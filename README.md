@@ -81,12 +81,62 @@ TypeScript is shipped as-is — there is no `dist` and no build step, because a 
 install does not run one. Keeping `index.ts` in the repository root lets the same
 file satisfy both a git-spec install and a local directory reference.
 
+## Agents
+
+Spectre declares its agents the way OpenCode declares its own built-ins: a typed
+value in TypeScript, applied through `ctx.agent.transform`, with the prompt
+inline.
+
+```ts title="agents/spectre.ts"
+import { Agent } from "@opencode/plugin/effect"
+
+export const spectre: Partial<Agent.Info> & Pick<Agent.Info, "id"> = {
+  id: Agent.ID.make("spectre"),
+  description: "Spectre's coding agent.",
+  mode: "primary",
+  color: "primary",
+  system: `You are Spectre, a coding agent.
+`,
+}
+```
+
+The annotation checks every field against `Agent.Info` at compile time and
+rejects a key it does not have, so a typo or a bad enum is a build error rather
+than a silently half-configured agent:
+
+```
+agents/spectre.ts(17,3): error TS2561: Object literal may only specify known
+properties, but 'colour' does not exist in type 'Partial<Info> & Pick<Info, "id">'.
+Did you mean to write 'color'?
+```
+
+Omitted fields keep the value `Agent.Info.default(id)` already supplies, so a
+definition only states what it changes. `permissions` **extend** the agent's
+seeded rules rather than replacing them — the same layering OpenCode's own agent
+plugins use — so a project's global rules still land on top and the last matching
+rule wins. Leaving `permissions` off gives the agent OpenCode's standard coding
+rules: allow tools, ask on `.env` reads and outside the worktree.
+
+### How an agent gets registered
+
+The editor behind `ctx.agent.transform` has no `add`. Its `update` creates an
+agent that does not exist yet, which is how a plugin introduces one, and how
+OpenCode's own `build`, `plan`, and `explore` are declared. Registering does not
+make an agent the default; the user's `default_agent` is left alone.
+
+A file-based alternative exists — OpenCode reads `agent/` and `agents/` folders
+of markdown with YAML frontmatter — but only inside a _config_ directory, the
+global `~/.config/opencode` or a project's `.opencode`, never inside an installed
+plugin. A folder shipped in this package would go unread, which is one reason
+Spectre declares agents in TypeScript.
+
 ## Layout
 
-| Path       | Purpose                                             |
-| ---------- | --------------------------------------------------- |
-| `index.ts` | Plugin entrypoint: `id` plus the `effect` that runs. |
-| `src/`     | Implementation, imported by the entrypoint.          |
+| Path                | Purpose                                                      |
+| ------------------- | ------------------------------------------------------------ |
+| `index.ts`          | Plugin entrypoint: `id` plus the `effect` that runs.         |
+| `agents/spectre.ts` | One agent: its id, description, mode, and prompt.            |
+| `agents/index.ts`   | Applies every definition to OpenCode's agent registry.       |
 
 ## Development
 

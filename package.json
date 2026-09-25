@@ -9,7 +9,7 @@
   },
   "files": [
     "index.ts",
-    "src"
+    "agents"
   ],
   "engines": {
     "opencode": ">=2.0.16"

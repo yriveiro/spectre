@@ -1,5 +1,6 @@
-import { Plugin } from "@opencode/plugin/effect";
-import { Effect } from "effect";
+import { Plugin } from "@opencode/plugin/effect"
+import { Effect } from "effect"
+import { update as updateAgents } from "./agents"
 
 /**
  * Spectre's OpenCode plugin entrypoint.
@@ -20,6 +21,7 @@ export default Plugin.define({
     Effect.gen(function* () {
       yield* Effect.logInfo("Effect plugin loaded", {
         version: ctx.app.version,
-      });
+      })
+      yield* updateAgents(ctx)
     }),
-});
+})
