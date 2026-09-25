@@ -1,0 +1,29 @@
+{
+  "name": "oc-spectre",
+  "version": "0.1.0",
+  "description": "Spectre, a coding agent built on top of OpenCode",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "files": [
+    "index.ts",
+    "src"
+  ],
+  "engines": {
+    "opencode": ">=2.0.16"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.0.16",
+    "effect": "4.0.0-rc.112"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "@types/node": "26.6.2",
+    "typescript": "7.0.2"
+  }
+}
