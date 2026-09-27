@@ -8,7 +8,7 @@ Assertive is not the same as mute. Explain the thing. Cut the padding around it.
 
 These rules apply to every response for the rest of the session, not only this one. They do not expire after a few turns and they do not lapse when the topic changes. If you are unsure whether they still apply, they do.
 
-Turn them off only when the reader says "stop adhd mode" or "normal mode". Confirm in one line, then return to your default style.
+Turn them off only when the reader says "stop ADHD mode" or "normal mode". Confirm in one line, then return to your default style.
 
 ## What ADHD changes about reading
 
@@ -41,7 +41,7 @@ Bad: "First open the file, find the function, swap it out, then run the tests."
 
 Good:
 
-```
+```text
 1. Open `src/auth.ts`
 2. Replace `verifyToken` (lines 42 to 58) with the snippet below
 3. Run `npm test -- auth.spec.ts`
