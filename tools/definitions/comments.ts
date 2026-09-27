@@ -9,7 +9,7 @@ const C_STYLE = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", "
 const HASH_STYLE = new Set([".py", ".sh", ".rb", ".yml", ".yaml", ".toml"]);
 
 const SUPPRESSION =
-  /eslint-disable|prettier-ignore|biome-ignore|@ts-(ignore|expect-error|nocheck)|noqa|ruff\s*:|pylint\s*:|nolint/;
+  /eslint-disable|prettier-ignore|biome-ignore|@ts-(ignore|expect-error|nocheck)|noqa|ruff\s*:|pylint\s*:|rubocop:|shellcheck\s+disable|nolint/;
 
 const DEFAULT_LIMIT = 400;
 
@@ -55,60 +55,82 @@ narrow before it reads anything:
 
   { hits: [{ file, line, kind, text }], errors, empty, total, suppressions, scanned, truncated }
 
-- \`file\` is relative to the project directory.
+- \`file\` is relative to the project directory. \`text\` is the whole line, trimmed, so a
+  comment that trails code arrives with the code it annotates.
 - \`kind\` is \`comment\`, \`doc\`, or \`suppression\`. A suppression is a comment with a
   rule attached: eslint-disable, prettier-ignore, biome-ignore, @ts-ignore,
-  @ts-expect-error, @ts-nocheck, noqa, ruff:, pylint:, nolint.
+  @ts-expect-error, @ts-nocheck, noqa, ruff:, pylint:, rubocop:, shellcheck disable,
+  nolint.
 - \`total\` and \`suppressions\` count the whole scope. \`hits\` is only the page named by
   \`offset\` and \`limit\`, and \`truncated\` is true when the page is not the whole scope.
 - \`errors\` lists the targets that could not be scanned, and \`empty\` the targets that
   produced no hits. An empty result and a failed scan look identical otherwise. A
   bad target never fails the call: every hit that did scan is still returned.
 
-The scan is line-based and lexical, not a parse. A line that opens with a comment
-marker inside a string literal is reported as a comment, and a block comment that
-trails code on the same line is missed. Both are the cheap direction to be wrong
-in: the caller judges every line anyway, so a false positive costs one dismissal
-and a false negative costs a grep.`;
+The scan is lexical, not a parse, so a file mid-edit still reads. It reads whole
+strings before it looks for a marker, so a comment marker inside a string is not a
+comment, and a comment trailing code on its line is reported at that line.
 
-const classify = (line: string, inDoc: boolean): Kind => {
-  if (SUPPRESSION.test(line)) return "suppression";
-  if (inDoc || line.trimStart().startsWith("*")) return "doc";
+Four limits remain, all lexical. A \`#\` must start its line or follow whitespace, so
+\`x = 1#note\` is missed where Python and Ruby would read one. A YAML block scalar
+whose lines start with \`#\` is reported. A Ruby \`=begin\` block is not read. A template
+holding a nested template inside \`\${ }\` ends at the first backtick, so a comment
+after it can be missed. None are worth a parse dependency: the caller judges every
+hit anyway, so a false positive costs one dismissal and a false negative costs a
+grep.`;
+
+type RawHit = { readonly line: number; readonly kind: Kind; readonly text: string };
+
+const C_TOKEN =
+  /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|(?<![\w$)\]}`"']\s*)\/(?![/*])(?:[^/\\\n[]|\\.|\[(?:[^\]\\\n]|\\.)*\])+\/[a-z]*/g;
+
+const HASH_TOKEN =
+  /"""[\s\S]*?(?:"""|$)|'''[\s\S]*?(?:'''|$)|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|(?<=^|[^\S])#[^\n]*/g;
+
+const classify = (part: string, doc: boolean): Kind => {
+  if (SUPPRESSION.test(part)) return "suppression";
+  if (doc || part.startsWith("/**") || part.startsWith("///") || part.trimStart().startsWith("*"))
+    return "doc";
   return "comment";
 };
 
-const opens = (line: string, style: "hash" | "c") =>
-  style === "hash" ? line.startsWith("#") : line.startsWith("//") || line.startsWith("/*");
-
-type RawHit = { readonly line: number; readonly kind: Kind; readonly text: string };
+const isComment = (body: string) => body.startsWith("//") || body.startsWith("/*") || body.startsWith("#");
 
 const scanFile = (text: string, ext: string): ReadonlyArray<RawHit> => {
   const style = HASH_STYLE.has(ext) ? "hash" : C_STYLE.has(ext) ? "c" : undefined;
   if (style === undefined) return [];
 
+  const lines = text.split("\n");
   const hits: Array<RawHit> = [];
-  let inBlock = false;
-  let inDoc = false;
+  let cursor = 0;
+  let line = 1;
+  let last = 0;
 
-  for (const [index, raw] of text.split("\n").entries()) {
-    const line = raw.trim();
-    if (line.length === 0) continue;
+  const newlines = (from: number, to: number) => {
+    let count = 0;
+    for (let at = from; at < to; at += 1) if (text[at] === "\n") count += 1;
+    return count;
+  };
 
-    if (inBlock) {
-      hits.push({ line: index + 1, kind: classify(line, inDoc), text: line });
-      inBlock = !line.includes("*/");
-      if (!inBlock) inDoc = false;
-      continue;
+  for (const token of text.matchAll(style === "c" ? C_TOKEN : HASH_TOKEN)) {
+    const start = token.index;
+    const body = token[0];
+    const at = line + newlines(cursor, start);
+    cursor = start + body.length;
+
+    if (isComment(body) && !(start === 0 && body.startsWith("#!"))) {
+      const doc = body.startsWith("/**");
+      const parts = body.startsWith("/*") ? body.split("\n") : [body];
+      for (const [offset, part] of parts.entries()) {
+        const target = at + offset;
+        const content = (lines[target - 1] ?? "").trim();
+        if (target <= last || content.length === 0) continue;
+        last = target;
+        hits.push({ line: target, kind: classify(part, doc), text: content });
+      }
     }
 
-    if (!opens(line, style)) continue;
-
-    const doc = line.startsWith("/**") || line.startsWith("///");
-    hits.push({ line: index + 1, kind: classify(line, doc), text: line });
-
-    const closes = line.includes("*/");
-    inBlock = line.startsWith("/*") && !closes;
-    inDoc = doc && !closes;
+    line = at + newlines(start, cursor);
   }
 
   return hits;
