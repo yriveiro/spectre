@@ -9,16 +9,18 @@
   },
   "files": [
     "index.ts",
-    "agents"
+    "agents",
+    "skills"
   ],
   "engines": {
-    "opencode": ">=2.0.16"
+    "opencode": ">=2.0.18"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@opencode/plugin": "2.0.16",
+    "@opencode/plugin": "2.0.18",
+    "@opencode/schema": "2.0.18",
     "effect": "4.0.0-rc.112"
   },
   "devDependencies": {

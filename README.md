@@ -1,10 +1,11 @@
 # Spectre
 
-Spectre is a coding agent built on top of OpenCode, delivered as an OpenCode plugin.
+Software Planning, Engineering, Coding, Testing, Reasoning & Execution, delivered
+as an OpenCode plugin.
 
 ## Requirements
 
-- OpenCode `>= 2.0.16`
+- OpenCode `>= 2.0.18`
 
 ## Install
 
@@ -87,7 +88,7 @@ Spectre declares its agents the way OpenCode declares its own built-ins: a typed
 value in TypeScript, applied through `ctx.agent.transform`, with the prompt
 inline.
 
-```ts title="agents/spectre.ts"
+```ts title="agents/definitions/spectre.ts"
 import { Agent } from "@opencode/plugin/effect"
 
 export const spectre: Partial<Agent.Info> & Pick<Agent.Info, "id"> = {
@@ -104,8 +105,8 @@ The annotation checks every field against `Agent.Info` at compile time and
 rejects a key it does not have, so a typo or a bad enum is a build error rather
 than a silently half-configured agent:
 
-```
-agents/spectre.ts(17,3): error TS2561: Object literal may only specify known
+```text
+agents/definitions/spectre.ts(17,3): error TS2561: Object literal may only specify known
 properties, but 'colour' does not exist in type 'Partial<Info> & Pick<Info, "id">'.
 Did you mean to write 'color'?
 ```
@@ -132,11 +133,15 @@ Spectre declares agents in TypeScript.
 
 ## Layout
 
-| Path                | Purpose                                                      |
-| ------------------- | ------------------------------------------------------------ |
-| `index.ts`          | Plugin entrypoint: `id` plus the `effect` that runs.         |
-| `agents/spectre.ts` | One agent: its id, description, mode, and prompt.            |
-| `agents/index.ts`   | Applies every definition to OpenCode's agent registry.       |
+| Path                               | Purpose                                                       |
+| ---------------------------------- | ------------------------------------------------------------- |
+| `index.ts`                         | Plugin entrypoint: `id` plus the `effect` that runs.          |
+| `agents/definitions/spectre.ts`    | One agent: its id, description, mode, and prompt.             |
+| `agents/index.ts`                  | Applies every definition to OpenCode's agent registry.        |
+| `skills/definitions/<id>/`         | One skill per directory: `index.ts`, `SKILL.md`, resources.   |
+| `skills/definitions/index.ts`      | The skill list, checked against what is on disk, plus bodies. |
+| `skills/definitions/definition.ts` | What every `index.ts` declares, and the `SKILL.md` anchor.    |
+| `skills/index.ts`                  | Applies every definition to OpenCode's skill registry.        |
 
 ## Development
 
@@ -144,4 +149,3 @@ Spectre declares agents in TypeScript.
 bun install
 bun run typecheck
 ```
-

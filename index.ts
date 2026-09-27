@@ -1,6 +1,7 @@
-import { Plugin } from "@opencode/plugin/effect"
-import { Effect } from "effect"
-import { update as updateAgents } from "./agents"
+import { Plugin } from "@opencode/plugin/effect";
+import { Effect } from "effect";
+import * as agents from "./agents";
+import * as skills from "./skills";
 
 /**
  * Spectre's OpenCode plugin entrypoint.
@@ -16,12 +17,13 @@ import { update as updateAgents } from "./agents"
  * @see https://opencode.ai/v2/docs/build/plugins/effect/
  */
 export default Plugin.define({
-  id: "spectre",
+  id: "yriveiro.spectre",
   effect: (ctx) =>
     Effect.gen(function* () {
       yield* Effect.logInfo("Effect plugin loaded", {
         version: ctx.app.version,
-      })
-      yield* updateAgents(ctx)
+      });
+      yield* agents.update(ctx);
+      yield* skills.update(ctx);
     }),
-})
+});
