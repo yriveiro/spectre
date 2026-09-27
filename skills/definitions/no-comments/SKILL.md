@@ -9,11 +9,19 @@ Mode tool that has no other surface.
 
 ## Steps
 
-1. Check `execute` is in your tool list. The audit is `tools.spectre.comments`,
-   a Code Mode tool: it is not in your tool list and cannot be called any other
-   way. If `execute` is missing, tell the user this skill needs Code Mode
-   enabled — `code.mode` in the command palette — and stop. Do not substitute
-   grep, and do not spawn Sicko first: its report cannot be audited without it.
+1. Prove the audit tool runs, before anything else. Call it once, on one file
+   you know has a comment in it:
+
+   ```js
+   const smoke = await tools.spectre.comments({ targets: ["<any source file>"] })
+   ```
+
+   A page comes back — do not go further if it does not. If `execute` is
+   missing from your tool list, or `search()` has no `spectre` namespace, or the
+   call errors, then Code Mode is off or this plugin is not the copy that got
+   loaded: say which of the two it is and stop. Do not substitute grep, and do
+   not spawn Sicko first — its report cannot be audited without this, and a
+   report nobody can audit is worse than no report.
 
 2. Spawn Sicko with the `task` tool: `subagent_type` is `sicko` — that is the
    agent id, not the persona name. Pass the scope: the caller's files or diff, or

@@ -41,6 +41,39 @@ A branded *type* is fine while it stays a TypeScript type.
 `comments(directory: AbsolutePath)` brands nothing at runtime and never reaches a
 schema. Branding it into the schema is what breaks it.
 
+## How `options` becomes a call path
+
+Read at tag `v2.0.18` (`cd9a14a`), not inferred. A tool added through
+`ctx.tool.transform` lands in the **same** registry as the builtins — there is no
+separate plugin path — and the three fields in `Tool.Options` decide where it
+surfaces:
+
+| Declared | Reaches the model as |
+| -------- | -------------------- |
+| `codemode: false` | a direct tool call, by name |
+| `codemode` unset or `true`, no `namespace` | `tools.<name>` in Code Mode |
+| `codemode` unset or `true`, plus a `namespace` | `tools.<namespace>.<name>` in Code Mode |
+
+`namespace` is what makes the dotted path: the host joins it to the name as
+`<namespace>.<name>`. `pinned: true` keeps a tool's full listing in the catalog
+from the first round instead of paging it in, and it is only legal alongside
+`codemode: true`.
+
+Two gates, and both are about the **caller**, not the tool:
+
+- A tool is dropped from the catalog when the caller's permission ruleset wholly
+  disables `options.permission`, defaulting to the tool's own name.
+- Code Mode itself is off when that same ruleset wholly disables `execute`.
+
+There is no branch on subagent versus primary. A subagent's catalog is built from
+the same registry, filtered by that agent's merged permission ruleset, so it sees
+a namespaced tool exactly when a primary does and nothing has to be granted to it.
+
+The practical consequence: a missing `tools.spectre.*` is almost never a
+declaration problem. It is `execute` disabled, a denied `read`, or — the one that
+actually bites — a different copy of this plugin being the one loaded. Check which
+copy before re-reading the declaration.
+
 ## Prove it with a call
 
 `bun run typecheck` cannot catch any of this — every rejected schema above is

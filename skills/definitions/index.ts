@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { type Definition } from "./definition";
 import { iHaveAdhd } from "./i-have-adhd";
 import { noComments } from "./no-comments";
+import { principleEvidence } from "./principle-evidence";
 import { principleHygiene } from "./principle-hygiene";
 import { principleVerification } from "./principle-verification";
 import { spectreMode } from "./spectre-mode";
@@ -10,6 +11,7 @@ import { principleGuardTheContextWindow } from "./principle-guard-the-context-wi
 const definitions: ReadonlyArray<Definition> = [
   iHaveAdhd,
   noComments,
+  principleEvidence,
   principleHygiene,
   principleVerification,
   spectreMode,
