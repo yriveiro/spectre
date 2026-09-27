@@ -2,6 +2,7 @@ import { Plugin } from "@opencode/plugin/effect";
 import { Effect } from "effect";
 import * as agents from "./agents";
 import * as skills from "./skills";
+import * as tools from "./tools";
 
 /**
  * Spectre's OpenCode plugin entrypoint.
@@ -25,5 +26,6 @@ export default Plugin.define({
       });
       yield* agents.update(ctx);
       yield* skills.update(ctx);
+      yield* tools.update(ctx);
     }),
 });

@@ -88,7 +88,7 @@ Rules that follow from this:
 
 | Import      | Why Bun has no equivalent |
 | ----------- | ------------------------- |
-| `node:path` | Only `join`. Checked against `docs/runtime/`: the complete set of Bun path utilities is `Bun.fileURLToPath`, `Bun.pathToFileURL`, and `Bun.resolveSync`, none of which join or split. `Bun.$`'s `dirname`/`basename` are shell binaries, not functions. A skill's `SKILL.md` anchor is `join(import.meta.dir, "SKILL.md")` — see `skills/definitions/definition.ts`, the only file that imports it. |
+| `node:path` | Only `join` and `relative`. Checked against `docs/runtime/`: the complete set of Bun path utilities is `Bun.fileURLToPath`, `Bun.pathToFileURL`, and `Bun.resolveSync`, none of which join, split, or relativize. `Bun.$`'s `dirname`/`basename` are shell binaries, not functions. Two files import it: `skills/definitions/definition.ts`, whose `SKILL.md` anchor is `join(import.meta.dir, "SKILL.md")`, and `tools/definitions/comments.ts`, which resolves a target against the project directory and reports every hit back as a project-relative path. |
 
 ## Writing the entrypoint
 
@@ -209,3 +209,25 @@ opencode plugin list
 `opencode plugin list` reports nothing on the first run in a fresh directory —
 the background service has not picked up the config yet. Re-run it before
 concluding anything failed.
+
+`opencode plugin list` only proves the entrypoint resolved. To prove the `effect`
+ran, and that what it registers is what you think, start a session with the logs
+turned on and read the plugin's own log lines:
+
+```sh
+OPENCODE_CONFIG_DIR=/tmp/empty-cfg opencode run --standalone --log-level info --print-logs \
+  'reply with the single word: ok'
+```
+
+`OPENCODE_CONFIG_DIR` is load-bearing while developing: the global config also
+lists the installed `github:yriveiro/spectre`, both copies claim the id
+`yriveiro.spectre`, and the installed one wins. Point the directory at an empty
+folder so only the checkout under test loads. With it unset you are reading the
+published plugin's log lines and concluding things about code that is not on
+disk.
+
+A log line that says a domain registered is not proof that what it registered
+runs. `opencode plugin list` resolves an entrypoint; a session proves the
+`effect`. For a tool, the proof is a call — see `tools/FOR_AGENTS.md`, which
+holds the sandbox boundary's rules for `input` and `output` schemas and the
+command that proves one.

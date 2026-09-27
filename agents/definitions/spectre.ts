@@ -5,6 +5,7 @@ export const spectre: Partial<Agent.Info> & Pick<Agent.Info, "id"> = {
   description: "Use it to activate the `Spectre mode`.",
   mode: "primary",
   color: "primary",
+  permissions: [{ action: "execute", resource: "*", effect: "allow" }],
   system: `# Spectre agent
 
 You are operating as spectre-mode's full agent style.

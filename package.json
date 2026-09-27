@@ -10,7 +10,8 @@
   "files": [
     "index.ts",
     "agents",
-    "skills"
+    "skills",
+    "tools"
   ],
   "engines": {
     "opencode": ">=2.0.18"
