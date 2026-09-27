@@ -219,12 +219,32 @@ OPENCODE_CONFIG_DIR=/tmp/empty-cfg opencode run --standalone --log-level info --
   'reply with the single word: ok'
 ```
 
-`OPENCODE_CONFIG_DIR` is load-bearing while developing: the global config also
-lists the installed `github:yriveiro/spectre`, both copies claim the id
-`yriveiro.spectre`, and the installed one wins. Point the directory at an empty
-folder so only the checkout under test loads. With it unset you are reading the
-published plugin's log lines and concluding things about code that is not on
-disk.
+`OPENCODE_CONFIG_DIR` does **not** achieve that on its own, which is worth knowing
+before you trust a session. Measured at 2.0.18: with the directory pointed at an
+empty folder and a scratch project listing only the checkout, `opencode plugin
+list` still reported both copies.
+
+```
+ID                VERSION  SOURCE
+yriveiro.spectre  local    /Users/.../spectre/index.ts
+yriveiro.spectre  3ac06f1  github:yriveiro/spectre
+```
+
+The `github:` specifier is resolved from the install cache, not from the config
+directory, so an empty `OPENCODE_CONFIG_DIR` does not unseat it. The only thing
+that does is removing the entry from the global config — `~/.config/opencode/opencode.jsonc`:
+
+```jsonc
+{
+  "plugins": ["github:yriveiro/spectre"]   // delete this line while developing
+}
+```
+
+Until it is gone, both copies claim the id `yriveiro.spectre` and the installed
+one wins, and it wins silently: a published copy from before this tool existed
+registers no `comments` tool at all, so `tools.spectre.comments` is simply absent
+from the catalog and every symptom looks like a bug in the code under test. Check
+which copy is live before debugging anything.
 
 A log line that says a domain registered is not proof that what it registered
 runs. `opencode plugin list` resolves an entrypoint; a session proves the
