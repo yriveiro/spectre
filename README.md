@@ -138,10 +138,80 @@ Spectre declares agents in TypeScript.
 | `index.ts`                         | Plugin entrypoint: `id` plus the `effect` that runs.          |
 | `agents/definitions/spectre.ts`    | One agent: its id, description, mode, and prompt.             |
 | `agents/index.ts`                  | Applies every definition to OpenCode's agent registry.        |
-| `skills/definitions/<id>/`         | One skill per directory: `index.ts`, `SKILL.md`, resources.   |
+| `skills/definitions/<id>/`         | One skill per directory: `index.ts`, `SKILL.md`.              |
 | `skills/definitions/index.ts`      | The skill list, checked against what is on disk, plus bodies. |
 | `skills/definitions/definition.ts` | What every `index.ts` declares, and the `SKILL.md` anchor.    |
 | `skills/index.ts`                  | Applies every definition to OpenCode's skill registry.        |
+| `tools/definitions/comments.ts`    | One tool: the comment and suppression inventory.              |
+| `tools/index.ts`                   | Applies every definition to OpenCode's tool registry.         |
+| `tools/FOR_AGENTS.md`              | Read by hand before touching a tool schema. Not auto-loaded.  |
+
+## Tools
+
+A tool is a typed `Tool.Info` applied through `ctx.tool.transform`. Spectre ships
+one, `spectre.comments`, and it exists to be called from inside a Code Mode
+script rather than as a direct tool call:
+
+```ts title="tools/definitions/comments.ts"
+import { Effect, Schema } from "effect";
+import { Tool } from "@opencode/schema/tool";
+
+export const comments = (directory: AbsolutePath): Tool.Info<typeof Input, typeof Output> => ({
+  name: "comments",
+  description: DESCRIPTION,
+  input: Input,
+  output: Output,
+  options: { namespace: "spectre", codemode: true, pinned: true, permission: "read" },
+  execute: (input) => Effect.promise(async () => ({ output: await inventory(directory, input) })),
+});
+```
+
+Three of those `options` are load-bearing, and OpenCode's own type says so.
+`Tool.Options` is a union in which omitting `codemode` means `true`:
+
+```ts
+export type Options = BaseOptions & (
+  | { readonly codemode?: true; readonly pinned?: boolean }
+  | { readonly codemode: boolean; readonly pinned?: never }
+)
+```
+
+- **`codemode: true`** puts the tool in the Code Mode catalog and keeps it out of
+  the model's direct tool list. It is reachable only as
+  `tools.spectre.comments(...)` from inside `execute`, which is the point: the
+  inventory is a few hundred structured hits, and a script can filter them down
+  to the handful worth reading before any of it reaches the context. Set
+  `codemode: false` instead and the same tool becomes an ordinary call whose
+  whole output lands in the transcript.
+- **`pinned: true`** hoists the signature to the top of the catalog. The catalog
+  is budgeted and partial, so an unpinned tool can be reachable only through
+  `tools.$codemode.search`.
+- **`namespace: "spectre"`** is what makes the path `spectre.comments` rather
+  than a bare top-level `comments`.
+
+`execute` returns a structured `output`, not a rendered report, and the schema is
+the contract: OpenCode validates the value against it before the sandbox sees
+it. Declare **plain** schemas only and do any checking inside `execute` — the
+boundary rejects `Int`, `Finite`, `NonEmptyString`, `URL`, and anything built
+with `Schema.check` or `Schema.refine`, and on two of those it fails with its
+own internal error instead of naming the field.
+[`tools/FOR_AGENTS.md`](tools/FOR_AGENTS.md) has the measured table, the rule,
+and the command that proves a tool actually runs.
+
+## `execute` is on in Spectre Mode
+
+The `spectre` agent allows the `execute` action outright:
+
+```ts title="agents/definitions/spectre.ts"
+permissions: [{ action: "execute", resource: "*", effect: "allow" }],
+```
+
+A tool registered with `codemode: true` is invisible to the model without it, so
+a skill that depends on one has to be able to assume it. This is a floor, not an
+override: session and project permission rules merge over an agent's own and the
+last match wins, so a user who denies `execute` still wins. `no-comments` is the
+skill that tests the assumption — step 1 checks for `execute` and stops with a
+message rather than falling back to `grep`.
 
 ## Development
 
