@@ -89,7 +89,7 @@ skipped and why.
 | When this is true | Load |
 | ----------------- | ---- |
 | You are about to write anything for a person to read | `i-have-adhd` |
-| A response is long enough that the reader must hold all of it at once | `principle-minimize-reader-load` |
+| You are about to send a response holding items the reader never saw resolved | `principle-minimize-reader-load` |
 | You are about to state a fact you have not read at its source | `principle-evidence` |
 | You are choosing between two ways to build something | `principle-evidence` |
 | You are about to report a number, a passing check, or "done" | `principle-verification` |
@@ -148,10 +148,10 @@ the leaf decides. This list only tells you which file to open.
   understand something, on two axes: the hops between their question and the
   answer, and the state they must hold in their head. It holds for code and for a
   response. Load it before adding a layer, a wrapper, a field, or a module-level
-  cache, when a value takes more than one hop to trace, and when a response is
-  long enough that the reader has to hold the whole thing at once. Collapse what
-  only forwards. Do not collapse a boundary that hides a real decision, because
-  that boundary is load reduction.
+  cache, when a value takes more than one hop to trace, and when you are about to
+  send a response that leaves the reader holding items nothing ever resolved.
+  Collapse what only forwards. Do not collapse a boundary that hides a real
+  decision, because that boundary is load reduction.
 - `ripwire`. The map from a principle to the command that can falsify its test.
   Load it when a principle applies and you have not measured the code, so the
   claim gets a run instead of an assertion. It also names the two leaves with no
