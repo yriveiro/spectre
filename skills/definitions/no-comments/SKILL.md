@@ -16,18 +16,22 @@ Mode tool that has no other surface.
    const smoke = await tools.spectre.comments({ targets: ["<any source file>"] })
    ```
 
-   A page comes back — do not go further if it does not. If `execute` is
+   A page comes back. Do not go further if it does not. If `execute` is
    missing from your tool list, or `search()` has no `spectre` namespace, or the
    call errors, then Code Mode is off or this plugin is not the copy that got
    loaded: say which of the two it is and stop. Do not substitute grep, and do
-   not spawn Sicko first — its report cannot be audited without this, and a
+   not spawn Sicko first. Its report cannot be audited without this, and a
    report nobody can audit is worse than no report.
 
-2. Spawn Sicko with the `task` tool: `subagent_type` is `sicko` — that is the
-   agent id, not the persona name. Pass the scope: the caller's files or diff, or
-   the working-tree diff against the base branch, default `main`. Set
+2. Spawn Sicko with the `subagent` tool. `agent` is `sicko`, which is the agent
+   id, not the persona name. Pass the scope in `prompt`: the caller's files or
+   diff, or the working-tree diff against the base branch, default `main`. Set
    `description` to a short phrase naming the scope. Do not restate its rules;
    the keep list is its own.
+
+   The tool is `subagent` and the argument is `agent`. There is no other way to
+   spawn an agent, so if the name you reach for is not `subagent`, name the tool
+   you actually have and stop.
 
 3. Vet the report before acting on any of it. Sicko applied the keep list and
    its own procedure before reporting, so do not re-apply them and do not invent
@@ -52,7 +56,7 @@ Mode tool that has no other surface.
    `{file, line, kind, text}`, and `total`, `suppressions` and `scanned` count
    the whole scope, so you can narrow before reading a thing. Page the rest with
    `offset` and `limit` while `truncated` is true. `errors` names a target it
-   could not scan — narrow and retry it, or report it open. `empty` names a
+   could not scan. Narrow and retry it, or report it open. `empty` names a
    target with nothing in it, and `empty: []` with `total: 0` means you scanned
    nothing: the scope resolved to no targets, which is a bug in the scope, not a
    clean audit. Fix the scope and call it again.
@@ -64,7 +68,7 @@ Mode tool that has no other surface.
    Revert and rerun one rejected report with the failure named. Reject a second,
    report it open, and fail this skill.
 
-4. Fix the accepted flags with the remedy Sicko named — rename, extract, add a
+4. Fix the accepted flags with the remedy Sicko named. Rename, extract, add a
    type, or restructure until the behavior is obvious without prose. `edit` for a
    bounded change, `apply_patch` when the fix spans hunks. If a fix needs a shape
    rather than a change, sketch it once for the accepted set and stop at the
@@ -76,8 +80,9 @@ Mode tool that has no other surface.
    authorize widening the fence or fixing instances outside it. Never bolt on a
    symptom guard.
 
-6. A comment that claims a constraint — `do not remove`, `do not change wording`,
-   `talk to X before changing` — is not a keep on its own. Judge it with the
+6. A comment that claims a constraint, such as `do not remove`, `do not change
+   wording`, or `talk to X before changing`, is not a keep on its own. Judge it
+   with the
    same keep list; if it survives, offer the cheapest in-scope encoding: a type
    constraint, a runtime check, a test, or a CI lint. Name which one and what it
    would assert.

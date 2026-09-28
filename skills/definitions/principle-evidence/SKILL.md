@@ -10,7 +10,7 @@ itself works. Two failures live here, and both are silent.
 
 The first is **an opinion where a measurement belongs.** Two implementations are
 both defensible, the reasoning on both sides is sound, and the argument settles
-nothing — because nobody built the thing that would settle it. A second
+nothing, because nobody built the thing that would settle it. A second
 implementation of the same specification, a compiler, a tokenizer, the upstream
 tool, a corpus of real input: each is an oracle, and any of them converts an
 argument into a number. The reasoning was never the bottleneck.
@@ -32,9 +32,9 @@ unmeasured claim, and the unfalsifiable check.
 ## Core values
 
 **An oracle beats an argument.** When two things are both plausible, build the
-thing that knows the answer — a reference implementation, a parser, a schema, a
-query — and ask it. Reasoning about which is better is cheap and frequently
-wrong; the oracle is usually already installed and takes one command.
+thing that knows the answer, such as a reference implementation, a parser, a
+schema, or a query, and ask it. Reasoning about which is better is cheap and
+frequently wrong; the oracle is usually already installed and takes one command.
 
 **A check that cannot fail is decoration.** Every assertion you can break on
 purpose is worth writing, and a suite you have never seen fail tells the reader
@@ -42,8 +42,8 @@ nothing about whether it works. Break it, watch it go red, put it back.
 
 **Measure the population, not the specimen.** A number from three hand-picked
 cases is an anecdote with a decimal point. The claim "this is faster", "this is
-more accurate", "this is safe" has a population behind it — every file of a kind,
-every call of a shape, the whole corpus — and the number means only as much as
+more accurate", "this is safe" has a population behind it: every file of a kind,
+every call of a shape, the whole corpus. The number means only as much as
 that population does.
 
 **Before and after, same population.** A comparison is only a comparison when both
@@ -61,8 +61,8 @@ two designs are in balance is: what would I have to measure to know? Often the
 answer names a tool that is already on the machine. If no oracle exists, writing a
 small one is usually faster than the argument it replaces.
 
-**Falsify before you trust.** When a check is new — a test suite, a linter rule, a
-benchmark, a scanner — deliberately break the thing it inspects and confirm it
+**Falsify before you trust.** When a check is new (a test suite, a linter rule, a
+benchmark, or a scanner), deliberately break the thing it inspects and confirm it
 notices. A check that has never failed has not been shown to work. This is the step
 people skip, and skipping it is how a suite full of assertions that cannot fail
 gets reported as a passing gate.
@@ -75,7 +75,7 @@ regressions live.
 
 **Let the disagreement be visible.** When a measurement contradicts the obvious
 answer, that is the most valuable result of the session. Do not quietly pick the
-reading that supports the change already made — go and find out why the number says
+reading that supports the change already made. Go and find out why the number says
 otherwise.
 
 **State the population with the number.** "1.00 precision on 58 files" is a claim a
@@ -130,5 +130,5 @@ performed for its own sake.
 - **Not a licence to ship a number instead of a fix.** A measurement that arrives
   without the change it justifies has produced a fact and no work.
 - **Not theatre.** A benchmark nobody runs, a corpus nobody regenerates, an oracle
-  cited in a report and not in the repository — these are the failure mode. Evidence
+  cited in a report and not in the repository. These are the failure mode. Evidence
   that cannot be reproduced by the next reader is a claim again.

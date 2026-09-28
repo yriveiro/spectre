@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { type Definition } from "./definition";
 import { iHaveAdhd } from "./i-have-adhd";
+import { modelRouter } from "./model-router";
 import { noComments } from "./no-comments";
 import { principleEvidence } from "./principle-evidence";
 import { principleHygiene } from "./principle-hygiene";
@@ -10,6 +11,7 @@ import { principleGuardTheContextWindow } from "./principle-guard-the-context-wi
 
 const definitions: ReadonlyArray<Definition> = [
   iHaveAdhd,
+  modelRouter,
   noComments,
   principleEvidence,
   principleHygiene,

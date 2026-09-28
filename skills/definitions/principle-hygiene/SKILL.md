@@ -5,8 +5,8 @@
 Hygiene is the craft of not leaving small things small.
 
 Every deferred detail is cheap on its own and ruinous in aggregate. A dead branch
-nobody deleted, a dependency nobody bumped, a shortcut marked "clean this up later"
-— each is a rounding error, and a codebase made of rounding errors is not a
+nobody deleted, a dependency nobody bumped, a shortcut marked "clean this up later".
+Each is a rounding error, and a codebase made of rounding errors is not a
 codebase anyone can safely change. Mess never arrives as mess. It arrives as four
 hundred small concessions, each defensible alone, that together cost more than the
 work they saved.
@@ -39,7 +39,7 @@ is a change, and a deletion is easier to verify than the replacement you would
 have to invent to keep it.
 
 **Move what is safe to move.** A dependency inside its range that is not moved is
-a risk deferred by default. Check the bump before taking it — then take it, when
+a risk deferred by default. Check the bump before taking it, then take it when
 the project's own checks say it holds.
 
 **Care, not obsession.** Detail is a means. The goal is work someone else can
@@ -62,7 +62,7 @@ alive is adding the mess back with a schema.
 it already claims, and the project's own checks pass on it, move it. "Outdated" is
 only a real risk when something breaks, and a check that passes is the evidence
 that this one does not. When the bump crosses a major, or the checks do not pass,
-that is not hygiene — that is a task. Say so and schedule it instead of filing it
+that is not hygiene. That is a task. Say so and schedule it instead of filing it
 as fine.
 
 **Separate dirt from damage.** Dead code, a stale comment, a duplicated block:
@@ -90,7 +90,7 @@ check either still passes or it does not, and either answer is a fact.
 
 **Take the whole bump, not the easy half.** A change that moves the direct pin but
 leaves a second copy of the same package behind is a known problem with extra
-steps. After any change of this kind, prove it was coherent — the pin, the
+steps. After any change of this kind, prove it was coherent. The pin, the
 lockfile, and any transitive copy all moved together, and the superseded value
 appears nowhere.
 
@@ -106,9 +106,9 @@ reader is not quietly re-deciding the same thing.
 it is a review tax, and it hides the real edit. Clean what you are already
 changing. Leave the rest for a change that is about it.
 
-**Check the tree before you call it done.** A workspace dirtier than you found it —
-a temp file, a debug print, a widened ignore, a dependency the install quietly
-moved — is the most common way good work gets delivered in a bad state.
+**Check the tree before you call it done.** A workspace dirtier than you found it
+(a temp file, a debug print, a widened ignore, a dependency the install quietly
+moved) is the most common way good work gets delivered in a bad state.
 
 **Judge the rot you are standing on.** If you notice a stale comment, an outdated
 dependency, or dead code in the area you are already inside, it is now yours to
@@ -127,7 +127,7 @@ performed for its own sake.
   owes nobody a tidy-up; the artifact other people depend on owes everybody one.
   Cleaning code nobody will read is a cost paid for nothing.
 - **Not a licence to expand the change.** Care is not scope. A drive-by rewrite
-  inside a bug fix is still scope creep — it just arrives with good intentions
+  inside a bug fix is still scope creep. It just arrives with good intentions
   attached, which is what makes it hard to refuse.
 - **Not a gate.** Tidying nobody performs proves nothing. A cleanup ritual nobody
   acts on is a slower way to feel productive.

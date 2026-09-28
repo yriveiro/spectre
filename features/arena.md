@@ -1,4 +1,4 @@
-# Arena — later, not built yet
+# Arena (later, not built yet)
 
 Status: reserved. On purpose this comes **after**
 [model-routing.md](./model-routing.md). Nothing here blocks that file, and nothing
@@ -49,17 +49,22 @@ has gone wrong: the two features have quietly merged.
 needs web search and a place to write. So the arena is the `task` path.
 
 `generate.text` is not wasted. It is the right tool for a cheaper, different kind
-of arena — one where the models just give opinions instead of doing work ("three
+of arena, one where the models just give opinions instead of doing work ("three
 opinions on this design, pick one"). Keep it in the design vocabulary for that.
 
-### Two gates on the `task` path
+### Two gates on the subagent path
 
 1. **Background is switched on in your setup, so this one is fine.** Background
    needs `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`; without it every
-   candidate would block and there would be no fan-out at all.
-2. **`subagent_depth` defaults to 1** (`task.ts:111-117`). A candidate that itself
-   spawns — `paper` running `verifier` — will hit that wall. So either we raise the
-   depth, or the verifier runs inside the same agent instead of as a subagent.
+   candidate would block and there would be no fan-out at all. *(Unverified at
+   2.0.18: no `background_subagents` string in `packages/core/src` at that tag.
+   Check it against the tag before this file is built.)*
+2. **`subagent_depth` defaults to 1** (`packages/core/src/tool/plugin/subagent.ts:129`,
+   at v2.0.18). A candidate that itself spawns (`paper` running `verifier`) will
+   hit that wall. So either we raise the depth, or the verifier runs inside the
+   same agent instead of as a subagent. Note the key moved: it is
+   `experimental.subagent_depth` at 2.0.18, not top-level `subagent_depth`, and
+   `config/normalize.ts:46` treats the top-level spelling as unsupported.
    **This is the sharpest knot between the arena and the paper profile, and it is
    not solved yet.**
 
@@ -91,7 +96,7 @@ than discover:
 
 1. **Context fills up fast.** Three paper summaries will fill a window. The judge
    needs the **verdicts**, not the essays. So candidates should return the same
-   fixed shape every time — claim, evidence, confidence — instead of prose. That
+   fixed shape every time: claim, evidence, confidence, instead of prose. That
    shape belongs in the profile from the start, not bolted on when the arena
    arrives.
 2. **They will agree for the wrong reasons.** Two candidates on the same model have
@@ -107,5 +112,5 @@ than discover:
    permissions first and then go?
 3. If a candidate fails or times out, do we drop it quietly or say so?
 4. Does the judge get told which model wrote each answer? Hiding it is probably
-   better — it stops "opus said so" from settling a tie. But it costs you the
+   better. It stops "opus said so" from settling a tie. But it costs you the
    trail you need when a verdict looks wrong.

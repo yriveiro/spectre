@@ -5,8 +5,8 @@ import { anchor, type Definition } from "../definition";
  * The discipline of never asserting more than has been checked.
  *
  * Split out of a file that was named for upkeep but spent its length on
- * verification. The upkeep half — cleaning while you refactoring, deleting dead
- * code, bumping what is safe to bump — is the principle-hygiene skill next to
+ * verification. The upkeep half (cleaning while you refactoring, deleting dead
+ * code, bumping what is safe to bump) is the principle-hygiene skill next to
  * this one. What remains here is the narrower claim: a fact nobody checked is
  * not a fact, however confidently it is written.
  *

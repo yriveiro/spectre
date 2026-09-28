@@ -9,7 +9,7 @@ import { anchor, type Definition } from "../definition";
  * to this one. What lives here is upkeep: clean while you refactor, delete what
  * nothing reaches, and move a dependency when moving it is safe.
  *
- * Care, not obsession — see "What this principle is not".
+ * Care, not obsession. See "What this principle is not".
  */
 export const principleHygiene: Definition = {
   id: Skill.ID.make("principle-hygiene"),

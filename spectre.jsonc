@@ -1,0 +1,36 @@
+// spectre.jsonc — the models a spectre subagent may be spent on, and the
+// names the router picks from. Read by tools.spectre.routing on every call.
+//
+// Every model here is free, and every ref below was checked against the live
+// catalogue. Five other free models (ling-3.0-flash-fin-free,
+// longcat-2.5-preview-free, nemotron-3-ultra-free,
+// nemotron-3.5-lightning-free, and both longcat/space-bunny under opencode-go)
+// carry no variants at all, so any `#variant` on them is rejected.
+{
+  "models": {
+    "flash":     "opencode/mimo-v2.6-flash-free",
+    "spark-low": "opencode/muse-spark-1.3-contributor-free#low",
+    "spark-high": "opencode/muse-spark-1.3-contributor-free#high",
+    "spark-xhigh": "opencode/muse-spark-1.3-contributor-free#xhigh",
+    "bunny-max": "opencode/space-bunny-free#max"
+  },
+
+  "profiles": {
+    "mechanical": {
+      "model": "flash",
+      "why": "One command, one log, one named file. Report what it said and decide nothing."
+    },
+    "reading": {
+      "model": ["spark-low", "spark-high"],
+      "why": "A few files that have to be understood before answering. A diff, a stack trace, a failing test name."
+    },
+    "judgement": {
+      "model": ["spark-high", "spark-xhigh"],
+      "why": "A decision with consequences: which of several designs to take, or why a subsystem breaks."
+    },
+    "deep": {
+      "model": "bunny-max",
+      "why": "A whole subsystem, or the word refactor. The strongest thinking available here, and the most expensive."
+    }
+  }
+}

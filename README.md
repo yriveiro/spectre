@@ -33,7 +33,7 @@ that project's configuration:
 
 `plugin` is still accepted as a legacy alias for `plugins`.
 
-While developing, install from a local mirror of the checkout — this exercises the
+While developing, install from a local mirror of the checkout. This exercises the
 same path as the GitHub install:
 
 ```sh
@@ -41,7 +41,7 @@ git clone --bare /absolute/path/to/spectre /tmp/spectre-mirror.git
 opencode plugin add "git+file:///tmp/spectre-mirror.git"
 ```
 
-While developing, point OpenCode at the checkout directly — no install step, no
+While developing, point OpenCode at the checkout directly. No install step, no
 build:
 
 ```json title="opencode.json"
@@ -54,8 +54,8 @@ build:
 ## How it plugs in
 
 OpenCode resolves `index.ts` through the package's `.` export and calls the
-plugin's `effect` once per project instance. Everything Spectre contributes —
-skills, agents, tools, nested plugins, MCP servers — is registered from inside that
+plugin's `effect` once per project instance. Everything Spectre contributes
+(skills, agents, tools, nested plugins, MCP servers) is registered from inside that
 `effect`, through the domains on `ctx`.
 
 The entrypoint follows the official
@@ -78,7 +78,7 @@ export default Plugin.define({
 prescribe. `effect` is pinned to the exact build OpenCode ships, which also keeps
 the two resolving to a single deduped copy.
 
-TypeScript is shipped as-is — there is no `dist` and no build step, because a git
+TypeScript is shipped as-is. There is no `dist` and no build step, because a git
 install does not run one. Keeping `index.ts` in the repository root lets the same
 file satisfy both a git-spec install and a local directory reference.
 
@@ -113,8 +113,8 @@ Did you mean to write 'color'?
 
 Omitted fields keep the value `Agent.Info.default(id)` already supplies, so a
 definition only states what it changes. `permissions` **extend** the agent's
-seeded rules rather than replacing them — the same layering OpenCode's own agent
-plugins use — so a project's global rules still land on top and the last matching
+seeded rules rather than replacing them. It is the same layering OpenCode's own agent
+plugins use, so a project's global rules still land on top and the last matching
 rule wins. Leaving `permissions` off gives the agent OpenCode's standard coding
 rules: allow tools, ask on `.env` reads and outside the worktree.
 
@@ -125,8 +125,8 @@ agent that does not exist yet, which is how a plugin introduces one, and how
 OpenCode's own `build`, `plan`, and `explore` are declared. Registering does not
 make an agent the default; the user's `default_agent` is left alone.
 
-A file-based alternative exists — OpenCode reads `agent/` and `agents/` folders
-of markdown with YAML frontmatter — but only inside a _config_ directory, the
+A file-based alternative exists. OpenCode reads `agent/` and `agents/` folders
+of markdown with YAML frontmatter, but only inside a _config_ directory, the
 global `~/.config/opencode` or a project's `.opencode`, never inside an installed
 plugin. A folder shipped in this package would go unread, which is one reason
 Spectre declares agents in TypeScript.
@@ -191,7 +191,7 @@ export type Options = BaseOptions & (
 
 `execute` returns a structured `output`, not a rendered report, and the schema is
 the contract: OpenCode validates the value against it before the sandbox sees
-it. Declare **plain** schemas only and do any checking inside `execute` — the
+it. Declare **plain** schemas only and do any checking inside `execute`. The
 boundary rejects `Int`, `Finite`, `NonEmptyString`, `URL`, and anything built
 with `Schema.check` or `Schema.refine`, and on two of those it fails with its
 own internal error instead of naming the field.
@@ -210,7 +210,7 @@ A tool registered with `codemode: true` is invisible to the model without it, so
 a skill that depends on one has to be able to assume it. This is a floor, not an
 override: session and project permission rules merge over an agent's own and the
 last match wins, so a user who denies `execute` still wins. `no-comments` is the
-skill that tests the assumption — step 1 checks for `execute` and stops with a
+skill that tests the assumption. Step 1 checks for `execute` and stops with a
 message rather than falling back to `grep`.
 
 ## Development

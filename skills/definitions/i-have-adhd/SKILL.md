@@ -130,9 +130,11 @@ Cutting is only allowed when the words carry no meaning. Before you delete a sen
 
 A hedge that carries real uncertainty is content, not padding. Keep it. Deleting it to make a sentence shorter is a correctness bug.
 
-Bad: "For `explorer` and `paper-research` — which differ on tools and write-scope, not compute — the difference is that one may write a notes file and the other may not touch anything."
+Bad: "For `explorer` and `paper-research`, which differ on tools and write-scope rather than compute, the difference is that one may write a notes file and the other may not touch anything."
 
 Good: "`explorer` and `paper-research` are not different amounts of thinking. They are different amounts of power. One may write to a notes file. The other may not touch anything."
+
+Rule 21 is the concrete test for this one. The failure has a shape: a dropped article, a fragment with no verb, an arrow standing in for a sentence.
 
 ### 13. One idea per sentence
 
@@ -140,20 +142,77 @@ Split the sentence when "and" joins two complete thoughts, or when one sentence 
 
 Name the actor first. A noun cannot fail, decide, or turn out. If the sentence starts with an abstraction, find the thing doing the action and put that first.
 
+Passive voice is fine when the actor is unknown or does not matter. Otherwise name it. "queries are validated" becomes "the compiler validates queries". "the file is parsed by the loader" becomes "the loader parses it". The test is mechanical: search for "is", "are", "was", or "were" plus a past participle, and ask who is doing it.
+
 Bad: "The axis is wrong." / "The real failure mode is invented citations." / "The resolution happens at load time."
 Good: "This does not work." / "It fails like this: invented citations." / "We check it at startup."
 
 ### 14. Short words, no pictures
 
-Use the short word: use, not utilize. Next, not subsequent. If, not in the event that. Buy, not purchase. When a noun only works with a verb bolted on, use the verb — "the resolution" becomes "it resolves".
+Use the short word: use, not utilize. Next, not subsequent. If, not in the event that. Buy, not purchase. When a noun only works with a verb bolted on, use the verb. "The resolution" becomes "it resolves".
 
 Say the thing, not a picture of the thing. "Turns out", "the opposite of what you want", "the sharpest knot", "worth a ceiling", "the fourth reader" all land as noise on a reader whose first language is not English. That reader is the worst case, not the special case: literal English is good for everyone, and a figure of speech costs a native reader a little and a non-native reader the meaning.
+
+Watch for the noun that sounds technical and means nothing. Substrate, wedge, vector, locus, vantage, nexus, harness, bedrock, scaffolding, modality, paradigm, gold-plating, ratchet, endgame, north star, flywheel. Each one has a plainer word. "Substrate" becomes "base". "Wedge in" becomes "add". "Gold-plating" becomes "more than the job needs". "Endgame" becomes "the last phase". Use the concrete word.
 
 ### 15. Say it twice if it helps
 
 Repeating a key point is cheap. A sentence the reader has to read twice is not. Restating is not padding when the thing being restated is load-bearing.
 
 Explain a term in plain words the first time it appears, then use the term. A reader meeting "upsert" or "blast radius" cold pays for it every time.
+
+### 16. No em dashes
+
+Use a period or a comma. Do not reach for a dash, and do not reach for an en dash or a hyphen as a stand-in either.
+
+A dash is the most reliable AI tell, and it hides a missing full stop. Two thoughts joined by a dash are two sentences that were never split. Parenthetical aside counts too: write `Bun.file(name)`, not `Bun.file (name)`.
+
+A dash inside a code block, a commit message, a quoted flag, or a file name is not prose. Leave it.
+
+Bad: "the fix is a one-line change — and it touches two files."
+Good: "The fix is a one-line change. It touches two files."
+
+This file holds one em dash, and it is the bad example in this rule. Read the file against itself and you will find it.
+
+### 17. Cut the -ing phrase
+
+"highlighting", "ensuring", "reflecting", "showcasing", "fostering", "demonstrating", "leveraging". They stand in for a fact nobody wrote. Delete the phrase, or finish the sentence with the thing it was gesturing at.
+
+Bad: "This ensures the token is refreshed."
+Good: "This refreshes the token."
+
+The dangling form is the same tell at longer length. "The change, ensuring backward compatibility, touches two files." Name the case it supports.
+
+### 18. Name the source, or cut the sentence
+
+"Experts believe", "industry reports suggest", "some critics argue", "it is widely known", "best practice is". Either name who, or delete the sentence.
+
+An attribution with no name gives the reader nothing and hides the fact that nobody said it. If the claim matters, it can be checked, so it can carry a citation. If it does not matter, it should not be there.
+
+`principle-evidence` holds the version of this rule for technical claims. This one is the prose habit behind it.
+
+### 19. Cut the false range
+
+"from X to Y" only works when X and Y sit on one scale. "from 200ms to 3 seconds" is a scale. "from types to docs, from tests to release" is not. List the things instead.
+
+Bad: "I swept the change from types to tests to release notes."
+Good: "I swept three places: the types, the tests, and the release notes."
+
+### 20. Cut the adverb, or use a stronger verb
+
+An adverb propping up a weak verb means the verb is wrong. "runs quickly" becomes "is fast" or a number. "significantly improves" becomes the measured delta. "carefully handles" becomes what it does.
+
+Bad: "The wrapper correctly handles the empty array."
+Good: "The wrapper returns an empty array."
+
+### 21. Write whole sentences
+
+Do not make the reader decode. Dropped articles, verbless fragments, symbol-speak, and abbreviations all spend the budget that the work needs.
+
+Bad: "Parser rejects bad date → exit 2, no write"
+Good: "The parser rejects a bad date, exits with code 2, and writes nothing."
+
+This is the brake on rules 1, 2, 10, and 12. They all push toward less, and less is easy to overshoot. Terse is the goal, cryptic is the failure.
 
 ## When to break the rules
 
@@ -177,12 +236,14 @@ Before sending, delete:
 4. Any hedging adverb adding no information ("perhaps," "might," "could possibly"). Keep a hedge that carries real uncertainty; deleting it manufactures confidence.
 5. Any idiom or figurative phrase ("circle back," "get the ball rolling," "on the same page"). Replace with the literal action.
 6. Any sentence that exists to sound thorough rather than to carry information.
+7. Every em dash. A period or a comma goes there (rule 16).
 
 Deleting is the easy half. The rest of this check protects the message:
 
-7. Put back anything you cut that carried meaning. If a sentence is the only place the reader learns a fact, a caveat, or a limit, it was never padding.
-8. Read every remaining sentence once. Would a reader whose first language is not English get it in one pass? If not, split it (rule 13) or swap the word (rule 14). Do this before the check below — there is no point measuring the first line of a message nobody can read.
-9. A table cell should be a phrase. If a cell needs a comma and a clause to make sense, it belongs in prose under the table.
+8. Put back anything you cut that carried meaning. If a sentence is the only place the reader learns a fact, a caveat, or a limit, it was never padding.
+9. Read every remaining sentence once. Would a reader whose first language is not English get it in one pass? If not, split it (rule 13) or swap the word (rule 14). Do this before the check below, because there is no point measuring the first line of a message nobody can read.
+10. A table cell should be a phrase. If a cell needs a comma and a clause to make sense, it belongs in prose under the table.
+11. Any fragment you cut that was already a fragment. Put back the article, the verb, and the noun (rule 21). Cutting a real sentence is fine. Cutting the reader's ability to parse what is left is not.
 
 Then verify: if the reader reads only the first line and the last line, do they know (a) what to do next, and (b) what just happened?
 
