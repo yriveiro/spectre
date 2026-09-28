@@ -5,8 +5,8 @@
 Verification is honesty made checkable.
 
 In software, the only claim worth anything is a checked one. A project whose
-code, manifests, generated artifacts, and documentation all say the same thing —
-and whose agreement you can reproduce with a command — has earned the reader's
+code, manifests, generated artifacts, and documentation all say the same thing,
+and whose agreement you can reproduce with a command, has earned the reader's
 trust. A project where they disagree has not: every statement in it is a
 hypothesis, and the reader pays to re-derive what the author already knew.
 
@@ -24,13 +24,13 @@ worse than a messy one, because it spends the reader's trust. Choose the boring
 true state.
 
 **One claim, one source.** Any fact stated twice will drift. A fact that must
-appear in several places — a supported-version floor, a dependency pin, a
-documented requirement, an inventory in a readme — moves together, in one
+appear in several places (a supported-version floor, a dependency pin, a
+documented requirement, an inventory in a readme) moves together, in one
 change. Never update one copy and leave the others. Once a fact is repeated, every
 extra copy becomes a liability to re-check whenever the original moves.
 
 **The diff, not the memory.** What is true is what the tool says now. Recall is
-a hypothesis; a diff is evidence. Never report what a file *should* contain — read
+a hypothesis; a diff is evidence. Never report what a file *should* contain. Read
 what it contains.
 
 **Unverified is not a claim.** If it was not checked, it is not a fact. Write
@@ -50,7 +50,7 @@ guessing. Reproduce it somewhere that cannot damage the real thing.
 
 **Diff to establish what changed.** To learn what a version range changed, diff
 the range. Do not infer it from commit subjects, release notes, changelog prose,
-or ancestry heuristics — each is independently misleading, and believing one is how
+or ancestry heuristics. Each is independently misleading, and believing one is how
 a wrong conclusion gets filed as a finding. When the tool that would give you the
 truth is available, a cheaper signal is a worse one.
 
@@ -60,7 +60,7 @@ reporting it; the residue is where the mistakes live.
 
 **Calibrate to the reader's trust.** Prose written for a stranger is held to a
 higher standard than a commit message, because a stranger cannot reconstruct your
-reasoning. Write for the reader who will believe you without checking — and make
+reasoning. Write for the reader who will believe you without checking, and make
 sure they were right to.
 
 ## Tactics
@@ -79,7 +79,7 @@ grep -R '<old-value>' . | grep -v '<generated-or-vendored>'   # expect no hits
 ```
 
 **Prove coherence rather than assume it.** After changing a dependency, confirm
-that everything which must agree with it actually did — the direct pin, the
+that everything which must agree with it actually did: the direct pin, the
 lockfile or its equivalent, and any transitive copy. One search is cheaper than
 the whole class of bug where two versions of the same thing coexist and quietly
 disagree.
@@ -101,11 +101,11 @@ must still stand behind. Every added subtree needs a provenance that can be name
 "It just came along" is the symptom of an unreviewed change.
 
 **Do not ship claims that cannot be reproduced.** A number in a report, a green
-checkmark, a passing build — each promises that a stranger can run the same
+checkmark, a passing build. Each promises that a stranger can run the same
 command and get the same result. Keep the command next to the claim.
 
 **Prefer the boring true state over the tidy false one.** Silencing a check,
-widening an ignore, loosening a constraint to make something resolve — these make
+widening an ignore, loosening a constraint to make something resolve. These make
 the project *look* healthy while removing the ability to know. A check that passes
 because it was adjusted is worse than one that fails, because it reports a health
 that does not exist.

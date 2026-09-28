@@ -6,7 +6,8 @@ import { anchor, type Definition } from "../definition";
  *
  * Verification says a fact nobody checked is not a fact; that claim half is the
  * principle-verification skill next to this one. What lives here is the other
- * half — how the check is obtained, and how you know the check itself works. Find
+ * half, which covers how the check is obtained and how you know the check itself
+ * works. Find
  * the oracle instead of arguing, prove a check can fail, and measure the
  * population rather than the specimen.
  */
