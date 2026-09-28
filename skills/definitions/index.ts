@@ -8,6 +8,8 @@ import { principleHygiene } from "./principle-hygiene";
 import { principleVerification } from "./principle-verification";
 import { spectreMode } from "./spectre-mode";
 import { principleGuardTheContextWindow } from "./principle-guard-the-context-window";
+import { principleMinimizeReaderLoad } from "./principle-minimize-reader-load";
+import { ripwire } from "./ripwire";
 
 const definitions: ReadonlyArray<Definition> = [
   iHaveAdhd,
@@ -18,6 +20,8 @@ const definitions: ReadonlyArray<Definition> = [
   principleVerification,
   spectreMode,
   principleGuardTheContextWindow,
+  principleMinimizeReaderLoad,
+  ripwire,
 ];
 
 const ROOT = import.meta.dir;

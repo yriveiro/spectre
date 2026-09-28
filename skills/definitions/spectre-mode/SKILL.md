@@ -89,12 +89,17 @@ skipped and why.
 | When this is true | Load |
 | ----------------- | ---- |
 | You are about to write anything for a person to read | `i-have-adhd` |
+| A response is long enough that the reader must hold all of it at once | `principle-minimize-reader-load` |
 | You are about to state a fact you have not read at its source | `principle-evidence` |
 | You are choosing between two ways to build something | `principle-evidence` |
 | You are about to report a number, a passing check, or "done" | `principle-verification` |
 | You just changed a decision that other files state | `principle-hygiene` |
 | You are inside code you are editing anyway | `principle-hygiene` |
-| The context window is filling | `principle-guard-the-context-window` |
+| A file, a log, or a file list is too big to read at once | `principle-guard-the-context-window` |
+| You are about to spawn a subagent, or a task splits into mechanical and judgement | `model-router` |
+| You are about to add a layer, a wrapper, or a field | `principle-minimize-reader-load` |
+| A value's origin or mutability takes more than one hop to answer | `principle-minimize-reader-load` |
+| Nobody has measured a claim about the code and you are about to report it | `ripwire` |
 | You are about to type a `//` or a `/**` | the comment disposition, above |
 | What you wrote has comments or lint suppressions | `no-comments` |
 
@@ -135,9 +140,24 @@ the leaf decides. This list only tells you which file to open.
   manifests, version floors, lockfiles, generated artifacts, READMEs, decision
   records, and release notes.
 - `principle-guard-the-context-window`. Spend context on purpose. Load it when the
-  window is filling: large files, verbose tool output, repeated reads, fan-out
-  planning. Send the bulk to subagents and keep summaries in the main thread, not
-  raw output.
+  material is too big to hold at once: a file or a log with thousands of lines, a
+  list of files too long to read one at a time, a command that returns megabytes,
+  several files that only make sense read together. Read the bulk in a subagent
+  and keep its summary in the main thread, never the raw payload.
+- `principle-minimize-reader-load`. Reader load is the work a person does to
+  understand something, on two axes: the hops between their question and the
+  answer, and the state they must hold in their head. It holds for code and for a
+  response. Load it before adding a layer, a wrapper, a field, or a module-level
+  cache, when a value takes more than one hop to trace, and when a response is
+  long enough that the reader has to hold the whole thing at once. Collapse what
+  only forwards. Do not collapse a boundary that hides a real decision, because
+  that boundary is load reduction.
+- `ripwire`. The map from a principle to the command that can falsify its test.
+  Load it when a principle applies and you have not measured the code, so the
+  claim gets a run instead of an assertion. It also names the two leaves with no
+  instrument, and the ways ripwire is wrong, which is the half that keeps the map
+  from becoming deference to a tool. The principles stay generic about tools;
+  this is the one file allowed to name one.
 
 ## How to work
 

@@ -86,7 +86,9 @@ not optional.
 
 **Remove what nothing reaches.** Unused exports, unreachable branches,
 commented-out blocks, a helper kept "just in case." Deletion is verifiable: the
-check either still passes or it does not, and either answer is a fact.
+check either still passes or it does not, and either answer is a fact. A layer
+with one caller that only forwards is a different thing. It is not dead, it is
+redundant, and that is `principle-minimize-reader-load`.
 
 **Take the whole bump, not the easy half.** A change that moves the direct pin but
 leaves a second copy of the same package behind is a known problem with extra
