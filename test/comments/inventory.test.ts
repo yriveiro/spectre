@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test"
 import { Effect } from "effect"
 import { Tool } from "@opencode/schema/tool"
-import { comments } from "../tools/definitions/comments"
+import { comments } from "../../tools/definitions/comments"
 
 type Hit = { file: string; line: number; kind: string; text: string }
 type Page = {
@@ -308,13 +308,16 @@ describe("robustness", () => {
 
 describe("this repository", () => {
   test("scanning every source file finds no hit that is not a comment", async () => {
-    const sources = [import.meta.dir, `${import.meta.dir}/../skills`, `${import.meta.dir}/../agents`];
+    // The repo root, not this directory: the point is to scan everything spectre
+    // ships, so a new source folder has to be listed here or the check goes quiet.
+    const root = `${import.meta.dir}/../..`;
+    const sources = ["agents", "skills", "tools"].map((f) => `${root}/${f}`);
     const files: Record<string, string> = {};
-    for (const root of sources) {
-      for await (const entry of new Bun.Glob("**/*.{ts,py,sh,yml,yaml,toml}").scan({ cwd: root })) {
+    for (const folder of sources) {
+      for await (const entry of new Bun.Glob("**/*.{ts,py,sh,yml,yaml,toml}").scan({ cwd: folder })) {
         if (entry.split("/").some((part) => part === "node_modules")) continue;
-        const name = `${root.split("/").at(-1) ?? "root"}/${entry}`;
-        files[name] = await Bun.file(`${root}/${entry}`).text();
+        const name = `${folder.split("/").at(-1)}/${entry}`;
+        files[name] = await Bun.file(`${folder}/${entry}`).text();
       }
     }
     expect(Object.keys(files).length).toBeGreaterThan(10);

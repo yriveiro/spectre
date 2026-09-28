@@ -2,14 +2,14 @@
 
 Read this before declaring or changing a tool's `input` or `output` schema. The
 sandbox boundary walks those schemas, and it walks a **small subset** of the
-Schema AST. Everything outside that subset is rejected at call time — after
+Schema AST. Everything outside that subset is rejected at call time, after
 registration succeeded, and on the input and the output side alike.
 
 ## The rule
 
 1. **A declared schema describes the JSON shape. It does not enforce anything.**
    The host will not run a check even when it accepts the schema carrying it, so
-   a check that matters runs inside `execute` — or in the caller, which is the
+   a check that matters runs inside `execute`, or in the caller, which is the
    only place that can trust the result anyway.
 2. **Prefer the primitive.** A count or a line number is `Schema.Number`. A
    member of a fixed set is `Schema.Literals`. An absent field is
@@ -17,7 +17,7 @@ registration succeeded, and on the input and the output side alike.
 
 ## What the boundary accepts
 
-Measured at 2.0.18 — one schema per tool, each called with a value valid for it.
+Measured at 2.0.18, one schema per tool, each called with a value valid for it.
 
 | Declared | Call |
 | --------- | ---- |
@@ -34,7 +34,7 @@ Measured at 2.0.18 — one schema per tool, each called with a value valid for i
 | `Schema.Trim` | rejected: `self.trim is not a function` |
 
 `Int`, `Finite`, and `NonEmptyString` are the traps: they read as plain schemas
-and they are not. The last two are worse — the boundary **crashes** on them with
+and they are not. The last two are worse. The boundary **crashes** on them with
 its own internal error, so the failure names neither the field nor the schema.
 
 A branded *type* is fine while it stays a TypeScript type.
@@ -44,8 +44,8 @@ schema. Branding it into the schema is what breaks it.
 ## How `options` becomes a call path
 
 Read at tag `v2.0.18` (`cd9a14a`), not inferred. A tool added through
-`ctx.tool.transform` lands in the **same** registry as the builtins — there is no
-separate plugin path — and the three fields in `Tool.Options` decide where it
+`ctx.tool.transform` lands in the **same** registry as the builtins. There is no
+separate plugin path, and the three fields in `Tool.Options` decide where it
 surfaces:
 
 | Declared | Reaches the model as |
@@ -70,13 +70,13 @@ the same registry, filtered by that agent's merged permission ruleset, so it see
 a namespaced tool exactly when a primary does and nothing has to be granted to it.
 
 The practical consequence: a missing `tools.spectre.*` is almost never a
-declaration problem. It is `execute` disabled, a denied `read`, or — the one that
-actually bites — a different copy of this plugin being the one loaded. Check which
+declaration problem. It is `execute` disabled, a denied `read`, or the one that
+actually bites: a different copy of this plugin being the one loaded. Check which
 copy before re-reading the declaration.
 
 ## Prove it with a call
 
-`bun run typecheck` cannot catch any of this — every rejected schema above is
+`bun run typecheck` cannot catch any of this. Every rejected schema above is
 valid TypeScript, and registration logs happily either way. A registration that
 logs is not a tool that runs. The only proof is a real call:
 
