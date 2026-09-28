@@ -1,13 +1,13 @@
 # AGENTS.md
 
-Working notes for anyone — human or agent — changing this repository.
+Working notes for anyone (human or agent) changing this repository.
 
 ## What this repo is
 
 Spectre is an OpenCode plugin. The whole package is one entrypoint: `index.ts`
 default-exports a plugin definition (`id` + `effect`), and OpenCode calls `effect`
-once per project instance. Everything Spectre adds to OpenCode — skills, agents,
-tools, nested plugins, MCP servers — is registered from inside that `effect`,
+once per project instance. Everything Spectre adds to OpenCode (skills, agents,
+tools, nested plugins, MCP servers) is registered from inside that `effect`,
 through the domains on the plugin context.
 
 Minimum supported OpenCode version: **2.0.18**. The installed CLI is the only
@@ -41,6 +41,7 @@ this table.
 | `node:timers/promises` `setTimeout` | `Bun.sleep`, `Bun.sleepSync`, `Bun.nanoseconds` |
 | `semver` | `Bun.semver` |
 | TOML parsers | `Bun.TOML.parse` |
+| JSONC parsers (`jsonc-parser`) | `Bun.JSONC.parse` |
 | `chalk`, `ansi-colors` | `Bun.color` |
 | markdown renderers | `Bun.markdown` |
 | XML parsers | `Bun.XML` |
@@ -64,13 +65,37 @@ and absent from the API table:
 - **`Bun.path` does not exist.** The path helpers are `Bun.pathToFileURL`,
   `Bun.fileURLToPath`, `Bun.resolveSync`, plus `import.meta.dir` /
   `import.meta.path`. For real path manipulation (`join`, `relative`, `extname`)
-  Bun has no equivalent, so `node:path` is the correct answer — Bun implements it
+  Bun has no equivalent, so `node:path` is the correct answer. Bun implements it
   fully. Use it without apology and record it as an exception below.
 - **`Bun.Blob` and `Bun.File` do not exist.** Use the standard `Blob` / `File`
   globals, or `Bun.file()` for filesystem work. Bun's own guidance is to build on
   the standard Web APIs rather than namespace them.
 
-To re-verify after a Bun upgrade, probe by direct property access — `n in Bun`
+One row above is the exception to how this table was built: **`Bun.JSONC.parse` is
+not in `docs/runtime/bun-apis.mdx`**, or in Bun's docs at `main`. Confirmed by
+probe on 1.4.2, the version OpenCode ships. It parses `//` and `/* */` comments
+and trailing commas. So do not add `jsonc-parser` for a config file. Re-probe it
+in the same sweep as the rest, and if a future Bun drops it, the failure is a
+`TypeError` at startup rather than a silent misparse.
+
+Two limits of that parser, both measured rather than assumed, and both the reason
+it is not a drop-in answer for a config file a human edits:
+
+- **Its `SyntaxError` does not locate the break.** The error carries `line`,
+  `column`, `originalLine` and `originalColumn`, and all four are the *same two
+  numbers* for every broken document (`line: 10, column: 19` across four files
+  with breaks on lines 1, 3, 9 and 10. Those are parser-internal state. Report
+  the message, which does name the offending token, and do not report a position.
+- **It ignores everything after the first complete value.**
+  `Bun.JSONC.parse('{"a":1} {"b":2}')` returns `{ a: 1 }` with no error. A config
+  with a stray second object parses as if it were not there, so trailing garbage
+  is not a parse failure and cannot be reported as one.
+
+Getting a line number means writing a position mapper, which is a hand-rolled
+JSONC scanner. That is a deliberate cost, not a free one; pay it only if a
+requirement actually needs it.
+
+To re-verify after a Bun upgrade, probe by direct property access. `n in Bun`
 reports `false` for lazily-defined members and will lie to you:
 
 ```sh
@@ -88,7 +113,43 @@ Rules that follow from this:
 
 | Import      | Why Bun has no equivalent |
 | ----------- | ------------------------- |
-| `node:path` | Only `join` and `relative`. Checked against `docs/runtime/`: the complete set of Bun path utilities is `Bun.fileURLToPath`, `Bun.pathToFileURL`, and `Bun.resolveSync`, none of which join, split, or relativize. `Bun.$`'s `dirname`/`basename` are shell binaries, not functions. Two files import it: `skills/definitions/definition.ts`, whose `SKILL.md` anchor is `join(import.meta.dir, "SKILL.md")`, and `tools/definitions/comments.ts`, which resolves a target against the project directory and reports every hit back as a project-relative path. |
+| `node:path` | Only `join` and `relative`. Checked against `docs/runtime/`: the complete set of Bun path utilities is `Bun.fileURLToPath`, `Bun.pathToFileURL`, and `Bun.resolveSync`, none of which join, split, or relativize. `Bun.$`'s `dirname`/`basename` are shell binaries, not functions. Four files import it: `skills/definitions/definition.ts`, whose `SKILL.md` anchor is `join(import.meta.dir, "SKILL.md")`; `tools/definitions/comments/index.ts`, which resolves a target against the project directory and reports every hit back as a project-relative path; `tools/definitions/routing/locate.ts`, which joins the config directory to the file name; and `tools/definitions/routing/load.ts`, which uses `basename` to name a file in an error message without printing a path the user cannot click. |
+
+## Reading OpenCode's source
+
+**Read it at the tag, never at the checkout's HEAD.** The `opencode-gh` reference
+is pinned to `dev`, and `dev` is not the version we target. Every claim about
+OpenCode's behaviour needs `git show v<our-version>:<path>`, or
+`git grep <pattern> v<our-version> -- <path>`. The answer to "does this file
+even exist for us?" is a `git ls-tree -r --name-only v<our-version> | grep …`,
+not a look at the working tree.
+
+The version floor is not a guess. It is the npm dist-tag:
+
+```sh
+curl -s https://registry.npmjs.org/@opencode/cli | grep -o '"latest":"[^"]*"'
+```
+
+At the time of writing that is `2.0.18`, published 2026-09-25. Three places in
+this repo carry that number and they mean different things: `engines.opencode` is
+the **floor** (`>=2.0.18`), while `@opencode/plugin` and `@opencode/schema` are
+**exact** pins. The exact pins are what source-reading must match, because they
+are what resolves into `node_modules` and what the plugin is handed at runtime.
+Re-run the registry check before any bump.
+
+### The `dev` checkout is not the version we ship
+
+`opencode-gh` is pinned to `dev`. `dev` is not the version we target, so a path
+that resolves in that working tree proves nothing about the version we ship.
+Before quoting a line number, prove the path exists at the tag:
+
+```sh
+git ls-tree -r --name-only v<our-version> | grep <path>
+```
+
+If it does not resolve at the tag, the finding is about code nobody runs. When
+`dev` and the tag disagree, the tag wins, and `AGENTS.md` plus the feature docs
+get corrected in the same change that found the error.
 
 ## Writing the entrypoint
 
@@ -111,7 +172,7 @@ export default Plugin.define({
 ```
 
 `@opencode/plugin` is a **runtime** `dependency` of a published plugin, alongside
-`effect` — that is what the docs' Publish section prescribes. An earlier version
+`effect`. That is what the docs' Publish section prescribes. An earlier version
 of this file argued for a type-only import to avoid pulling the `@opencode/*`
 tree in at install time. That reasoning was wrong on the merits: the dependency is
 supposed to be there, and because we pin `effect` to the same exact version
@@ -123,7 +184,7 @@ find node_modules -path '*effect/package.json' | grep -c .
 ```
 
 Anything above `1` means two Effect copies, which is the hazard worth worrying
-about — not the dependency count.
+about, not the dependency count.
 
 Prefer `Effect.gen` over `Effect.fn` here. The docs use `Effect.gen` throughout,
 and the `effect` signature is `(ctx) => Effect`, so a generator that takes `ctx`
@@ -131,9 +192,42 @@ directly is the shape OpenCode expects.
 
 `tsconfig.json` sets `"types": ["node", "bun"]` deliberately. Dropping `"node"`
 to leave a tidy `["bun"]` typechecks fine until you touch a Bun API that needs
-node's ambient declarations — `Bun.Blob` and the `BunFile` type both stop
+node's ambient declarations. `Bun.Blob` and the `BunFile` type both stop
 resolving. Both entries are load-bearing: `bun` supplies the Bun globals, `node`
 supplies the ambient declarations and `node:*` compatibility that Bun implements.
+
+## Every definition is a folder
+
+One rule under every `definitions/`, and it has no exceptions:
+
+```
+agents/definitions/<id>/index.ts      the definition
+skills/definitions/<id>/index.ts      the declaration
+skills/definitions/<id>/SKILL.md      its body
+tools/definitions/<id>/index.ts       the declaration
+```
+
+A definition that needs one file still gets a folder with one file in it. That is
+not ceremony: a mix of `comments.ts` and a `routing/` folder in the same directory
+reads as though the second one is a different kind of thing, and the next person
+copies the wrong shape. A tool that grows past a single file adds siblings beside
+its `index.ts`; it never moves out to the repository root, because a root folder
+would be a fourth kind of surface the plugin does not have.
+
+`index.ts` is the declaration and is what the parent imports, so
+`./definitions/comments` resolves the same whether the definition is one file or
+five. Nothing above `definitions/` needs to know how many files are inside.
+
+Two consequences worth keeping:
+
+- **Nothing at the root imports a definition's internals.** `tools/index.ts`
+  imports `./definitions/routing` and gets the tool. It does not reach for
+  `routing/check`. If a second consumer ever needs the internals, that is the
+  signal the boundary is wrong, not the signal to widen the import.
+- **The `comments` self-check enumerates source folders**, so a definition that
+  moves between `agents/`, `skills/` and `tools/` breaks that test until the list
+  is updated. That is the intended failure: it catches the move instead of
+  silently scanning less than it did.
 
 ## Layout and how OpenCode finds the entrypoint
 
@@ -152,11 +246,11 @@ paths, with no build step and no `dist`:
 | absolute **directory** in config | `<dir>/server.*`, then `<dir>/index.*` | a root-level `index.*` or `server.*` |
 | absolute **file** in config | rejected | logs `configured plugin path must be a directory` |
 
-Moving the entrypoint to `src/index.ts` would still install from a git specifier —
-resolution goes through the exports map, not the file location — but it would stop
-a local **directory** reference from resolving, and OpenCode drops unresolved
-directory plugins **silently** (`if (!entrypoints.server) return []`). Keeping
-`index.ts` at the root means both paths work, so local iteration needs no mirror:
+Moving the entrypoint to `src/index.ts` would still install from a git specifier,
+since resolution goes through the exports map and not the file location. But it
+would stop a local **directory** reference from resolving, and OpenCode drops
+unresolved directory plugins **silently** (`if (!entrypoints.server) return []`).
+Keeping `index.ts` at the root means both paths work, so local iteration needs no mirror:
 
 ```json title="opencode.json"
 {
@@ -206,8 +300,8 @@ Verify a change actually loads, from a scratch project rather than this repo:
 opencode plugin list
 ```
 
-`opencode plugin list` reports nothing on the first run in a fresh directory —
-the background service has not picked up the config yet. Re-run it before
+`opencode plugin list` reports nothing on the first run in a fresh directory,
+because the background service has not picked up the config yet. Re-run it before
 concluding anything failed.
 
 `opencode plugin list` only proves the entrypoint resolved. To prove the `effect`
@@ -232,22 +326,23 @@ yriveiro.spectre  3ac06f1  github:yriveiro/spectre
 
 The `github:` specifier is resolved from the install cache, not from the config
 directory, so an empty `OPENCODE_CONFIG_DIR` does not unseat it. The only thing
-that does is removing the entry from the global config — `~/.config/opencode/opencode.jsonc`:
-
+that does is removing the entry from the global config, which is
+`~/.config/opencode/opencode.jsonc`:
 ```jsonc
 {
   "plugins": ["github:yriveiro/spectre"]   // delete this line while developing
 }
 ```
 
-Until it is gone, both copies claim the id `yriveiro.spectre` and the installed
-one wins, and it wins silently: a published copy from before this tool existed
-registers no `comments` tool at all, so `tools.spectre.comments` is simply absent
-from the catalog and every symptom looks like a bug in the code under test. Check
-which copy is live before debugging anything.
+Until it is gone, both copies load: the first in boot order wins the id and the
+later one is marked failed with `Duplicate plugin ID`, so the installed copy wins
+silently. A published copy from before this tool existed registers no `comments`
+tool at all, so `tools.spectre.comments` is simply absent from the catalog and
+every symptom looks like a bug in the code under test. Check which copy is live
+before debugging anything.
 
 A log line that says a domain registered is not proof that what it registered
 runs. `opencode plugin list` resolves an entrypoint; a session proves the
-`effect`. For a tool, the proof is a call — see `tools/FOR_AGENTS.md`, which
+`effect`. For a tool, the proof is a call. See `tools/FOR_AGENTS.md`, which
 holds the sandbox boundary's rules for `input` and `output` schemas and the
 command that proves one.

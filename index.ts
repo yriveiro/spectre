@@ -12,8 +12,12 @@ import * as tools from "./tools";
  * OpenCode — skills, agents, tools, nested plugins, MCP servers — is registered
  * from inside that effect, through the domains on `ctx`.
  *
- * The id must be unique across every loaded plugin; OpenCode refuses to activate
- * two plugins that claim the same id.
+ * A duplicate id is not fatal: the first registration wins and the later one is
+ * marked failed, so two copies load and the installed one silently takes the id.
+ *
+ * Nothing here reads `spectre.jsonc`. Model routing is a tool, called when a model
+ * is about to be chosen, so a config mistake is reported to whoever was about to
+ * route instead of stopping a session that had nothing to do with it.
  *
  * @see https://opencode.ai/v2/docs/build/plugins/effect/
  */
