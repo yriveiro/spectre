@@ -15,7 +15,7 @@ export const principleHygiene: Definition = {
   id: Skill.ID.make("principle-hygiene"),
   name: Skill.Name.make("principle-hygiene"),
   description:
-    "The principle that small deferred details compound into a mess no one can afford to fix later. Use when refactoring code you are already inside, removing something that is no longer used, deciding whether a dependency should be bumped, or finishing a change: leave what you touched cleaner than you found it, without expanding the change to prove it.",
+    "Leave what you touched cleaner than you found it. Load it when you are already inside code you are editing anyway and you notice dead code, an unused export, a stale comment, a leftover flag, a duplicated block, or a dependency sitting on an old version that is still inside its range. Delete what nothing reaches, and take the safe bump while the checks that prove it are already in your hand. Hygiene is not finishing a change: that is principle-verification, and a skill that claims to do both cannot be trusted to do either.",
   autoinvoke: false,
   path: anchor(import.meta.dir),
 };

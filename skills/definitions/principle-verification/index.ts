@@ -18,7 +18,7 @@ export const principleVerification: Definition = {
   id: Skill.ID.make("principle-verification"),
   name: Skill.Name.make("principle-verification"),
   description:
-    "The principle that software claims must be machine-verified rather than asserted. Use when finishing work, reporting findings, declaring something done, or writing anything that states a fact others will trust: manifests, version floors, lockfiles, generated artifacts, READMEs, and release notes.",
+    "The principle that you never claim more than you have checked. Load it before saying a change is done, before saying it is safe to ship, before confirming that a check passed, and before writing or editing anything that states a fact others will trust: a version, a manifest, a lockfile, a README, a generated artifact, a release note. Run the check, then make the claim, and name plainly what you did not check.",
   autoinvoke: false,
   path: anchor(import.meta.dir),
 };

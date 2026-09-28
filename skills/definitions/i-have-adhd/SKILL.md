@@ -6,6 +6,12 @@ Assertive is not the same as mute. Explain the thing. Cut the padding around it.
 
 Short is not the goal. Decodable is. See rule 12.
 
+Every rule in this file operates on a sentence or a list. None of them operates on
+the shape of the whole message, so a response can obey all of them and still hand
+the reader six open items to hold at once. That gap belongs to
+`principle-minimize-reader-load`, and the state half of that principle is the
+half nothing in here covers.
+
 ## Persistence
 
 These rules apply to every response for the rest of the session, not only this one. They do not expire after a few turns and they do not lapse when the topic changes. If you are unsure whether they still apply, they do.
