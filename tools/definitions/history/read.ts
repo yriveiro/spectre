@@ -10,6 +10,8 @@ export type Report = {
   readonly authors: ReadonlyArray<string>;
   readonly first: string | null;
   readonly last: string | null;
+  /** The commit bodies, which is where the rationale actually is. */
+  readonly bodies: number;
   readonly problems: ReadonlyArray<string>;
 };
 
@@ -44,6 +46,7 @@ export const history = async (
     readonly limit?: number;
     readonly line?: number;
     readonly contains?: string;
+    readonly matches?: string;
   },
 ): Promise<Report> => {
   const limit = input.limit ?? DEFAULT_LIMIT;
@@ -64,6 +67,7 @@ export const history = async (
       authors: [],
       first: null,
       last: null,
+      bodies: 0,
       problems: [
         onDisk
           ? `${input.path} exists but git does not track it, so it has no history`
@@ -72,7 +76,12 @@ export const history = async (
     };
   }
 
-  const filter = input.contains === undefined ? [] : [`--grep=${input.contains}`, "--fixed-strings"];
+  // `contains` asks the message. `matches` asks the diff, which is the
+  // pickaxe: the commits that added or removed this exact text. The second is
+  // how you find the commit that introduced a line nobody wrote a message about.
+  const filter: Array<string> = [];
+  if (input.contains !== undefined) filter.push(`--grep=${input.contains}`, "--fixed-strings");
+  if (input.matches !== undefined) filter.push(`-S${input.matches}`);
   const commits = await log(directory, input.path, [`--max-count=${limit}`, ...filter]);
 
   const added = await log(directory, input.path, ["--diff-filter=A", "--max-count=1"]);
@@ -119,6 +128,10 @@ export const history = async (
     authors: [...new Set(commits.map((one) => one.author))],
     first: total.at(-1)?.date ?? null,
     last: commits[0]?.date ?? null,
+    // How much of what came back actually carries a rationale. A history of
+    // subjects and no bodies cannot answer why, and the caller should not have
+    // to read every row to discover that.
+    bodies: commits.filter((one) => one.body !== "").length,
     problems,
   };
 };

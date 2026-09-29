@@ -24,6 +24,7 @@ type Report = {
   authors: ReadonlyArray<string>;
   first?: string;
   last?: string;
+  bodies: number;
   problems?: string;
 };
 
@@ -233,6 +234,47 @@ describe("a file with three commits, the last reverting the second", () => {
 
     expect(report.commits).toHaveLength(1);
     expect(report.commits[0]?.subject).toBe("cache the lookup");
+  });
+
+  test("matches finds the commits that touched the text, not the one that named it", async () => {
+    // The commit that added `two` says nothing about it, so the message filter
+    // cannot reach it. The diff is the only record, and this is the pickaxe.
+    // Two commits come back, and both are correct: one added the text and one
+    // removed it again, so a pickaxe reports additions and deletions.
+    const report = await call(await repo(), { path: "a.txt", matches: "two" });
+
+    expect(report.commits.map((one) => one.subject)).toEqual([
+      'Revert "cache the lookup"',
+      "cache the lookup",
+    ]);
+    expect(report.commits[1]?.body).toBe("keeps the file off disk");
+  });
+
+  test("matches and contains are different questions, so both can be given", async () => {
+    // The revert names `cache the lookup` in its message too, so asking both
+    // filters is the message filter. `two` alone would not remove it, and
+    // `cache the lookup` alone would not reach the commit that added the line.
+    const report = await call(await repo(), {
+      path: "a.txt",
+      contains: "keeps the file",
+      matches: "two",
+    });
+
+    expect(report.commits.map((one) => one.subject)).toEqual(["cache the lookup"]);
+  });
+
+  test("bodies says whether the history can answer why at all", async () => {
+    const withBody = await call(await repo(), { path: "a.txt" });
+    expect(withBody.bodies).toBeGreaterThan(0);
+
+    const root = await repo();
+    await Bun.write(`${root}/b.txt`, "x\n");
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-qm", "subject only"]);
+
+    const bare = await call(root, { path: "b.txt" });
+    expect(bare.commits).toHaveLength(1);
+    expect(bare.bodies).toBe(0);
   });
 
   test("blame names the commit that last touched that line", async () => {

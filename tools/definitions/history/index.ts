@@ -10,7 +10,12 @@ const Input = Schema.Struct({
     description: "Also blame this line, which answers who last changed it and when.",
   }),
   contains: Schema.optional(Schema.String).annotate({
-    description: "Only commits whose message contains this. Use it to find the one that mattered.",
+    description:
+      "Only commits whose MESSAGE contains this. Use it to find the one that explained itself.",
+  }),
+  matches: Schema.optional(Schema.String).annotate({
+    description:
+      "Only commits whose DIFF added or removed this exact text. This is the pickaxe, and it is how you find the commit that introduced a line nobody wrote a message about.",
   }),
   limit: Schema.optional(Schema.Number).annotate({
     description: `Commits to return, newest first. Default ${DEFAULT_LIMIT}.`,
@@ -45,6 +50,7 @@ const Output = Schema.Struct({
   authors: Schema.Array(Schema.String),
   first: Schema.optional(Schema.String),
   last: Schema.optional(Schema.String),
+  bodies: Schema.Number,
   problems: Schema.optional(Schema.String),
 });
 
@@ -54,9 +60,14 @@ const DESCRIPTION = `Read the git history of one file and hand back the commits 
 answers the question this is for, which is why a line looks the way it does. The
 rationale lives in commit messages, so this reads them.
 
-  const h = await tools.spectre.history({ path: "src/auth.ts", line: 42, contains: "oauth" })
+  const h = await tools.spectre.history({ path: "src/auth.ts", line: 42 })
+  h.bodies         // 0 means git holds no rationale for this file
   h.commits        // the reason that line is shaped like that
   h.blame          // who last touched this exact line, and when
+
+  // The commit that introduced a line, found in the diff rather than a message,
+  // which is the only place the answer lives when nobody wrote one.
+  const origin = await tools.spectre.history({ path: "src/auth.ts", matches: "refreshToken" })
 
 ## What comes back
 
@@ -71,17 +82,27 @@ rationale lives in commit messages, so this reads them.
 - \`reverts\`, how many of the commits returned are reverts. A file with reverts in
   its recent history has been argued about, and the losing argument is often still
   in the tree.
+- \`bodies\`, how many of the commits returned carry a body. **A history of
+  subjects and no bodies cannot answer why**, and this is the number that says so
+  before you read a row. Zero means the rationale is not in git for this file, and
+  the honest answer is that the reason is unrecoverable here.
 - \`authors\` and \`first\` / \`last\`, for "who knows this" and "how old is this".
+
+## Two ways to narrow, and they ask different questions
+
+\`contains\` asks the commit **message**. \`matches\` asks the **diff**: the pickaxe,
+which returns the commits that added or removed that exact text. They are not
+redundant, and the second is usually the one that works.
+
+A line nobody wrote a message about has no \`contains\` answer, because the
+rationale was never typed. Its origin is still in the diff, so \`matches\` on a
+literal from the line finds the commit that introduced it. Use \`contains\` for
+"fix", "revert", "keep", "for now", "temporary", which finds the commits that
+argued. Use \`matches\` for the shape nobody explained.
 
 ## Reading it
 
-\`contains\` is the lever. Without it you get the last ${DEFAULT_LIMIT} commits, which
-is a list. With it you get the one commit that explains the thing, and a list of
-the other things that changed in the same breath. Search the message, not the diff:
-"revert", "fix", "keep", "for now", "temporary" find the interesting commits
-faster than reading every subject.
-
-\`problems\` carries the two signals that change how much the answer is worth. A file
+\`problems\` carries the signals that change how much the answer is worth. A file
 whose commits are mostly under 90 days old is still moving, and a reason recorded
 last month may already be wrong. Read the warnings before quoting the history as
 the reason something is the way it is.
