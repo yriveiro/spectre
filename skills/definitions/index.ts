@@ -8,6 +8,22 @@ import { noComments } from "./no-comments";
 import { principleBoundaryDiscipline } from "./principle-boundary-discipline";
 import { principleEvidence } from "./principle-evidence";
 import { principleHygiene } from "./principle-hygiene";
+import { principleAttackThePremise } from "./principle-attack-the-premise";
+import { principleBuildTheLever } from "./principle-build-the-lever";
+import { principleEncodeLessonsInStructure } from "./principle-encode-lessons-in-structure";
+import { principleExhaustTheDesignSpace } from "./principle-exhaust-the-design-space";
+import { principleExperienceFirst } from "./principle-experience-first";
+import { principleFixRootCauses } from "./principle-fix-root-causes";
+import { principleFoundationalThinking } from "./principle-foundational-thinking";
+import { principleMinimizeReaderLoad } from "./principle-minimize-reader-load";
+import { principleModelTheDomain } from "./principle-model-the-domain";
+import { principleNeverBlockOnTheHuman } from "./principle-never-block-on-the-human";
+import { principleProveItWorks } from "./principle-prove-it-works";
+import { principleRedesignFromFirstPrinciples } from "./principle-redesign-from-first-principles";
+import { principleSeparateBeforeSerializingSharedState } from "./principle-separate-before-serializing-shared-state";
+import { principleSequenceVerifiableUnits } from "./principle-sequence-verifiable-units";
+import { principleSubtractBeforeYouAdd } from "./principle-subtract-before-you-add";
+import { principleTypeSystemDiscipline } from "./principle-type-system-discipline";
 import { principleMakeOperationsIdempotent } from "./principle-make-operations-idempotent";
 import { principleMigrateCallersThenDeleteLegacyApis } from "./principle-migrate-callers-then-delete-legacy-apis";
 import { principleOutcomeOrientedExecution } from "./principle-outcome-oriented-execution";
@@ -30,6 +46,22 @@ const definitions: ReadonlyArray<Definition> = [
   principleBoundaryDiscipline,
   principleEvidence,
   principleHygiene,
+  principleAttackThePremise,
+  principleBuildTheLever,
+  principleEncodeLessonsInStructure,
+  principleExhaustTheDesignSpace,
+  principleExperienceFirst,
+  principleFixRootCauses,
+  principleFoundationalThinking,
+  principleMinimizeReaderLoad,
+  principleModelTheDomain,
+  principleNeverBlockOnTheHuman,
+  principleProveItWorks,
+  principleRedesignFromFirstPrinciples,
+  principleSeparateBeforeSerializingSharedState,
+  principleSequenceVerifiableUnits,
+  principleSubtractBeforeYouAdd,
+  principleTypeSystemDiscipline,
   principleLazinessProtocol,
   principleMakeOperationsIdempotent,
   principleMakeStatesUnrepresentable,
