@@ -11,10 +11,10 @@ already owns deletion-first as reader-load discipline, and this leaf does not
 repeat it; what laziness does not say is that the deletions come first, are
 checked on their own, and are the ground the addition is written against.
 
-The original states no falsifiable test, so say that plainly. No single question
-proves you subtracted enough, and a leaf that offers one is selling a number. The
-moment is the whole rule. Before you add anything, read the area for what can go
-first: dead code, unused flags, wrappers that forward once, options nobody passes.
+There is no single question that proves you subtracted enough, and a rule that
+offered one would be selling a number. The moment is the whole rule. Before you
+add anything, read the area for what can go first: dead code, unused flags,
+wrappers that forward once, options nobody passes.
 Delete those, run the project's checks, and only then build. The simpler base is
 the evidence, not a score.
 

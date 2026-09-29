@@ -99,11 +99,10 @@ interaction writes that it is not review-gated, with no boxes under it.
 
 ## Phase E: Check
 
-Upstream ran a plan linter over the file. There is no equivalent here, so the
-check is a read, and it is not optional: every placeholder filled, every heading
-stating a task or a finding, every pull request with a verification block naming
-a real run and its outcome, every dependency consistent with the order the ids
-are listed in.
+Read the plan back yourself, and it is not optional: every placeholder filled,
+every heading stating a task or a finding, every pull request with a
+verification block naming a real run and its outcome, every dependency
+consistent with the order the ids are listed in.
 
 One claim in a plan does have an instrument. `tools.spectre.comments` takes the
 paths the plan names and returns the comments and suppressions in each, so a

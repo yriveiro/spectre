@@ -11,9 +11,8 @@ import { anchor, type Definition } from "../definition";
  * answer to a different question and fire on a different moment: a commit message,
  * a code comment, a doc, not only a reply.
  *
- * The upstream is `cursor/plugins` `pstack/skills/unslop`, ported with its rule
- * numbers intact because they are declared stable ids other skills cite. Two of
- * its rules were already here, verbatim, and the rest were new.
+ * Rule numbers are stable ids that other skills cite, so they are declared and
+ * kept. A renumbering breaks a reference.
  */
 export const unslop: Definition = {
   id: Skill.ID.make("unslop"),

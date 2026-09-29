@@ -4,10 +4,9 @@ import { anchor, type Definition } from "../definition";
 /**
  * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
  *
- * The one procedure here with no upstream principle behind it and no decision
- * to hand to a sibling: it designs the decision path itself. The trail it
- * keeps is the git trail, and `tools.spectre.history` reads it back, since
- * there is no tracker to write to.
+ * The one procedure that designs its own decision path rather than handing a
+ * decision to a sibling. The trail it keeps is the git trail, and
+ * `tools.spectre.history` reads it back.
  */
 export const figureItOut: Definition = {
   id: Skill.ID.make("figure-it-out"),

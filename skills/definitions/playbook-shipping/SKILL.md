@@ -4,12 +4,11 @@ Land a stack of pull requests, one at a time, from the bottom up. Verify each
 pull request independently, land only the verified run from the root, then keep
 your hands off the queue. This is the half after `playbook-babysit`.
 
-## What replaced the watcher
+## The verdict
 
-Upstream this phase ran a polling watcher until the bottom pull request merged
-or failed. It does not exist here, and the substitution is not a downgrade.
-`tools.spectre.stack({})` computes the same verdict as a pure function of the
-pull request state and returns in one call:
+`tools.spectre.stack({})` computes the verdict as a pure function of the pull
+request state and returns in one call. Call it, act, and call it again rather
+than waiting on it:
 
 ```
 const s = await tools.spectre.stack({ prs: [412] })

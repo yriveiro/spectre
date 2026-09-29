@@ -1,11 +1,9 @@
 # Playbook autonomous-run
 
-The source drives this loop with `/loop`, and the target has no wake primitive of any
-kind: at OpenCode 2.0.18 the only `schedule*` symbols in the tree are
-`scheduleReconnect` in the TUI editor and `scheduleRows` in the TUI footer, so there is
-no scheduler and nothing re-enters a session while you are working. `/goal` is lost the
-same way, so a standing objective becomes a file. What arrives instead is a sequence of
-short runs, each doing one unit and leaving the state where the next one finds it.
+A run does one unit of work and then stops. Nothing re-enters a session while you
+are in it, so a run is a unit of work rather than a loop, and everything a later
+run needs is written where that run will find it: the branch holds the work, the
+commit body holds why the run advanced, and a file holds the objective.
 
 ## Start
 

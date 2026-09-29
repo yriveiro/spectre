@@ -5,14 +5,13 @@ is the specification, you do not touch it, and equivalence is settled by an imag
 diff rather than by your eye.
 
 Driving a real UI is the job, and the instruments for it are in the session: the
-`playwright` tools load a page, click, type, resize and read the accessibility tree,
-and the browser tool opens and focuses a tab so a screenshot can be shown to the
-person who asked. Between them they replace the browser-driving half of a pstack
-playbook.
-What has no equivalent here is `xcrun simctl` and the iOS simulators — if the target
-is a native iOS screen and no simulator is present on this machine, say so and get
-the harness agreed before writing the migration, because a parity claim you cannot
-capture is not a parity claim.
+`playwright` tools load a page, click, type, resize and read the accessibility
+tree, and the browser tool opens and focuses a tab so a screenshot can be shown to
+the person who asked.
+
+A native iOS target needs a simulator as its harness. If this machine has none,
+say so and agree the harness before writing the migration, because a parity claim
+you cannot reproduce is not a parity claim.
 
 ## Start
 

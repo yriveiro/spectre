@@ -3,12 +3,11 @@
 Work a stack of pull requests up to merge-ready. Clear the frontier, answer the
 reviews, classify the red, and stop where the human's call begins.
 
-## What replaced the watcher
+## The verdict
 
-Upstream this ran a background script that polled a pull request until a
-terminal verdict. That script does not exist here, and the substitution is not
-cosmetic. `tools.spectre.stack({})` computes the same verdict as a pure function
-of the pull request state and returns in one call:
+`tools.spectre.stack({})` computes the verdict as a pure function of the pull
+request state and returns in one call. The same state gives the same answer every
+time, so a verdict you act on is one you can re-derive:
 
 ```
 const s = await tools.spectre.stack({ prs: [412, 413, 414] })

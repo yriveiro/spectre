@@ -1,11 +1,10 @@
 # Playbook autopilot-stack
 
-The same three losses as `playbook-autopilot-full`: no `/loop` to arm the thirty-minute
-audit tick, no `/goal` to hold the objective across turns, and no cloud agent per pull
-request. `subagent` with `background: true` is the whole capacity and every worker shares
-this filesystem, so the tick is a phase you re-invoke, the objective is a file, and the
-owner paths have to be kept disjoint by hand. The procedure ends one step before the merge
-on purpose: a person lands the chain.
+As `playbook-autopilot-full`, but every item builds and verifies rather than
+merges: the chain is handed to a person who lands it. Capacity is `subagent` with
+`background: true` and every worker shares this filesystem, so owner paths are
+disjoint by construction. The procedure ends one step before the merge on
+purpose.
 
 ## Start
 

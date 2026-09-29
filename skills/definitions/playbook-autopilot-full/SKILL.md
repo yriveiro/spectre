@@ -1,11 +1,10 @@
 # Playbook autopilot-full
 
-The source arms a real terminal `/loop` for its thirty-minute audit tick, keeps the
-programme objective in a `/goal` across turns, and runs one cloud agent per pull request on
-its own machine. None of those exist here: nothing wakes you, a standing objective is a
-file, and `subagent` with `background: true` is the whole of the parallel capacity, sharing
-this filesystem with every other worker. So the tick is a phase you re-invoke, and nothing
-runs while nobody is in the room.
+One owner per pull request, each driven to merged, with a root verdict on every
+round. Capacity is `subagent` with `background: true`, and every worker shares
+this filesystem, so owner paths are disjoint by construction or two of them will
+collide. Nothing runs while nobody is in the room, so the audit tick is a phase
+you re-invoke.
 
 ## Start
 

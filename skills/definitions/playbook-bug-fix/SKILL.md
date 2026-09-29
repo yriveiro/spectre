@@ -53,11 +53,10 @@ the
 code runs. Do not guess at state from the source; the bug is the gap between what
 the source says and what the state is.
 
-There is no `/loop` command in this harness and nothing replaces it. Drive the
-passes yourself, or hand the hunt to a background `subagent` with one written
-predicate per pass and have it write a note per elimination. Whichever you pick,
-a long hunt is a written trail of what was ruled out and why, not a session of
-re-reading the same file.
+Drive the passes yourself, or hand the hunt to a background `subagent` with one
+written predicate per pass and have it write a note per elimination. Whichever you
+pick, a long hunt is a written trail of what was ruled out and why, not a session
+of re-reading the same file.
 
 Confirm the surviving mechanism with runtime evidence before Phase C. "The code
 looks wrong" is not a mechanism.

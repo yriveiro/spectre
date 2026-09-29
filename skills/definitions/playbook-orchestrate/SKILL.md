@@ -1,9 +1,8 @@
 # Playbook orchestrate
 
-Four things this relied on are gone: `/loop` and every other wake primitive, `/goal`,
-cloud workers on separate machines, and `gt`. Nothing runs while you are out of the room
-and every run starts cold, so there is no overnight programme here — only runs that read
-state and do one thing.
+A standing programme handed to one coordinator: many units, countable, across
+days. Every run starts cold and nothing runs while you are out of the room, so a
+programme here is a sequence of runs, each reading state and doing one thing.
 
 ## Start
 

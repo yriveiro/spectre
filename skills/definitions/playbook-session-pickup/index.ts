@@ -4,10 +4,9 @@ import { anchor, type Definition } from "../definition";
 /**
  * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
  *
- * pstack's version read another agent's `agent-transcripts/` to find the resume
- * point. There is no equivalent here: opencode keeps sessions in a SQLite
- * database and no tool in this plugin reads it, so the recovery path is a branch
- * and a diff.
+ * The resume point is a branch and a diff. Reasoning that never became a commit
+ * is not in git, and the body says so at the point a reader would otherwise infer
+ * it from a confident summary.
  */
 export const playbookSessionPickup: Definition = {
   id: Skill.ID.make("playbook-session-pickup"),

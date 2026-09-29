@@ -9,10 +9,10 @@ slower on the way to discovering that. This leaf decides who may write at all.
 `principle-make-operations-idempotent` asks the separate question of what a
 replayed write converges to, which presumes there is a reason to replay one.
 
-The original states no falsifiable test, so say that plainly. There is no single
-question that proves you did this, and a leaf that offers one is selling a
-number. The moment is the whole rule: you are about to add ordering, locking, or
-coordination around a shared write target. Stop there and ask whether the target
+There is no single question that proves you did this, and a rule that offered one
+would be selling a number. The moment is the whole rule: you are about to add
+ordering, locking, or coordination around a shared write target. Stop there and
+ask whether the target
 has to be shared. If each writer can own its own copy, its own partition, or its
 own output, merged later by one reader, do that, and the coordination code never
 gets written.

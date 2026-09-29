@@ -57,18 +57,13 @@ to settle it cheaply before the real procedure starts.
 ported before this family existed and it is a maintenance task rather than a
 shape of work. It is in the same table under its own name.
 
-## The four that cannot run unattended
+## The four that need re-invoking
 
 `playbook-autonomous-run`, `playbook-orchestrate`, `playbook-autopilot-full` and
-`playbook-autopilot-stack` all assume something re-enters a session while it is
-working. This host has no such thing: at `v2.0.18` the only `schedule*` symbols
-in it are `scheduleReconnect` and `scheduleRows`, both TUI, so there is no
-scheduler and no wake primitive.
-
-Read those four as sequences of short resumable runs with their state written to
-a file, not as loops. Each one says at the top what was lost. If you were promised
-an overnight unattended run, the honest answer is that this host cannot do it and
-the procedure is the closest thing that works.
+`playbook-autopilot-stack` are long programmes, and a session is one unit of one.
+Each of them writes its objective, its queue and its progress to a file, so the
+next run reads state and continues rather than starting over. Ask for the next
+unit, or leave it and come back to it; do not expect it to finish while you wait.
 
 ## How to use one
 

@@ -4,9 +4,9 @@ import { anchor, type Definition } from "../definition";
 /**
  * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
  *
- * pstack's version pointed its resume note at a transcript for a cold-start agent
- * to read. That file does not exist here, so the note is written as a commit body
- * and a plain file next to the tree, both of which survive a lost session.
+ * The resume note is a commit body and a file next to the tree, because a note
+ * kept only in a session's context dies with the session and the whole point is
+ * that the next one finds it.
  */
 export const playbookPauseSafely: Definition = {
   id: Skill.ID.make("playbook-pause-safely"),

@@ -3,14 +3,9 @@
 Take over work another session left in flight and resume it at the right point. The
 prior work is authoritative input, not a hint.
 
-One substitution, because it changes what this procedure is. The pstack original
-recovered its resume point by reading the prior agent's transcript, a local file
-under the workspace's `agent-transcripts/` directory. **There is no transcript here
-and no equivalent.** opencode keeps sessions in a SQLite database that nothing in
-this plugin reads. So the trail is replaced by two things that do exist: git —
-branches, worktrees, the commit record, the diff — and the work on disk right now.
-That is less than a transcript. A transcript records reasoning that never became a
-commit; here that reasoning is simply gone, and where it is gone, say so rather than
+The trail is git: branches, worktrees, the commit record, and what is on disk
+right now. A commit records a decision that became code. Reasoning that never
+became a commit is not in git, and where it is missing, say so rather than
 infer it.
 
 ## Start

@@ -4,12 +4,8 @@ Stop at a clean boundary and leave a checkpoint another session can resume from
 without asking you anything. Explicit only: on "keep going", "going to bed, keep
 going", or "don't stop", you do not pause, because this procedure is a stop.
 
-One substitution, because it decides where the note goes. The pstack original aimed
-its resume note at whatever the harness would compact the next session into, and
-read back to itself. There is no transcript and no compaction file to write here:
-opencode keeps sessions in a SQLite database that nothing in this plugin reads. So
-the note goes where a cold start will find it — the `wip:` commit body and a plain
-file in the repository. A note kept only in your context dies with you.
+The note goes where a cold start will find it: the `wip:` commit body and a
+plain file in the repository. A note kept only in your context dies with you.
 
 ## Start
 
