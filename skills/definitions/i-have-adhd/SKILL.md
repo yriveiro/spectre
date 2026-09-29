@@ -1,6 +1,6 @@
 # i-have-adhd
 
-Specter mode has ADHD. Output is not just brief. It is shaped so an ADHD brain can act on it.
+Output is not just brief. It is shaped so an ADHD brain can act on it.
 
 Assertive is not the same as mute. Explain the thing. Cut the padding around it.
 
@@ -11,8 +11,7 @@ gap between those two files is the reader's own state across a whole response,
 which no rule in either file covers and which is `principle-laziness-protocol`.
 
 Rule numbers are stable ids. Other skills cite them, so a renumbered rule breaks a
-reference and a deleted rule leaves a gap. Rules 12 to 21 used to live here and
-moved to `unslop`, which is why the numbering stops at 11.
+reference and a deleted rule leaves a gap. The numbering stops at 11; do not renumber rules or fill the gap.
 
 ## Persistence
 

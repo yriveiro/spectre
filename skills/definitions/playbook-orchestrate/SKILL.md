@@ -9,7 +9,7 @@ programme here is a sequence of runs, each reading state and doing one thing.
 The store is `orchestrate/<project-slug>/` under
 `~/.local/share/spectre/<worktree-name>/`, the root `arena` already writes to. It is
 outside the project directory, so the first write asks for permission, which the `spectre`
-agent allows. There is no `orch.ts` here: every file is plain text.
+agent allows. Every file is plain text.
 
 1. Frame
 2. Lay out the store
@@ -33,7 +33,7 @@ shape. By roughly 70% of the budget, stop spawning and land what is verified.
 
 Every file has one writer; readers aggregate at read time.
 
-- `preferences.md` is the standing-orders register, and it is what replaces `/goal`.
+- `preferences.md` is the standing-orders register.
   Numbered lines, one constraint each: model policy, stack shape, verification bar,
   forbidden paths, escalation policy. Paste it verbatim into every spawn, and append a
   line whenever you catch yourself restating an instruction.
@@ -44,8 +44,7 @@ Every file has one writer; readers aggregate at read time.
   `live-verified`, `unit-test-verified`, `type-check-only`, `verifier-blocked`,
   `verifier-failed`. A new head SHA voids the row, and CI green is an input to a verdict,
   not a verdict.
-- `frontier.json`, the computed merge frontier. The source computes it with `gt log`; this
-  port computes it in plain git. `generation` increments on every topology change, `order`
+- `frontier.json`, the computed merge frontier. Compute it in plain git. `generation` increments on every topology change, `order`
   holds the PR numbers bottom-up, `branches` and `heads` are the parallel arrays, and
   `lowestUnmerged` is the one to land next.
 - `overview.md`, the durable pull request and issue list. Append, never rewrite.

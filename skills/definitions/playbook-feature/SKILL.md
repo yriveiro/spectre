@@ -70,9 +70,7 @@ Delegate the code to a `subagent` with a specific scope: the file paths, the
 named data shape and the structure holding it, the success criteria. Choose the
 model with `tools.spectre.routing({})` and never write a model id by hand.
 
-Make surgical edits and re-ground against the source for anything derived from
-an upstream file, because a file you did not read is a file you cannot edit
-safely. When a shared primitive improves, port the improvement to every consumer
+Make surgical edits and re-ground against the upstream file for anything derived from it, because a file you did not read is a file you cannot edit safely. When a shared primitive improves, apply the improvement to every consumer
 and verify each one; leaving three consumers on the old behaviour is a
 migration you did not finish.
 

@@ -3,11 +3,8 @@
 Turn the reader's working conventions into one personal skill an agent follows
 without being asked. The output is a single skill in their name.
 
-The version this came from mined the transcripts of past sessions for what the
-reader kept asking for. Nothing here exposes transcripts, so that pass is gone.
-What replaces it is weaker, and saying so is part of the job: the commit history,
-the skills already installed, and the reader's own answers. A rule the evidence
-does not carry does not go in.
+Mine the commit history, the skills already installed, and the reader's own
+answers. A rule the evidence does not carry does not go in.
 
 ## Start
 

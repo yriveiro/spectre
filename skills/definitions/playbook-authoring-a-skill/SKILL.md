@@ -30,9 +30,7 @@ you load it on. A procedure is a sequence of phases. A procedure wearing a
 principle's template has a `The moves` list that is really a step list, and a
 principle wearing a procedure's phases has phases that are really claims.
 
-Read `skills/FOR_AGENTS.md` before writing either. It holds the template, the
-measurements behind it, and the ports that are still open, and it is the only
-place that knows which leaf already owns a claim.
+Read `skills/FOR_AGENTS.md` before writing either. It holds the template and the measurements behind it, and it is the only place that knows which leaf already owns a claim.
 
 ## Phase B: Cut
 
@@ -47,8 +45,7 @@ competent reader would get wrong.
 Do not restate a claim another leaf owns. Name the owner in a clause and move
 on. A claim written twice is a claim that will be updated once.
 
-Match tone to scope. A leaf about a comment's punctuation is written differently
-from one about a call graph, and the difference is that the first is read.
+Match tone to scope. A leaf about a comment's punctuation is written differently from one about a call graph.
 
 ## Phase C: Place the reason
 

@@ -7,8 +7,7 @@ warning comes back in the next onboarding, and every return costs the full price
 of the first telling, paid by somebody who never heard it. The response is not a
 stricter paragraph. It is a lint rule, a metadata field, a runtime check, or a
 script, whichever form fails closest to the mistake, and the lesson then travels
-with the code instead of with whoever happened to be in the room. This principle
-states no falsifiable test and says so plainly: there is no count to pass and no
+with the code instead of with whoever happened to be in the room. There is no count to pass and no
 gate to clear, because recurrence is the signal and recurrence has no threshold you
 can check for. What is left is a moment, and the moment is sharp — the second time
 you write the same instruction or watch the same mistake return, while the two

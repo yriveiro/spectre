@@ -17,10 +17,7 @@ s.rows       // the per-PR evidence behind the verdict
 s.problems   // PRs gh could not read
 ```
 
-**The polling is your job, and a watcher is not what you want anyway.** A
-watcher that ran an hour would have given a different answer to the same
-question for reasons that had nothing to do with the pull request. This cannot:
-same state, same answer. Call it, read `stack`, and if it says `waiting` say
+**Call and read the verdict.** The same state gives the same answer every time, so a verdict you act on is one you can re-derive. Call it, read `stack`, and if it says `waiting` say
 which check you are waiting for and stop. No sleeping, no re-polling in a loop,
 no holding the session open.
 

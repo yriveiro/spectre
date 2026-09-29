@@ -6,8 +6,7 @@ its flaws show, the code is load-bearing and the flaws are architecture; redesig
 then means a rewrite, so the flaws stay, annotated as trade-offs nobody ever
 traded, and the team inherits a guess wearing the authority of shipped code. So
 build two or three competing prototypes, compare them on the same evidence, and
-only then commit, because a design chosen from one option was never chosen. This
-principle states no falsifiable test and says so plainly: there is no count to
+only then commit, because a design chosen from one option was never chosen. There is no count to
 pass and no gate to clear, because the whole rule is a moment, novelty with no
 precedent where being wrong costs more than two throwaways. The comparison itself
 is `principle-evidence`'s oracle; this leaf is the workflow that builds the oracle

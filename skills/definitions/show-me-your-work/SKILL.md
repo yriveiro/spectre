@@ -75,8 +75,7 @@ run. Use phase `start` for nothing else.
 
 ## Phase E: Audit it before handing back
 
-There are no session transcripts here to walk the log against, so the audit runs
-against the repository, which is the thing every claim is about.
+Audit the log against the repository, which is the thing every claim is about.
 
 For each row of this run: does the evidence resolve, and does what it points at
 show what the row claims. Is there a fork, a pivot or a rejected approach that

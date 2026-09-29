@@ -24,7 +24,7 @@ Execution starts on an explicit go, and it begins by writing the objective down.
 Resolve the forge once: `gh` by default, `origin` if it resolves the repository, and record
 which one. Never require `gt`.
 
-`/goal` held the objective; a file holds it now. Put it in `.spectre/autopilot.md` at the
+Put the objective in `.spectre/autopilot.md` at the
 project root, in a form a run that has never seen this conversation can act on: the queue
 as it stands, each item's owner and state, the verification bar, and the exit condition.
 That file is all a later run reads, so a row is written when it changes.
@@ -45,9 +45,7 @@ Within roughly one run, every owner has started a `decisions.tsv` trail
 than draft. Keep the trail uncommitted and return it with the report. Each owner also keeps
 a `children.tsv`: subagent id, expected runtime, state, added when the subagent starts.
 
-**What the missing isolation costs.** The source gave each owner a private machine, so
-two owners could touch the same file and neither would know. Here they share one
-filesystem, and the collision reads as a corrupted file rather than a scheduling bug, so
+**Keep owner paths disjoint.** Every worker shares one filesystem, and the collision reads as a corrupted file rather than a scheduling bug, so
 prevention is structural: one writer per branch, disjoint files, and sequenced work merged
 before the dependent PR branches. Where two items genuinely overlap, run them in separate
 runs.
@@ -68,11 +66,8 @@ to one verdict. The lanes:
 - Run the same scenario against current trunk, and where trunk lacks the feature, record
   that fact and gate the behaviour the diff adds.
 
-**Where the source watches, call and read.** It arms a loop around CI and merges;
-`tools.spectre.stack({ prs: [218] })` returns once with a verdict and `rows` you can check.
-`stack: "waiting"` means a check is still running, which is the source's sleep state, so
-come back rather than intervene. `stack: "blocker"` names the PR to fix first. One call is
-a reading of that moment, not a standing watch, so re-run it before acting on a clear.
+**Call and read.** `tools.spectre.stack({ prs: [218] })` returns once with a verdict and `rows` you can check.
+`stack: "waiting"` means a check is still running, so come back rather than intervene. `stack: "blocker"` names the PR to fix first. One call reads that moment, so re-run it before acting on a clear.
 
 Send every proven finding back to the owner in one fix-forward, with a red test requested
 for every site carrying the same defect. A new head SHA starts a fresh round.
@@ -90,8 +85,7 @@ other.
 
 ## Phase F: Run the audit tick
 
-The source runs this on a thirty-minute loop. You run it when you are next in the room, and
-that version does not exist, so the cadence is the human's, not yours.
+Run it when you are next in the room; the cadence is the human's, not yours.
 
 Re-read this file from trunk, then re-read the objective in `.spectre/autopilot.md`, and
 audit the operation against both. Fix drift during that tick. Count only side effects as

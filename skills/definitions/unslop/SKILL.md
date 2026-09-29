@@ -10,7 +10,7 @@ in another project's docs, it says nothing about this one, so cut it. And **13**
 a dash hides a missing full stop. Between them they catch more than the rest put
 together, and both are mechanical.
 
-Rule numbers are the stable ids from the source, so other skills cite them. The
+Rule numbers are stable ids, so other skills cite them. The
 gaps are deliberate: 17, 18 and 19 (title case, emoji, curly quotes) are a
 formatter's job rather than a rule, and 20 and 22 duplicate what
 `i-have-adhd` rule 10 owns, which is the shape of a message rather than the words

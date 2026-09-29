@@ -71,9 +71,7 @@ pushing a review — you cannot wait for it, because nothing here can wake you. 
 event in the state file's next-check line and stop. The human, or the next session, is
 the wake mechanism.
 
-One watcher does exist, and it returns once rather than following: call
-`tools.spectre.stack({})` where the source would arm one, and read the verdict. Where
-the source watches a ref advance, read the branch instead of polling it.
+One watcher does exist, and it returns once rather than following: call `tools.spectre.stack({})` and read the verdict. Where a ref advances, read the branch instead of polling it.
 
 ## Phase E: Write the row down
 
@@ -93,7 +91,7 @@ finding to report rather than a failure to hide.
 
 ## Phase F: Stop and name the next check
 
-The last thing the run does is write down the thing the source would have scheduled. One
+The last thing the run does is write down the next check. One
 sentence, in `.spectre/run.md`, naming the event or condition and the exact command that
 would settle it: *"CI on `feat/queue` is still running; next run calls
 `tools.spectre.stack({ prs: [218] })` and reads the verdict."*

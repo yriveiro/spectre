@@ -2,9 +2,7 @@
 
 As `playbook-autopilot-full`, but every item builds and verifies rather than
 merges: the chain is handed to a person who lands it. Capacity is `subagent` with
-`background: true` and every worker shares this filesystem, so owner paths are
-disjoint by construction. The procedure ends one step before the merge on
-purpose.
+`background: true` and every worker shares this filesystem, so owner paths are disjoint by construction.
 
 ## Start
 
@@ -25,7 +23,7 @@ which one. Never require `gt`, and never register the chain through it — the c
 in plain git, with `git branch --list --format='%(refname:short) %(objectname)'` for the
 members and `git merge-base --is-ancestor <parent> <child>` for the order.
 
-`/goal` held the objective; a file holds it now. Put it in `.spectre/autopilot-stack.md`
+Put the objective in `.spectre/autopilot-stack.md`
 at the project root: the chain in order, each member's branch, base, head SHA, and
 verdict, plus the exit condition. A later run reads that file and nothing else, so a row is
 written on append.
@@ -39,9 +37,7 @@ a rebase onto trunk, and green checks. Within roughly one run every owner has st
 the PR ready rather than draft. The trail stays uncommitted and comes back with the report.
 Each owner also keeps a `children.tsv`: subagent id, expected runtime, state.
 
-**What the missing isolation costs.** The source gave every owner a private machine, so
-two owners could touch the same file and neither would learn of it. Here they share one
-filesystem, and the collision reads as a corrupted file rather than a scheduling bug. So:
+**Keep owner paths disjoint.** Every worker shares one filesystem, and the collision reads as a corrupted file rather than a scheduling bug. So:
 one writer per branch, disjoint files, and owners parallelised only across work that
 touches different lines. Items that overlap run in separate runs.
 
@@ -59,10 +55,7 @@ on the real surface the change touches, audit the diff and distrust the pull req
 and run the same scenario against trunk — where trunk lacks the feature, record that fact
 and gate the behaviour the diff adds rather than pretending trunk can produce it.
 
-**Where the source watches, call and read.** It arms a loop around CI and merges;
-`tools.spectre.stack({ prs: [221] })` returns once with a verdict and the `rows` behind it.
-`"waiting"` is the source's sleep state and the answer is to come back later, not to
-intervene. `"blocker"` names the one to fix first. Nothing enters the stack unverified.
+**Call and read.** `tools.spectre.stack({ prs: [221] })` returns once with a verdict and the `rows` behind it. `"waiting"` means a check is still running; come back later, not to intervene. `"blocker"` names the one to fix first. Nothing enters the stack unverified.
 
 Every proven finding goes back to the owner in one fix-forward, with a red test for every
 site carrying it. A new head SHA starts a fresh round.
@@ -94,8 +87,7 @@ The deliverable is one linear chain of verified pull requests, reviewable bottom
 forge, every link carrying its verdict in the PR body or a comment. The operator reviews
 and lands it, with their own clicks.
 
-The audit tick the source runs on a thirty-minute loop is not here to run: you run it when
-you are next in the room, re-read this file from trunk and the objective in
+Run the audit tick when you are next in the room, re-read this file from trunk and the objective in
 `.spectre/autopilot-stack.md`, and probe every owner. Count only side effects as progress —
 commits, pushes, PR or check deltas, reports — and treat an owner that passed its expected
 runtime with none of those as stuck. The operator's stop is a zero-writes order.

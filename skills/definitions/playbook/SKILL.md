@@ -53,8 +53,7 @@ to settle it cheaply before the real procedure starts.
 | `playbook-autopilot-full` | a queue of PRs to merged | each item has an owner and the queue drains |
 | `playbook-autopilot-stack` | one stack for a human to land | the stack is built and verified and a person merges it |
 
-`worktree-cleanup` is the twenty-third and it is not prefixed, because it was
-ported before this family existed and it is a maintenance task rather than a
+`worktree-cleanup` is the twenty-third and it is not prefixed, and it is a maintenance task rather than a
 shape of work. It is in the same table under its own name.
 
 ## The four that need re-invoking

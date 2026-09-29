@@ -105,8 +105,7 @@ Cite the measurement in the pull request: baseline, post-fix, delta, and where
 the artifacts are. Open it with `gh pr create`. A perf change without the number
 in the description is a perf change nobody can check.
 
-Sustained improvement against a metric is not this playbook, and nothing here
-replaces a hillclimb loop. Write the loop yourself, or route the whole campaign
+Sustained improvement against a metric is not this playbook. Write the loop yourself, or route the whole campaign
 to `figure-it-out`.
 
 ## Outputs
