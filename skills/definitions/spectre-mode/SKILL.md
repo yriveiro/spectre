@@ -274,7 +274,7 @@ the leaf decides. This list only tells you which file to open.
   and keep its summary in the main thread, never the raw payload.
 - `ripwire`. The map from a principle to the command that can falsify its test.
   Load it when a principle applies and you have not measured the code, so the
-  claim gets a run instead of an assertion. It also names the five leaves with no
+  claim gets a run instead of an assertion. It also names the twelve leaves with no
   instrument, and the ways ripwire is wrong, which is the half that keeps the map
   from becoming deference to a tool. The principles stay generic about tools;
   this is the one file allowed to name one.
