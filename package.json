@@ -14,7 +14,7 @@
     "tools"
   ],
   "engines": {
-    "opencode": ">=2.0.18"
+    "opencode": ">=2.0.19"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -22,8 +22,8 @@
     "eval": "bun run eval/run.ts"
   },
   "dependencies": {
-    "@opencode/plugin": "2.0.18",
-    "@opencode/schema": "2.0.18",
+    "@opencode/plugin": "2.0.19",
+    "@opencode/schema": "2.0.19",
     "effect": "4.0.0-rc.112"
   },
   "devDependencies": {

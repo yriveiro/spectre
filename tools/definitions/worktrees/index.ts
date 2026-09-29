@@ -1,11 +1,34 @@
+import type { Plugin } from "@opencode/plugin/effect";
 import type { Tool } from "@opencode/schema/tool";
+import { AbsolutePath } from "@opencode/schema/schema";
+import type { Session } from "@opencode/schema/session";
 import { Effect, Schema } from "effect";
 import { audit } from "./audit";
 import { BUCKETS, count } from "./classify";
+import {
+  attachBranch,
+  bareOf,
+  branchExists,
+  currentBranch,
+  firstResolving,
+  git,
+  head,
+  isWorktree,
+  listed,
+  mainOf,
+  refusal as hostRefusal,
+  resolves,
+  rootFor,
+  toplevel,
+} from "./git";
+import { BASES, mismatch, refusal, type Reads } from "./lifecycle";
 
 const Bucket = Schema.Literals([...BUCKETS]);
 
-const Input = Schema.Struct({
+const List = Schema.Struct({
+  action: Schema.optional(Schema.Literals(["list"])).annotate({
+    description: "Survey the worktrees. The default when `action` is omitted.",
+  }),
   repo: Schema.optional(Schema.String).annotate({
     description: "Repository to inspect. Defaults to the project directory.",
   }),
@@ -23,24 +46,284 @@ const Row = Schema.Struct({
   bucket: Bucket,
 });
 
-const Output = Schema.Struct({
-  worktrees: Schema.Array(Row),
-  counts: Schema.Struct({
-    "hold-wip": Schema.Number,
-    "hold-open-pr": Schema.Number,
-    safe: Schema.Number,
-    review: Schema.Number,
+const Counts = Schema.Struct({
+  "hold-wip": Schema.Number,
+  "hold-open-pr": Schema.Number,
+  safe: Schema.Number,
+  review: Schema.Number,
+});
+
+
+
+export const Start = Schema.Struct({
+  action: Schema.Literals(["start"]).annotate({
+    description: "Open a worktree for this change and move this session into it.",
   }),
+  name: Schema.String.annotate({
+    description: "Directory name and, unless `branch` says otherwise, the new branch name. Lowercase kebab-case, at most 40 characters.",
+  }),
+  branch: Schema.optional(Schema.String).annotate({
+    description: "New branch name. Defaults to `name`.",
+  }),
+  base: Schema.optional(Schema.String).annotate({
+    description: "Ref to branch from. Defaults to the first of origin/HEAD, origin/main, main, HEAD that resolves.",
+  }),
+});
+
+export const Remove = Schema.Struct({
+  action: Schema.Literals(["remove"]).annotate({
+    description: "Remove one worktree. Never the main one, never with force.",
+  }),
+  directory: Schema.String.annotate({
+    description: "Absolute path, exactly as a previous listing reported it.",
+  }),
+});
+
+export const Action = Schema.Union([Start, Remove]);
+
+export const Opened = Schema.Struct({
+  status: Schema.Literals(["opened"]).annotate({
+    description: "Created, branched, read back, and this session is now in it.",
+  }),
+  directory: Schema.String,
+  branch: Schema.String,
+  base: Schema.String,
+  head: Schema.String,
+});
+
+export const Unverified = Schema.Struct({
+  status: Schema.Literals(["unverified"]),
+  directory: Schema.String,
+  problems: Schema.String.annotate({
+    description: "Left intact, and this session has not moved.",
+  }),
+});
+
+export const Rejected = Schema.Struct({
+  status: Schema.Literals(["rejected"]),
+  problems: Schema.String.annotate({ description: "Nothing was created." }),
+});
+
+export const Failed = Schema.Struct({
+  status: Schema.Literals(["failed"]),
+  problems: Schema.String,
+  directory: Schema.optional(Schema.String).annotate({
+    description: "Present when something landed on disk.",
+  }),
+});
+
+export const Removed = Schema.Struct({
+  status: Schema.Literals(["removed"]),
+  directory: Schema.String,
+  branch: Schema.optional(Schema.String).annotate({
+    description: "The branch that was kept.",
+  }),
+});
+
+export const AlreadyGone = Schema.Struct({
+  status: Schema.Literals(["already-gone"]),
+  directory: Schema.String,
   problems: Schema.optional(Schema.String),
 });
 
-const DESCRIPTION = `Classify every git worktree in this repository by whether deleting it would lose work.
 
-One row per worktree except the main one, with the evidence that produced its
-bucket, and a \`counts\` tally so a cleanup can be sized without reading every row.
 
-  const a = await tools.spectre.worktrees({})
-  a.worktrees.filter(w => w.bucket === "safe").map(w => w.path)
+const rejected = (problems: string) => ({ status: "rejected" as const, problems });
+
+const runStart = (ctx: Plugin.Context) =>
+  Effect.fn("spectre.worktrees.start")(function* (
+    input: typeof Start.Type,
+    sessionID: Session.ID | undefined,
+  ) {
+    const projectDirectory = ctx.location.project.directory;
+    const branch = input.branch ?? input.name;
+
+    // One reading of the worktree list answers three questions: where main is,
+    // whether the name is taken, and which repository the set hangs off.
+    const rows = yield* Effect.promise(() => listed(projectDirectory));
+    const bare = bareOf(rows);
+    const root = rootFor(bare ?? projectDirectory);
+
+    // Three independent reads, run together: whether the branch exists, which
+    // base resolves, and where this session is.
+    const [branchTaken, base, sessionDirectory] = yield* Effect.promise(async () => {
+      const [exists, resolved, where] = await Promise.all([
+        branchExists(projectDirectory, branch),
+        input.base === undefined
+          ? firstResolving(projectDirectory, BASES)
+          : resolves(projectDirectory, input.base).then((ok) => (ok ? input.base : undefined)),
+        sessionID === undefined
+          ? Promise.resolve(undefined)
+          : Effect.runPromise(
+              Effect.result(ctx.session.get({ sessionID })).pipe(
+                Effect.flatMap((found) =>
+                  found._tag === "Failure"
+                    ? Effect.succeed(undefined)
+                    : Effect.promise(() => toplevel(found.success.location.directory)),
+                ),
+              ),
+            ),
+      ]);
+      return [exists, resolved, where] as const;
+    });
+
+    const blocked = refusal({
+      name: input.name,
+      branch,
+      root,
+      rows,
+      branchExists: branchTaken,
+      base,
+      sessionDirectory,
+    });
+    if (blocked !== undefined) return rejected(blocked.why);
+
+    const expected = yield* Effect.promise(() => head(projectDirectory));
+
+    const made = yield* Effect.result(
+      ctx.worktree.create({
+        projectID: ctx.location.project.id,
+        directory: root,
+        name: input.name,
+        branch: base!,
+      }),
+    );
+
+    if (made._tag === "Failure") {
+      // The host makes the parent directory before it creates anything and runs
+      // the project's start command after the row is written, so a failure here
+      // can still have landed a directory. Look before reporting nothing.
+      const landed = (yield* Effect.promise(() => listed(projectDirectory))).find((one) =>
+        one.directory.endsWith(`/${input.name}`),
+      );
+      return {
+        status: "failed" as const,
+        ...(landed === undefined ? {} : { directory: landed.directory }),
+        problems: `the host failed to create the worktree: ${hostRefusal(made.failure).message}`,
+      };
+    }
+
+    const directory = made.success.directory;
+    const attached = yield* Effect.promise(() => attachBranch(directory, branch));
+    if (attached.code !== 0)
+      return {
+        status: "unverified" as const,
+        directory,
+        problems: `created on a detached HEAD and could not branch to ${branch}: ${attached.err || attached.out}. Left intact, and this session has not moved.`,
+      };
+
+    const [after, gotHead, gotBranch] = yield* Effect.promise(async () =>
+      Promise.all([listed(projectDirectory), head(directory), currentBranch(directory)]),
+    );
+
+    const reads: Reads = {
+      listed: after.some((one) => one.directory === directory),
+      head: gotHead,
+      expected,
+      branch: gotBranch,
+      wanted: branch,
+    };
+    const wrong = mismatch(reads);
+
+    if (wrong !== undefined)
+      return {
+        status: "unverified" as const,
+        directory,
+        problems: `${wrong}. Left intact, and this session has not moved.`,
+      };
+
+    if (sessionID !== undefined) {
+      const moved = yield* Effect.result(ctx.session.move({ sessionID, directory }));
+      if (moved._tag === "Failure")
+        return {
+          status: "unverified" as const,
+          directory,
+          problems: `the worktree is ready but this session could not move into it: ${String(moved.failure)}. Work in it explicitly rather than assuming the move happened.`,
+        };
+    }
+
+    return {
+      status: "opened" as const,
+      directory,
+      branch,
+      base: base!,
+      head: gotHead,
+    };
+  });
+
+const runRemove = (ctx: Plugin.Context) =>
+  Effect.fn("spectre.worktrees.remove")(function* (input: typeof Remove.Type) {
+    const projectDirectory = ctx.location.project.directory;
+    const rows = yield* Effect.promise(() => listed(projectDirectory));
+
+    if (rows.length === 0)
+      return rejected(`${projectDirectory} is not a git repository, or has no worktrees`);
+
+    if (mainOf(rows) === input.directory)
+      return rejected(`${input.directory} is the main worktree, and it is never removed here`);
+
+    const known = rows.some((one) => one.directory === input.directory);
+    const onDisk = yield* Effect.promise(() => isWorktree(input.directory));
+
+    if (!onDisk)
+      return {
+        status: "already-gone" as const,
+        directory: input.directory,
+        ...(known
+          ? {
+              problems: `${input.directory} is gone from disk but git still lists it; run \`git worktree prune\``,
+            }
+          : {}),
+      };
+
+    const named = yield* Effect.promise(() => currentBranch(input.directory));
+    const kept = named === "HEAD" ? {} : { branch: named };
+
+    const removed = yield* Effect.result(
+      ctx.worktree.remove({
+        projectID: ctx.location.project.id,
+        directory: AbsolutePath.make(input.directory),
+        force: false,
+      }),
+    );
+
+    if (removed._tag === "Failure") {
+      const why = hostRefusal(removed.failure);
+      return {
+        status: "failed" as const,
+        directory: input.directory,
+        ...kept,
+        problems: why.forceRequired
+          ? `${why.message} Nothing was deleted — that refusal is the guard.`
+          : `${why.message}`,
+      };
+    }
+
+    return { status: "removed" as const, directory: input.directory, ...kept };
+  });
+
+const Input = Schema.Union([List, Start, Remove]);
+
+const Output = Schema.Union([
+  Schema.Struct({
+    worktrees: Schema.Array(Row),
+    counts: Counts,
+    problems: Schema.optional(Schema.String),
+  }),
+  Opened,
+  Unverified,
+  Rejected,
+  Failed,
+  Removed,
+  AlreadyGone,
+]);
+
+const DESCRIPTION = `How a change reaches a worktree, what is in the way, and when one may go.
+
+  await tools.spectre.worktrees({})                                    // survey
+  const w = await tools.spectre.worktrees({ action: "start", name: "fix-login" })
+  w.status === "opened"                                                // this session is now in it
+  await tools.spectre.worktrees({ action: "remove", directory: w.directory })
 
 ## The buckets, and what each one licenses
 
@@ -68,39 +351,72 @@ The evidence columns are there for the cases the bucket cannot settle.
 - \`merged\`: HEAD is an ancestor of \`origin/main\`. A squash-merge leaves a
   branch that is not an ancestor, so a merged PR is often what proves this.
 
-## Two things it will not do
-
-It does not fetch, and it does not measure disk size. \`merged\` is false for
+A survey does not fetch and does not measure disk size. \`merged\` is false for
 every worktree when \`origin/main\` has not been fetched, and \`problems\` says so
-rather than quietly reporting nothing merged. A \`safe\` row under that warning
-rests on the PR column alone. Fetch first when the answer decides a deletion.
+rather than quietly reporting nothing merged. Fetch first when the answer decides
+a deletion. A bad path or a directory that is not a repository comes back in
+\`problems\` with an empty \`worktrees\`, never as a failed call.
 
-## Determinism
+## Start is one call, and it moves you
 
-The bucket is a pure function of the evidence, and the evidence is whatever git
-and \`gh\` report at the moment of the call. Same repository state, same remote
-state, same answer. \`ageDays\` moves with the clock, and \`gh\` and \`origin/main\`
-move without you, so a row is a reading of now rather than a stored fact. Read it
-twice before deleting anything.
+\`start\` refuses unless the calling session is in the project's main worktree. It
+creates the worktree, branches it off trunk, reads the result back, and **moves
+this session into it**. There is no second call and nothing to remember: when it
+returns \`opened\`, the session you are reading this in is the one working in the
+worktree, and its subagents inherit that.
 
-It never deletes. This tool only tells you which paths a human, or a separate
-step, may remove.
+A session already in a worktree cannot open another — its directory is compared
+against the worktree on \`main\` in the same reading. One worktree per session. A
+fanning-out parent therefore stays on main and each worker starts its own; see
+\`playbook-hillclimb\` and \`playbook-shipping\`.
 
-## When it cannot answer
+## Where a worktree goes
 
-A bad path, a missing \`git\`, or a directory that is not a repository comes back
-in \`problems\` with an empty \`worktrees\`, never as a failed call. Rows that did
-gather are still returned.`;
+Beside the repository, in a \`…-worktrees\` directory: \`~/dev/spectre-worktrees/\`
+for a bare repository at \`~/dev/spectre\`, and the same shape beside an ordinary
+checkout. A worktree belongs to the repository it was cut from — it shares that
+repository's object store — and this is the layout the project already uses by
+hand. Never inside a working tree: a nested worktree shows up in its own
+checkout's status as an untracked directory, which would make a clean tree look
+like it has WIP and could block its own cleanup.
 
-export const worktrees = (directory: string): Tool.Info<typeof Input, typeof Output> => ({
+## What \`status\` certifies
+
+Only \`start\` and \`remove\` return a status; a survey returns rows and counts.
+\`opened\` is the only status that says a worktree is ready, and it means three
+reads agreed: git lists the directory, its HEAD is the commit the base resolved
+to, and it is on the branch you asked for.
+
+- \`opened\` — created, branched, read back, and the session moved in.
+- \`unverified\` — it exists, and a read disagreed. Left intact on purpose: the
+  directory is the evidence. Read \`problems\`, then remove it and try again.
+  **The session was not moved.**
+- \`rejected\` — nothing was created. \`problems\` says which rule.
+- \`failed\` — a step errored. \`directory\` is present when something landed, and
+  the session has not moved.
+- \`removed\` — the directory is gone. The branch was kept.
+- \`already-gone\` — nothing to do. Removing twice is not an error.
+
+## What it will not do
+
+No \`force\`, and there is no input that produces one. A dirty or untracked
+worktree is refused by git and comes back as \`failed\` with git's own message;
+the tree is still there, which is the point. It never deletes a branch: removal
+reclaims a directory, and a branch is somebody's work. It never removes the main
+worktree. It never edits, commits, or pushes.`;
+
+export const worktrees = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Output> => ({
   name: "worktrees",
   description: DESCRIPTION,
   input: Input,
   output: Output,
-  options: { namespace: "spectre", codemode: true, pinned: true, permission: "read" },
-  execute: (input) =>
-    Effect.promise(async () => {
-      const report = await audit(input.repo ?? directory);
+  options: { namespace: "spectre", codemode: true, pinned: true, permission: "worktree" },
+  execute: (input, context) =>
+    Effect.gen(function* () {
+      if (input.action === "start") return { output: yield* runStart(ctx)(input, context?.sessionID) };
+      if (input.action === "remove") return { output: yield* runRemove(ctx)(input) };
+
+      const report = yield* Effect.promise(() => audit(input.repo ?? ctx.location.directory));
       return {
         output: {
           worktrees: report.worktrees,

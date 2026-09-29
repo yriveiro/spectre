@@ -1,7 +1,14 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
+import type { Plugin } from "@opencode/plugin/effect";
 import type { Tool } from "@opencode/schema/tool";
+import { AbsolutePath } from "@opencode/schema/schema";
 import { worktrees } from "../../tools/definitions/worktrees";
+
+const ctx = (directory: string) =>
+  ({
+    location: { project: { id: "test", directory: AbsolutePath.make(directory), canonical: AbsolutePath.make(directory) } },
+  }) as unknown as Plugin.Context;
 
 type Row = {
   path: string;
@@ -50,13 +57,54 @@ const repo = async () => {
   return { root, tree };
 };
 
+/**
+ * This project's own layout: a bare repository, then `main` and a feature as its
+ * siblings. The bare entry is reported first, so an audit that takes entry 0 as
+ * main discards the bare path and lists the real `main` as a candidate — which is
+ * the whole reason `audit.ts` filters on the branch and on `bare`.
+ */
+const bareLayout = async () => {
+  const base = `${TMP}/spectre-bare-${process.pid}-${seq++}`;
+  roots.push(base);
+  const bare = `${base}/spectre`;
+  const main = `${base}/spectre-worktrees/main`;
+  const feature = `${base}/spectre-worktrees/feature`;
+
+  await Bun.write(`${base}/.keep`, "");
+  await git(base, ["init", "-q", "--bare", bare]);
+  await git(base, ["clone", "-q", bare, `${base}/seed`]);
+  await Bun.write(`${base}/seed/a.txt`, "one\n");
+  await git(`${base}/seed`, ["add", "."]);
+  await git(`${base}/seed`, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "first"]);
+  await git(`${base}/seed`, ["push", "-q", bare, "HEAD:refs/heads/main"]);
+  await git(bare, ["worktree", "add", "-q", main, "main"]);
+  await git(main, ["worktree", "add", "-q", "-b", "feature", feature]);
+  await git(main, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+  await Bun.$`rm -rf ${`${base}/seed`}`.quiet();
+
+  return { bare, main, feature };
+};
+
+/**
+ * The survey branch, narrowed by the presence of rows. `repo` is passed
+ * explicitly rather than left to the context: the tool reads
+ * `ctx.location.directory` as the default, and in this test that is the real
+ * repository, so a fixture that relied on the default would silently assert on
+ * this project's own worktrees.
+ */
 const call = async (directory: string) => {
-  const result = await Effect.runPromise(worktrees(directory).execute({}, context));
-  return result.output as {
-    worktrees: ReadonlyArray<Row>;
-    counts: Record<string, number>;
-    problems?: string;
-  };
+  const result = await Effect.runPromise(
+    worktrees(ctx(directory)).execute(
+      { action: "list", repo: directory },
+      { ...context, sessionID: "test" as never },
+    ),
+  );
+  const output = result.output as
+    | { worktrees: ReadonlyArray<Row>; counts: Record<string, number>; problems?: string }
+    | { status: string };
+  if (!("worktrees" in output))
+    throw new Error(`expected a survey, got status ${output.status}`);
+  return output;
 };
 
 /** Every fixture builds exactly one worktree, so anything else is a failure. */
@@ -107,6 +155,73 @@ describe("a worktree with only untracked files", () => {
     const row = only((await call(root)).worktrees);
     expect(row.dirty).toBe("scratch:1");
     expect(row.bucket).toBe("review");
+  });
+});
+
+describe("a bare repository with linked worktrees", () => {
+  test("git orders the bare path first, and no row is the bare one or main", async () => {
+    const { bare, main, feature } = await bareLayout();
+    // git sorts these by directory, so the order it reports is the bare
+    // repository, then feature, then main — neither "the first entry" nor "the
+    // second" is main. Assert the order so a change to how rows are chosen fails
+    // here rather than passing on a loose path comparison.
+    const raw = await Bun.$`git -C ${main} worktree list --porcelain`.text();
+    const blocks = raw.split("\n\n").filter((one) => one !== "");
+    const order = blocks.map((block) =>
+      block.split("\n").includes("bare")
+        ? "BARE"
+        : (block.match(/^worktree (.*)$/m)?.[1]?.split("/").pop() ?? "?"),
+    );
+
+    expect(order[0]).toBe("BARE");
+    expect(order).toContain("main");
+    expect(order).toContain("feature");
+
+    const page = await call(main);
+    const row = only(page.worktrees);
+
+    // git's own spelling of the path: macOS resolves TMPDIR's `/var` to
+    // `/private/var`, so the fixture's path and the row's differ.
+    const endsWith = (p: string, tail: string) => p.endsWith(tail);
+    expect(endsWith(row.path, "/spectre-worktrees/feature")).toBe(true);
+    expect(row.branch).toBe("feature");
+    // The bare repository and the main worktree are both reported by git and
+    // neither is a cleanup candidate: one is not a worktree, the other is trunk.
+    expect(page.worktrees.some((one) => endsWith(one.path, "/spectre"))).toBe(false);
+    expect(page.worktrees.some((one) => endsWith(one.path, "/spectre-worktrees/main"))).toBe(false);
+    expect(endsWith(bare, "/spectre")).toBe(true);
+    expect(endsWith(feature, "/spectre-worktrees/feature")).toBe(true);
+  });
+
+  test("two feature worktrees are both listed, and neither the bare path nor main is", async () => {
+    const base = `${TMP}/spectre-bare-two-${process.pid}-${seq++}`;
+    roots.push(base);
+    const bare = `${base}/spectre`;
+    const main = `${base}/spectre-worktrees/main`;
+    const second = `${base}/spectre-worktrees/second`;
+
+    await Bun.write(`${base}/.keep`, "");
+    await git(base, ["init", "-q", "--bare", bare]);
+    await git(base, ["init", "-q", "-b", "main", `${base}/seed`]);
+    await Bun.write(`${base}/seed/a.txt`, "one\n");
+    await git(`${base}/seed`, ["add", "."]);
+    await git(`${base}/seed`, [
+      "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "first",
+    ]);
+    await git(`${base}/seed`, ["push", "-q", bare, "HEAD:refs/heads/main"]);
+    await git(bare, ["worktree", "add", "-q", main, "main"]);
+    await git(main, ["worktree", "add", "-q", "-b", "feature", `${base}/spectre-worktrees/feature`]);
+    await git(main, ["worktree", "add", "-q", "-b", "other", second]);
+    await git(main, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    await Bun.$`rm -rf ${`${base}/seed`}`.quiet();
+
+    const page = await call(main);
+    const endsWith = (p: string, tail: string) => p.endsWith(tail);
+
+    expect(page.worktrees.map((one) => one.branch).sort()).toEqual(["feature", "other"]);
+    expect(page.worktrees.some((one) => endsWith(one.path, "/spectre"))).toBe(false);
+    expect(page.worktrees.some((one) => endsWith(one.path, "/spectre-worktrees/main"))).toBe(false);
+    expect(page.worktrees.some((one) => endsWith(one.path, "/spectre-worktrees/second"))).toBe(true);
   });
 });
 

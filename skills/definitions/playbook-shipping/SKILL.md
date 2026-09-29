@@ -41,8 +41,11 @@ Open a `todolist` with one entry per phase before you merge anything.
 One verifier per pull request, not batched. Each is a subagent on a model you
 pick with `tools.spectre.routing({})`, each exercising the real surface against
 parent versus head, and each returning `PASS`, `PASS+NOTES` or `FAIL` and
-posting that verdict on its own pull request. Give each its own worktree:
-verifiers sharing a working directory serialize on it and the fan-out is a lie.
+posting that verdict on its own pull request. Verifiers sharing a working
+directory serialize on it and the fan-out is a lie, so each opens its own
+checkout — and because `tools.spectre.worktrees` is one worktree per session, that
+is the verifier's first act, not something this session does on their behalf.
+Keep this session on main while they run.
 
 Safe means a verdict from an agent that did not write the code. A green CI run
 is not a verdict, and an approving bot review is not a verdict. If the only

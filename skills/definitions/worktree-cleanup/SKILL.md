@@ -58,14 +58,23 @@ that is what the bucket accepts.
 So `safe` is the list to work from, in this order:
 
 1. Start the largest. The path is where the disk went.
-2. For each one, `git worktree remove <path>`. Never `rm -rf` the directory. The
-   worktree metadata lives in the main repository's `.git/worktrees`, and removing
-   the directory behind git's back leaves a stale entry that every later
-   `git worktree list` still reports.
-3. `git worktree prune` afterwards, which clears entries whose directory is gone.
-4. `git branch -d <branch>` only for a branch that was merged. `-d` refuses to
+2. Re-read the row before you act on it. The call in Start is a snapshot, and by
+   the time you reach the last row the branch may have moved. `git -C <path> status
+   --porcelain` and `git -C <path> log --oneline main..<branch>` are the two checks
+   that matter, and a row that no longer matches is not a candidate any more.
+3. `tools.spectre.worktrees({ action: "remove", directory: path })`. The tool
+   asks git to remove it without force and then reads the result back, so a
+   worktree holding modified or untracked files comes back as `failed` with
+   git's own message and the tree is still there — that refusal is the guard.
+   Never `rm -rf` the directory: the worktree metadata lives in the main
+   repository's `.git/worktrees`, and removing the directory behind git's back
+   leaves a stale entry that every later `git worktree list` still reports.
+4. `git worktree prune` only when a `failed` or `already-gone` status names a
+   stale entry, which clears metadata for a directory that is already gone.
+5. `git branch -d <branch>` only for a branch that was merged. `-d` refuses to
    delete an unmerged branch, which is the guard you want; `-D` overrides it and
-   is how work disappears.
+   is how work disappears. `tools.spectre.worktrees` never deletes a branch —
+   removal reclaims a directory, and a branch is somebody's work.
 
 ## Phase D: Report what you did not do
 

@@ -62,8 +62,10 @@ Shared primitives first, as a blocking phase. A button that does not match makes
 every component that contains a button unmatchable, and the diff stops carrying
 information.
 
-After that, one owner per component, and the owners work in parallel in their own git
-worktrees so two migrations cannot collide on the same file. A component that two
+After that, one owner per component, and the owners work in parallel in their own
+worktrees, each opened by that owner as its first act — this session stays on
+main, because `tools.spectre.worktrees` moves the caller in and a caller can only
+own one. Two migrations cannot collide on the same file. A component that two
 people are editing at once produces a parity failure whose cause is the merge, not
 the pixels.
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bucket, count } from "../../tools/definitions/worktrees/classify";
+import { bucket, count, prFor, type PullRequest } from "../../tools/definitions/worktrees/classify";
 
 /**
  * The bucket is the only judgement this tool makes, so it is the part tested
@@ -51,5 +51,42 @@ describe("count", () => {
 
   test("no worktrees is all zeroes, not a missing field", () => {
     expect(count([])).toEqual({ "hold-wip": 0, "hold-open-pr": 0, safe: 0, review: 0 });
+  });
+});
+
+const pr = (number: number, state: string, headRefName: string): PullRequest => ({
+  number,
+  state,
+  headRefName,
+});
+
+describe("prFor", () => {
+  test("a branch nobody opened a pull request for reads as no PR", () => {
+    expect(prFor("feature", [])).toBe("-");
+    expect(prFor("feature", [pr(12, "OPEN", "other")])).toBe("-");
+  });
+
+  test("one pull request on the branch is the branch's pull request", () => {
+    expect(prFor("feature", [pr(12, "MERGED", "other"), pr(13, "OPEN", "feature")])).toBe(
+      "#13/OPEN",
+    );
+  });
+
+  test("a reused branch name reports the open pull request, not the closed one", () => {
+    // #12 was closed, the branch was recreated, #13 was opened under the same
+    // name. Taking the first would report the closed one, which reads as `safe`.
+    const pulled = [pr(12, "CLOSED", "feature"), pr(13, "OPEN", "feature")];
+
+    expect(prFor("feature", pulled)).toBe("#13/OPEN");
+    expect(bucket({ merged: false, dirty: "clean", pr: prFor("feature", pulled) })).toBe(
+      "hold-open-pr",
+    );
+  });
+
+  test("two finished pull requests on one name answer the same either way", () => {
+    const pulled = [pr(12, "CLOSED", "feature"), pr(13, "MERGED", "feature")];
+
+    expect(prFor("feature", pulled)).toBe("#12/CLOSED");
+    expect(prFor("feature", [...pulled].reverse())).toBe("#13/MERGED");
   });
 });

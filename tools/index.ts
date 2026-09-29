@@ -10,7 +10,7 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
   Effect.gen(function* () {
     const listed = comments(ctx.location.directory);
     const route = routing(ctx);
-    const trees = worktrees(ctx.location.directory);
+    const trees = worktrees(ctx);
     const prs = stack(ctx.location.directory);
     const why = historyTool(ctx.location.directory);
 

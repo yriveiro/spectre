@@ -12,10 +12,10 @@ const set = (name: string): string | undefined => {
  * The directory holding the global config, or `undefined` when the environment
  * cannot name one. Never guesses a path it was not given.
  *
- * Precedence, measured at `v2.0.18`:
- *   - `core/src/config/global.ts:79` — `OPENCODE_CONFIG_DIR ?? Path.config`
- *   - `core/src/config/global-roots.ts:8` — `XDG_CONFIG_HOME || home/.config`,
- *     then `join(..., "opencode")`
+ * Precedence, measured at `v2.0.19`:
+ *   - `util/src/global.ts:79` — `OPENCODE_CONFIG_DIR ?? Path.config`
+ *   - `util/src/global-roots.ts:6` — `XDG_CONFIG_HOME || home/.config`, and
+ *     `roots(app)` at line 13 joins that with `"opencode"`
  */
 const globalConfigDir: Effect.Effect<string | undefined> = Effect.sync((): string | undefined => {
   const configured = set("OPENCODE_CONFIG_DIR");

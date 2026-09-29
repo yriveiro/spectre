@@ -5,7 +5,7 @@ as an OpenCode plugin.
 
 ## Requirements
 
-- OpenCode `>= 2.0.18`
+- OpenCode `>= 2.0.19`
 
 ## Install
 

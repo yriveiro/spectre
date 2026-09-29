@@ -70,8 +70,13 @@ rather than "try memoizing something".
 
 1. Hand the change to a subagent with a tight scope and a named model from
    `tools.spectre.routing({})`. Never a model id from memory. When several
-   independent hypotheses are live, fan them to parallel subagents, each in its own
-   git worktree, so the shared tree is not a serialization point.
+   independent hypotheses are live, fan them to parallel subagents so the shared
+   tree is not a serialization point. Each one needs its own checkout, and
+   `tools.spectre.worktrees` is one worktree per session: this session cannot open
+   them, because the first call moves it in. So a fanning-out parent stays on
+   main, and each subagent opens its own worktree as its first act — or works in
+   the main checkout read-only and writes nothing, when the hypothesis is small
+   enough that a scratch path beats a branch.
 2. Measure before and after with the frozen harness, and run the gate.
 3. Keep only when the delta clears the noise *and* the gate is green. Otherwise
    revert the change in full. A tweak that "might help" is not kept.
