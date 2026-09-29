@@ -27,8 +27,8 @@ const call = async (
 };
 
 const good = JSON.stringify({
-  models: { haiku: "anthropic/claude-haiku-4-5" },
-  profiles: { explorer: { model: "haiku", why: "one named file" } },
+  models: { light: "acme/falcon-mini" },
+  profiles: { explorer: { model: "light", why: "one named file" } },
 });
 
 describe("tools.spectre.routing", () => {
@@ -39,12 +39,12 @@ describe("tools.spectre.routing", () => {
     expect(out.profiles).toEqual([
       {
         name: "explorer",
-        models: [{ name: "haiku", model: "anthropic/claude-haiku-4-5" }],
+        models: [{ name: "light", model: "acme/falcon-mini" }],
         agent: "spectre",
         why: "one named file",
       },
     ]);
-    expect(out.models).toEqual([{ name: "haiku", model: "anthropic/claude-haiku-4-5" }]);
+    expect(out.models).toEqual([{ name: "light", model: "acme/falcon-mini" }]);
     expect(out.sources).toHaveLength(1);
   });
 
@@ -52,22 +52,22 @@ describe("tools.spectre.routing", () => {
     await scratch.writeProject(
       JSON.stringify({
         models: {
-          haiku: "anthropic/claude-haiku-4-5",
-          opus: "anthropic/claude-opus-4-1",
+          light: "acme/falcon-mini",
+          heavy: "acme/falcon-max",
         },
-        profiles: { refactor: { model: ["opus", "haiku"], why: "w" } },
+        profiles: { refactor: { model: ["heavy", "light"], why: "w" } },
       }),
     );
     const out = await call(scratch.projectDir());
     expect(out.profiles[0]?.models.map((one) => one.model)).toEqual([
-      "anthropic/claude-opus-4-1",
-      "anthropic/claude-haiku-4-5",
+      "acme/falcon-max",
+      "acme/falcon-mini",
     ]);
   });
 
   test("a ref the catalogue does not have comes back as problems, not a crash", async () => {
     await scratch.writeProject(
-      JSON.stringify({ models: { ghost: "anthropic/claude-imaginary-9" } }),
+      JSON.stringify({ models: { ghost: "acme/falcon-ghost" } }),
     );
     const out = await call(scratch.projectDir());
     expect(out.profiles).toEqual([]);
@@ -78,7 +78,7 @@ describe("tools.spectre.routing", () => {
   test("problems from reading and from checking arrive together, one per line", async () => {
     await scratch.writeProject("{ broken");
     await scratch.writeGlobal(
-      JSON.stringify({ models: { ghost: "anthropic/claude-imaginary-9" } }),
+      JSON.stringify({ models: { ghost: "acme/falcon-ghost" } }),
     );
     const out = await call(scratch.projectDir());
     const lines = (out.problems ?? "").split("\n");
@@ -104,12 +104,12 @@ describe("tools.spectre.routing", () => {
     await scratch.writeProject(
       JSON.stringify({
         models: {
-          haiku: "anthropic/claude-haiku-4-5",
-          opus: "anthropic/claude-opus-4-1",
+          light: "acme/falcon-mini",
+          heavy: "acme/falcon-max",
         },
         profiles: {
-          explorer: { model: "haiku", why: "w" },
-          reviewer: { model: "opus", why: "w" },
+          explorer: { model: "light", why: "w" },
+          reviewer: { model: "heavy", why: "w" },
         },
       }),
     );

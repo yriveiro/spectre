@@ -17,16 +17,16 @@ describe("load", () => {
   test("a valid file is read and its path is a source", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { haiku: "anthropic/claude-haiku-4-5" },
-        profiles: { explorer: { model: "haiku", why: "one named file" } },
+        models: { light: "acme/falcon-mini" },
+        profiles: { explorer: { model: "light", why: "one named file" } },
       }),
     );
     const found = await run(scratch.projectDir());
     expect(found.problems).toEqual([]);
     expect(found.sources).toEqual([`${scratch.projectDir()}/spectre.jsonc`]);
-    expect(found.tables.models).toEqual({ haiku: "anthropic/claude-haiku-4-5" });
+    expect(found.tables.models).toEqual({ light: "acme/falcon-mini" });
     expect(found.tables.profiles.explorer).toEqual({
-      model: ["haiku"],
+      model: ["light"],
       why: "one named file",
     });
   });
@@ -49,7 +49,7 @@ describe("load", () => {
   test("an unknown key inside a profile names the whole path", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        profiles: { p: { model: "haiku", why: "w", extra: 1 } },
+        profiles: { p: { model: "light", why: "w", extra: 1 } },
       }),
     );
     const found = await run(scratch.projectDir());
@@ -57,13 +57,13 @@ describe("load", () => {
   });
 
   test("a missing required field names the field", async () => {
-    await scratch.writeProject(JSON.stringify({ profiles: { p: { model: "haiku" } } }));
+    await scratch.writeProject(JSON.stringify({ profiles: { p: { model: "light" } } }));
     expect((await run(scratch.projectDir())).problems[0]).toContain("profiles.p.why");
   });
 
   test("a value of the wrong type names the value", async () => {
-    await scratch.writeProject(JSON.stringify({ models: { haiku: 5 } }));
-    expect((await run(scratch.projectDir())).problems[0]).toContain("models.haiku");
+    await scratch.writeProject(JSON.stringify({ models: { light: 5 } }));
+    expect((await run(scratch.projectDir())).problems[0]).toContain("models.light");
   });
 
   test("a broken document reports the file and not a position", async () => {
@@ -76,43 +76,43 @@ describe("load", () => {
   test("both files are read, lowest precedence first", async () => {
     await scratch.writeGlobal(
       JSON.stringify({
-        models: { haiku: "anthropic/claude-haiku-4-5", sonnet: "anthropic/other" },
+        models: { light: "acme/falcon-mini", balanced: "acme/other" },
       }),
     );
-    await scratch.writeProject(JSON.stringify({ models: { opus: "opencode/gpt-5" } }));
+    await scratch.writeProject(JSON.stringify({ models: { heavy: "opencode/gpt-5" } }));
     const found = await run(scratch.projectDir());
     expect(found.sources).toHaveLength(2);
     expect(found.sources[0]).toContain("global");
-    expect(Object.keys(found.tables.models).sort()).toEqual(["haiku", "opus", "sonnet"]);
+    expect(Object.keys(found.tables.models).sort()).toEqual(["balanced", "heavy", "light"]);
   });
 
   test("a later entry replaces the earlier one whole", async () => {
     await scratch.writeGlobal(
-      JSON.stringify({ models: { haiku: "anthropic/claude-haiku-4-5#high" } }),
+      JSON.stringify({ models: { light: "acme/falcon-mini#high" } }),
     );
-    await scratch.writeProject(JSON.stringify({ models: { haiku: "opencode/gpt-5" } }));
+    await scratch.writeProject(JSON.stringify({ models: { light: "opencode/gpt-5" } }));
     expect((await run(scratch.projectDir())).tables.models).toEqual({
-      haiku: "opencode/gpt-5",
+      light: "opencode/gpt-5",
     });
   });
 
   test("null removes an inherited model, and a profile that needs it says so", async () => {
     await scratch.writeGlobal(
       JSON.stringify({
-        models: { haiku: "anthropic/claude-haiku-4-5" },
-        profiles: { explorer: { model: "haiku", why: "w" } },
+        models: { light: "acme/falcon-mini" },
+        profiles: { explorer: { model: "light", why: "w" } },
       }),
     );
-    await scratch.writeProject(JSON.stringify({ models: { haiku: null } }));
+    await scratch.writeProject(JSON.stringify({ models: { light: null } }));
     const found = await run(scratch.projectDir());
     expect(found.tables.models).toEqual({});
     expect(found.problems).toEqual([]);
-    expect(found.tables.profiles.explorer).toEqual({ model: ["haiku"], why: "w" });
+    expect(found.tables.profiles.explorer).toEqual({ model: ["light"], why: "w" });
   });
 
   test("null removes an inherited profile", async () => {
     await scratch.writeGlobal(
-      JSON.stringify({ profiles: { explorer: { model: "haiku", why: "w" } } }),
+      JSON.stringify({ profiles: { explorer: { model: "light", why: "w" } } }),
     );
     await scratch.writeProject(JSON.stringify({ profiles: { explorer: null } }));
     expect((await run(scratch.projectDir())).tables.profiles).toEqual({});
@@ -121,7 +121,7 @@ describe("load", () => {
   test("a profile listing several models keeps them all, in order", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { a: "anthropic/claude-haiku-4-5", b: "anthropic/claude-opus-4-1" },
+        models: { a: "acme/falcon-mini", b: "acme/falcon-max" },
         profiles: { refactor: { model: ["b", "a"], why: "w" } },
       }),
     );
@@ -129,11 +129,11 @@ describe("load", () => {
   });
 
   test("a broken project file still yields the global tables", async () => {
-    await scratch.writeGlobal(JSON.stringify({ models: { haiku: "anthropic/claude-haiku-4-5" } }));
+    await scratch.writeGlobal(JSON.stringify({ models: { light: "acme/falcon-mini" } }));
     await scratch.writeProject("{ broken");
     const found = await run(scratch.projectDir());
     expect(found.problems).toHaveLength(1);
     expect(found.sources).toHaveLength(1);
-    expect(found.tables.models).toEqual({ haiku: "anthropic/claude-haiku-4-5" });
+    expect(found.tables.models).toEqual({ light: "acme/falcon-mini" });
   });
 });
