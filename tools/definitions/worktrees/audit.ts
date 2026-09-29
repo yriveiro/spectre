@@ -1,4 +1,5 @@
 import { type Bucket, bucket, type Evidence, prFor, type PullRequest } from "./classify";
+import { git as run } from "./git";
 
 export type Row = Evidence & {
   readonly path: string;
@@ -14,19 +15,12 @@ export type Report = {
   readonly problems: ReadonlyArray<string>;
 };
 
-type Head = { readonly path: string; readonly head: string; readonly branch: string };
-
-const run = async (
-  cwd: string,
-  args: ReadonlyArray<string>,
-): Promise<{ out: string; err: string; code: number }> => {
-  const proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-  const [out, err, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  return { out: out.trim(), err: err.trim(), code };
+type Head = {
+  readonly path: string;
+  readonly head: string;
+  readonly branch: string;
+  /** A bare repository is listed first on a bare-plus-worktrees project. */
+  readonly bare: boolean;
 };
 
 const heads = (porcelain: string): ReadonlyArray<Head> => {
@@ -34,12 +28,17 @@ const heads = (porcelain: string): ReadonlyArray<Head> => {
   let path = "";
   let head = "";
   let branch = "";
+  // Set while the record is still being read. A bare entry carries no HEAD and
+  // no branch, so it is only complete when the record ends — marking it here
+  // would target the previous record, which has already been flushed.
+  let bare = false;
 
   const flush = () => {
-    if (path !== "") found.push({ path, head, branch });
+    if (path !== "") found.push({ path, head, branch, bare });
     path = "";
     head = "";
     branch = "";
+    bare = false;
   };
 
   for (const line of porcelain.split("\n")) {
@@ -49,6 +48,7 @@ const heads = (porcelain: string): ReadonlyArray<Head> => {
     }
     if (line.startsWith("worktree ")) path = line.slice("worktree ".length);
     else if (line.startsWith("HEAD ")) head = line.slice("HEAD ".length);
+    else if (line === "bare") bare = true;
     else if (line.startsWith("branch "))
       // Porcelain names the branch in full; every lookup below wants the short
       // name, the same one `git symbolic-ref --short` and `gh` report.
@@ -151,10 +151,14 @@ export const audit = async (directory: string): Promise<Report> => {
   if (listed.code !== 0)
     return { worktrees: [], problems: [`${directory} is not a git repository`] };
 
+  // A bare repository is reported FIRST and carries neither a HEAD nor a branch,
+  // so position is not the answer: the worktree on `main` is main, and a bare
+  // entry is none of them.
   const all = heads(listed.out);
-  const [main, ...rest] = all;
+  const main = all.find((one) => one.branch === "main");
+  const rest = all.filter((one) => !one.bare && one.branch !== "main");
   if (main === undefined)
-    return { worktrees: [], problems: [`git reported no worktree in ${directory}`] };
+    return { worktrees: [], problems: [`git reported no worktree on main in ${directory}`] };
 
   const base = await run(directory, [
     "rev-parse",

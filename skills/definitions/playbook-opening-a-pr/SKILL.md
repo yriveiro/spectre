@@ -17,7 +17,10 @@ Open a `todolist` with one entry per phase before the first push.
 
 ## Phase A: Worktree
 
-Work from a git worktree off the main branch. Subagents inherit it. Several
+Never edit the main checkout. `tools.spectre.worktrees({ action: "start", name })`
+opens one, branches it off trunk, reads the result back, and moves this session
+into it — one call, and only `status: "opened"` means it happened. Subagents
+inherit the worktree, so brief them with the path. Several
 runs on the same branch each get their own worktree, or you reset between them:
 
 ```

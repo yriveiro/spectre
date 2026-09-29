@@ -128,8 +128,9 @@ convention they have never said out loud does not go in on your own authority.
 
 ## Phase G: Land
 
-Open a worktree off the default branch, commit, and open a PR. Do not push to
-the branch they are on.
+`tools.spectre.worktrees({ action: "start", name })` opens a worktree off the
+default branch and moves this session into it, then commit and open a PR. Do not
+push to the branch they are on.
 
 ## Outputs
 

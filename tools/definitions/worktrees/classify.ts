@@ -37,8 +37,18 @@ export type PullRequest = {
   readonly headRefName: string;
 };
 
-/** `-` means no PR, which is what every merge and remote rule downstream reads. */
+/**
+ * `-` means no PR, which is what every merge and remote rule downstream reads.
+ *
+ * A branch name outlives its pull request, so one name can carry several: #12
+ * opened, closed, branch recreated, #13 opened under the same name. Taking the
+ * first match would let the closed one answer for the branch, and a closed PR is
+ * proof on purpose, so the row would read `safe` over a pull request somebody is
+ * waiting on. The match that still holds somebody up wins.
+ */
 export const prFor = (branch: string, pulled: ReadonlyArray<PullRequest>): string => {
-  const found = pulled.find((one) => one.headRefName === branch);
+  const matching = pulled.filter((one) => one.headRefName === branch);
+  const open = matching.find((one) => one.state === "OPEN");
+  const found = open ?? matching[0];
   return found === undefined ? "-" : `#${found.number}/${found.state}`;
 };
