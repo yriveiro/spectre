@@ -33,8 +33,11 @@ unmeasured claim, and the unfalsifiable check.
 
 **An oracle beats an argument.** When two things are both plausible, build the
 thing that knows the answer, such as a reference implementation, a parser, a
-schema, or a query, and ask it. Reasoning about which is better is cheap and
-frequently wrong; the oracle is usually already installed and takes one command.
+schema, a query, or two or three prototypes compared side by side, and ask it.
+Reasoning about which is better is cheap and frequently wrong; the oracle is
+usually already installed and takes one command. Two prototypes is the same move
+when the surface is a screen rather than a function: you cannot argue a feel into
+existence, and you can look at two of them next to each other.
 
 **A check that cannot fail is decoration.** Every assertion you can break on
 purpose is worth writing, and a suite you have never seen fail tells the reader
@@ -59,7 +62,10 @@ line in the file scores 100%.
 **Find the oracle before forming the opinion.** The cheapest question to ask when
 two designs are in balance is: what would I have to measure to know? Often the
 answer names a tool that is already on the machine. If no oracle exists, writing a
-small one is usually faster than the argument it replaces.
+small one is usually faster than the argument it replaces. Do not spend the method
+on work with a clear target: a bug fix, a refactor with a known end state, or a
+mechanical change has one right answer, and three versions of it is three times the
+reading for nothing.
 
 **Falsify before you trust.** When a check is new (a test suite, a linter rule, a
 benchmark, or a scanner), deliberately break the thing it inspects and confirm it
@@ -118,12 +124,6 @@ finding about the tests, and it is the cheapest finding you will get all session
 
 ## What this principle is not
 
-Guards against the failure mode of every principle, which is becoming a ritual
-performed for its own sake.
-
-- **Not a demand to measure everything.** Some questions are answered by reading
-  the code. Measuring a decision that was never in doubt spends attention the
-  doubtful decisions needed.
 - **Not a substitute for judgement.** A number narrows the field; it does not pick.
   Two options that score identically still need a reason, and the reason is
   sometimes taste, cost, or what the project is for.

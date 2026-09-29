@@ -17,6 +17,14 @@ It is custody: leave what you touched better than you found it, do not walk past
 what is already broken while you are standing on it, and accept that this is
 cheaper today than in six months.
 
+The steady state is a codebase that is not larger than it was. A change is allowed
+to add what it needs and to remove more, so the surface after it is the same size
+or smaller and does more. A change that ends with a bigger surface and nothing
+deleted has spent the budget it was given on a net addition, and the next change
+pays for it. This is the continual form of the same claim, not a stricter one: the
+unit is the codebase, not the file, and a per-file tally that adds up to growth is
+not the win it looks like.
+
 The test is not "is this code perfect." It is "could I touch this again, on a bad
 day, without a grudge."
 
@@ -36,7 +44,8 @@ work with none of the context.
 
 **Dead code is not free.** It is read, reviewed, and misread forever. Deleting it
 is a change, and a deletion is easier to verify than the replacement you would
-have to invent to keep it.
+have to invent to keep it. Dead code is the narrower question: nothing reaches it.
+The wider one is a path with a replacement that callers still use.
 
 **Move what is safe to move.** A dependency inside its range that is not moved is
 a risk deferred by default. Check the bump before taking it, then take it when
@@ -54,9 +63,8 @@ How the values are applied at the level of judgement:
 already have the checks in your hand. This is the cheapest moment in the
 project's life to remove the thing, and the only one where the removal is obvious.
 
-**Delete before you abstract.** A leftover path that has a replacement does not
-need a flag, a comment, or a condition. It needs to go. Building a way to keep it
-alive is adding the mess back with a schema.
+**Delete before you abstract.** A path that has a replacement does not need a
+flag, a comment, or a condition. It needs to go.
 
 **Take the safe upgrade.** When a dependency has a newer version inside the range
 it already claims, and the project's own checks pass on it, move it. "Outdated" is
@@ -64,6 +72,14 @@ only a real risk when something breaks, and a check that passes is the evidence
 that this one does not. When the bump crosses a major, or the checks do not pass,
 that is not hygiene. That is a task. Say so and schedule it instead of filing it
 as fine.
+
+**Delete before you build on top.** The base a new thing sits on decides how much
+of it is necessary. A codebase carrying four redundant validators and a stub with
+no content underneath needs those gone first, because the design that looks obvious
+on the clean base is invisible on the cluttered one. Sequencing is
+`principle-laziness-protocol`, which owns removal before addition as a decision to
+make before any code exists. This is the same order seen from the other end, once
+the addition is written.
 
 **Separate dirt from damage.** Dead code, a stale comment, a duplicated block:
 hygiene. A wrong invariant, a silent failure, a security hole: a bug, and it gets
@@ -74,6 +90,12 @@ relabel a defect as tidying to avoid the harder conversation.
 implementations, the one a reader needs no comment to understand is the cleaner
 one. A comment that exists because the code was unclear is a record of a
 simplification that did not happen.
+
+**Count what the change removed, not only what it added.** A diff that adds forty
+lines and deletes none is a net addition, whatever the ticket asked for. The
+deletions were available the whole time, and taking them is the difference
+between a codebase that stays the size it is and one that grows a little on every
+change until nobody can find anything.
 
 **Let the tools do the trivial parts.** Run the formatter, the linter, the
 dependency audit. Manual tidying of what a tool already does is where attention
@@ -86,9 +108,11 @@ not optional.
 
 **Remove what nothing reaches.** Unused exports, unreachable branches,
 commented-out blocks, a helper kept "just in case." Deletion is verifiable: the
-check either still passes or it does not, and either answer is a fact. A layer
-with one caller that only forwards is a different thing. It is not dead, it is
-redundant, and that is `principle-minimize-reader-load`.
+check either still passes or it does not, and either answer is a fact. Two
+neighbouring questions are not this one. A layer with one caller that only
+forwards is redundant, and that is `principle-laziness-protocol`. An old path
+whose callers you have not moved yet is
+`principle-migrate-callers-then-delete-legacy-apis`.
 
 **Take the whole bump, not the easy half.** A change that moves the direct pin but
 leaves a second copy of the same package behind is a known problem with extra
@@ -110,7 +134,8 @@ changing. Leave the rest for a change that is about it.
 
 **Check the tree before you call it done.** A workspace dirtier than you found it
 (a temp file, a debug print, a widened ignore, a dependency the install quietly
-moved) is the most common way good work gets delivered in a bad state.
+moved) is the most common way good work gets delivered in a bad state. Reporting
+on it is `principle-verification`.
 
 **Judge the rot you are standing on.** If you notice a stale comment, an outdated
 dependency, or dead code in the area you are already inside, it is now yours to
@@ -119,19 +144,10 @@ it.
 
 ## What this principle is not
 
-Guards against the failure mode of every principle, which is becoming a ritual
-performed for its own sake.
-
 - **Not a formatting obsession.** Run the formatter; that is what formatters are
   for. This principle concerns what is true and what is reachable, not what is
   aligned.
 - **Not maximalism.** Hygiene is proportional to the stakes. A throwaway probe
   owes nobody a tidy-up; the artifact other people depend on owes everybody one.
   Cleaning code nobody will read is a cost paid for nothing.
-- **Not a licence to expand the change.** Care is not scope. A drive-by rewrite
-  inside a bug fix is still scope creep. It just arrives with good intentions
-  attached, which is what makes it hard to refuse.
-- **Not a gate.** Tidying nobody performs proves nothing. A cleanup ritual nobody
-  acts on is a slower way to feel productive.
-- **Not gatekeeping.** The target is code that is kept, not authors who are caught
-  out. Apply it to your own diff first, and most often.
+

@@ -15,7 +15,7 @@ export const principleEvidence: Definition = {
   id: Skill.ID.make("principle-evidence"),
   name: Skill.Name.make("principle-evidence"),
   description:
-    "The principle that a claim is only as good as the evidence behind it and the evidence must be able to fail. Use when choosing between two implementations, when writing or trusting a test suite, a linter rule, a benchmark or a scanner, and before reporting any number: accuracy, recall, speed, size, or regression count.",
+    "A check you have never seen fail proves nothing, so make it fail on purpose before you trust it. Load it when you write a test, a linter rule, a benchmark, or a scanner, and before you trust a suite that is green, before you compare two implementations, and before you report a number: accuracy, recall, speed, size, a regression count. Then find the oracle instead of arguing, and measure the population rather than the specimen. A number from three hand-picked cases is an anecdote with a decimal point, and a corpus nobody regenerates is a claim again. Reporting a number you did not measure is principle-verification, which owns the other half: a fact nobody checked is not a fact.",
   autoinvoke: false,
   path: anchor(import.meta.dir),
 };

@@ -6,7 +6,12 @@ export const spectre: Partial<Agent.Info> & Pick<Agent.Info, "id"> = {
     "Operates in Spectre mode, and is the agent model routing spawns. Use it to turn the mode on, or when a routed task should run under it.",
   mode: "all",
   color: "primary",
-  permissions: [{ action: "execute", resource: "*", effect: "allow" }],
+  permissions: [
+    { action: "execute", resource: "*", effect: "allow" },
+    { action: "external_directory", resource: "~/.local/share/spectre/*", effect: "allow" },
+    { action: "read", resource: "~/.local/share/spectre/*", effect: "allow" },
+    { action: "edit", resource: "~/.local/share/spectre/*", effect: "allow" },
+  ],
   system: `# Spectre agent
 
 You are operating as spectre-mode's full agent style. Read the \`spectre-mode\`

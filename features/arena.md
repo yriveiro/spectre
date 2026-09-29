@@ -4,6 +4,11 @@ Status: reserved. On purpose this comes **after**
 [model-routing.md](./model-routing.md). Nothing here blocks that file, and nothing
 in that file should be bent to fit this one.
 
+The skill `skills/definitions/arena/` already exists and is not this feature.
+Which of the two gives way is recorded in
+[FOR_AGENTS.md](../skills/FOR_AGENTS.md), rule 3. Everything below is about the
+feature.
+
 ## What it does
 
 Run the same question on several spectre agents using **different models**. Let
