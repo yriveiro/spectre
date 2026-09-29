@@ -135,6 +135,7 @@ skipped and why.
 | You are inside code you are editing anyway | `principle-hygiene` |
 | A file, a log, or a file list is too big to read at once | `principle-guard-the-context-window` |
 | You are about to spawn a subagent, or a task splits into mechanical and judgement | `model-router` |
+| A request is a whole task whose ORDER matters, rather than a claim you are holding | `playbook` |
 | You are about to add a layer, a wrapper, or a field | `principle-laziness-protocol` |
 | A value's origin or mutability takes more than one hop to answer | `principle-laziness-protocol` |
 | You are writing, editing, or keeping a test, and about to trust a green suite | `principle-test-behavior-not-implementation` |
@@ -158,6 +159,11 @@ Two of these fire far more often than they get loaded, and both are cheap:
 Every entry below is a leaf skill. Read this index, then load the one leaf the
 task actually needs. Do not load them all up front. If a leaf covers the matter,
 the leaf decides. This list only tells you which file to open.
+
+A principle holds one claim and has no phases. A whole task whose order matters is
+`playbook`, and it indexes itself: the twenty-two procedures are in that file, not
+here, because this file is the binding constraint on the set and a row per
+procedure is what would break it.
 
 - `i-have-adhd`. Shapes the message: lead with the next action, number multi-step
   work, restate state, suppress tangents, make wins visible, and say "I do not

@@ -46,6 +46,29 @@ import { tdd } from "./tdd";
 import { teach } from "./teach";
 import { technicalWriting } from "./technical-writing";
 import { typescriptBestPractices } from "./typescript-best-practices";
+import { playbook } from "./playbook";
+import { playbookAuthoringASkill } from "./playbook-authoring-a-skill";
+import { playbookAutonomousRun } from "./playbook-autonomous-run";
+import { playbookAutopilotFull } from "./playbook-autopilot-full";
+import { playbookAutopilotStack } from "./playbook-autopilot-stack";
+import { playbookBabysit } from "./playbook-babysit";
+import { playbookBugFix } from "./playbook-bug-fix";
+import { playbookEval } from "./playbook-eval";
+import { playbookFeature } from "./playbook-feature";
+import { playbookHillclimb } from "./playbook-hillclimb";
+import { playbookInvestigation } from "./playbook-investigation";
+import { playbookMultiPhasePlan } from "./playbook-multi-phase-plan";
+import { playbookOpeningAPr } from "./playbook-opening-a-pr";
+import { playbookOrchestrate } from "./playbook-orchestrate";
+import { playbookPauseSafely } from "./playbook-pause-safely";
+import { playbookPerfIssue } from "./playbook-perf-issue";
+import { playbookPrototype } from "./playbook-prototype";
+import { playbookRefactoring } from "./playbook-refactoring";
+import { playbookRuntimeForensics } from "./playbook-runtime-forensics";
+import { playbookSessionPickup } from "./playbook-session-pickup";
+import { playbookShipping } from "./playbook-shipping";
+import { playbookTraceForensics } from "./playbook-trace-forensics";
+import { playbookVisualParity } from "./playbook-visual-parity";
 import { ripwire } from "./ripwire";
 import { swarm } from "./swarm";
 import { unslop } from "./unslop";
@@ -68,6 +91,29 @@ const definitions: ReadonlyArray<Definition> = [
   teach,
   technicalWriting,
   typescriptBestPractices,
+  playbook,
+  playbookAuthoringASkill,
+  playbookAutonomousRun,
+  playbookAutopilotFull,
+  playbookAutopilotStack,
+  playbookBabysit,
+  playbookBugFix,
+  playbookEval,
+  playbookFeature,
+  playbookHillclimb,
+  playbookInvestigation,
+  playbookMultiPhasePlan,
+  playbookOpeningAPr,
+  playbookOrchestrate,
+  playbookPauseSafely,
+  playbookPerfIssue,
+  playbookPrototype,
+  playbookRefactoring,
+  playbookRuntimeForensics,
+  playbookSessionPickup,
+  playbookShipping,
+  playbookTraceForensics,
+  playbookVisualParity,
   arena,
   bro,
   iHaveAdhd,

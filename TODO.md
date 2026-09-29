@@ -19,14 +19,13 @@ because that file's rules put them there, not because they were planned.
 | `ripwire` map row per leaf | 31 rows, and the `none` count synced to the hub |
 | 14 procedures from pstack | registered and not indexed, per rule 3 |
 | `why` | the surviving seventh of pstack's seven evidence categories |
+| 22 playbooks plus a `playbook` index | registered and not indexed; the hub grew by 376 bytes for all 23 |
 | Reachability and map-drift tests | both verified to fail before being kept |
 
 ## Next
 
-| Item | Why it is next |
-| ---- | -------------- |
-| 23 pstack playbooks, folded into `spectre-mode` | the largest remaining piece of pstack's value, and the one that makes a method reachable from a sentence rather than from a name you have to remember |
-| The overnight family needs a `/loop` substitution | verified real: at tag `v2.0.18` the only `schedule*` symbols are `scheduleReconnect` and `scheduleRows`, both TUI, so there is no scheduler to wait on |
+Nothing in the port is left unplanned. The two rows below are the remainder, and
+both are blocked on a person rather than on work.
 
 ## Blocked on a human
 
