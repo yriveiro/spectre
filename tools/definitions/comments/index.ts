@@ -15,7 +15,8 @@ const DEFAULT_LIMIT = 400;
 
 const Input = Schema.Struct({
   targets: Schema.Array(Schema.String).annotate({
-    description: "Files or directories to inventory, relative to the project directory or absolute.",
+    description:
+      "Files or directories to inventory, relative to the project directory or absolute.",
   }),
   limit: Schema.optional(Schema.Number).annotate({
     description: `Maximum hits to return. Default ${DEFAULT_LIMIT}.`,
@@ -94,7 +95,8 @@ const classify = (part: string, doc: boolean): Kind => {
   return "comment";
 };
 
-const isComment = (body: string) => body.startsWith("//") || body.startsWith("/*") || body.startsWith("#");
+const isComment = (body: string) =>
+  body.startsWith("//") || body.startsWith("/*") || body.startsWith("#");
 
 const scanFile = (text: string, ext: string): ReadonlyArray<RawHit> => {
   const style = HASH_STYLE.has(ext) ? "hash" : C_STYLE.has(ext) ? "c" : undefined;
@@ -137,7 +139,9 @@ const scanFile = (text: string, ext: string): ReadonlyArray<RawHit> => {
 };
 
 const filesIn = async (target: string): Promise<ReadonlyArray<string>> => {
-  const stat = await Bun.file(target).stat().catch(() => undefined);
+  const stat = await Bun.file(target)
+    .stat()
+    .catch(() => undefined);
   if (stat === undefined) throw new Error("no such file or directory");
   if (stat.isFile()) return [target];
 
@@ -154,7 +158,11 @@ const filesIn = async (target: string): Promise<ReadonlyArray<string>> => {
 
 const inventory = async (
   directory: string,
-  input: { readonly targets: ReadonlyArray<string>; readonly limit?: number; readonly offset?: number },
+  input: {
+    readonly targets: ReadonlyArray<string>;
+    readonly limit?: number;
+    readonly offset?: number;
+  },
 ): Promise<Page> => {
   const offset = input.offset ?? 0;
   const limit = input.limit ?? DEFAULT_LIMIT;
@@ -171,7 +179,10 @@ const inventory = async (
     try {
       files = await filesIn(target);
     } catch (cause) {
-      errors.push({ target: asked, reason: cause instanceof Error ? cause.message : String(cause) });
+      errors.push({
+        target: asked,
+        reason: cause instanceof Error ? cause.message : String(cause),
+      });
       continue;
     }
 

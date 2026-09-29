@@ -20,9 +20,9 @@ const call = async (
   input: { profile?: string } = {},
   list?: () => Effect.Effect<unknown, unknown>,
 ) => {
-  const run = routing(context(directory, list)).execute as unknown as (
-    given: { profile?: string },
-  ) => Effect.Effect<{ output: Page }>;
+  const run = routing(context(directory, list)).execute as unknown as (given: {
+    profile?: string;
+  }) => Effect.Effect<{ output: Page }>;
   return (await Effect.runPromise(run(input))).output;
 };
 
@@ -44,9 +44,7 @@ describe("tools.spectre.routing", () => {
         why: "one named file",
       },
     ]);
-    expect(out.models).toEqual([
-      { name: "haiku", model: "anthropic/claude-haiku-4-5" },
-    ]);
+    expect(out.models).toEqual([{ name: "haiku", model: "anthropic/claude-haiku-4-5" }]);
     expect(out.sources).toHaveLength(1);
   });
 

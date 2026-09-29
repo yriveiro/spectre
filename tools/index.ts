@@ -6,9 +6,7 @@ import { routing } from "./definitions/routing";
 import { stack } from "./definitions/stack";
 import { worktrees } from "./definitions/worktrees";
 
-export const update = (
-  ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.Context,
-) =>
+export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.Context) =>
   Effect.gen(function* () {
     const listed = comments(ctx.location.directory);
     const route = routing(ctx);

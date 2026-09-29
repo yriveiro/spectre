@@ -42,9 +42,7 @@ const rows = async () => {
 
 describe("every principle has a row in the map", () => {
   test("no leaf is missing, and a row names no leaf that does not exist", async () => {
-    const skills: ReadonlyArray<string> = (await Effect.runPromise(load())).map(
-      (one) => one.id,
-    );
+    const skills: ReadonlyArray<string> = (await Effect.runPromise(load())).map((one) => one.id);
     const listed = new Set((await rows()).map((one) => one.leaf));
     const exempt = await notALeaf();
 
@@ -56,9 +54,27 @@ describe("every principle has a row in the map", () => {
 });
 
 const WORDS = [
-  "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-  "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
-  "seventeen", "eighteen", "nineteen", "twenty",
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+  "twenty",
 ] as const;
 
 describe("the none count agrees with the hub", () => {

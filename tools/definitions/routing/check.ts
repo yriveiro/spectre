@@ -47,18 +47,13 @@ export const check = (
       continue;
     }
 
-    const found = catalogue.find(
-      (one) => one.providerID === ref.providerID && one.id === ref.id,
-    );
+    const found = catalogue.find((one) => one.providerID === ref.providerID && one.id === ref.id);
     if (found === undefined) {
       unresolved.push({ name, ref: formatRef(ref) });
       continue;
     }
 
-    if (
-      ref.variant !== undefined &&
-      !found.variants.some((one) => one.id === ref.variant)
-    ) {
+    if (ref.variant !== undefined && !found.variants.some((one) => one.id === ref.variant)) {
       const have = found.variants.map((one) => one.id).join(", ");
       problems.push(
         `models.${name}: "${ref.variant}" is not a variant of ${ref.providerID}/${ref.id}. Variants: ${have || "none"}`,

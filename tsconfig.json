@@ -1,16 +1,11 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "lib": [
-      "ESNext"
-    ],
+    "lib": ["ESNext"],
     "module": "Preserve",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
-    "types": [
-      "node",
-      "bun"
-    ],
+    "types": ["node", "bun"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
@@ -18,12 +13,5 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true
   },
-  "include": [
-    "index.ts",
-    "agents",
-    "eval",
-    "skills",
-    "test",
-    "tools"
-  ]
+  "include": ["index.ts", "agents", "eval", "skills", "test", "tools"]
 }

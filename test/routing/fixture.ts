@@ -39,8 +39,7 @@ export const useScratch = () => {
     globalDir,
     projectDir,
     writeGlobal: (body: string) => Bun.write(`${globalDir()}/spectre.jsonc`, body),
-    writeProject: (body: string) =>
-      Bun.write(`${projectDir()}/spectre.jsonc`, body),
+    writeProject: (body: string) => Bun.write(`${projectDir()}/spectre.jsonc`, body),
   };
 };
 
@@ -48,5 +47,4 @@ export const context = (
   directory: string,
   list: () => Effect.Effect<unknown, unknown> = () =>
     Effect.succeed({ location: {}, data: CATALOGUE }),
-) =>
-  ({ location: { directory }, model: { list } }) as unknown as Plugin.Context;
+) => ({ location: { directory }, model: { list } }) as unknown as Plugin.Context;

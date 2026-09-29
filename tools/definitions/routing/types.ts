@@ -16,12 +16,8 @@ const Profile = Schema.Struct({
  */
 export const Config = Schema.Struct({
   $schema: Schema.optional(Schema.String),
-  models: Schema.optional(
-    Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Null])),
-  ),
-  profiles: Schema.optional(
-    Schema.Record(Schema.String, Schema.Union([Profile, Schema.Null])),
-  ),
+  models: Schema.optional(Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Null]))),
+  profiles: Schema.optional(Schema.Record(Schema.String, Schema.Union([Profile, Schema.Null]))),
 });
 
 export type File = typeof Config.Type;

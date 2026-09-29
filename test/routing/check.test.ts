@@ -28,16 +28,12 @@ describe("check", () => {
   test("a ref that exists becomes a row, with no variant suffix", () => {
     const found = run(tables({ haiku: "anthropic/claude-haiku-4-5" }));
     expect(found.problems).toEqual([]);
-    expect(found.models).toEqual([
-      { name: "haiku", model: "anthropic/claude-haiku-4-5" },
-    ]);
+    expect(found.models).toEqual([{ name: "haiku", model: "anthropic/claude-haiku-4-5" }]);
   });
 
   test("a ref with a variant keeps it in the string", () => {
     const found = run(tables({ haiku: "anthropic/claude-haiku-4-5#high" }));
-    expect(found.models.map((one) => one.model)).toEqual([
-      "anthropic/claude-haiku-4-5#high",
-    ]);
+    expect(found.models.map((one) => one.model)).toEqual(["anthropic/claude-haiku-4-5#high"]);
   });
 
   test("a ref of the wrong shape is reported and the model left out", () => {
@@ -49,7 +45,9 @@ describe("check", () => {
   });
 
   test("a ref that is not in the catalogue is reported against the allowlist", () => {
-    const found = run(tables({ spark: "anthropic/claude-haiku-4-5", ghost: "anthropic/claude-imaginary-9" }));
+    const found = run(
+      tables({ spark: "anthropic/claude-haiku-4-5", ghost: "anthropic/claude-imaginary-9" }),
+    );
     expect(found.problems[0]).toContain("models.ghost");
     expect(found.problems[0]).toContain("Allowed: spark (anthropic/claude-haiku-4-5)");
   });
@@ -60,10 +58,10 @@ describe("check", () => {
       id: `m${i}`,
       variants: [],
     })) as unknown as ReadonlyArray<Model.Info>;
-    const found = run(
-      tables({ spark: "anthropic/claude-haiku-4-5", ghost: "other/nope" }),
-      [...catalogue, ...many],
-    );
+    const found = run(tables({ spark: "anthropic/claude-haiku-4-5", ghost: "other/nope" }), [
+      ...catalogue,
+      ...many,
+    ]);
     expect(found.problems[0]).toContain("Allowed: spark (anthropic/claude-haiku-4-5)");
     expect(found.problems[0]).not.toContain("other/m0");
     expect(found.problems[0]).not.toContain("more");
@@ -95,16 +93,23 @@ describe("check", () => {
   });
 
   test("the unresolved list does not depend on the order of the file", () => {
-    const first = run(tables({ ghost: "anthropic/imaginary", spark: "anthropic/claude-haiku-4-5" }));
-    const second = run(tables({ spark: "anthropic/claude-haiku-4-5", ghost: "anthropic/imaginary" }));
+    const first = run(
+      tables({ ghost: "anthropic/imaginary", spark: "anthropic/claude-haiku-4-5" }),
+    );
+    const second = run(
+      tables({ spark: "anthropic/claude-haiku-4-5", ghost: "anthropic/imaginary" }),
+    );
     expect(first.problems).toEqual(second.problems);
   });
 
   test("a profile naming a model that is not a name is reported with the names", () => {
     const found = run(
-      tables({ haiku: "anthropic/claude-haiku-4-5" }, {
-        explorer: { model: "opus", why: "w" },
-      }),
+      tables(
+        { haiku: "anthropic/claude-haiku-4-5" },
+        {
+          explorer: { model: "opus", why: "w" },
+        },
+      ),
     );
     expect(found.profiles).toEqual([]);
     expect(found.problems[0]).toContain('"opus" is not a name in models');
@@ -112,18 +117,19 @@ describe("check", () => {
   });
 
   test("a profile whose model failed is not reported a second time", () => {
-    const found = run(
-      tables({ haiku: "nope" }, { explorer: { model: "haiku", why: "w" } }),
-    );
+    const found = run(tables({ haiku: "nope" }, { explorer: { model: "haiku", why: "w" } }));
     expect(found.problems).toHaveLength(1);
     expect(found.problems[0]).toContain("models.haiku");
   });
 
   test("a profile with no agent is given the default", () => {
     const found = run(
-      tables({ haiku: "anthropic/claude-haiku-4-5" }, {
-        explorer: { model: "haiku", why: "w" },
-      }),
+      tables(
+        { haiku: "anthropic/claude-haiku-4-5" },
+        {
+          explorer: { model: "haiku", why: "w" },
+        },
+      ),
     );
     expect(found.profiles).toEqual([
       {
@@ -137,18 +143,24 @@ describe("check", () => {
 
   test("a profile that names a spectre agent is left alone", () => {
     const found = run(
-      tables({ haiku: "anthropic/claude-haiku-4-5" }, {
-        reviewer: { model: "haiku", why: "w", agent: "sicko" },
-      }),
+      tables(
+        { haiku: "anthropic/claude-haiku-4-5" },
+        {
+          reviewer: { model: "haiku", why: "w", agent: "sicko" },
+        },
+      ),
     );
     expect(found.profiles.map((one) => one.agent)).toEqual(["sicko"]);
   });
 
   test("an agent that is not a spectre agent is refused, naming the ones that are", () => {
     const found = run(
-      tables({ haiku: "anthropic/claude-haiku-4-5" }, {
-        explorer: { model: "haiku", why: "w", agent: "explore" },
-      }),
+      tables(
+        { haiku: "anthropic/claude-haiku-4-5" },
+        {
+          explorer: { model: "haiku", why: "w", agent: "explore" },
+        },
+      ),
     );
     expect(found.profiles).toEqual([]);
     expect(found.problems).toHaveLength(1);
@@ -158,18 +170,24 @@ describe("check", () => {
 
   test("a misspelled spectre agent is caught here, not at spawn", () => {
     const found = run(
-      tables({ haiku: "anthropic/claude-haiku-4-5" }, {
-        reviewer: { model: "haiku", why: "w", agent: "sickoo" },
-      }),
+      tables(
+        { haiku: "anthropic/claude-haiku-4-5" },
+        {
+          reviewer: { model: "haiku", why: "w", agent: "sickoo" },
+        },
+      ),
     );
     expect(found.problems[0]).toContain('"sickoo" is not a spectre agent');
   });
 
   test("the default agent is checked too, so a bad DEFAULT_AGENT cannot slip through", () => {
     const found = check(
-      tables({ haiku: "anthropic/claude-haiku-4-5" }, {
-        explorer: { model: "haiku", why: "w" },
-      }),
+      tables(
+        { haiku: "anthropic/claude-haiku-4-5" },
+        {
+          explorer: { model: "haiku", why: "w" },
+        },
+      ),
       catalogue,
       "general",
       AGENTS,

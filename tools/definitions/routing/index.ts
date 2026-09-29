@@ -17,8 +17,7 @@ import { DEFAULT_AGENT } from "./types";
 
 const Input = Schema.Struct({
   profile: Schema.optional(Schema.String).annotate({
-    description:
-      "One profile name, to get just that row. Omit it for the whole table.",
+    description: "One profile name, to get just that row. Omit it for the whole table.",
   }),
 });
 
@@ -80,7 +79,7 @@ the text looks wrong, so a human reading the answer cannot catch it.`;
 
 const catalogue = (ctx: Plugin.Context) =>
   ctx.model.list().pipe(
-    Effect.map((out) => ({ models: out.data, problem: undefined } as const)),
+    Effect.map((out) => ({ models: out.data, problem: undefined }) as const),
     Effect.catchCause(() =>
       Effect.succeed({
         models: [] as ReadonlyArray<Model.Info>,
@@ -89,9 +88,7 @@ const catalogue = (ctx: Plugin.Context) =>
     ),
   );
 
-export const routing = (
-  ctx: Plugin.Context,
-): Tool.Info<typeof Input, typeof Output> => ({
+export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Output> => ({
   name: "routing",
   description: DESCRIPTION,
   input: Input,
@@ -106,22 +103,14 @@ export const routing = (
     Effect.gen(function* () {
       const found = yield* load(ctx.location.directory);
       const listed = yield* catalogue(ctx);
-      const checked = check(
-        found.tables,
-        listed.models,
-        DEFAULT_AGENT,
-        agentIds,
-      );
+      const checked = check(found.tables, listed.models, DEFAULT_AGENT, agentIds);
 
       const problems = [
         ...found.problems,
         ...(listed.problem === undefined ? [] : [listed.problem]),
         ...checked.problems,
       ];
-      if (
-        found.sources.length > 0 &&
-        Object.keys(found.tables.models).length === 0
-      )
+      if (found.sources.length > 0 && Object.keys(found.tables.models).length === 0)
         problems.push(`${FILE_NAME}: no models are allowed, so nothing routes`);
 
       if (problems.length > 0)

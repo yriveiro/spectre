@@ -78,7 +78,9 @@ export const boot = async (options: {
   while (password === undefined) {
     if (Date.now() > deadline) {
       proc.kill();
-      throw new Error(`opencode serve printed no password in ${options.timeoutMs ?? 60_000}ms. Saw: ${seen}`);
+      throw new Error(
+        `opencode serve printed no password in ${options.timeoutMs ?? 60_000}ms. Saw: ${seen}`,
+      );
     }
     const chunk = await reader.read();
     if (chunk.done) break;

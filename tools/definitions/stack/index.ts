@@ -5,8 +5,7 @@ import { openPullRequests, readPr } from "./read";
 
 const Input = Schema.Struct({
   prs: Schema.optional(Schema.Array(Schema.Number)).annotate({
-    description:
-      "Pull request numbers, lowest first. Omit to use every open PR in the repository.",
+    description: "Pull request numbers, lowest first. Omit to use every open PR in the repository.",
   }),
   allowDraft: Schema.optional(Schema.Boolean).annotate({
     description: "Treat a draft as landable. Default false.",
@@ -25,12 +24,7 @@ const Row = Schema.Struct({
   decision: Schema.Literals(["blocker", "waiting", "ready", "merged"]),
   blocker: Schema.optional(
     Schema.Struct({
-      kind: Schema.Literals([
-        "merge-conflicts",
-        "review-threads",
-        "failing-checks",
-        "merge-gate",
-      ]),
+      kind: Schema.Literals(["merge-conflicts", "review-threads", "failing-checks", "merge-gate"]),
       pr: Schema.Number,
       detail: Schema.String,
     }),
@@ -41,12 +35,7 @@ const Output = Schema.Struct({
   stack: Schema.Literals(["blocker", "waiting", "clear"]),
   blocker: Schema.optional(
     Schema.Struct({
-      kind: Schema.Literals([
-        "merge-conflicts",
-        "review-threads",
-        "failing-checks",
-        "merge-gate",
-      ]),
+      kind: Schema.Literals(["merge-conflicts", "review-threads", "failing-checks", "merge-gate"]),
       pr: Schema.Number,
       detail: Schema.String,
     }),
@@ -134,8 +123,7 @@ export const stack = (directory: string): Tool.Info<typeof Input, typeof Output>
       const allowDraft = input.allowDraft ?? false;
       const problems: Array<string> = [];
 
-      const numbers =
-        input.prs ?? (await openPullRequests(directory));
+      const numbers = input.prs ?? (await openPullRequests(directory));
       if (numbers.length === 0)
         return {
           output: {
@@ -164,7 +152,12 @@ export const stack = (directory: string): Tool.Info<typeof Input, typeof Output>
 
       return {
         output: {
-          stack: verdict.kind === "blocker" ? ("blocker" as const) : verdict.kind === "waiting" ? ("waiting" as const) : ("clear" as const),
+          stack:
+            verdict.kind === "blocker"
+              ? ("blocker" as const)
+              : verdict.kind === "waiting"
+                ? ("waiting" as const)
+                : ("clear" as const),
           ...(blocker === undefined ? {} : { blocker }),
           ready,
           rows,

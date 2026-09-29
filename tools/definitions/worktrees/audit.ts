@@ -9,7 +9,10 @@ export type Row = Evidence & {
   readonly bucket: Bucket;
 };
 
-export type Report = { readonly worktrees: ReadonlyArray<Row>; readonly problems: ReadonlyArray<string> };
+export type Report = {
+  readonly worktrees: ReadonlyArray<Row>;
+  readonly problems: ReadonlyArray<string>;
+};
 
 type Head = { readonly path: string; readonly head: string; readonly branch: string };
 
@@ -66,7 +69,12 @@ const dirty = (porcelain: string): string => {
 
 const remote = async (cwd: string, branch: string, head: string): Promise<string> => {
   if (branch === "") return "detached";
-  const exists = await run(cwd, ["show-ref", "--verify", "--quiet", `refs/remotes/origin/${branch}`]);
+  const exists = await run(cwd, [
+    "show-ref",
+    "--verify",
+    "--quiet",
+    `refs/remotes/origin/${branch}`,
+  ]);
   if (exists.code !== 0) return "no-remote";
   const tip = await run(cwd, ["rev-parse", `origin/${branch}`]);
   if (tip.out === head) return "pushed";
@@ -90,7 +98,19 @@ const pullRequests = async (cwd: string): Promise<Prs> => {
   if (Bun.which("gh") === null) return { ok: false, reason: "`gh` is not on PATH" };
 
   const proc = Bun.spawn(
-    ["gh", "pr", "list", "--author", "@me", "--state", "all", "--limit", "1000", "--json", "number,state,headRefName"],
+    [
+      "gh",
+      "pr",
+      "list",
+      "--author",
+      "@me",
+      "--state",
+      "all",
+      "--limit",
+      "1000",
+      "--json",
+      "number,state,headRefName",
+    ],
     { cwd, stdout: "pipe", stderr: "pipe" },
   );
   const [out, err, code] = await Promise.all([
@@ -133,9 +153,15 @@ export const audit = async (directory: string): Promise<Report> => {
 
   const all = heads(listed.out);
   const [main, ...rest] = all;
-  if (main === undefined) return { worktrees: [], problems: [`git reported no worktree in ${directory}`] };
+  if (main === undefined)
+    return { worktrees: [], problems: [`git reported no worktree in ${directory}`] };
 
-  const base = await run(directory, ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"]);
+  const base = await run(directory, [
+    "rev-parse",
+    "--verify",
+    "--quiet",
+    "refs/remotes/origin/main",
+  ]);
   const hasBase = base.code === 0;
   if (!hasBase)
     problems.push(

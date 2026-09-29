@@ -10,9 +10,7 @@ const flatten = (message: string): string => {
   const cut = message.lastIndexOf("\n  at [");
   if (cut === -1) return message;
   const path = [...message.slice(cut + 7).matchAll(/"([^"]*)"/g)].map((one) => one[1]);
-  return path.length === 0
-    ? message.slice(0, cut)
-    : `${path.join(".")}: ${message.slice(0, cut)}`;
+  return path.length === 0 ? message.slice(0, cut) : `${path.join(".")}: ${message.slice(0, cut)}`;
 };
 
 const decode = (path: string, text: string): { file?: File; problem?: string } => {

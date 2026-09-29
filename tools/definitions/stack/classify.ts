@@ -13,11 +13,7 @@ export type Snapshot = {
   readonly mergedAt: string | null;
 };
 
-export type BlockerKind =
-  | "merge-conflicts"
-  | "review-threads"
-  | "failing-checks"
-  | "merge-gate";
+export type BlockerKind = "merge-conflicts" | "review-threads" | "failing-checks" | "merge-gate";
 
 export type GateReason = "closed-without-merge" | "draft-pr" | "changes-requested";
 
@@ -34,7 +30,9 @@ export type PrDecision =
   | { readonly kind: "merged"; readonly pr: number; readonly mergedAt: string | null };
 
 /** `clear` belongs to a whole stack, never to one PR, so the two stay apart. */
-export type StackDecision = PrDecision | { readonly kind: "clear"; readonly prs: ReadonlyArray<number> };
+export type StackDecision =
+  | PrDecision
+  | { readonly kind: "clear"; readonly prs: ReadonlyArray<number> };
 
 const conflict = (row: Snapshot): boolean =>
   row.kind === "open" &&
@@ -62,15 +60,12 @@ const gate = (row: Snapshot, allowDraft: boolean): GateReason | null => {
 const gateBlocks = (row: Snapshot, allowDraft: boolean): Blocker | null => {
   const reason = gate(row, allowDraft);
   if (reason === null) return null;
-  if (reason === "draft-pr" && row.kind === "open" && row.ci === "pending")
-    return null;
+  if (reason === "draft-pr" && row.kind === "open" && row.ci === "pending") return null;
   return { kind: "merge-gate", pr: row.number, detail: reason };
 };
 
 const conflictBlocker = (row: Snapshot): Blocker | null =>
-  conflict(row)
-    ? { kind: "merge-conflicts", pr: row.number, detail: row.mergeStateStatus }
-    : null;
+  conflict(row) ? { kind: "merge-conflicts", pr: row.number, detail: row.mergeStateStatus } : null;
 
 /**
  * An unreadable thread count blocks, because `unknown` and `clear` are not the
@@ -91,10 +86,7 @@ const ciBlocker = (row: Snapshot): Blocker | null => {
   return {
     kind: "failing-checks",
     pr: row.number,
-    detail:
-      row.ci === "github-rejected"
-        ? "ci failing and GitHub refuses the merge"
-        : "ci failing",
+    detail: row.ci === "github-rejected" ? "ci failing and GitHub refuses the merge" : "ci failing",
   };
 };
 
@@ -120,10 +112,7 @@ export const decide = (row: Snapshot, allowDraft: boolean): PrDecision => {
   return { kind: "ready", pr: row.number };
 };
 
-export const decideStack = (
-  rows: ReadonlyArray<Snapshot>,
-  allowDraft: boolean,
-): StackDecision => {
+export const decideStack = (rows: ReadonlyArray<Snapshot>, allowDraft: boolean): StackDecision => {
   for (const ask of [conflictBlocker, threadBlocker, ciBlocker])
     for (const row of rows) {
       const blocking = ask(row);

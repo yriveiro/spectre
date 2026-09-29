@@ -81,7 +81,11 @@ const reviewThreads = async (
   const parsed: unknown = JSON.parse(found.out);
   const nodes = (
     parsed as {
-      data?: { repository?: { pullRequest?: { reviewThreads?: { nodes?: ReadonlyArray<{ isResolved: boolean }> } } } };
+      data?: {
+        repository?: {
+          pullRequest?: { reviewThreads?: { nodes?: ReadonlyArray<{ isResolved: boolean }> } };
+        };
+      };
     }
   ).data?.repository?.pullRequest?.reviewThreads?.nodes;
 
@@ -140,11 +144,12 @@ export const readPr = async (cwd: string, number: number): Promise<Read> => {
     }
   }
 
-  const kind = facts.state === "MERGED" || facts.mergedAt !== null
-    ? "merged"
-    : facts.state === "CLOSED"
-      ? "closed"
-      : "open";
+  const kind =
+    facts.state === "MERGED" || facts.mergedAt !== null
+      ? "merged"
+      : facts.state === "CLOSED"
+        ? "closed"
+        : "open";
 
   return {
     snapshot: {

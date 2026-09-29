@@ -31,7 +31,10 @@ export type Transcript = {
 export type SkillMessage = { id: string; type: "skill"; skill: string; name?: string };
 
 /** What `session.generate` answers with. */
-export type GenerateResult = { text?: string; content?: string; data?: string } & Record<string, unknown>;
+export type GenerateResult = { text?: string; content?: string; data?: string } & Record<
+  string,
+  unknown
+>;
 
 /** A full message, from the per-message route. */
 export type Message = {
@@ -144,20 +147,28 @@ export class Opencode {
    * Measured: 0, then 209.
    */
   models(): Promise<ReadonlyArray<ModelInfo>> {
-    return this.#until(() => this.#call<ReadonlyArray<ModelInfo>>("/api/model"), "/api/model") as Promise<
-      ReadonlyArray<ModelInfo>
-    >;
+    return this.#until(
+      () => this.#call<ReadonlyArray<ModelInfo>>("/api/model"),
+      "/api/model",
+    ) as Promise<ReadonlyArray<ModelInfo>>;
   }
 
   session(model: Model, location?: Record<string, string>): Promise<Session> {
     return this.#call<Session>("/api/session", {
       method: "POST",
-      body: JSON.stringify({ title: "skill-eval", model, ...(location === undefined ? {} : { location }) }),
+      body: JSON.stringify({
+        title: "skill-eval",
+        model,
+        ...(location === undefined ? {} : { location }),
+      }),
     });
   }
 
   prompt(id: string, text: string): Promise<unknown> {
-    return this.#call(`/api/session/${id}/prompt`, { method: "POST", body: JSON.stringify({ text }) });
+    return this.#call(`/api/session/${id}/prompt`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
   }
 
   /**

@@ -50,9 +50,7 @@ describe("one PR at a time", () => {
   });
 
   test("CI failing while BLOCKED is a different act from red CI", () => {
-    expect(
-      decide(open({ ci: "github-rejected", mergeStateStatus: "BLOCKED" }), false),
-    ).toEqual({
+    expect(decide(open({ ci: "github-rejected", mergeStateStatus: "BLOCKED" }), false)).toEqual({
       kind: "blocker",
       blocker: {
         kind: "failing-checks",

@@ -34,7 +34,13 @@ describe("reporter", () => {
     release();
     const status = (await Bun.file(`${TMP}/b.json`).json()) as Status;
     expect(status.running).toBe(false);
-    expect(status.models[0]).toMatchObject({ ref: "m1", done: 2, total: 4, failed: 0, finished: false });
+    expect(status.models[0]).toMatchObject({
+      ref: "m1",
+      done: 2,
+      total: 4,
+      failed: 0,
+      finished: false,
+    });
   });
 
   test("a failure reason is announced once, as it happens", async () => {

@@ -38,10 +38,7 @@ export type PullRequest = {
 };
 
 /** `-` means no PR, which is what every merge and remote rule downstream reads. */
-export const prFor = (
-  branch: string,
-  pulled: ReadonlyArray<PullRequest>,
-): string => {
+export const prFor = (branch: string, pulled: ReadonlyArray<PullRequest>): string => {
   const found = pulled.find((one) => one.headRefName === branch);
   return found === undefined ? "-" : `#${found.number}/${found.state}`;
 };

@@ -10,7 +10,11 @@ const RATE_LIMITED = {
   id: "msg_1",
   type: "assistant",
   finish: "error",
-  error: { type: "provider.quota", message: "Rate limit exceeded. Please try again later.", status: 429 },
+  error: {
+    type: "provider.quota",
+    message: "Rate limit exceeded. Please try again later.",
+    status: 429,
+  },
   content: [],
 };
 

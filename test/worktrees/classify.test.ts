@@ -45,12 +45,7 @@ describe("review", () => {
 describe("count", () => {
   test("tallies every bucket and starts at zero", () => {
     expect(
-      count([
-        { bucket: "safe" },
-        { bucket: "safe" },
-        { bucket: "hold-wip" },
-        { bucket: "review" },
-      ]),
+      count([{ bucket: "safe" }, { bucket: "safe" }, { bucket: "hold-wip" }, { bucket: "review" }]),
     ).toEqual({ "hold-wip": 1, "hold-open-pr": 0, safe: 2, review: 1 });
   });
 

@@ -66,9 +66,7 @@ const repo = async () => {
 };
 
 const call = async (directory: string, input: Record<string, unknown>) => {
-  const result = await Effect.runPromise(
-    historyTool(directory).execute(input as never, context),
-  );
+  const result = await Effect.runPromise(historyTool(directory).execute(input as never, context));
   return result.output as Report;
 };
 
@@ -139,7 +137,8 @@ describe("separating the fields", () => {
     // The empty `%H` is a truncated read, not a real path, so this guards the
     // parser. Repairing it by dropping the first field is what turns a
     // truncated record into six plausible-looking wrong values.
-    const truncated = ["", "abc1234", "2026-09-01T10:00:00Z", "D", "subject", ""].join("\x1f") + "\x1e";
+    const truncated =
+      ["", "abc1234", "2026-09-01T10:00:00Z", "D", "subject", ""].join("\x1f") + "\x1e";
     expect(parse(truncated).map((one) => one.sha)).not.toContain("abc1234");
   });
 
