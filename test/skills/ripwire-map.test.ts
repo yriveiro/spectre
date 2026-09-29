@@ -9,17 +9,26 @@ import { load } from "../../skills/definitions/index";
  * and neither is visible from a leaf, so they are checked here.
  */
 
-const MAP = "skills/definitions/ripwire/SKILL.md";
-const HUB = "skills/definitions/spectre-mode/SKILL.md";
+const DIR = "skills/definitions";
+const MAP = `${DIR}/ripwire/SKILL.md`;
+const HUB = `${DIR}/spectre-mode/SKILL.md`;
 
-/** `bro`, `arena`, `swarm`, `spectre-mode` and `ripwire` are not principles. */
-const NOT_A_LEAF = new Set([
-  "arena",
-  "bro",
-  "spectre-mode",
-  "ripwire",
-  "swarm",
-]);
+/**
+ * `skills/FOR_AGENTS.md` rule 3: a procedure for another harness is registered
+ * and never indexed, so it gets no map row and does not move the `none` count.
+ * `spectre-mode` and `ripwire` are the hub and the map itself. A leaf is a
+ * procedure when its own `index.ts` says it was registered for rule 3, which is
+ * the marker that shape always carries, so the exemption is read from the file
+ * rather than hardcoded here and going stale.
+ */
+const notALeaf = async (): Promise<ReadonlySet<string>> => {
+  const out = new Set(["spectre-mode", "ripwire"]);
+  for await (const entry of new Bun.Glob("*/index.ts").scan({ cwd: DIR })) {
+    const text = await Bun.file(`${DIR}/${entry}`).text();
+    if (/FOR_AGENTS\.md.*rule 3/.test(text)) out.add(entry.split("/")[0]!);
+  }
+  return out;
+};
 
 const rows = async () => {
   const text = await Bun.file(MAP).text();
@@ -37,8 +46,9 @@ describe("every principle has a row in the map", () => {
       (one) => one.id,
     );
     const listed = new Set((await rows()).map((one) => one.leaf));
+    const exempt = await notALeaf();
 
-    const missing = skills.filter((id) => !listed.has(id) && !NOT_A_LEAF.has(id));
+    const missing = skills.filter((id) => !listed.has(id) && !exempt.has(id));
     const stale = [...listed].filter((id) => !skills.includes(id));
 
     expect({ missing, stale }).toEqual({ missing: [], stale: [] });

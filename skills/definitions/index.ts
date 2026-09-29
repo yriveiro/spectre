@@ -33,11 +33,37 @@ import { spectreMode } from "./spectre-mode";
 import { principleGuardTheContextWindow } from "./principle-guard-the-context-window";
 import { principleLazinessProtocol } from "./principle-laziness-protocol";
 import { principleMakeStatesUnrepresentable } from "./principle-make-states-unrepresentable";
+import { architect } from "./architect";
+import { automateMe } from "./automate-me";
+import { blastRadius } from "./blast-radius";
+import { createVerificationSkill } from "./create-verification-skill";
+import { figureItOut } from "./figure-it-out";
+import { how } from "./how";
+import { interrogate } from "./interrogate";
+import { maintainVerificationSkill } from "./maintain-verification-skill";
+import { showMeYourWork } from "./show-me-your-work";
+import { tdd } from "./tdd";
+import { teach } from "./teach";
+import { technicalWriting } from "./technical-writing";
+import { typescriptBestPractices } from "./typescript-best-practices";
 import { ripwire } from "./ripwire";
 import { swarm } from "./swarm";
 import { unslop } from "./unslop";
 
 const definitions: ReadonlyArray<Definition> = [
+  architect,
+  automateMe,
+  blastRadius,
+  createVerificationSkill,
+  figureItOut,
+  how,
+  interrogate,
+  maintainVerificationSkill,
+  showMeYourWork,
+  tdd,
+  teach,
+  technicalWriting,
+  typescriptBestPractices,
   arena,
   bro,
   iHaveAdhd,
