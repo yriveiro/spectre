@@ -15,7 +15,7 @@ export const principleHygiene: Definition = {
   id: Skill.ID.make("principle-hygiene"),
   name: Skill.Name.make("principle-hygiene"),
   description:
-    "Leave what you touched cleaner than you found it. Load it when you are already inside code you are editing anyway and you notice dead code, an unused export, a stale comment, a leftover flag, a duplicated block, or a dependency sitting on an old version that is still inside its range. Delete what nothing reaches, and take the safe bump while the checks that prove it are already in your hand. Hygiene is not finishing a change: that is principle-verification, and a skill that claims to do both cannot be trusted to do either.",
+    "Leave what you touched cleaner than you found it, and no bigger than you found it. Load it when you are already inside code you are editing anyway and you notice dead code, an unused export, a stale comment, a duplicated block, or a dependency sitting on an old version that is still inside its range. Delete what nothing reaches, count what the change removed as well as what it added, and take the safe bump while the checks that prove it are already in your hand. This leaf owns the callers-free half. A replaced path whose callers still use it is principle-migrate-callers-then-delete-legacy-apis, and removal before addition as a decision to make first is principle-laziness-protocol. Hygiene is not finishing a change: that is principle-verification, and a skill that claims to do both cannot be trusted to do either.",
   autoinvoke: false,
   path: anchor(import.meta.dir),
 };

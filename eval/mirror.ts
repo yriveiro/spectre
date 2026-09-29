@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { load } from "../../skills/definitions";
+import { load } from "../skills/definitions";
 
 const frontmatter = (name: string, description: string) =>
   `---\nname: ${name}\ndescription: ${JSON.stringify(description)}\n---\n\n`;

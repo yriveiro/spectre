@@ -35,13 +35,20 @@ Keyed on the test, not the name. The test is the falsifiable half.
 
 | Leaf | Its test | The verb that answers it |
 | ---- | -------- | ------------------------ |
-| `principle-minimize-reader-load` | where does X come from, and what can change it | `--callers` `--uses` `--context-ratio` `--nonlocal-state` |
+| `principle-laziness-protocol` | where does X come from, what can change it, and what would a deletion have avoided | `--callers` `--uses` `--context-ratio` `--nonlocal-state` `--map-diff` `--clones` |
 | `principle-verification` | which claim no longer holds | `--doc-drift` `--mentions` `--test-gate` |
-| `principle-evidence` | does any check reach this | `--seams` `--exercises=FILE` |
+| `principle-evidence` | can this check fail, and has it ever | `--seams` `--exercises=FILE` |
+| `principle-make-states-unrepresentable` | can I write a comment saying when this combination of fields is valid | `--seams` names the untested shapes, and the typecheck is the oracle. Whether a sum should have been a union, or whether a struct admits a state nobody can name, is a person reading the type. `--clones` catches the two hand-written copies of one shape. |
+| `principle-boundary-discipline` | where did this value enter, and which checks sit below that point | `--uses` `--callers` |
 | `principle-hygiene` | what does nothing reach | `--dead-code` `--clones` `--lint` |
+| `principle-migrate-callers-then-delete-legacy-apis` | does any caller still reach the old path | `--callers` `--whereis` |
+| `principle-test-behavior-not-implementation` | would this test pass if every import returned undefined | `--test-gate` names the tests; the mutation itself has no verb here. `--seams` gives the complement, which is the test that should exist and does not. |
+| `principle-outcome-oriented-execution` | is the named end reached, and did a check at the boundary | none. Whether a declared end was reached is a fact about a plan and a diff, not about a graph. The reachability half has an instrument: `--callers` on what the end says should be gone, and `--test-gate` for the check the boundary was supposed to run. Whether the plan still means anything is a person reading it. |
+| `principle-make-operations-idempotent` | does the second run converge to the same end state | none. Convergence is a property of a run, not of a graph. The reachability half has a floor with `--exercises=FILE`; whether the second run agrees with the first has no oracle here. The check is running the thing twice, and crashing it on purpose. |
 | `no-comments` | does the comment say what the name does not | `--comment-coherence` |
 | `principle-guard-the-context-window` | what did this cost | `--token-budget` `--pack-top-n` |
-| `i-have-adhd` | none | none. Prose has no oracle here, and the pre-send pass is a person reading it. |
+| `i-have-adhd` | does the first line name an action, and is anything left open | none. Whether a message lands is a person reading it. `unslop` is the half that is greppable. |
+| `unslop` | would this sentence read the same in another project | none. Rules 13 and 3 are greppable, and a grep for a dash and a grep for an -ing clause cover them. Rule 27 has a mechanical check too: try the sentence in another project's docs. The rest are a person reading it. |
 | `model-router` | none | none. The allowlist in `spectre.jsonc` is the check. |
 
 Two rows worth reading twice, because they are the strongest instruments in the
@@ -52,7 +59,7 @@ set and neither is obvious from its name:
   definitions the symbol's references resolve to, and the share defined outside
   its own file. As an edge count and as `read_ratio=`, weighted by the tokens a
   reader actually has to read. This is the two axes of
-  `principle-minimize-reader-load` as numbers, which is what makes that
+  `principle-laziness-protocol` as numbers, which is what makes that
   principle's test answerable instead of a judgement.
 - **`--nonlocal-state` is the state axis alone.** Per function, the non-local
   mutable state it can reach, most writes first. A function whose `writes=` list
@@ -157,7 +164,7 @@ vocabulary rather than structure. Measured on eighteen prompts written after the
 descriptions were reworded and never tuned against: description-based routing
 separates the right skill from the wrong one at 0.933 AUC, and puts 7 of 15 at
 rank one. Each of the four reworded skills wins at least one of its own rows. The
-one left at none is `principle-minimize-reader-load`, which was not reworded, and
+one left at none is `principle-laziness-protocol`, which was not reworded, and
 the prompt that beats it is "where does this value get set", which is the
 question its own test is built around.
 

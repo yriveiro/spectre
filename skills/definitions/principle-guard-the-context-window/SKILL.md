@@ -16,6 +16,6 @@ Pattern:
 - Size phases and cap scope. Limit files per phase, set turn budgets, account for
   mechanism costs.
 
-The human half of this is `principle-minimize-reader-load`: the same finite
+The human half of this is `principle-laziness-protocol`: the same finite
 budget, spent by the person reading the code instead of the agent reading the
 payload.
