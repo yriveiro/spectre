@@ -31,26 +31,26 @@ describe("deltas", () => {
 
   test("an improvement is up and carries the signed change", () => {
     const before = run([pred("a", "two")]);
-    const after = run([
-      pred("a", "one"),
-      pred("b", "two"),
-    ]);
+    const after = run([pred("a", "one"), pred("b", "two")]);
     expect(deltas(before, after)).toEqual([
       { arm: "model:x", before: 0, after: 1, change: 1, state: "up" },
     ]);
   });
 
   test("a regression is down, and not rounded away", () => {
-    const before = run([
-      pred("a", "one"),
-      pred("b", "two"),
-    ]);
+    const before = run([pred("a", "one"), pred("b", "two")]);
     expect(deltas(before, run([pred("a", "one")]))[0]?.state).toBe("down");
   });
 
   test("an identical run is same, with a zero change", () => {
     const r = run([pred("a", "one")]);
-    expect(deltas(r, r)[0]).toEqual({ arm: "model:x", before: 0.5, after: 0.5, change: 0, state: "same" });
+    expect(deltas(r, r)[0]).toEqual({
+      arm: "model:x",
+      before: 0.5,
+      after: 0.5,
+      change: 0,
+      state: "same",
+    });
   });
 
   test("an arm that disappears is gone, not silently dropped", () => {
@@ -68,13 +68,7 @@ describe("deltas", () => {
 
 describe("flips", () => {
   test("a row that changed answer is reported with both answers", () => {
-    const flipsFound = flips(
-      run([pred("a", "two")]),
-      run([
-        pred("a", "one"),
-        pred("b", "two"),
-      ]),
-    );
+    const flipsFound = flips(run([pred("a", "two")]), run([pred("a", "one"), pred("b", "two")]));
     expect(flipsFound).toEqual([{ arm: "model:x", prompt: "a", from: "two", to: "one" }]);
   });
 

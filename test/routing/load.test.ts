@@ -57,19 +57,13 @@ describe("load", () => {
   });
 
   test("a missing required field names the field", async () => {
-    await scratch.writeProject(
-      JSON.stringify({ profiles: { p: { model: "haiku" } } }),
-    );
-    expect((await run(scratch.projectDir())).problems[0]).toContain(
-      "profiles.p.why",
-    );
+    await scratch.writeProject(JSON.stringify({ profiles: { p: { model: "haiku" } } }));
+    expect((await run(scratch.projectDir())).problems[0]).toContain("profiles.p.why");
   });
 
   test("a value of the wrong type names the value", async () => {
     await scratch.writeProject(JSON.stringify({ models: { haiku: 5 } }));
-    expect((await run(scratch.projectDir())).problems[0]).toContain(
-      "models.haiku",
-    );
+    expect((await run(scratch.projectDir())).problems[0]).toContain("models.haiku");
   });
 
   test("a broken document reports the file and not a position", async () => {
@@ -89,20 +83,14 @@ describe("load", () => {
     const found = await run(scratch.projectDir());
     expect(found.sources).toHaveLength(2);
     expect(found.sources[0]).toContain("global");
-    expect(Object.keys(found.tables.models).sort()).toEqual([
-      "haiku",
-      "opus",
-      "sonnet",
-    ]);
+    expect(Object.keys(found.tables.models).sort()).toEqual(["haiku", "opus", "sonnet"]);
   });
 
   test("a later entry replaces the earlier one whole", async () => {
     await scratch.writeGlobal(
       JSON.stringify({ models: { haiku: "anthropic/claude-haiku-4-5#high" } }),
     );
-    await scratch.writeProject(
-      JSON.stringify({ models: { haiku: "opencode/gpt-5" } }),
-    );
+    await scratch.writeProject(JSON.stringify({ models: { haiku: "opencode/gpt-5" } }));
     expect((await run(scratch.projectDir())).tables.models).toEqual({
       haiku: "opencode/gpt-5",
     });
@@ -137,16 +125,11 @@ describe("load", () => {
         profiles: { refactor: { model: ["b", "a"], why: "w" } },
       }),
     );
-    expect((await run(scratch.projectDir())).tables.profiles.refactor?.model).toEqual([
-      "b",
-      "a",
-    ]);
+    expect((await run(scratch.projectDir())).tables.profiles.refactor?.model).toEqual(["b", "a"]);
   });
 
   test("a broken project file still yields the global tables", async () => {
-    await scratch.writeGlobal(
-      JSON.stringify({ models: { haiku: "anthropic/claude-haiku-4-5" } }),
-    );
+    await scratch.writeGlobal(JSON.stringify({ models: { haiku: "anthropic/claude-haiku-4-5" } }));
     await scratch.writeProject("{ broken");
     const found = await run(scratch.projectDir());
     expect(found.problems).toHaveLength(1);

@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { NONE, permitted, score, table, type Prediction } from "../score";
 import type { Row } from "../fixture";
 
-const p = (prompt: string, got: string, via: Prediction["via"] = "text"): Prediction => ({ prompt, got, via });
+const p = (prompt: string, got: string, via: Prediction["via"] = "text"): Prediction => ({
+  prompt,
+  got,
+  via,
+});
 
 const rows: ReadonlyArray<Row> = [
   { prompt: "a", label: "one", provenance: "judged" },
@@ -87,10 +91,7 @@ describe("per skill", () => {
         { prompt: "a", label: "one", provenance: "judged" },
         { prompt: "b", label: "one", provenance: "judged" },
       ],
-      [
-        p("a", "one"),
-        p("b", "two"),
-      ],
+      [p("a", "one"), p("b", "two")],
       catalogue,
     );
     const one = r.perSkill.find((s) => s.id === "one");

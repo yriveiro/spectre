@@ -5,14 +5,20 @@ import type { Message } from "../opencode";
 
 const catalogue = ["no-comments", "principle-evidence", "principle-hygiene"];
 
-const text = (body: string): Message => ({ type: "assistant", content: [{ type: "text", text: body }] });
+const text = (body: string): Message => ({
+  type: "assistant",
+  content: [{ type: "text", text: body }],
+});
 
 const tool = (name: string, input: Record<string, unknown>): Message => ({
   type: "assistant",
   content: [{ type: "tool", name, state: { status: "completed", input } }],
 });
 
-const turn = (parts: Transcript["messages"], activated: ReadonlyArray<string> = []): Transcript => ({
+const turn = (
+  parts: Transcript["messages"],
+  activated: ReadonlyArray<string> = [],
+): Transcript => ({
   messages: parts,
   activated,
 });
@@ -67,13 +73,15 @@ describe("observe", () => {
     expect(observe(turn([tool("skill", { skill: "principle-evidence" })]), catalogue).got).toBe(
       "principle-evidence",
     );
-    expect(observe(turn([tool("skills", { name: "no-comments" })]), catalogue).got).toBe("no-comments");
+    expect(observe(turn([tool("skills", { name: "no-comments" })]), catalogue).got).toBe(
+      "no-comments",
+    );
   });
 
   test("another tool is not a skill decision", () => {
-    expect(observe(turn([tool("read", { id: "no-comments" }), text("no-comments")]), catalogue).via).toBe(
-      "text",
-    );
+    expect(
+      observe(turn([tool("read", { id: "no-comments" }), text("no-comments")]), catalogue).via,
+    ).toBe("text");
   });
 
   test("a tool call with no usable input falls through to the prose", () => {

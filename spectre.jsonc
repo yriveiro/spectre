@@ -8,7 +8,7 @@
 // carry no variants at all, so any `#variant` on them is rejected.
 {
   "models": {
-    "flash":     "opencode/mimo-v2.6-flash-free",
+    "flash": "opencode/mimo-v2.6-flash-free",
     "spark-low": "opencode/muse-spark-1.3-contributor-free#low",
     "spark-high": "opencode/muse-spark-1.3-contributor-free#high",
     "spark-xhigh": "opencode/muse-spark-1.3-contributor-free#xhigh",

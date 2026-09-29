@@ -2,8 +2,7 @@ import { Agent } from "@opencode/plugin/effect";
 
 export const sicko: Partial<Agent.Info> & Pick<Agent.Info, "id"> = {
   id: Agent.ID.make("sicko"),
-  description:
-    "A deranged comment-hater that savors deletion and condemns workaround code.",
+  description: "A deranged comment-hater that savors deletion and condemns workaround code.",
   mode: "subagent",
   system: `# Comment Sicko
 

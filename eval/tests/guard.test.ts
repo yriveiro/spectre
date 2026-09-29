@@ -47,11 +47,11 @@ describe("complete", () => {
   });
 
   test("a halted run is not complete, and sparse holes must not read as done", () => {
-    const out: Array<unknown> = [{ a: 1 }, { a: 2 }, { a: 3 }]
-    out.length = 5
+    const out: Array<unknown> = [{ a: 1 }, { a: 2 }, { a: 3 }];
+    out.length = 5;
     // `some` skips holes in a sparse array, which is how a halted run got scored.
-    expect(out.some((one) => one === undefined)).toBe(false)
-    expect(complete(out, 5)).toBe(false)
+    expect(out.some((one) => one === undefined)).toBe(false);
+    expect(complete(out, 5)).toBe(false);
   });
 
   test("an untouched run is not complete either", () => {

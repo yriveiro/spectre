@@ -18,7 +18,9 @@ import { heldOut, rows, type Row } from "./fixture";
 const PLUGIN = new URL("../", import.meta.url).pathname;
 const PORT = Number(Bun.env.SPECTRE_EVAL_PORT ?? 4489);
 const FAST = Bun.argv.includes("--fast");
-const ROWS = Number(Bun.argv.find((a) => a.startsWith("--rows="))?.slice("--rows=".length) ?? (FAST ? 12 : 0));
+const ROWS = Number(
+  Bun.argv.find((a) => a.startsWith("--rows="))?.slice("--rows=".length) ?? (FAST ? 12 : 0),
+);
 // The pinned model answers 429 under load, so a tier that has to finish in a
 // coffee break runs one request at a time with a gap between them.
 const CONCURRENCY = Number(Bun.env.SPECTRE_EVAL_CONCURRENCY ?? (FAST ? 1 : 6));
@@ -76,7 +78,9 @@ const evaluate = async (
         reasons.push(why);
         halted = systemic(reasons, ABORT_AFTER);
         if (halted !== undefined)
-          log.say(`  halted   ${ref(model)}: ${ABORT_AFTER} rows failed with the same reason, not a routing result`);
+          log.say(
+            `  halted   ${ref(model)}: ${ABORT_AFTER} rows failed with the same reason, not a routing result`,
+          );
         bar.advance(why);
       } finally {
         await client.remove(session.id).catch(() => {});
@@ -143,8 +147,7 @@ try {
     skip: Bun.env.SPECTRE_EVAL_SKIP,
   });
   const models = picked.models;
-  for (const skip of picked.skipped)
-    log.say(`  skipped  ${skip.ref.padEnd(44)} ${skip.why}`);
+  for (const skip of picked.skipped) log.say(`  skipped  ${skip.ref.padEnd(44)} ${skip.why}`);
   if (models.length === 0) throw new Error("every free model was excluded, nothing to compare");
 
   log.say(
@@ -202,7 +205,9 @@ try {
       // limit as a routing result, which is the exact false green this harness
       // already produced once.
       const answered = predictions.filter((one) => one !== undefined).length;
-      log.say(`  skipped  ${ref(model)}: ${answered} of ${corpus.length} rows answered, which is not a result`);
+      log.say(
+        `  skipped  ${ref(model)}: ${answered} of ${corpus.length} rows answered, which is not a result`,
+      );
       continue;
     }
     const report = score(corpus, predictions, ours);
@@ -222,9 +227,16 @@ try {
   if (byPrompt.size > 0) {
     const weight = ([, a]: [string, Map<string, number>]) =>
       [...a.values()].reduce((x, y) => x + y, 0);
-    log.say(`\nrows models miss (${byPrompt.size} of ${corpus.length}), and what they answer instead:`);
-    for (const [prompt, answers] of [...byPrompt].sort((a, b) => weight(b) - weight(a)).slice(0, 18)) {
-      const got = [...answers].sort((a, b) => b[1] - a[1]).map(([id, n]) => `${id} x${n}`).join(", ");
+    log.say(
+      `\nrows models miss (${byPrompt.size} of ${corpus.length}), and what they answer instead:`,
+    );
+    for (const [prompt, answers] of [...byPrompt]
+      .sort((a, b) => weight(b) - weight(a))
+      .slice(0, 18)) {
+      const got = [...answers]
+        .sort((a, b) => b[1] - a[1])
+        .map(([id, n]) => `${id} x${n}`)
+        .join(", ");
       log.say(`  ${JSON.stringify(prompt).padEnd(54)} -> ${got}`);
     }
   }

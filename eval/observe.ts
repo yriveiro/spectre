@@ -59,10 +59,7 @@ export const fromText = (raw: string, catalogue: ReadonlyArray<string>): string 
   return tokens[0] ?? "";
 };
 
-export const observe = (
-  transcript: Transcript,
-  catalogue: ReadonlyArray<string>,
-): Observed => {
+export const observe = (transcript: Transcript, catalogue: ReadonlyArray<string>): Observed => {
   const activated = transcript.activated[0];
   if (activated !== undefined) return { got: activated, via: "skill" };
   for (const message of transcript.messages) {

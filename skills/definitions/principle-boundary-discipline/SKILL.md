@@ -122,6 +122,3 @@ the split is real.
 - **Not a question you answer by reading.** `ripwire --uses` on the value and
   `--callers` on the check say which guards sit below the point it entered, and
   a guard with no caller is one the edge already made.
-- **Not a question you answer by reading.** `ripwire --uses` on the value and
-  `--callers` on the check say which guards sit below the point it entered, and
-  a guard with no caller is one the edge already made.

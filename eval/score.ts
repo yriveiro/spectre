@@ -106,8 +106,7 @@ export type Arm = { readonly name: string; readonly report: Report };
 /** One table, so a model arm and a lexical arm can be read against each other. */
 export const table = (arms: ReadonlyArray<Arm>) => {
   const width = Math.max(...arms.map((arm) => arm.name.length), 4);
-  const cells = (r: Report) =>
-    `${r.byVia.skill}/${r.byVia.tool}/${r.byVia.text}/${r.byVia.silent}`;
+  const cells = (r: Report) => `${r.byVia.skill}/${r.byVia.tool}/${r.byVia.text}/${r.byVia.silent}`;
   const lines = [
     `${"arm".padEnd(width)}  ${"hit@1".padStart(6)}  ${"hits".padStart(7)}  ${"skill/tool/text/silent".padStart(23)}  ${"off-catalogue".padStart(13)}`,
     `${"-".repeat(width)}  ${"-".repeat(6)}  ${"-".repeat(7)}  ${"-".repeat(23)}  ${"-".repeat(13)}`,

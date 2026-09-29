@@ -4,9 +4,7 @@ import { anchor, type Definition } from "../definition";
 /**
  * The discipline of not leaving small things small.
  *
- * Split out of a file named for this principle that spent its length verifying
- * claims instead. The verification half is the principle-verification skill next
- * to this one. What lives here is upkeep: clean while you refactor, delete what
+ * What lives here is upkeep: clean while you refactor, delete what
  * nothing reaches, and move a dependency when moving it is safe.
  *
  * Care, not obsession. See "What this principle is not".

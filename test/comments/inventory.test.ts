@@ -1,9 +1,9 @@
-import { afterAll, describe, expect, test } from "bun:test"
-import { Effect } from "effect"
-import { Tool } from "@opencode/schema/tool"
-import { comments } from "../../tools/definitions/comments"
+import { afterAll, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
+import { Tool } from "@opencode/schema/tool";
+import { comments } from "../../tools/definitions/comments";
 
-type Hit = { file: string; line: number; kind: string; text: string }
+type Hit = { file: string; line: number; kind: string; text: string };
 type Page = {
   hits: Array<Hit>;
   errors: Array<{ target: string; reason: string }>;
@@ -20,7 +20,10 @@ let seq = 0;
 
 const context = { progress: () => Effect.void } as unknown as Tool.Context;
 
-const run = async (files: Record<string, string>, options: { limit?: number; offset?: number } = {}) => {
+const run = async (
+  files: Record<string, string>,
+  options: { limit?: number; offset?: number } = {},
+) => {
   const root = `${TMP}/spectre-comments-${process.pid}-${seq++}`;
   roots.push(root);
   for (const [name, body] of Object.entries(files)) await Bun.write(`${root}/${name}`, body);
@@ -34,8 +37,7 @@ const scan = async (files: Record<string, string>, options?: { limit?: number; o
   (await run(files, options)).hits.map((hit) => `${hit.file}:${hit.line} ${hit.kind} ${hit.text}`);
 
 afterAll(async () => {
-  for (const root of roots)
-    await Bun.$`rm -rf ${root}`.quiet();
+  for (const root of roots) await Bun.$`rm -rf ${root}`.quiet();
 });
 
 describe("c style", () => {
@@ -70,12 +72,12 @@ describe("c style", () => {
     expect(
       await scan({
         "a.ts": [
-          'if (/Firefox\\//.test(ua)) {}',
+          "if (/Firefox\\//.test(ua)) {}",
           'const r = s.replace(/["\']/g, "") // real',
           "",
         ].join("\n"),
       }),
-    ).toEqual(["a.ts:2 comment const r = s.replace(/[\"']/g, \"\") // real"]);
+    ).toEqual(['a.ts:2 comment const r = s.replace(/["\']/g, "") // real']);
   });
 
   test("a division on a line with a trailing comment keeps the comment", async () => {
@@ -104,7 +106,9 @@ describe("c style", () => {
   test("one hit per line for a block, doc kind when the block is a doc block", async () => {
     expect(
       await scan({
-        "a.ts": ["/**", " * doc", " * lines", " */", "/* plain", " * still plain", " */", ""].join("\n"),
+        "a.ts": ["/**", " * doc", " * lines", " */", "/* plain", " * still plain", " */", ""].join(
+          "\n",
+        ),
       }),
     ).toEqual([
       "a.ts:1 doc /**",
@@ -157,7 +161,7 @@ describe("hash style", () => {
       await scan({
         "a.sh": ["#!/bin/sh", "# leading", 'echo "a#b" # trailing', ""].join("\n"),
       }),
-    ).toEqual(["a.sh:2 comment # leading", "a.sh:3 comment echo \"a#b\" # trailing"]);
+    ).toEqual(["a.sh:2 comment # leading", 'a.sh:3 comment echo "a#b" # trailing']);
   });
 
   test("a hash inside a quoted value is not a comment", async () => {
@@ -171,7 +175,9 @@ describe("hash style", () => {
   test("a hash inside a triple quoted string is not a comment", async () => {
     expect(
       await scan({
-        "a.py": ["#!/usr/bin/env python3", 'r = """', "# not a comment", '"""', "# real", ""].join("\n"),
+        "a.py": ["#!/usr/bin/env python3", 'r = """', "# not a comment", '"""', "# real", ""].join(
+          "\n",
+        ),
       }),
     ).toEqual(["a.py:5 comment # real"]);
   });
@@ -218,7 +224,9 @@ describe("suppressions", () => {
           "",
         ].join("\n"),
         "b.sh": ["x=1 # shellcheck disable=SC2086", "y=2 # shellcheck disable", ""].join("\n"),
-        "c.rb": ["x = 1 # rubocop:disable Style/Foo", "y = 2 # rubocop:enable Style/Foo", ""].join("\n"),
+        "c.rb": ["x = 1 # rubocop:disable Style/Foo", "y = 2 # rubocop:enable Style/Foo", ""].join(
+          "\n",
+        ),
       }),
     ).toEqual([
       "a.py:1 suppression x = 1  # noqa: E501",
@@ -316,7 +324,9 @@ describe("this repository", () => {
     const sources = ["agents", "eval", "skills", "tools"].map((f) => `${root}/${f}`);
     const files: Record<string, string> = {};
     for (const folder of sources) {
-      for await (const entry of new Bun.Glob("**/*.{ts,py,sh,yml,yaml,toml}").scan({ cwd: folder })) {
+      for await (const entry of new Bun.Glob("**/*.{ts,py,sh,yml,yaml,toml}").scan({
+        cwd: folder,
+      })) {
         if (entry.split("/").some((part) => part === "node_modules")) continue;
         const name = `${folder.split("/").at(-1)}/${entry}`;
         files[name] = await Bun.file(`${folder}/${entry}`).text();

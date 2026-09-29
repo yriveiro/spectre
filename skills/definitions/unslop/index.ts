@@ -2,18 +2,16 @@ import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
 /**
- * The prose pass, split out of `i-have-adhd`.
+ * The prose pass: the words in a sentence.
  *
- * The two were one file until this, and the split is the same test the whole set
- * asks of a leaf: does it have one question with a check that can fail. Rules 1 to
+ * The test the whole set asks of a leaf: does it have one question with a check that can fail. Rules 1 to
  * 11 here are the shape of a message and are judged by a person. The rules in
  * `unslop` are the words in a sentence, and most of them are greppable, so they
  * answer to a different question and fire on a different moment: a commit message,
  * a code comment, a doc, not only a reply.
  *
- * The upstream is `cursor/plugins` `pstack/skills/unslop`, ported with its rule
- * numbers intact because they are declared stable ids other skills cite. Two of
- * its rules were already here, verbatim, and the rest were new.
+ * Rule numbers are stable ids that other skills cite, so they are declared and
+ * kept. A renumbering breaks a reference.
  */
 export const unslop: Definition = {
   id: Skill.ID.make("unslop"),

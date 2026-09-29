@@ -4,19 +4,16 @@ import { anchor, type Definition } from "../definition";
 /**
  * The discipline of not spending attention that is not yours to spend.
  *
- * Merged from two leaves this session. `principle-laziness-protocol` held the
- * moment before the code exists: deletion before addition, and a signal you were
- * told to thread as a design question. `principle-minimize-reader-load` held the
- * moment after, and the merge argument is that the reader is not a role but a
- * position, which the agent occupies as much as any human does. Same question,
- * two moments, and the first one is cheaper because it answers the second before
- * there is anything to read.
+ * Two moments of the same question. Before the code exists: deletion before
+ * addition, and a signal you were told to thread as a design question. After
+ * the code exists: the reader is not a role but a position, which the agent
+ * occupies as much as any human does. The first moment is cheaper because it
+ * answers the second before there is anything to read.
  *
- * The merged leaf carries two tests, "what would a deletion have avoided" and
- * "where does this value come from", and the owner accepted that cost rather than
- * pay a leaf for each. See `principle-laziness-protocol/SKILL.md`, which names
- * the other owners: `principle-hygiene` for upkeep, `principle-boundary-discipline`
- * for where a check belongs, `principle-minimize-reader-load` is gone.
+ * This leaf carries two tests, "what would a deletion have avoided" and
+ * "where does this value come from". See `principle-laziness-protocol/SKILL.md`,
+ * which names the other owners: `principle-hygiene` for upkeep and
+ * `principle-boundary-discipline` for where a check belongs.
  */
 export const principleLazinessProtocol: Definition = {
   id: Skill.ID.make("principle-laziness-protocol"),

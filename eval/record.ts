@@ -11,7 +11,12 @@ export type Run = {
     readonly scored: number;
     readonly unparsable: number;
     readonly abstained: number;
-    readonly perSkill: ReadonlyArray<{ id: string; permitted: number; won: number; stolen: number }>;
+    readonly perSkill: ReadonlyArray<{
+      id: string;
+      permitted: number;
+      won: number;
+      stolen: number;
+    }>;
     readonly predictions: ReadonlyArray<Prediction>;
   }>;
 };
@@ -69,7 +74,9 @@ export const deltas = (before: Run | undefined, after: Run): ReadonlyArray<Delta
 
 export const deltaTable = (rows: ReadonlyArray<Delta>) => {
   const width = Math.max(24, ...rows.map((r) => r.arm.length));
-  const out = [`${"arm".padEnd(width)}  ${"before".padStart(7)}  ${"after".padStart(7)}  ${"change".padStart(8)}`];
+  const out = [
+    `${"arm".padEnd(width)}  ${"before".padStart(7)}  ${"after".padStart(7)}  ${"change".padStart(8)}`,
+  ];
   for (const row of rows) {
     const before = row.before === undefined ? "-" : pct(row.before);
     const change =
@@ -78,12 +85,19 @@ export const deltaTable = (rows: ReadonlyArray<Delta>) => {
           ? "new"
           : "gone"
         : `${row.change > 0 ? "+" : ""}${(row.change * 100).toFixed(1)}pp`;
-    out.push(`${row.arm.padEnd(width)}  ${before.padStart(7)}  ${pct(row.after).padStart(7)}  ${change.padStart(8)}`);
+    out.push(
+      `${row.arm.padEnd(width)}  ${before.padStart(7)}  ${pct(row.after).padStart(7)}  ${change.padStart(8)}`,
+    );
   }
   return out.join("\n");
 };
 
-export type Flip = { readonly arm: string; readonly prompt: string; readonly from: string; readonly to: string };
+export type Flip = {
+  readonly arm: string;
+  readonly prompt: string;
+  readonly from: string;
+  readonly to: string;
+};
 
 /**
  * Rows that changed verdict between two runs. A leaf that gains four rows and
@@ -92,7 +106,9 @@ export type Flip = { readonly arm: string; readonly prompt: string; readonly fro
  */
 export const flips = (before: Run | undefined, after: Run): ReadonlyArray<Flip> => {
   if (before === undefined) return [];
-  const was = new Map(before.arms.map((arm) => [arm.name, new Map(arm.predictions.map((p) => [p.prompt, p.got]))]));
+  const was = new Map(
+    before.arms.map((arm) => [arm.name, new Map(arm.predictions.map((p) => [p.prompt, p.got]))]),
+  );
   const out: Array<Flip> = [];
   for (const arm of after.arms) {
     const old = was.get(arm.name);
