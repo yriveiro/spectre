@@ -1,0 +1,127 @@
+import type { Tool } from "@opencode/schema/tool";
+import { Effect, Schema } from "effect";
+import { DEFAULT_LIMIT, history } from "./read";
+
+const Input = Schema.Struct({
+  path: Schema.String.annotate({
+    description: "File to read the history of, relative to the project directory or absolute.",
+  }),
+  line: Schema.optional(Schema.Number).annotate({
+    description: "Also blame this line, which answers who last changed it and when.",
+  }),
+  contains: Schema.optional(Schema.String).annotate({
+    description: "Only commits whose message contains this. Use it to find the one that mattered.",
+  }),
+  limit: Schema.optional(Schema.Number).annotate({
+    description: `Commits to return, newest first. Default ${DEFAULT_LIMIT}.`,
+  }),
+});
+
+const Commit = Schema.Struct({
+  sha: Schema.String,
+  short: Schema.String,
+  date: Schema.String,
+  author: Schema.String,
+  subject: Schema.String,
+  body: Schema.String,
+  reverts: Schema.Boolean,
+});
+
+const Output = Schema.Struct({
+  path: Schema.String,
+  found: Schema.Boolean,
+  introducedBy: Schema.optional(Commit),
+  commits: Schema.Array(Commit),
+  blame: Schema.optional(
+    Schema.Struct({
+      line: Schema.Number,
+      sha: Schema.String,
+      author: Schema.String,
+      date: Schema.String,
+      summary: Schema.String,
+    }),
+  ),
+  reverts: Schema.Number,
+  authors: Schema.Array(Schema.String),
+  first: Schema.optional(Schema.String),
+  last: Schema.optional(Schema.String),
+  problems: Schema.optional(Schema.String),
+});
+
+const DESCRIPTION = `Read the git history of one file and hand back the commits that explain it.
+
+\`ripwire\` answers who last touched a file and what changes alongside it. Neither
+answers the question this is for, which is why a line looks the way it does. The
+rationale lives in commit messages, so this reads them.
+
+  const h = await tools.spectre.history({ path: "src/auth.ts", line: 42, contains: "oauth" })
+  h.commits        // the reason that line is shaped like that
+  h.blame          // who last touched this exact line, and when
+
+## What comes back
+
+- \`commits\`, newest first. \`body\` is the rationale, and it is the field worth
+  reading: a subject says what changed, a body says why, and the why is what you
+  cannot recover from the code.
+- \`introducedBy\`, the commit that created the file. Read this before changing a
+  shape you do not recognise; the original commit usually says what the shape was
+  for, and a later commit is usually the one that broke it.
+- \`blame\`, when you passed \`line\`. It is one commit, not a distribution: who
+  last touched that exact line, and what they said they were doing.
+- \`reverts\`, how many of the commits returned are reverts. A file with reverts in
+  its recent history has been argued about, and the losing argument is often still
+  in the tree.
+- \`authors\` and \`first\` / \`last\`, for "who knows this" and "how old is this".
+
+## Reading it
+
+\`contains\` is the lever. Without it you get the last ${DEFAULT_LIMIT} commits, which
+is a list. With it you get the one commit that explains the thing, and a list of
+the other things that changed in the same breath. Search the message, not the diff:
+"revert", "fix", "keep", "for now", "temporary" find the interesting commits
+faster than reading every subject.
+
+\`problems\` carries the two signals that change how much the answer is worth. A file
+whose commits are mostly under 90 days old is still moving, and a reason recorded
+last month may already be wrong. Read the warnings before quoting the history as
+the reason something is the way it is.
+
+## What it will not do
+
+It does not read pull request bodies, issues, or review threads. Those live
+outside git, and a local clone does not have them. A commit message that says
+"see #412" is a commit message that will not answer anything here, and the tool
+cannot tell you that. \`ripwire.stray_content\` and \`ripwire.owners\` cover the
+cross-branch and bus-factor halves.
+
+## Determinism
+
+Everything here is a function of the repository as committed. No network, no clock
+except the ninety-day window in \`problems\`, and the same clone gives the same
+answer. A file with uncommitted edits reports the history of what was committed,
+which is the point, and the working tree is not consulted beyond existence.`;
+
+export const historyTool = (directory: string): Tool.Info<typeof Input, typeof Output> => ({
+  name: "history",
+  description: DESCRIPTION,
+  input: Input,
+  output: Output,
+  options: { namespace: "spectre", codemode: true, pinned: true, permission: "read" },
+  execute: (input) =>
+    Effect.promise(async () => {
+      const { problems, introducedBy, blame, first, last, ...rest } = await history(
+        directory,
+        input,
+      );
+      return {
+        output: {
+          ...rest,
+          ...(introducedBy === null ? {} : { introducedBy }),
+          ...(blame === null ? {} : { blame }),
+          ...(first === null ? {} : { first }),
+          ...(last === null ? {} : { last }),
+          ...(problems.length > 0 ? { problems: problems.join("\n") } : {}),
+        },
+      };
+    }),
+});
