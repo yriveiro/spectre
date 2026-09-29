@@ -21,6 +21,7 @@
   "include": [
     "index.ts",
     "agents",
+    "eval",
     "skills",
     "test",
     "tools"

@@ -308,10 +308,12 @@ describe("robustness", () => {
 
 describe("this repository", () => {
   test("scanning every source file finds no hit that is not a comment", async () => {
-    // The repo root, not this directory: the point is to scan everything spectre
-    // ships, so a new source folder has to be listed here or the check goes quiet.
+    // The repo root, not this directory. Every source folder is listed here, so a
+    // new one has to be added or the check goes quiet. `eval` is in the list
+    // because it is in-repo TypeScript a maintainer reads, not because it ships:
+    // package.json's `files` keeps it out of the tarball, which npm pack confirms.
     const root = `${import.meta.dir}/../..`;
-    const sources = ["agents", "skills", "tools"].map((f) => `${root}/${f}`);
+    const sources = ["agents", "eval", "skills", "tools"].map((f) => `${root}/${f}`);
     const files: Record<string, string> = {};
     for (const folder of sources) {
       for await (const entry of new Bun.Glob("**/*.{ts,py,sh,yml,yaml,toml}").scan({ cwd: folder })) {
