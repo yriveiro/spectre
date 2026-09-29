@@ -9,4 +9,3 @@ The test: check the real thing, not something standing in for it. Before you say
 Reach for this at the moment of the claim, when the proxies are all green and stopping feels earned. That is exactly when the real check is cheapest and most valuable. Its sibling principle-verification owns never asserting more than has been checked; principle-prove-it-works owns checking the real artifact instead of a stand-in.
 
 This owns which surface you check. How the codebase stays clean while you change it is principle-hygiene.
-Adapted from pstack (MIT, Lauren Tan).

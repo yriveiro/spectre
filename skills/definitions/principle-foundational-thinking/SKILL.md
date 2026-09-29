@@ -9,5 +9,3 @@ The test is forward-looking: does every subsequent phase benefit from this exist
 The moment is the start of multi-phase work, before downstream code exists. Data shapes, module seams, the scaffold everything else hangs on: decide these while they are still cheap to change, and write them down so the next phase inherits decisions instead of archaeology. Small single-step tasks do not need this; reach for it when the work has phases and the early ones constrain the late ones.
 
 Removing what the new structure makes redundant is `principle-laziness-protocol`. Proving the foundation holds before building on it is `principle-verification`.
-
-Adapted from pstack (MIT, Lauren Tan).

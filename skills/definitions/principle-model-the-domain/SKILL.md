@@ -9,4 +9,3 @@ The test is simple: a new feature grows an if/else chain by one branch. That is 
 Reach for this the moment a second branch appears beside the first and a third is already imaginable. Do not reach for it for a single flag with one reader. One check is a check, not a model, and wrapping it in machinery is the clutter that principle-laziness-protocol exists to refuse. The line between them: if removing a branch would delete the abstraction too, you built the abstraction too early.
 
 This owns the shape of what the code is about. Whether any claim about that shape has actually been checked is principle-verification.
-Adapted from pstack (MIT, Lauren Tan).

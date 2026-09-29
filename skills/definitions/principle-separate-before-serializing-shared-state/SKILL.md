@@ -7,5 +7,3 @@ The original states no falsifiable test, so say that plainly. There is no single
 Only when the answer is no does serialization earn its place. One writer drains the queue. One owner holds the lock. One process sequences the writes. A single shared writer is then a stated invariant, not an accident of who happened to write last, and the surrounding code can rely on it because exactly one place keeps it true.
 
 The neighbouring case belongs to principle-sequence-verifiable-units. Once writes are separated or serialized, sequence the work so each unit lands in a state you can check. This principle decides who may write. That one decides in what order the writes land.
-
-Adapted from pstack (MIT, Lauren Tan).

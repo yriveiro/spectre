@@ -11,5 +11,3 @@ A failed fix asks for another fix. That is the trap. Each attempt feels like pro
 Reach for this the moment the second fix fails where the first one did. A single failure is noise, and noise belongs to principle-verification: reproduce it, check the claim, then diagnose. A decision with no precedent at all belongs to principle-exhaust-the-design-space, where you build competing options before committing instead of after failing. This skill owns the middle case: repeated failure under one shared belief.
 
 A premise that survives the attack earns its fixes. One that does not was never load-bearing. Write it, count against it, and let the count decide.
-
-Adapted from pstack (MIT, Lauren Tan).

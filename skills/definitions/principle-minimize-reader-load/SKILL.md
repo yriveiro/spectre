@@ -7,5 +7,3 @@ Without this, reading becomes archaeology. A value arrives from three layers up,
 The test is a timed question: hand the code to someone new and ask where X comes from and what can change X. If both answers take under thirty seconds, the load is low. Hops are counted in jumps between definitions; state is counted in live facts the reader must hold at once. Narrow the state to a local, derive the value rather than synchronizing it, and collapse the layer that hides nothing.
 
 The moment is any code that is hard to follow: a value you cannot trace, a change you cannot scope, a helper with one caller that only forwards. Reach for this when reading hurts. Laziness is about the work, this is about the reading: `principle-laziness-protocol` owns refusing the addition before it exists, and this owns the two axes once code is on the page. A boundary that hides a real decision stays, because that boundary cuts hops instead of adding them.
-
-Adapted from pstack (MIT, Lauren Tan).

@@ -7,5 +7,3 @@ The tests are three questions you can quote. Can you write one sentence explaini
 The moment is the boundary. Data enters from outside, untyped or loosely typed, and you parse it once into the narrow type the inside uses. Never validate at use. Parse at the edge, then let the checker carry the proof inward, so every function past the boundary takes valid data by construction instead of by hope.
 
 principle-make-states-unrepresentable owns the language-agnostic claim; this skill owns the concrete forms: brands, boundary parsing, exhaustive matches.
-
-Adapted from pstack (MIT, Lauren Tan).

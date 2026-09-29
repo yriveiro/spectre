@@ -7,4 +7,3 @@ Without this the architecture drifts one accommodation at a time. Nobody decides
 The test: if we were writing this from scratch with this new requirement, what would we build? Describe that shape honestly, then move the code toward it and let the old shape dissolve into the new one. If the answer looks nothing like the change you were about to make, the change you were about to make was a bolt-on. The redesign does not have to land in one diff. It has to be the direction, stated plainly, with the first step inside this change.
 
 Reach for this when a requirement arrives the current shape never anticipated, and the plan starts with a flag or a special case. Deleting first to keep the addition small is principle-laziness-protocol. Naming the domain shape the redesign lands in is principle-model-the-domain.
-Adapted from pstack (MIT, Lauren Tan).

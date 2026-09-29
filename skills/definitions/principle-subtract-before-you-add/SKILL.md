@@ -7,5 +7,3 @@ The original states no falsifiable test, so say that plainly. No single question
 Resist the urge to build first and clean later. Later never has the checks in hand and the context in mind the way now does. Subtraction done after the addition is a separate change with its own risk. Subtraction done first is the ground the addition stands on.
 
 principle-laziness-protocol already owns deletion-first, and this leaf does not repeat it. That skill owns the reader-load question: what work does this code impose on whoever reads it next. This one owns the builder's sequence: subtract as the first step of an addition, so the new work lands on ground you already cleared. One guards the reader. The other orders the change.
-
-Adapted from pstack (MIT, Lauren Tan).

@@ -9,5 +9,3 @@ Reproduce first. A failure you have not reproduced is a story, and stories get f
 The moment is the candidate patch. You hold a change that would make the symptom stop, and the question is whether it makes the cause stop too. A guard at the crash site, a default for the bad value, a retry around the flake: each silences the report. Apply the patch at the cause and the whole class of reports ends.
 
 Reproducing the failure before diagnosing it is `principle-verification`. Deciding which layer the fix belongs in once the cause is known is `principle-boundary-discipline`.
-
-Adapted from pstack (MIT, Lauren Tan).

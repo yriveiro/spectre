@@ -9,5 +9,3 @@ Prose is read once and forgotten by Friday. The same review comment returns on t
 This principle states no falsifiable test. There is no count to pass and no gate to clear. The signal is recurrence itself: the same lesson, needed twice, is the whole evidence, and the response is structure, not a stricter paragraph.
 
 Reach for this the second time you write the same instruction or watch the same mistake return. Checking one claim once is principle-verification: run the command, make the claim, move on. Building the rerunnable tool for a batch of work is principle-build-the-lever, which owns the single pass while this one owns every pass after. Hand the lesson to the machine and stop paying the telling.
-
-Adapted from pstack (MIT, Lauren Tan).

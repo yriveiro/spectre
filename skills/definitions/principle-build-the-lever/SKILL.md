@@ -11,5 +11,3 @@ That is the test. If you cited a file and the diff holds no codemod, script, gen
 Reach for this when the work touches more than a couple of sites, or when you will run the same pass twice. A touch-up to code you are already editing is principle-hygiene: clean it and move on, no tooling required. A lesson that must survive beyond one run, stated as prose, belongs to principle-encode-lessons-in-structure, which puts it where prose cannot decay. This skill owns the batch: repeated mechanical work that a machine should carry.
 
 Hand work is a loan against the next pass. Build the lever and pay once.
-
-Adapted from pstack (MIT, Lauren Tan).

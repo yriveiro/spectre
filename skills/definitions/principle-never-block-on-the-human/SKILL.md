@@ -9,4 +9,3 @@ The test: reversible means proceed without blocking, irreversible means confirm.
 Reach for this whenever your next step is a question rather than a result. Pick the reasonable option among safe ones, do it, and show what you did so correction is cheap. Name the choice you made in one line so the human can overturn it without reconstructing your reasoning. Never present a question whose answers differ only in work you could have just done.
 
 This owns whether to act before asking. Whether what you did holds true after you acted is principle-verification.
-Adapted from pstack (MIT, Lauren Tan).

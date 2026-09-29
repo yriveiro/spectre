@@ -9,5 +9,3 @@ The moment is any task with more than one step: a migration, a refactor across f
 Keep each unit small enough that a red check leaves one suspect, not five. If the bracket holds two changes, it holds two suspects, and you are back to archaeology. Smaller brackets cost a few more check runs and save the whole debugging session.
 
 The neighbouring case belongs to principle-verification. That skill owns what it means to check a claim honestly. This one owns the ordering around it: small units, each closed by that check, never advancing on red.
-
-Adapted from pstack (MIT, Lauren Tan).

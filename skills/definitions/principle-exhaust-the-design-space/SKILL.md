@@ -11,5 +11,3 @@ This principle states no falsifiable test. No count, no gate. The moment is the 
 Reach for this when no precedent exists in the tree and the decision will outlive the week. A decision with precedent belongs to principle-laziness-protocol: reuse before you invent, delete before you add. Prototypes that keep failing under one shared belief belong to principle-attack-the-premise: stop tuning and suspect the sentence. This skill owns the open field. No map, so draw three, then pick the ground.
 
 Guesses are cheap before they ship. Spend two while they still are.
-
-Adapted from pstack (MIT, Lauren Tan).
