@@ -34,8 +34,11 @@ the depth where their question is and skip the rest.
 Read the code yourself before you explain anything. `ripwire` gives you the callers,
 the callees, the complexity and the hot file. `tools.spectre.history` gives you the
 reason a line is shaped the way it is, which is the half nobody recovers from the
-code. `tools.spectre.stack` says whether the code in front of you is a leaf or a
-shared path, and that decides which half of the explanation is relevant.
+code.
+
+To decide how much of the surrounding machinery a reader needs, use
+`ripwire.impact`: it says what a change to that code would reach, and the blast
+radius is a better guide to how much context someone needs than the file count is.
 
 Keep the hedges. Where the history does not settle why, say you do not know rather
 than smoothing it over. The hedge is a finding and the reader needs to see it.

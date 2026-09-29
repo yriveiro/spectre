@@ -49,9 +49,11 @@ import { typescriptBestPractices } from "./typescript-best-practices";
 import { ripwire } from "./ripwire";
 import { swarm } from "./swarm";
 import { unslop } from "./unslop";
+import { worktreeCleanup } from "./worktree-cleanup";
 
 const definitions: ReadonlyArray<Definition> = [
   architect,
+  worktreeCleanup,
   automateMe,
   blastRadius,
   createVerificationSkill,
