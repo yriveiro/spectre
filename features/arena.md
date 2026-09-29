@@ -36,7 +36,7 @@ model logic.
 That is the whole surface. Turning a profile name into a real model is work the
 `agents` part already does for every other profile.
 
-If the arena ever has to write `anthropic/claude-opus-4-1#high` directly, something
+If the arena ever has to write `opencode/space-bunny-free#max` directly, something
 has gone wrong: the two features have quietly merged.
 
 ## Two ways to run several at once
@@ -117,5 +117,5 @@ than discover:
    permissions first and then go?
 3. If a candidate fails or times out, do we drop it quietly or say so?
 4. Does the judge get told which model wrote each answer? Hiding it is probably
-   better. It stops "opus said so" from settling a tie. But it costs you the
+   better. It stops "the strongest model said so" from settling a tie. But it costs you the
    trail you need when a verdict looks wrong.

@@ -22,8 +22,8 @@ Find a skill for this reader before writing one. One folder per skill, each
 holding a `SKILL.md`:
 
 ```sh
-ls ~/.config/opencode/skills ~/.claude/skills ~/.agents/skills 2>/dev/null
-ls .opencode/skills .claude/skills .agents/skills 2>/dev/null
+ls ~/.config/opencode/skills ~/.agents/skills 2>/dev/null
+ls .opencode/skills .agents/skills 2>/dev/null
 ```
 
 If one exists, ask which they want: update it, which is the default, or start
@@ -50,8 +50,8 @@ The transcripts are not available here, so mine what is:
   changelog kept or not, a review tool or not.
 - The skills they have installed and the tooling the project wires up, which is
   where their formatting and verification posture shows.
-- The project's own `AGENTS.md`, `README.md`, and `CLAUDE.md`: rules they already
-  wrote down, and none of them need rediscovering.
+- The project's own `AGENTS.md` and `README.md`: rules they already wrote down,
+  and none of them need rediscovering.
 
 Fan this out when the history is long. Call `tools.spectre.routing({})`, take one
 model per slice from the profiles, and spawn the readers with `subagent` and
@@ -92,8 +92,7 @@ not a section. "Bullets only when the items are genuinely parallel" is.
 
 Name the folder for them: `.opencode/skills/<name>-mode/SKILL.md` in the
 project, or `~/.config/opencode/skills/<name>-mode/SKILL.md` to follow them
-everywhere. OpenCode also reads `~/.claude/skills/` and `~/.agents/skills/`, so
-a skill they already keep in one of those is the same kind of artefact.
+everywhere.
 
 Frontmatter is required or the skill never loads:
 

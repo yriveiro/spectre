@@ -44,9 +44,9 @@ reason a model quietly declines. This is the most likely explanation for routing
 does not happen, and it is unresolved.
 
 ```text
-agent: "spectre",  model: "anthropic/claude-haiku-4-5#none"
-agent: "spectre",  model: "anthropic/claude-opus-4-1#high"
-agent: "spectre",  model: "anthropic/claude-sonnet-4-5#medium"
+agent: "spectre",  model: "opencode/mimo-v2.6-flash-free"
+agent: "spectre",  model: "opencode/space-bunny-free#max"
+agent: "spectre",  model: "opencode/muse-spark-1.3-contributor-free#high"
 ```
 
 ## What OpenCode already does
@@ -83,9 +83,9 @@ OpenCode's: `opencode.jsonc` only loads the plugin.
 ```jsonc
 {
   "models": {
-    "mechanical": "anthropic/claude-haiku-4-5#none",
-    "standard":   "anthropic/claude-sonnet-4-5#medium",
-    "deep":       "anthropic/claude-opus-4-1#high"
+    "mechanical": "opencode/mimo-v2.6-flash-free",
+    "standard":   "opencode/muse-spark-1.3-contributor-free#high",
+    "deep":       "opencode/space-bunny-free#max"
   },
 
   "profiles": {
@@ -264,7 +264,7 @@ has to be right or only reported, and what being wrong would cost.
 subagent({
   agent:  "spectre",
   prompt: "<the task>",
-  model:  "anthropic/claude-haiku-4-5#none"
+  model:  "opencode/mimo-v2.6-flash-free"
 })
 ```
 

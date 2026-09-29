@@ -4,11 +4,11 @@ import { afterEach, beforeEach } from "bun:test";
 
 export const CATALOGUE = [
   {
-    providerID: "anthropic",
-    id: "claude-haiku-4-5",
+    providerID: "acme",
+    id: "falcon-mini",
     variants: [{ id: "none" }, { id: "high" }],
   },
-  { providerID: "anthropic", id: "claude-opus-4-1", variants: [{ id: "high" }] },
+  { providerID: "acme", id: "falcon-max", variants: [{ id: "high" }] },
   { providerID: "opencode", id: "gpt-5", variants: [] },
 ];
 
