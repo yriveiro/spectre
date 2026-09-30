@@ -1,7 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/** Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3. */
 export const playbookOpeningAPr: Definition = {
   id: Skill.ID.make("playbook-opening-a-pr"),
   name: Skill.Name.make("playbook-opening-a-pr"),

@@ -1,19 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of fixing where the defect lives instead of where it reports.
- *
- * Applies to the candidate patch: you hold a change that would make the
- * symptom stop, and the question is whether it makes the cause stop too. A
- * guard at the crash site, a default for the bad value, a retry around the
- * flake each silence the report while the wrongness stays in place.
- *
- * The test is reproduction followed by honest asking. Reproduce the failure
- * somewhere safe, then ask why until the answer is a defect you can point at
- * rather than a condition you can guard against. A workaround that needs a
- * paragraph of comment to justify means the code is wrong.
- */
 export const principleFixRootCauses: Definition = {
   id: Skill.ID.make("principle-fix-root-causes"),
   name: Skill.Name.make("principle-fix-root-causes"),

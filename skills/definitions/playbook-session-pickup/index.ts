@@ -1,13 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
- *
- * The resume point is a branch and a diff. Reasoning that never became a commit
- * is not in git, and the body says so at the point a reader would otherwise infer
- * it from a confident summary.
- */
 export const playbookSessionPickup: Definition = {
   id: Skill.ID.make("playbook-session-pickup"),
   name: Skill.Name.make("playbook-session-pickup"),

@@ -1,14 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
- *
- * Distinct from `arena`, and the difference is the output. A swarm reports on
- * work that was going to happen anyway. An arena builds one artifact out of
- * several attempts at the same thing, and the picking is the point. A swarm
- * cannot invent a design you have not asked for yet.
- */
 export const swarm: Definition = {
   id: Skill.ID.make("swarm"),
   name: Skill.Name.make("swarm"),

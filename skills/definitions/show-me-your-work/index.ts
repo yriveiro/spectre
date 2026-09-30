@@ -1,14 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
- *
- * `tools.spectre.history` already reads commit messages and blame, and it answers
- * "why is this line shaped like this". What it cannot answer is why one option
- * won. Git records the change that landed; a decision log records the ones that
- * did not, which is the half a reviewer needs and the half git has no column for.
- */
 export const showMeYourWork: Definition = {
   id: Skill.ID.make("show-me-your-work"),
   name: Skill.Name.make("show-me-your-work"),

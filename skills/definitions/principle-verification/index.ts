@@ -1,18 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of never asserting more than has been checked.
- *
- * The upkeep half (cleaning while you refactoring, deleting dead
- * code, bumping what is safe to bump) is the principle-hygiene skill next to
- * this one. What remains here is the narrower claim: a fact nobody checked is
- * not a fact, however confidently it is written.
- *
- * Written to outlive any single moment. It names no version, no
- * package, and no tool, because a principle that hardcodes any of those has
- * stopped being a way of working and become a note about one moment.
- */
 export const principleVerification: Definition = {
   id: Skill.ID.make("principle-verification"),
   name: Skill.Name.make("principle-verification"),

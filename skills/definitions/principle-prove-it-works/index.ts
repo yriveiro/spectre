@@ -1,15 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of verifying every output against the real artifact directly.
- *
- * A proxy, a self-report, or a successful compile is not the thing. The test is
- * to check the real thing: open the rendered page, run the built binary, read
- * the artifact the user will actually touch. Its sibling principle-verification
- * owns never asserting more than has been checked; this leaf owns checking the
- * real artifact instead of a stand-in.
- */
 export const principleProveItWorks: Definition = {
   id: Skill.ID.make("principle-prove-it-works"),
   name: Skill.Name.make("principle-prove-it-works"),

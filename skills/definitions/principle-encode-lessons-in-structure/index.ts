@@ -1,14 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of putting a recurring lesson where prose cannot decay.
- *
- * An instruction stated twice as prose will be stated a third time, or ignored
- * once. A lint rule, metadata, a runtime check, or a script says it every time
- * without being asked. Checking one claim once is principle-verification; the
- * rerunnable tool for a batch of work is principle-build-the-lever.
- */
 export const principleEncodeLessonsInStructure: Definition = {
   id: Skill.ID.make("principle-encode-lessons-in-structure"),
   name: Skill.Name.make("principle-encode-lessons-in-structure"),

@@ -1,14 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
- *
- * Distinct from `principle-test-behavior-not-implementation`, which owns the shape
- * of a good assertion. That leaf decides what the test should say once it
- * exists; this one owns the order: the failing run comes before the production
- * edit, and it is the only thing that proves the test can fail at all.
- */
 export const tdd: Definition = {
   id: Skill.ID.make("tdd"),
   name: Skill.Name.make("tdd"),

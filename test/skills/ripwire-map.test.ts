@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { load } from "../../skills/definitions/index";
+import { load, notALeaf } from "../../skills/definitions/index";
 
 /**
  * `skills/FOR_AGENTS.md` requires the map in `ripwire/SKILL.md` to carry a row
@@ -12,23 +12,6 @@ import { load } from "../../skills/definitions/index";
 const DIR = "skills/definitions";
 const MAP = `${DIR}/ripwire/SKILL.md`;
 const HUB = `${DIR}/spectre-mode/SKILL.md`;
-
-/**
- * `skills/FOR_AGENTS.md` rule 3: a procedure for another harness is registered
- * and never indexed, so it gets no map row and does not move the `none` count.
- * `spectre-mode` and `ripwire` are the hub and the map itself. A leaf is a
- * procedure when its own `index.ts` says it was registered for rule 3, which is
- * the marker that shape always carries, so the exemption is read from the file
- * rather than hardcoded here and going stale.
- */
-const notALeaf = async (): Promise<ReadonlySet<string>> => {
-  const out = new Set(["spectre-mode", "ripwire"]);
-  for await (const entry of new Bun.Glob("*/index.ts").scan({ cwd: DIR })) {
-    const text = await Bun.file(`${DIR}/${entry}`).text();
-    if (/FOR_AGENTS\.md.*rule 3/.test(text)) out.add(entry.split("/")[0]!);
-  }
-  return out;
-};
 
 const rows = async () => {
   const text = await Bun.file(MAP).text();
@@ -44,12 +27,18 @@ describe("every principle has a row in the map", () => {
   test("no leaf is missing, and a row names no leaf that does not exist", async () => {
     const skills: ReadonlyArray<string> = (await Effect.runPromise(load())).map((one) => one.id);
     const listed = new Set((await rows()).map((one) => one.leaf));
-    const exempt = await notALeaf();
 
-    const missing = skills.filter((id) => !listed.has(id) && !exempt.has(id));
+    const missing = skills.filter((id) => !listed.has(id) && !notALeaf.has(id));
     const stale = [...listed].filter((id) => !skills.includes(id));
 
     expect({ missing, stale }).toEqual({ missing: [], stale: [] });
+  });
+
+  test("every id in notALeaf names a skill that exists", async () => {
+    const skills = new Set<string>((await Effect.runPromise(load())).map((one) => one.id));
+    const unknown = [...notALeaf].filter((id) => !skills.has(id));
+
+    expect(unknown).toEqual([]);
   });
 });
 

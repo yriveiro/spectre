@@ -1,15 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of building the rerunnable thing for non-trivial work.
- *
- * Hand work across many sites drifts, cannot be reviewed as intent, and charges
- * full price on every rerun. A codemod, script, generator, or delegated skill
- * pays once and runs forever. Single-site upkeep while editing anyway is
- * principle-hygiene; a lesson that must outlive one run is
- * principle-encode-lessons-in-structure.
- */
 export const principleBuildTheLever: Definition = {
   id: Skill.ID.make("principle-build-the-lever"),
   name: Skill.Name.make("principle-build-the-lever"),

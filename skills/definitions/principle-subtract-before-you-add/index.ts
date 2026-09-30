@@ -1,15 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of deleting before building.
- *
- * Reach for it at the start of any addition, when you are about to extend code
- * that already carries dead branches, unused flags, single-use wrappers, or
- * options nobody passes. Remove those first, run the checks, and build on the
- * simpler base. There is no question that proves you subtracted enough; the
- * moment is the test.
- */
 export const principleSubtractBeforeYouAdd: Definition = {
   id: Skill.ID.make("principle-subtract-before-you-add"),
   name: Skill.Name.make("principle-subtract-before-you-add"),

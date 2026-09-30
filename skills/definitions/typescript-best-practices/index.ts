@@ -1,22 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
- *
- * Reference material rather than a claim. It is not a principle because it
- * states no test that can fail; it is the syntax half of
- * `principle-type-system-discipline`, and the body says so in one line: load the
- * leaf when you are deciding whether to strengthen a type, read this when you
- * are typing it.
- *
- * Overlap is the whole design constraint here. The leaf already holds
- * `satisfies`, `as const`, `unknown` over `any`, the `never` exhaustiveness
- * idiom, and when not to strengthen a type, so nothing in that list is argued
- * again. What is here is the working code for each form, the narrowing order,
- * and the four reasons an `as` exists so a reader can tell which one they have
- * in front of them.
- */
 export const typescriptBestPractices: Definition = {
   id: Skill.ID.make("typescript-best-practices"),
   name: Skill.Name.make("typescript-best-practices"),

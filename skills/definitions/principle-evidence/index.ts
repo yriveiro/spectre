@@ -1,16 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of obtaining the proof, not merely of claiming it.
- *
- * Verification says a fact nobody checked is not a fact; that claim half is the
- * principle-verification skill next to this one. What lives here is the other
- * half, which covers how the check is obtained and how you know the check itself
- * works. Find
- * the oracle instead of arguing, prove a check can fail, and measure the
- * population rather than the specimen.
- */
 export const principleEvidence: Definition = {
   id: Skill.ID.make("principle-evidence"),
   name: Skill.Name.make("principle-evidence"),

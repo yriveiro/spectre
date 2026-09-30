@@ -132,8 +132,9 @@ how a port rots.
    files. They are registered only because `load()` dies on a body it does not
    list, and they are reader-called rather than model-routed because upstream
    ships `disable-model-invocation: true`, which is also why each description is
-   written for the person choosing from the Skills dialog. A definition's
-   `index.ts` says what is particular to that skill and points here.
+   written for the person choosing from the Skills dialog. Their ids are in the
+   `notALeaf` set in `definitions/index.ts`, which is what a map row is checked
+   against.
 
    `arena` carries one more, and it is the reason the name needs watching:
    `features/arena.md` reserves `arena` for an unbuilt feature that owns the key

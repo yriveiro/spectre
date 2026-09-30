@@ -1,15 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
- *
- * Distinct from `principle-evidence`, which owns obtaining the proof. This owns
- * the writing: a subsystem explained to a person who has to answer a question
- * about it afterwards. `ripwire.explore` is the orientation call, and the two
- * overlap in neither direction, because a ranked map is not an explanation and an
- * explanation is not proof.
- */
 export const how: Definition = {
   id: Skill.ID.make("how"),
   name: Skill.Name.make("how"),

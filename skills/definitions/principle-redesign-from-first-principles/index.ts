@@ -1,15 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of integrating a new requirement as though it had been foundational.
- *
- * A bolt-on preserves the old design and pays rent on it forever: a flag, a
- * special case, a parallel path that every later change must route around. The
- * moment it applies is when a requirement arrives that the current shape never
- * anticipated. Redesign as though the requirement had been there from day one,
- * and let the old shape dissolve into the new one.
- */
 export const principleRedesignFromFirstPrinciples: Definition = {
   id: Skill.ID.make("principle-redesign-from-first-principles"),
   name: Skill.Name.make("principle-redesign-from-first-principles"),

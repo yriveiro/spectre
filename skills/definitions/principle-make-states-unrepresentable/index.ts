@@ -1,20 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The shape beats the check.
- *
- * A bag of optional fields and an if/else chain are the same claim at two
- * resolutions: a domain rule written in a language the compiler cannot check.
- * A state machine, a discriminated union, a branded id, and a module organized
- * around the domain rather than around load-validate-save are all ways of moving
- * one rule out of prose and into a shape. `principle-boundary-discipline` owns
- * where a value enters; this leaf owns what shape it takes.
- *
- * Test: can I write a comment explaining when this combination of fields is
- * valid? If yes, the type is too loose. It has a mechanical answer, which is the
- * bar a leaf in this set has to clear.
- */
 export const principleMakeStatesUnrepresentable: Definition = {
   id: Skill.ID.make("principle-make-states-unrepresentable"),
   name: Skill.Name.make("principle-make-states-unrepresentable"),

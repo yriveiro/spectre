@@ -1,13 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
- *
- * The one procedure that designs its own decision path rather than handing a
- * decision to a sibling. The trail it keeps is the git trail, and
- * `tools.spectre.history` reads it back.
- */
 export const figureItOut: Definition = {
   id: Skill.ID.make("figure-it-out"),
   name: Skill.Name.make("figure-it-out"),

@@ -1,13 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
- *
- * The decision is the tool's, and it is a pure function of git state, so the
- * procedure is only the part a judgement cannot take: reading the evidence, and
- * the two cases where a `safe` bucket still needs a human.
- */
 export const worktreeCleanup: Definition = {
   id: Skill.ID.make("worktree-cleanup"),
   name: Skill.Name.make("worktree-cleanup"),

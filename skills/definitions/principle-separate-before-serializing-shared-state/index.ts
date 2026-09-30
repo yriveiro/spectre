@@ -1,15 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of removing shared write targets before coordinating them.
- *
- * Reach for it the moment you are about to add locking, ordering, or retries
- * around state that two writers touch. Ask first whether the target must be
- * shared at all, and serialize structurally only when a single shared writer is
- * a real invariant you can state and defend. There is no question that proves
- * you did it; the moment is the test.
- */
 export const principleSeparateBeforeSerializingSharedState: Definition = {
   id: Skill.ID.make("principle-separate-before-serializing-shared-state"),
   name: Skill.Name.make("principle-separate-before-serializing-shared-state"),
