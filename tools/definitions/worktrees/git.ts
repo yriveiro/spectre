@@ -88,9 +88,10 @@ export const currentBranch = async (cwd: string): Promise<string> =>
 
 /**
  * The one mutating git command the host does not provide. Its create runs
- * `git worktree add --detach` (`packages/core/src/git.ts` at v2.0.19) and
- * `Worktree.Info` is `{directory}` with no branch, so a worktree that is on a
- * branch is two steps and this is the second.
+ * `git worktree add --detach` (`packages/core/src/git.ts` at v2.0.20) and
+ * `Worktree` is `{directory, kind}`, where `kind` is `main` or `linked` and
+ * nothing carries the branch, so a worktree that is on a branch is two steps and
+ * this is the second.
  */
 export const attachBranch = (cwd: string, branch: string) => git(cwd, ["switch", "-c", branch]);
 
@@ -99,7 +100,7 @@ export const isWorktree = async (directory: string): Promise<boolean> =>
 
 /**
  * `Worktree.OperationError` carries `forceRequired`, which the host computes by
- * matching git's own refusal text (`packages/core/src/git.ts` at v2.0.19). A
+ * matching git's own refusal text (`packages/core/src/git.ts` at v2.0.20). A
  * boolean that names the guard is worth more than a stringified unknown, so the
  * failure is decoded into it rather than interpolated.
  */
