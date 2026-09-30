@@ -1,20 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of not spending attention that is not yours to spend.
- *
- * Two moments of the same question. Before the code exists: deletion before
- * addition, and a signal you were told to thread as a design question. After
- * the code exists: the reader is not a role but a position, which the agent
- * occupies as much as any human does. The first moment is cheaper because it
- * answers the second before there is anything to read.
- *
- * This leaf carries two tests, "what would a deletion have avoided" and
- * "where does this value come from". See `principle-laziness-protocol/SKILL.md`,
- * which names the other owners: `principle-hygiene` for upkeep and
- * `principle-boundary-discipline` for where a check belongs.
- */
 export const principleLazinessProtocol: Definition = {
   id: Skill.ID.make("principle-laziness-protocol"),
   name: Skill.Name.make("principle-laziness-protocol"),

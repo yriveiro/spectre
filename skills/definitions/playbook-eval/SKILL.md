@@ -64,7 +64,7 @@ Spawn the candidates in parallel, one per variant, on models chosen with
 candidates on one model share its blind spots and their agreement proves very
 little. Each gets the same prompt, its own sanitized directory, and its own
 output path under
-`~/.local/share/spectre/<worktree-name>/eval-<slug>/candidate-<n>/`.
+`~/.local/share/spectre/<worktree-name>/evals/<slug>/seat-<n>/`.
 
 Say the same thing to each. Anything one candidate is told that the other is
 not is a difference in the experiment, not a difference in the result.

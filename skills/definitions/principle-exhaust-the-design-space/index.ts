@@ -1,14 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of comparing before committing when nothing precedes you.
- *
- * A novel decision has no precedent to reuse, so the first design is a guess
- * wearing confidence. Two or three competing prototypes turn the guess into a
- * comparison. A decision with precedent is principle-laziness-protocol; prototypes
- * failing under one shared belief are principle-attack-the-premise.
- */
 export const principleExhaustTheDesignSpace: Definition = {
   id: Skill.ID.make("principle-exhaust-the-design-space"),
   name: Skill.Name.make("principle-exhaust-the-design-space"),

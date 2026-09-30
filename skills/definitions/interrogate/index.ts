@@ -1,15 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
- *
- * Distinct from `arena`, and the difference is the direction of the fan-out. An
- * arena has one task and several answers, and what it produces is a synthesis,
- * so the picking is the work. An interrogation already has one artifact and hands
- * that same artifact to several reviewers, so the finding is the work and
- * nothing is built from the answers.
- */
 export const interrogate: Definition = {
   id: Skill.ID.make("interrogate"),
   name: Skill.Name.make("interrogate"),

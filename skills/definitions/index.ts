@@ -152,6 +152,58 @@ const definitions: ReadonlyArray<Definition> = [
   unslop,
 ];
 
+/**
+ * Registered and reader-called rather than indexed, so they carry no row in the
+ * ripwire map and do not move its `none` count: `skills/FOR_AGENTS.md`,
+ * "Porting a principle from elsewhere", item 3. `spectre-mode` and `ripwire` are
+ * the hub and the map itself.
+ */
+export const notALeaf: ReadonlySet<string> = new Set([
+  "architect",
+  "arena",
+  "automate-me",
+  "blast-radius",
+  "bro",
+  "create-verification-skill",
+  "figure-it-out",
+  "how",
+  "interrogate",
+  "maintain-verification-skill",
+  "playbook",
+  "playbook-authoring-a-skill",
+  "playbook-autonomous-run",
+  "playbook-autopilot-full",
+  "playbook-autopilot-stack",
+  "playbook-babysit",
+  "playbook-bug-fix",
+  "playbook-eval",
+  "playbook-feature",
+  "playbook-hillclimb",
+  "playbook-investigation",
+  "playbook-multi-phase-plan",
+  "playbook-opening-a-pr",
+  "playbook-orchestrate",
+  "playbook-pause-safely",
+  "playbook-perf-issue",
+  "playbook-prototype",
+  "playbook-refactoring",
+  "playbook-runtime-forensics",
+  "playbook-session-pickup",
+  "playbook-shipping",
+  "playbook-trace-forensics",
+  "playbook-visual-parity",
+  "ripwire",
+  "show-me-your-work",
+  "spectre-mode",
+  "swarm",
+  "tdd",
+  "teach",
+  "technical-writing",
+  "typescript-best-practices",
+  "why",
+  "worktree-cleanup",
+]);
+
 const ROOT = import.meta.dir;
 
 const bodies = async (): Promise<ReadonlyArray<string>> => {

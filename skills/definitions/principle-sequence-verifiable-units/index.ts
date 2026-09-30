@@ -1,14 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of ordering work as small units that each end in a check.
- *
- * Reach for it whenever a task has more than one step: a migration, a refactor
- * across files, a feature with setup plus behaviour plus cleanup. Bracket each
- * unit before you start, a known-good state, one change, then the check, and do
- * not advance until green. A unit that cannot state its check is not a unit.
- */
 export const principleSequenceVerifiableUnits: Definition = {
   id: Skill.ID.make("principle-sequence-verifiable-units"),
   name: Skill.Name.make("principle-sequence-verifiable-units"),

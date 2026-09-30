@@ -1,15 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
- *
- * This is the one index the playbooks get, and it is a file of its own rather
- * than rows in `spectre-mode`. A playbook is a whole task shape, so an entry
- * per playbook in the hub would grow the file that already is the binding
- * constraint, and the hub's own rule says its index entry has to become one
- * line. One row in the hub, the selection table here.
- */
 export const playbook: Definition = {
   id: Skill.ID.make("playbook"),
   name: Skill.Name.make("playbook"),

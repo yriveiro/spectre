@@ -1,15 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * The discipline of encoding the domain in a structure instead of scattering conditionals.
- *
- * A new feature that grows an if/else chain by one branch is the sign this was
- * skipped. The conditionals were never the model; they were the absence of one.
- * The moment it applies is when a second branch appears beside the first and a
- * third is already imaginable. What the structure excludes by construction,
- * no review has to catch by attention.
- */
 export const principleModelTheDomain: Definition = {
   id: Skill.ID.make("principle-model-the-domain"),
   name: Skill.Name.make("principle-model-the-domain"),

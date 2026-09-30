@@ -1,13 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
- *
- * The resume note is a commit body and a file next to the tree, because a note
- * kept only in a session's context dies with the session and the whole point is
- * that the next one finds it.
- */
 export const playbookPauseSafely: Definition = {
   id: Skill.ID.make("playbook-pause-safely"),
   name: Skill.Name.make("playbook-pause-safely"),

@@ -7,6 +7,7 @@ for each, and what is still open. It is not a log of how the design was reached.
 | File | Status | In one line |
 | ---- | ------ | ----------- |
 | [model-routing.md](./model-routing.md) | built | A `spectre.jsonc` file. It whitelists models and names the reasons to pick one. A profile resolves to a model string for a `subagent` call, not an agent body. |
+| [data-root.md](./data-root.md) | built | Where a skill writes when the output has to outlive the session. The path shape, the permission that covers it, and who writes there. |
 | [arena.md](./arena.md) | reserved, not built | Run the same question on several models at once. The main chat picks the best answer. |
 
 The skill `skills/definitions/arena/` shares this file's name and is not the same

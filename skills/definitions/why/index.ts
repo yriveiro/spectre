@@ -1,13 +1,6 @@
 import { Skill } from "@opencode/plugin/effect";
 import { anchor, type Definition } from "../definition";
 
-/**
- * Why this is registered and not indexed: `skills/FOR_AGENTS.md`, rule 3.
- *
- * Evidence is git: the commit body, the blame, the diff that introduced a line.
- * That is the only record guaranteed to exist for any repository, and the
- * rationale a code comment does not carry lives there.
- */
 export const why: Definition = {
   id: Skill.ID.make("why"),
   name: Skill.Name.make("why"),

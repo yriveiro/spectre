@@ -28,12 +28,17 @@ The candidates get the same prompt, so the prompt is the contract.
    proves very little. That constraint is the feature, so if the profiles only
    offer one family, say so before spending the run.
 4. Give each candidate its own output path under the shared root:
-   `~/.local/share/spectre/<worktree-name>/arena-<slug>/candidate-<n>/`. No git
-   worktree and no `/tmp`. The root is outside the project directory, so a
-   candidate's first write asks for permission; the `spectre` agent already
-   allows `external_directory`, `read` and `edit` on it.
+   `~/.local/share/spectre/<worktree-name>/arenas/<slug>/seat-<n>/`, and
+   `mkdir -p` it before the fan-out. The shared root is the location that clears
+   both tests — outside the project tree, and outliving the session — so a path
+   that fails either one is wrong whatever it looks like. The two that come to
+   hand are `tools.spectre.worktrees`, which opens a worktree and moves this
+   session into it, and `/tmp`, which promises nothing about surviving.
 
-   Candidates writing to one path serialize on it and the fan-out is a lie.
+   Candidates writing to one path serialize on it and the fan-out is a lie. The
+   root being outside the project directory is what makes the first write ask for
+   permission; every spectre agent already allows `external_directory`, `read`
+   and `edit` on it, subagents included, so a candidate never stops on the prompt.
 
 ## Phase B: Fan out
 
