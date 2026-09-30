@@ -1,6 +1,7 @@
 import { Agent } from "@opencode/plugin/effect";
+import type { Definition } from "./definition";
 
-export const sicko: Partial<Agent.Info> & Pick<Agent.Info, "id"> = {
+export const sicko: Definition = {
   id: Agent.ID.make("sicko"),
   description: "A deranged comment-hater that savors deletion and condemns workaround code.",
   mode: "subagent",
