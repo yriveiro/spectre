@@ -25,24 +25,32 @@ a.problems      // read this before acting on a count
 `problems` changes what the answer is worth, and skipping it is the one way to be
 wrong here.
 
-- **`origin/main` is not fetched.** Every `merged` is then false, and a `safe`
-  bucket rests on the PR column alone. Run `git fetch origin main` and call again.
-- **`gh` failed.** The tool says which way it failed and why. With no PR data,
-  `pr` is `-` everywhere and nothing is `safe` on that account.
+- **`origin/main` is not fetched.** Every `merged` is then false, so nothing reads
+  `safe` on the merge column alone. Run `git fetch origin main` and call again.
+- **`gh` failed.** The tool says which way it failed and why. This costs the `pr`
+  column and **nothing else**: the buckets are decided with the git CLI, so a
+  broken `gh` cannot make a worktree look safe or unsafe.
 
 Both are cheap to fix and expensive to skip. A `review` row under a stale-fetch
 warning might be a branch that merged last month.
 
+**A squash-merge reads `review` and is kept.** A squash rewrites the patch, so no
+git-only signal can see that the work landed, and the tool will not guess. That
+is the safe direction: a directory that should have been reclaimed stays. If a
+`review` row's branch is gone from the remote, check the pull request before
+deleting anything.
+
 ## Phase B: Take the holds off the table
 
-Three buckets are not candidates, and none of them is a judgement call:
+Two buckets are not candidates, and neither is a judgement call:
 
 - `hold-wip` has tracked edits in the tree. Not a candidate at any priority.
-- `hold-open-pr` has an OPEN pull request. Somebody is waiting on it.
-- `review` is a branch with no PR, not merged, and not pushed, or pushed with
-  commits that never landed. **This is the one to read.** A `no-remote` branch
-  exists in one directory and nowhere else, so removing the directory is
-  removing the work.
+- `hold-unpushed` has no remote-tracking ref: git hosts no other copy, so
+  removing the directory removes the work.
+
+`review` is the rest — pushed, not landed. **This is the one to read.** A
+`no-remote` branch exists in one directory and nowhere else, so removing the
+directory is removing the work.
 
 Read what a `review` row actually contains before deciding. `git log --oneline
 main..<branch>` in that worktree tells you whether there is anything on it that
@@ -51,9 +59,8 @@ call, not yours.
 
 ## Phase C: Reclaim the safe ones
 
-`safe` means deleting loses nothing the author was still holding. It does **not**
-mean the work was good: a CLOSED pull request is proof the author let it go, and
-that is what the bucket accepts.
+`safe` means deleting loses nothing the author was still holding: the work is on
+`origin/main`. It does **not** mean the work was good.
 
 So `safe` is the list to work from, in this order:
 
@@ -83,7 +90,7 @@ Say which buckets you left and why, by name. A cleanup that silently skips three
 
 ```
 removed 4 safe worktrees, 1.2G
-left 2 hold-wip (tracked edits), 1 hold-open-pr (#412)
+left 2 hold-wip (tracked edits), 1 hold-unpushed (no remote copy)
 left 1 review: feature/experiment, 3 commits not on main, never pushed
 ```
 
@@ -96,7 +103,10 @@ a deletion nobody agreed to.
   that lives in one of these directories.
 - **On a worktree whose session is live.** The tool cannot see an agent working
   in it. `safe` means the *git* state is settled, not that nobody is mid-edit, and
-  an uncommitted thought in a merged worktree still reads as `safe`.
+  an uncommitted thought in a merged worktree still reads as `safe`. A worktree
+  whose directory is *already gone* is the other case: that session returns
+  itself to main at its next message, or on its next tool call if the directory
+  died mid-turn, so the directory is safe to remove.
 - **To solve a disk problem you have not measured.** Count first, delete second.
   Deleting three worktrees to free 40M is a worse answer than the one you started
   with.

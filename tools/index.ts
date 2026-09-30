@@ -4,7 +4,7 @@ import { comments } from "./definitions/comments";
 import { historyTool } from "./definitions/history";
 import { routing } from "./definitions/routing";
 import { stack } from "./definitions/stack";
-import { worktrees } from "./definitions/worktrees";
+import { sessionReturn, worktrees } from "./definitions/worktrees";
 
 export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.Context) =>
   Effect.gen(function* () {
@@ -29,4 +29,6 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
         (tool) => `${tool.options?.namespace}_${tool.name}`,
       ),
     });
+
+    yield* sessionReturn(ctx);
   });

@@ -154,7 +154,7 @@ describe("a worktree with only untracked files", () => {
 
     const row = only((await call(root)).worktrees);
     expect(row.dirty).toBe("scratch:1");
-    expect(row.bucket).toBe("review");
+    expect(row.bucket).toBe("hold-unpushed");
   });
 });
 
@@ -281,6 +281,6 @@ describe("what the tool cannot do", () => {
     // `gh` needs a remote. When one is absent the message must say so, because
     // "unauthenticated" would send the reader to fix the wrong thing.
     expect(reported).toContain("`gh pr list` failed:");
-    expect(reported).toContain("every branch reads as having no PR");
+    expect(reported).toContain("the buckets do not depend on it");
   });
 });

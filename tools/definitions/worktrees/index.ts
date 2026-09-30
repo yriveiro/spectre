@@ -3,27 +3,34 @@ import type { Tool } from "@opencode/schema/tool";
 import { AbsolutePath } from "@opencode/schema/schema";
 import type { Session } from "@opencode/schema/session";
 import { Effect, Schema } from "effect";
-import { audit } from "./audit";
-import { BUCKETS, count } from "./classify";
+import {
+  BASES,
+  BUCKETS,
+  type Reads,
+  type Start as StartFacts,
+  mismatch,
+  refusal as policyRefusal,
+} from "./classify";
 import {
   attachBranch,
   bareOf,
   branchExists,
   currentBranch,
   firstResolving,
-  git,
   head,
+  hostRefusal,
   isWorktree,
   listed,
   mainOf,
-  refusal as hostRefusal,
-  resolves,
   rootFor,
+  resolves,
   toplevel,
-} from "./git";
-import { BASES, mismatch, refusal, type Reads } from "./lifecycle";
+} from "./read";
+import { audit, count } from "./survey";
 
 const Bucket = Schema.Literals([...BUCKETS]);
+
+export { update as sessionReturn } from "./return";
 
 const List = Schema.Struct({
   action: Schema.optional(Schema.Literals(["list"])).annotate({
@@ -39,7 +46,9 @@ const Row = Schema.Struct({
   branch: Schema.String,
   head: Schema.String,
   ageDays: Schema.Number,
-  merged: Schema.Boolean,
+  merged: Schema.Union([Schema.Boolean, Schema.Literals(["unknown"])]).annotate({
+    description: "`unknown` when origin/main does not resolve, which is not the same as false.",
+  }),
   dirty: Schema.String,
   remote: Schema.String,
   pr: Schema.String,
@@ -48,7 +57,7 @@ const Row = Schema.Struct({
 
 const Counts = Schema.Struct({
   "hold-wip": Schema.Number,
-  "hold-open-pr": Schema.Number,
+  "hold-unpushed": Schema.Number,
   safe: Schema.Number,
   review: Schema.Number,
 });
@@ -138,14 +147,12 @@ const runStart = (ctx: Plugin.Context) =>
     const projectDirectory = ctx.location.project.directory;
     const branch = input.branch ?? input.name;
 
-    // One reading of the worktree list answers three questions: where main is,
-    // whether the name is taken, and which repository the set hangs off.
-    const rows = yield* Effect.promise(() => listed(projectDirectory));
+    const listing = yield* Effect.promise(() => listed(projectDirectory));
+    if (listing.kind === "no-repository") return rejected(listing.why);
+    const rows = listing.rows;
     const bare = bareOf(rows);
     const root = rootFor(bare ?? projectDirectory);
 
-    // Three independent reads, run together: whether the branch exists, which
-    // base resolves, and where this session is.
     const [branchTaken, base, sessionDirectory] = yield* Effect.promise(async () => {
       const [exists, resolved, where] = await Promise.all([
         branchExists(projectDirectory, branch),
@@ -167,7 +174,7 @@ const runStart = (ctx: Plugin.Context) =>
       return [exists, resolved, where] as const;
     });
 
-    const blocked = refusal({
+    const blocked = policyRefusal({
       name: input.name,
       branch,
       root,
@@ -178,7 +185,9 @@ const runStart = (ctx: Plugin.Context) =>
     });
     if (blocked !== undefined) return rejected(blocked.why);
 
-    const expected = yield* Effect.promise(() => head(projectDirectory));
+    const gotExpected = yield* Effect.promise(() => head(projectDirectory));
+    if (gotExpected.kind !== "read")
+      return rejected(`${projectDirectory} is not a git repository, or has no commit yet`);
 
     const made = yield* Effect.result(
       ctx.worktree.create({
@@ -193,9 +202,11 @@ const runStart = (ctx: Plugin.Context) =>
       // The host makes the parent directory before it creates anything and runs
       // the project's start command after the row is written, so a failure here
       // can still have landed a directory. Look before reporting nothing.
-      const landed = (yield* Effect.promise(() => listed(projectDirectory))).find((one) =>
-        one.directory.endsWith(`/${input.name}`),
-      );
+      const after = yield* Effect.promise(() => listed(projectDirectory));
+      const landed =
+        after.kind === "listed"
+          ? after.rows.find((one) => one.directory.endsWith(`/${input.name}`))
+          : undefined;
       return {
         status: "failed" as const,
         ...(landed === undefined ? {} : { directory: landed.directory }),
@@ -205,11 +216,11 @@ const runStart = (ctx: Plugin.Context) =>
 
     const directory = made.success.directory;
     const attached = yield* Effect.promise(() => attachBranch(directory, branch));
-    if (attached.code !== 0)
+    if (!attached.ran || attached.code !== 0)
       return {
         status: "unverified" as const,
         directory,
-        problems: `created on a detached HEAD and could not branch to ${branch}: ${attached.err || attached.out}. Left intact, and this session has not moved.`,
+        problems: `created on a detached HEAD and could not branch to ${branch}: ${attached.err || (attached.ran ? attached.out : "")}. Left intact, and this session has not moved.`,
       };
 
     const [after, gotHead, gotBranch] = yield* Effect.promise(async () =>
@@ -217,10 +228,10 @@ const runStart = (ctx: Plugin.Context) =>
     );
 
     const reads: Reads = {
-      listed: after.some((one) => one.directory === directory),
-      head: gotHead,
-      expected,
-      branch: gotBranch,
+      listed: after.kind === "listed" && after.rows.some((one) => one.directory === directory),
+      head: gotHead.kind === "read" ? gotHead.value : undefined,
+      expected: gotExpected.value,
+      branch: gotBranch.kind === "read" ? gotBranch.value : undefined,
       wanted: branch,
     };
     const wrong = mismatch(reads);
@@ -247,15 +258,17 @@ const runStart = (ctx: Plugin.Context) =>
       directory,
       branch,
       base: base!,
-      head: gotHead,
+      head: gotHead.kind === "read" ? gotHead.value : gotHead.why,
     };
   });
 
 const runRemove = (ctx: Plugin.Context) =>
   Effect.fn("spectre.worktrees.remove")(function* (input: typeof Remove.Type) {
     const projectDirectory = ctx.location.project.directory;
-    const rows = yield* Effect.promise(() => listed(projectDirectory));
+    const listing = yield* Effect.promise(() => listed(projectDirectory));
+    if (listing.kind === "no-repository") return rejected(listing.why);
 
+    const rows = listing.rows;
     if (rows.length === 0)
       return rejected(`${projectDirectory} is not a git repository, or has no worktrees`);
 
@@ -277,7 +290,8 @@ const runRemove = (ctx: Plugin.Context) =>
       };
 
     const named = yield* Effect.promise(() => currentBranch(input.directory));
-    const kept = named === "HEAD" ? {} : { branch: named };
+    const kept =
+      named.kind !== "read" || named.value === "HEAD" ? {} : { branch: named.value };
 
     const removed = yield* Effect.result(
       ctx.worktree.remove({
@@ -328,34 +342,45 @@ const DESCRIPTION = `How a change reaches a worktree, what is in the way, and wh
 ## The buckets, and what each one licenses
 
 - \`hold-wip\`. Tracked edits in the tree. Nothing may touch it.
-- \`hold-open-pr\`. The branch has an OPEN PR. It is somebody's review.
-- \`safe\`. HEAD is an ancestor of \`origin/main\`, or the branch has a PR that is
-  no longer open. Deletion loses nothing the author was still holding.
-- \`review\`. None of the above. An unpushed branch with no PR and no merge. Read
-  it before deciding.
+- \`hold-unpushed\`. Git hosts no other copy: no remote-tracking ref for the branch.
+  Removing the directory removes the work.
+- \`safe\`. The work is already on \`origin/main\`. Deletion loses nothing the author
+  was still holding.
+- \`review\`. None of the above, and a remote copy exists. Read it before deciding.
 
-\`safe\` does not mean the work was good. A CLOSED PR is proof the author let it
-go, and that is what \`safe\` accepts, so a rejected branch buckets as \`safe\`.
-The evidence columns are there for the cases the bucket cannot settle.
+The buckets are decided with the git CLI. \`gh\` is read for the \`pr\` column and
+nothing else, because a pull request is a forge fact and the forge does not decide
+what may be deleted. The cost is stated in the evidence, not hidden: an N-into-1
+squash-merge rewrites the patch, so no git-only signal can see it, and a
+squash-merged branch reads \`review\` and is kept. That errs toward keeping
+directories, which is the direction that loses no work.
+
+\`safe\` does not mean the work was good. It means the author let it go.
 
 ## Reading the evidence
 
 - \`dirty\`: \`clean\`, \`wip:<n>\` for n tracked changes, \`scratch:<n>\` for n
-  untracked files. Untracked files are not WIP, which is why they are counted
-  separately: a build artefact left behind is not a reason to hold a worktree.
-- \`remote\`: \`pushed\`, \`ahead:<n>\` commits not on origin, \`no-remote\`, or
-  \`detached\`. \`no-remote\` on a \`review\` row is the dangerous combination: the
-  work exists in one directory and nowhere else.
-- \`pr\`: \`#<number>/<state>\` or \`-\`. States are OPEN, CLOSED, and MERGED.
+  untracked files, or \`unknown\` when the read failed. Untracked files are not
+  WIP, which is why they are counted separately: a build artefact left behind is
+  not a reason to hold a worktree.
+- \`remote\`: \`pushed\`, \`ahead:<n>\` commits not on origin, \`no-remote\`,
+  \`detached\`, or \`unknown\`.
+- \`pr\`: \`#<number>/<state>\` or \`-\`. States are OPEN, CLOSED, and MERGED. This
+  column is information; no bucket reads it.
 - \`ageDays\`: days since the HEAD commit, or -1 when the worktree has no commit.
-- \`merged\`: HEAD is an ancestor of \`origin/main\`. A squash-merge leaves a
-  branch that is not an ancestor, so a merged PR is often what proves this.
+- \`merged\`: HEAD is an ancestor of \`origin/main\`, or \`unknown\` when that ref
+  does not resolve. \`unknown\` is not \`false\`.
+
+**A failed read is never the reassuring value.** A \`git status\` that cannot run
+reports \`unknown\`, not \`clean\`, and no bucket treats \`unknown\` as \`safe\`.
 
 A survey does not fetch and does not measure disk size. \`merged\` is false for
 every worktree when \`origin/main\` has not been fetched, and \`problems\` says so
 rather than quietly reporting nothing merged. Fetch first when the answer decides
 a deletion. A bad path or a directory that is not a repository comes back in
-\`problems\` with an empty \`worktrees\`, never as a failed call.
+\`problems\` with an empty \`worktrees\`, never as a failed call. A worktree whose
+directory was collected is named in \`problems\` rather than listed as a row,
+because there is no tree to measure; \`git worktree prune\` clears it.
 
 ## Start is one call, and it moves you
 
@@ -403,7 +428,13 @@ No \`force\`, and there is no input that produces one. A dirty or untracked
 worktree is refused by git and comes back as \`failed\` with git's own message;
 the tree is still there, which is the point. It never deletes a branch: removal
 reclaims a directory, and a branch is somebody's work. It never removes the main
-worktree. It never edits, commits, or pushes.`;
+worktree. It never edits, commits, or pushes.
+
+A collected worktree is named in \`problems\` rather than listed as a row, because
+there is no tree to measure: git keeps a \`prunable\` row for a directory that is
+gone, and a row built from it would report itself clean. \`git worktree prune\`
+clears it. A session left in such a directory returns itself to main on its next
+prompt, which is not this tool's doing — it registers no action for it.`;
 
 export const worktrees = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Output> => ({
   name: "worktrees",
