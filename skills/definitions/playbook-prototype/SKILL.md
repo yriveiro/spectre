@@ -49,7 +49,7 @@ was set rather than quietly skipping it.
 ## Phase C: Build
 
 Throwaway means throwaway. Build in a scratch directory outside the project:
-`~/.local/share/spectre/<worktree-name>/prototype-<slug>/`. Not the production
+`~/.local/share/spectre/<worktree-name>/prototypes/<slug>/`. Not the production
 source, and not `/tmp` — the artifact has to survive the session to be looked at
 twice, and `/tmp` does not promise that.
 

@@ -32,7 +32,7 @@ Open a `todolist` with one entry per phase before launching anything.
    model share its blind spots and the race proves nothing. Name each arm's model
    before you spawn.
 5. Give each worker its own writable path when it writes:
-   `~/.local/share/spectre/<worktree-name>/swarm-<slug>/worker-<n>/`. Workers
+   `~/.local/share/spectre/<worktree-name>/swarms/<slug>/worker-<n>/`. Workers
    sharing one path serialize on it and the fan-out is a lie.
 
 When workers check or measure commits, each brief names the exact SHAs, and a

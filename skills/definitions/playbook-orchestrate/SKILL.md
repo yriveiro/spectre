@@ -6,10 +6,10 @@ programme here is a sequence of runs, each reading state and doing one thing.
 
 ## Start
 
-The store is `orchestrate/<project-slug>/` under
-`~/.local/share/spectre/<worktree-name>/`, the root `arena` already writes to. It is
-outside the project directory, so the first write asks for permission, which the `spectre`
-agent allows. Every file is plain text.
+The store is `orchestrates/<project-slug>/` under
+`~/.local/share/spectre/<worktree-name>/`, the root `arena` already writes to. It
+is outside the project directory, so the first write asks for permission, which the
+`spectre` agent allows. Every file is plain text.
 
 1. Frame
 2. Lay out the store

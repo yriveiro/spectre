@@ -53,7 +53,8 @@ riskiest-unknown first. Scaffolding and verification come before features.
   over a decision already made is `principle-laziness-protocol` charging you
   for the look of rigour.
 - Decide what fans out. Parallelize across seams only, and give each worker its
-  own path — a scratch path under `~/.local/share/spectre/<worktree-name>/` when
+  own path — a scratch path under
+  `~/.local/share/spectre/<worktree-name>/decisions/<slug>/worker-<n>/` when
   it writes no commits, or its own worktree when it will commit, which the worker
   opens itself because `tools.spectre.worktrees` moves the caller in and this
   session must stay on main to spawn the rest — because workers sharing one path
