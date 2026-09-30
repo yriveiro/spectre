@@ -1,92 +1,133 @@
 import { describe, expect, test } from "bun:test";
-import { bucket, count, prFor, type PullRequest } from "../../tools/definitions/worktrees/classify";
+import {
+  bucket,
+  count,
+  type Evidence,
+  dirtyOf,
+  dirtyLabel,
+  prFor,
+  type PullRequest,
+  trackedChanges,
+} from "../../tools/definitions/worktrees/classify";
 
 /**
- * The bucket is the only judgement this tool makes, so it is the part tested
- * against literals. Every row below is one branch of the rule in
- * `classify.ts`; a classifier that returned `undefined` fails all of them.
+ * The bucket is the only judgement this tool makes, so it is the part tested against
+ * literals. Every row below is one branch of the rule in `classify.ts`; a classifier
+ * that returned `undefined` fails all of them.
  */
 
-const clean = { merged: false, dirty: "clean", pr: "-" };
-const wip = { merged: false, dirty: "wip:2", pr: "-" };
-const scratch = { merged: false, dirty: "scratch:14", pr: "-" };
+const clean: Evidence = { dirty: { kind: "clean" }, merged: true, patches: "landed", pushed: true };
+const wip: Evidence = { ...clean, dirty: { kind: "wip", count: 1 } };
+const scratch: Evidence = { ...clean, dirty: { kind: "scratch", count: 1 } };
 
 describe("what outranks what", () => {
-  test("tracked edits hold a worktree that is also merged and has an open PR", () => {
-    expect(bucket({ merged: true, dirty: "wip:1", pr: "#12/OPEN" })).toBe("hold-wip");
+  test("tracked edits hold a worktree that also landed", () => {
+    expect(bucket(wip)).toBe("hold-wip");
   });
 
-  test("an open PR outranks a merge", () => {
-    expect(bucket({ merged: true, dirty: "clean", pr: "#12/OPEN" })).toBe("hold-open-pr");
-  });
-});
-
-describe("safe", () => {
-  test("an ancestor of origin/main", () => {
-    expect(bucket({ ...clean, merged: true })).toBe("safe");
+  test("a branch that landed is safe whatever else is true", () => {
+    expect(bucket(clean)).toBe("safe");
+    expect(bucket({ ...clean, dirty: { kind: "scratch", count: 1 } })).toBe("safe");
   });
 
-  test("a PR that is no longer open, whatever its state", () => {
-    expect(bucket({ ...clean, pr: "#12/MERGED" })).toBe("safe");
-    expect(bucket({ ...clean, pr: "#12/CLOSED" })).toBe("safe");
+  test("squash evidence counts as landed on its own, since ancestry cannot see it", () => {
+    expect(bucket({ dirty: { kind: "clean" }, merged: false, patches: "landed", pushed: true })).toBe("safe");
+  });
+
+  test("untracked files are not WIP, and do not hold a landed branch", () => {
+    expect(bucket(scratch)).toBe("safe");
   });
 });
 
-describe("review", () => {
-  test("nothing proves the work landed", () => {
-    expect(bucket(clean)).toBe("review");
+describe("what the absence of a copy is worth", () => {
+  test("a branch git hosts nowhere is held, not merely reviewed", () => {
+    expect(bucket({ dirty: { kind: "clean" }, merged: false, patches: "unlanded", pushed: false })).toBe(
+      "hold-unpushed",
+    );
   });
 
-  test("untracked files are not a reason to hold", () => {
-    expect(bucket(scratch)).toBe("review");
+  test("a pushed branch that did not land is review, never safe", () => {
+    // It may carry an open pull request, which git cannot see.
+    expect(bucket({ dirty: { kind: "clean" }, merged: false, patches: "unlanded", pushed: true })).toBe("review");
+  });
+});
+
+describe("a read that failed is not the reassuring answer", () => {
+  test("an unknown dirty never reaches safe", () => {
+    // `clean` is what the delete decision reads as a licence, so a failed status
+    // must not become it.
+    expect(bucket({ dirty: { kind: "unknown" }, merged: false, patches: "unlanded", pushed: true })).toBe("review");
+    expect(bucket({ dirty: { kind: "unknown" }, merged: "unknown", patches: "unknown", pushed: "unknown" })).toBe(
+      "review",
+    );
+  });
+
+  test("unknown base with no other proof is review, not safe", () => {
+    expect(bucket({ dirty: { kind: "clean" }, merged: "unknown", patches: "unknown", pushed: true })).toBe("review");
   });
 });
 
 describe("count", () => {
-  test("tallies every bucket and starts at zero", () => {
-    expect(
-      count([{ bucket: "safe" }, { bucket: "safe" }, { bucket: "hold-wip" }, { bucket: "review" }]),
-    ).toEqual({ "hold-wip": 1, "hold-open-pr": 0, safe: 2, review: 1 });
+  test("tallies all four buckets from zero", () => {
+    expect(count([])).toEqual({ "hold-wip": 0, "hold-unpushed": 0, safe: 0, review: 0 });
   });
 
-  test("no worktrees is all zeroes, not a missing field", () => {
-    expect(count([])).toEqual({ "hold-wip": 0, "hold-open-pr": 0, safe: 0, review: 0 });
+  test("each row lands in exactly one bucket", () => {
+    const rows: ReadonlyArray<Evidence> = [
+      wip,
+      clean,
+      { dirty: { kind: "clean" }, merged: false, patches: "unlanded", pushed: false },
+    ];
+    expect(count(rows.map((evidence) => ({ bucket: bucket(evidence) })))).toEqual({
+      "hold-wip": 1,
+      "hold-unpushed": 1,
+      safe: 1,
+      review: 0,
+    });
   });
 });
 
-const pr = (number: number, state: string, headRefName: string): PullRequest => ({
-  number,
-  state,
-  headRefName,
+describe("tracked edits, counted once for both consumers", () => {
+  test("untracked lines are scratch, not WIP", () => {
+    expect(dirtyLabel(trackedChanges("?? new.txt\n?? other.txt"))).toBe("scratch:2");
+  });
+
+  test("a tracked line is WIP even beside untracked ones", () => {
+    expect(dirtyLabel(trackedChanges(" M a.ts\n?? new.txt"))).toBe("wip:1");
+  });
+
+  test("nothing at all is clean", () => {
+    expect(dirtyLabel(trackedChanges(""))).toBe("clean");
+  });
 });
 
 describe("prFor", () => {
-  test("a branch nobody opened a pull request for reads as no PR", () => {
-    expect(prFor("feature", [])).toBe("-");
-    expect(prFor("feature", [pr(12, "OPEN", "other")])).toBe("-");
+  const pr = (number: number, state: string, headRefName: string): PullRequest => ({
+    number,
+    state,
+    headRefName,
   });
 
-  test("one pull request on the branch is the branch's pull request", () => {
-    expect(prFor("feature", [pr(12, "MERGED", "other"), pr(13, "OPEN", "feature")])).toBe(
-      "#13/OPEN",
-    );
+  test("no pull request reads as `-`", () => {
+    expect(prFor("feat", [])).toBe("-");
   });
 
-  test("a reused branch name reports the open pull request, not the closed one", () => {
-    // #12 was closed, the branch was recreated, #13 was opened under the same
-    // name. Taking the first would report the closed one, which reads as `safe`.
-    const pulled = [pr(12, "CLOSED", "feature"), pr(13, "OPEN", "feature")];
-
-    expect(prFor("feature", pulled)).toBe("#13/OPEN");
-    expect(bucket({ merged: false, dirty: "clean", pr: prFor("feature", pulled) })).toBe(
-      "hold-open-pr",
-    );
+  test("a branch that is not named reads as `-`", () => {
+    expect(prFor("feat", [pr(1, "OPEN", "other")])).toBe("-");
   });
 
-  test("two finished pull requests on one name answer the same either way", () => {
-    const pulled = [pr(12, "CLOSED", "feature"), pr(13, "MERGED", "feature")];
+  test("one match is reported as number and state", () => {
+    expect(prFor("feat", [pr(12, "MERGED", "feat")])).toBe("#12/MERGED");
+  });
 
-    expect(prFor("feature", pulled)).toBe("#12/CLOSED");
-    expect(prFor("feature", [...pulled].reverse())).toBe("#13/MERGED");
+  test("a reused branch name prefers the request that is still open", () => {
+    // A branch outlives its pull request, so one name can carry several. The closed
+    // one is proof the author let it go, and answering with it would report a branch
+    // somebody is waiting on as finished.
+    expect(prFor("feat", [pr(12, "MERGED", "feat"), pr(13, "OPEN", "feat")])).toBe("#13/OPEN");
+  });
+
+  test("two finished requests answer with either", () => {
+    expect(["#12/CLOSED", "#9/CLOSED"]).toContain(prFor("feat", [pr(12, "CLOSED", "feat"), pr(9, "CLOSED", "feat")]));
   });
 });

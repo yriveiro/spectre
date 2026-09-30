@@ -7,8 +7,8 @@ import {
   refusal,
   startProblem,
   type Start,
-} from "../../tools/definitions/worktrees/lifecycle";
-import { bareOf, listed, mainOf, toplevel, type ListedWorktree } from "../../tools/definitions/worktrees/git";
+} from "../../tools/definitions/worktrees/classify";
+import { bareOf, listed, mainOf, toplevel, type ListedWorktree } from "../../tools/definitions/worktrees/read";
 
 const row = (directory: string, branch?: string, bare?: boolean): ListedWorktree => ({
   directory,
@@ -113,15 +113,15 @@ describe("one worktree per session", () => {
       ...clean,
       sessionDirectory: "/dev/spectre-worktrees/spectre-agent",
     });
-    expect(blocked?.kind).toBe("session-on-worktree");
+    expect(blocked?.kind).toBe("wrong-session");
     expect(blocked?.why).toBe(
-      "this session is already in /dev/spectre-worktrees/spectre-agent, which is not the main worktree (/dev/spectre-worktrees/main). One worktree per session: move back to main, or work where you are.",
+      "this session is already in /dev/spectre-worktrees/spectre-agent, which is not the main worktree (/dev/spectre-worktrees/main). One worktree per session: move back to /dev/spectre-worktrees/main, or work where you are.",
     );
   });
 
   test("a call with no session at all is refused rather than creating a worktree nobody moves into", () => {
     const blocked = refusal({ ...clean, sessionDirectory: undefined });
-    expect(blocked?.kind).toBe("no-session");
+    expect(blocked?.kind).toBe("wrong-session");
     expect(blocked?.why).toContain("no session");
   });
 
@@ -132,7 +132,7 @@ describe("one worktree per session", () => {
       branchExists: true,
       base: undefined,
     });
-    expect(blocked?.kind).toBe("session-on-worktree");
+    expect(blocked?.kind).toBe("wrong-session");
   });
 });
 
@@ -142,14 +142,14 @@ describe("the rest of the refusals", () => {
       ...clean,
       rows: [...BARE_LAYOUT, row("/dev/spectre-worktrees/fix-login", "fix-login")],
     });
-    expect(blocked?.kind).toBe("name-taken");
+    expect(blocked?.kind).toBe("already-taken");
     expect(blocked?.why).toBe(
-      "a worktree named fix-login already exists, and the host would silently create fix-login-2 instead",
+      "a worktree named fix-login already exists at /dev/spectre-worktrees/fix-login, and the host would silently create fix-login-2 instead",
     );
   });
 
   test("a branch that exists under a different directory is still refused", () => {
-    expect(refusal({ ...clean, branchExists: true })?.kind).toBe("branch-exists");
+    expect(refusal({ ...clean, branchExists: true })?.kind).toBe("already-taken");
   });
 
   test("an unresolved base is refused and names what it tried", () => {
@@ -230,7 +230,9 @@ describe("parsing real git output", () => {
     ]);
     await Bun.$`rm -rf ${`${base}/seed`}`.quiet();
 
-    const rows = await listed(`${base}/spectre-worktrees/main`);
+    const listing = await listed(`${base}/spectre-worktrees/main`);
+    if (listing.kind !== "listed") throw new Error(`expected a listing, got ${listing.why}`);
+    const rows = listing.rows;
     // What git prints, not what TMPDIR spells: macOS resolves `/var` to
     // `/private/var`, and the parser reports git's own paths on purpose.
     const main = await toplevel(`${base}/spectre-worktrees/main`);
@@ -260,7 +262,9 @@ describe("parsing real git output", () => {
       "-C", `${base}/app`, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init",
     ]);
 
-    const rows = await listed(`${base}/app`);
+    const listing = await listed(`${base}/app`);
+    if (listing.kind !== "listed") throw new Error(`expected a listing, got ${listing.why}`);
+    const rows = listing.rows;
     // Compared against what git says, not against a spelling of the path: on
     // macOS TMPDIR is `/var/...` and git resolves that to `/private/var/...`.
     const resolved = await toplevel(`${base}/app`);
@@ -268,7 +272,10 @@ describe("parsing real git output", () => {
     expect(bareOf(rows)).toBeUndefined();
     expect(resolved).toBeDefined();
     expect(mainOf(rows)).toBe(resolved!);
-    expect(rows).toEqual([{ directory: resolved!, branch: "main" }]);
+    // The one porcelain parser also reads HEAD, which the survey needs for `ageDays`.
+    expect(rows).toEqual([
+      { directory: resolved!, branch: "main", head: expect.stringMatching(/^[0-9a-f]{40}$/) },
+    ]);
   });
 
   test("a directory reached through a symlink resolves to the same worktree", async () => {
