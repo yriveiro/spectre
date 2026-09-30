@@ -41,6 +41,35 @@ Amend when a fix belongs in a commit you just made. Make a new commit when the
 change is separable. A series that only reads correctly in the order you happened
 to write it is a series nobody can review.
 
+Each commit message uses this shape:
+
+```text
+<type>[optional scope][!]: <concise imperative subject>
+
+# Description
+<one concise sentence about the primary staged change>
+
+# Changes
+- <concrete staged change>
+- <concrete staged change>
+
+[# Breaking Changes
+- <incompatibility and required migration>]
+```
+
+`# Description` and `# Changes` are required. Omit `# Breaking Changes`
+unless the staged change creates an actual incompatibility. Add `!` before
+the colon when that section is present.
+
+Write one direct description sentence, normally 8 to 25 words. It states
+the primary change, not a generic rationale. Write one to four change
+bullets. Each bullet describes a concrete change visible in the diff.
+Use direct change verbs such as `add`, `remove`, `update`, `replace`,
+`rename`, `refactor`, or `correct`. Do not claim behavior is preserved,
+unchanged, compatible, safe, or unaffected. Do not list files, line edits,
+or implementation trivia unless that is the material change. Do not infer
+motivation or runtime effects the diff does not show.
+
 ## Phase C: Prose
 
 Run `interrogate` and `unslop` over the diff before you commit, and `no-comments`
@@ -54,36 +83,48 @@ articles, and avoid an `-ing` form where a plain verb does the work.
 ## Phase D: Title and body
 
 Titles are Conventional Commits, `type(scope): subject`. The type is one of
-`feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`. The scope is the
-changed area, written as the repository writes it. Keep the subject short and
-imperative, name a real symbol when one carries the change, and do not end it
-with a period. `fix(spectre): report reading a PR gh could not` is the shape.
+`feat`, `fix`, `refactor`, `docs`, `style`, `test`, `build`, `ci`, `chore`,
+`perf`, or `revert`. The scope is a lowercase noun naming the changed area,
+written as the repository writes it. Keep the subject short and imperative,
+at most 72 characters, with no final period. Name a real symbol when one
+carries the change. Add `!` before the colon for a breaking change.
+`fix(spectre): report reading a PR gh could not` is the shape.
 
 The body is a briefing, not the lab notebook. A reviewer who already has the diff
 should learn why the change exists, what is out of scope, and how you proved it
 works. The squash commit body is the pull request body, so if the body would
 push the squash commit past about forty lines, cut the body.
 
-Use these sections in order, and drop any that has nothing to say:
+Use these sections in order. Fill every section. State `None.` where a section
+has no content, except `## Tradeoffs` which is omitted when there was no real
+choice:
 
 - `## Why`. The intent and the approach, in one or two short paragraphs. No SHA
-  list, no rebase genealogy, no "based on main" preamble.
+  list, no rebase genealogy, no "based on main" preamble. This is the Summary.
 - `## Scope`. Bullets naming real symbols and paths. Name both sides of a
   rename or a retarget. State the boundary only where it matters; it is not a
-  file-by-file essay.
+  file-by-file essay. This is the Changes list.
 - `## Tradeoffs`. Only the alternatives a reviewer would otherwise ask about. Omit
   the section when there was no real choice.
-- `## Blast Radius`. One to three sentences on who or what the change touches,
-  and why it is safe or risky. Include what stays broken on main if this is not
-  merged.
-- `## Verification`. Each run you actually did and what it returned. For a
-  performance change, one number with its unit in `before → after` form. Link
-  the artifact holding the rest.
+- `## Validation`. Each run you actually did and what it returned. List commands,
+  tests, or manual checks with results. Link GitHub Actions runs when available.
+  For a performance change, one number with its unit in `before → after` form.
+  Link the artifact holding the rest.
+- `## Risk and Rollback`. Who or what the change touches, why it is safe or
+  risky, and how to revert or recover. Include what stays broken on main if this
+  is not merged.
+- `## Breaking Changes`. State what no longer works and the required migration.
+  State `None.` when no incompatibility exists.
+- `## Merge Gate`. Leave each box unchecked until verified:
+  - [ ] Explicit direct user approval is recorded.
+  - [ ] All required GitHub Actions checks are green.
+  - [ ] If checks are not green, the direct user override names the failed
+    checks and reason.
 
 Attach a screenshot or a video when it proves a claim a sentence cannot. Do not
 paste full SHAs, per-lane recitals, file-by-file checklists, or a verdict word
-on its own; those belong in a linked artifact. No `## Summary`, no `## Test plan`.
-A commit body does not restate its subject.
+on its own; those belong in a linked artifact. No `## Summary`, no `## Test plan`
+as separate headings. A commit body does not restate its subject.
 
 ## Phase E: Stack
 
