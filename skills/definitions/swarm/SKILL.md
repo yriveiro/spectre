@@ -27,10 +27,12 @@ Open a `todolist` with one entry per phase before launching anything.
    per slice, and enough arms on a race to make the comparison mean something.
    N is total workers, not a concurrency limit.
 4. Pick the models. Call `tools.spectre.routing({})` and take them from the
-   profiles. Coverage wants a cheap model per slice, since the work is
-   mechanical. A race wants different families per arm, because two arms on one
-   model share its blind spots and the race proves nothing. Name each arm's model
-   before you spawn.
+   profiles, plus the `agent` each profile names. A spawn without `agent` lands
+   on OpenCode's default agent, which holds none of spectre's permissions — a
+   worker that cannot write to its path is a dropout you caused. Coverage wants
+   a cheap model per slice, since the work is mechanical. A race wants different
+   families per arm, because two arms on one model share its blind spots and the
+   race proves nothing. Name each arm's model and agent before you spawn.
 5. Give each worker its own writable path when it writes:
    `~/.local/share/spectre/<worktree-name>/swarms/<slug>/worker-<n>/`. Workers
    sharing one path serialize on it and the fan-out is a lie.
@@ -41,8 +43,8 @@ what order. The worker records both in its result.
 
 ## Phase B: Fan out
 
-Spawn all N workers in one message with `background: true`, each with its model
-and its own brief. Every brief stands alone, because a worker cannot ask you a
+Spawn all N workers in one message with `background: true`, each with its agent,
+its model, and its own brief. Every brief stands alone, because a worker cannot ask you a
 question. Each one carries the goal, its scope, its exact slice or race arm, how
 to verify, and what to report back.
 
