@@ -13,16 +13,12 @@ this leaf owns the two axes once there is something to read, and neither answer 
 any use without the other.
 
 Laziness's reader half says this already, in its own words, and a reader who has
-loaded that leaf should not take this one for a second opinion of it. Four of the
-moves below are its claims restated for the reader who arrived here first: the
-narrowing ladder is its "keep state as narrow as you can", the author-side version
-of the two questions is its "answer the two questions before you leave the code",
-the count of files a change reaches is its "count the files the change touches",
-and the instrument is its `--callers`, `--uses`, `--context-ratio` and
-`--nonlocal-state`. What is left here is the part laziness does not say: how to
-read two numbers instead of one, what a transfer looks like in a diff, and the
-fact that load reproduces itself, which is why a repository nobody prunes gets
-harder to read while no individual file changes.
+loaded that leaf should not take this one for a second opinion of it. It owns the
+narrowing ladder, the two questions asked before leaving the code, the count of
+files a change reaches, and the instrument. What is left here is the part laziness
+does not say: how to read two numbers instead of one, what a transfer looks like in
+a diff, and the fact that load reproduces itself, which is why a repository nobody
+prunes gets harder to read while no individual file changes.
 
 The test is timed, and it is the one part of this that is actually falsifiable.
 Hand the code to a reader who did not write it and ask two questions, in this
@@ -44,17 +40,12 @@ any single file and every change local and reasonable.
 
 ## The moves
 
-**Time the two questions, in that order.** Pick a value somebody will ask about,
-hand the code to a reader who has not seen it, and ask where it comes from and
-what can change it. This is the author's version of
-`principle-laziness-protocol`'s exit check with a stopwatch on it, and the
-stopwatch is the part that matters: the question you answer from memory is not
-evidence about the question a stranger has to answer.
-
 **Map the slow answer to its axis.** "Where does X come from" took a minute means
 hops. "What can change X" took a minute means state. Do not fix both when only one
 is slow, and read the second answer through the first, because a reader who cannot
 find the source is reporting a hop problem inside what looks like a state problem.
+The tell that state has been promoted too far is a value read before it is written
+in file order.
 
 **Take both numbers from one run of one tool, on one commit.** The two verbs that
 exist for this are laziness's, `--context-ratio` for the hops and how much of the
@@ -79,13 +70,6 @@ untouchable code, flag added because the reach could not be scoped, a second
 parse added because nobody agreed on a shape: each is a rational response to load
 and each is more load. Find the first one, because a loop cut anywhere else
 restarts.
-
-**Keep the state as narrow as the question allows.** The ladder from return value
-to local to field to module state to global is laziness's, and the reason it runs
-in that order is this leaf's: each step widens the scope in which the value can
-change, and each widening is a question the reader now has to hold the answer to.
-The tell that you are at the wrong rung is a value read before it is written in
-file order.
 
 **Scope the change with the state question, before you make it.** "What can change
 X" asked at a call site is the same question asked before an edit, and it is what

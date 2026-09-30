@@ -11,7 +11,7 @@ assertion is a hypothesis. This skill is the map from principle to command.
 
 It also states the other half, which is the half that keeps the map honest: where
 ripwire is wrong, what its silence means, and which moments belong to one of the
-eighteen moment-skills ripwire installs rather than to a verb you run by hand.
+seventeen moment-skills ripwire installs rather than to a verb you run by hand.
 
 ## The rule
 
@@ -142,23 +142,21 @@ from one that was deleted.
 
 ## Hand off to the moment-skills
 
-Ripwire installs eighteen skills of its own into
-`~/.local/share/ripwire/skills/`, one per moment. They carry the long form of
-what this table summarises. When one covers the moment, load it instead of
-running a verb by hand.
+Ripwire installs seventeen skills of its own into `~/.local/share/ripwire/skills/`,
+one per moment, and they carry the long form of what this table summarises. The
+moment → skill map is `ripwire-router`'s job and it keeps itself current, so when a
+moment is one of those, load it from there rather than reading a second copy of
+that routing here. Two of the seventeen are worth naming from this side:
 
-| This principle's test, mid-task | The skill that owns the moment |
-| -------------------------------- | ----------------------------- |
-| reader load, in a diff you did not write | `ripwire-fresh-eyes` |
-| reader load, before the code exists | `ripwire-before-you-build` |
-| reader load, picking a shape out of several | `ripwire-reuse-first` |
-| verification, at the moment you think you are done | `ripwire-quality-bar` |
-| evidence, finding what has no test | `ripwire-write-tests` |
-| the context window, when it is filling | `ripwire-efficient` |
-| anything, when the moment is not obvious | `ripwire-router` |
+- `ripwire-quality-bar` owns the moment you think you are done, and it is what
+  `--test-gate` exists for, since that flag lives only in the CLI.
+- `ripwire-mcp` holds the server's own wiring, including staleness and rebuild
+  behaviour, and is worth reading once if you use the server heavily.
 
-`ripwire-mcp` holds the server's own wiring, including staleness and rebuild
-behaviour, and is worth reading once if you use the server heavily.
+Nothing above is a substitute for the row it replaces. This file maps a
+**principle's test to a verb**; `ripwire-router` maps a **moment to a skill**. The
+two answer different questions, and a verb is the cheaper answer when the question
+you have is which measurement would settle a claim you are holding.
 
 ## Checking this repo's own routing
 
@@ -202,9 +200,10 @@ arm is better than chance, and the descriptions are visible.
   attached is a fact nobody acted on.
 - **Not a claim that the tools are accurate.** Every row here is a place to
   measure, and the section above is the list of ways the measurement misleads.
-- **Not a reason to run ripwire on everything.** The map has eight rows. Six have
-  a verb. Running a verb because it exists is the same as asserting a principle
-  because it sounds right.
+- **Not a reason to run ripwire on everything.** The map has thirty-one rows and
+  twelve of them answer `none`, so nineteen name a verb and the rest are honest
+  about having no instrument. Running a verb because it exists is the same as
+  asserting a principle because it sounds right.
 - **Not portable to a machine without ripwire.** This skill names a tool on
   purpose, which the principles themselves are written not to do, because naming
   the instrument is this skill's entire content. If ripwire is not installed,
