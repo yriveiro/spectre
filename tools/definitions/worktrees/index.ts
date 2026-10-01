@@ -195,6 +195,14 @@ const runStart = (ctx: Plugin.Context) =>
         directory: root,
         name: input.name,
         branch: base!,
+        // `from` is the only field that names the repository to cut from, and the host
+        // falls back to the project row when it is absent. That row is the bare
+        // repository in this layout, and the host finds a repository by walking up for
+        // a `.git` entry, which a bare repository does not have
+        // (`packages/core/src/git.ts` at v2.0.20). Naming the session's own worktree
+        // gives it a `.git` file pointing back at the bare one, and for an ordinary
+        // checkout this is the same path the fallback would have used.
+        from: AbsolutePath.make(sessionDirectory!),
       }),
     );
 
