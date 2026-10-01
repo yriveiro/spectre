@@ -6,6 +6,7 @@ import { Effect, Schema } from "effect";
 import {
   BASES,
   BUCKETS,
+  escort,
   type Reads,
   type Start as StartFacts,
   mismatch,
@@ -20,6 +21,7 @@ import {
   head,
   hostRefusal,
   isWorktree,
+  type ListedWorktree,
   listed,
   mainOf,
   rootFor,
@@ -113,12 +115,22 @@ export const Rejected = Schema.Struct({
   problems: Schema.String.annotate({ description: "Nothing was created." }),
 });
 
+/**
+ * One field, one sentence, on both outcomes that can carry it. `start` never sets it,
+ * because a start that reports a move is `opened`, and an `unverified` start is one
+ * whose session was deliberately not moved.
+ */
+const MovedTo = Schema.optional(Schema.String).annotate({
+  description: "Where this session was moved to, when this call moved it. Absent when it did not.",
+});
+
 export const Failed = Schema.Struct({
   status: Schema.Literals(["failed"]),
   problems: Schema.String,
   directory: Schema.optional(Schema.String).annotate({
     description: "Present when something landed on disk.",
   }),
+  moved: MovedTo,
 });
 
 export const Removed = Schema.Struct({
@@ -127,6 +139,7 @@ export const Removed = Schema.Struct({
   branch: Schema.optional(Schema.String).annotate({
     description: "The branch that was kept.",
   }),
+  moved: MovedTo,
 });
 
 export const AlreadyGone = Schema.Struct({
@@ -138,6 +151,25 @@ export const AlreadyGone = Schema.Struct({
 
 
 const rejected = (problems: string) => ({ status: "rejected" as const, problems });
+
+/**
+ * The calling session's worktree top level, resolved by git rather than compared as a
+ * string: the session's spelling and git's differ and mean one directory.
+ *
+ * `undefined` means the call carries no session, or the session could not be read. Both
+ * are "this tool cannot place the caller", and each caller says so in its own terms —
+ * `start` refuses, because a worktree nobody moves into is not a start.
+ */
+const whereIs = (ctx: Plugin.Context, sessionID: Session.ID | undefined) =>
+  sessionID === undefined
+    ? Effect.succeed(undefined)
+    : Effect.result(ctx.session.get({ sessionID })).pipe(
+        Effect.flatMap((found) =>
+          found._tag === "Failure"
+            ? Effect.succeed(undefined)
+            : Effect.promise(() => toplevel(found.success.location.directory)),
+        ),
+      );
 
 const runStart = (ctx: Plugin.Context) =>
   Effect.fn("spectre.worktrees.start")(function* (
@@ -159,17 +191,7 @@ const runStart = (ctx: Plugin.Context) =>
         input.base === undefined
           ? firstResolving(projectDirectory, BASES)
           : resolves(projectDirectory, input.base).then((ok) => (ok ? input.base : undefined)),
-        sessionID === undefined
-          ? Promise.resolve(undefined)
-          : Effect.runPromise(
-              Effect.result(ctx.session.get({ sessionID })).pipe(
-                Effect.flatMap((found) =>
-                  found._tag === "Failure"
-                    ? Effect.succeed(undefined)
-                    : Effect.promise(() => toplevel(found.success.location.directory)),
-                ),
-              ),
-            ),
+        Effect.runPromise(whereIs(ctx, sessionID)),
       ]);
       return [exists, resolved, where] as const;
     });
@@ -270,8 +292,64 @@ const runStart = (ctx: Plugin.Context) =>
     };
   });
 
+/**
+ * The caller out of the way, or the reason the removal is not happening at all. This is
+ * a statement about the session rather than about the directory: the host's removal
+ * deletes a path and leaves a session's own row alone, so the two have to be ordered by
+ * whoever calls this, and the ordering is the whole fix.
+ */
+type Escorted =
+  | { readonly kind: "clear" }
+  | { readonly kind: "moved"; readonly to: string }
+  | { readonly kind: "refused"; readonly problems: string };
+
+const runEscort = (ctx: Plugin.Context) =>
+  Effect.fn("spectre.worktrees.escort")(function* (
+    sessionID: Session.ID | undefined,
+    target: string,
+    rows: ReadonlyArray<ListedWorktree>,
+  ) {
+    const plan = escort({ sessionDirectory: yield* whereIs(ctx, sessionID), target, rows });
+    if (plan.kind === "nowhere") return { kind: "refused" as const, problems: plan.why };
+    if (plan.kind === "stay" || sessionID === undefined) return { kind: "clear" as const };
+
+    const moved = yield* Effect.result(
+      ctx.session.move({ sessionID, directory: AbsolutePath.make(plan.to) }),
+    );
+    return moved._tag === "Failure"
+      ? {
+          kind: "refused" as const,
+          problems: `this session is in ${target}, which is the directory being removed, and it could not be moved to ${plan.to}: ${String(moved.failure)}. Nothing was removed.`,
+        }
+      : { kind: "moved" as const, to: plan.to };
+  });
+
+/**
+ * What git can say about a directory before the host is asked to delete it: whether the
+ * directory is there at all, whether git still lists it, and which branch it holds.
+ * Three reads that do not depend on each other, so they are asked together.
+ */
+const runStanding = (directory: string, rows: ReadonlyArray<ListedWorktree>) =>
+  Effect.gen(function* () {
+    const [onDisk, named] = yield* Effect.all(
+      [
+        Effect.promise(() => isWorktree(directory)),
+        Effect.promise(() => currentBranch(directory)),
+      ],
+      { concurrency: "unbounded" },
+    );
+    return {
+      onDisk,
+      listed: rows.some((one) => one.directory === directory),
+      branch: named.kind === "read" && named.value !== "HEAD" ? named.value : undefined,
+    };
+  });
+
 const runRemove = (ctx: Plugin.Context) =>
-  Effect.fn("spectre.worktrees.remove")(function* (input: typeof Remove.Type) {
+  Effect.fn("spectre.worktrees.remove")(function* (
+    input: typeof Remove.Type,
+    sessionID: Session.ID | undefined,
+  ) {
     const projectDirectory = ctx.location.project.directory;
     const listing = yield* Effect.promise(() => listed(projectDirectory));
     if (listing.kind === "no-repository") return rejected(listing.why);
@@ -283,23 +361,28 @@ const runRemove = (ctx: Plugin.Context) =>
     if (mainOf(rows) === input.directory)
       return rejected(`${input.directory} is the main worktree, and it is never removed here`);
 
-    const known = rows.some((one) => one.directory === input.directory);
-    const onDisk = yield* Effect.promise(() => isWorktree(input.directory));
+    const standing = yield* runStanding(input.directory, rows);
 
-    if (!onDisk)
+    if (!standing.onDisk)
       return {
         status: "already-gone" as const,
         directory: input.directory,
-        ...(known
+        ...(standing.listed
           ? {
               problems: `${input.directory} is gone from disk but git still lists it; run \`git worktree prune\``,
             }
           : {}),
       };
 
-    const named = yield* Effect.promise(() => currentBranch(input.directory));
-    const kept =
-      named.kind !== "read" || named.value === "HEAD" ? {} : { branch: named.value };
+    const escorted = yield* runEscort(ctx)(sessionID, input.directory, rows);
+    if (escorted.kind === "refused") return rejected(escorted.problems);
+
+    // One tail for both outcomes below: the branch that was kept, and this session's new
+    // address when it had to move out of the way.
+    const kept = {
+      ...(standing.branch === undefined ? {} : { branch: standing.branch }),
+      ...(escorted.kind === "moved" ? { moved: escorted.to } : {}),
+    };
 
     const removed = yield* Effect.result(
       ctx.worktree.remove({
@@ -321,7 +404,11 @@ const runRemove = (ctx: Plugin.Context) =>
       };
     }
 
-    return { status: "removed" as const, directory: input.directory, ...kept };
+    return {
+      status: "removed" as const,
+      directory: input.directory,
+      ...kept,
+    };
   });
 
 const Input = Schema.Union([List, Start, Remove]);
@@ -346,6 +433,7 @@ const DESCRIPTION = `How a change reaches a worktree, what is in the way, and wh
   const w = await tools.spectre.worktrees({ action: "start", name: "fix-login" })
   w.status === "opened"                                                // this session is now in it
   await tools.spectre.worktrees({ action: "remove", directory: w.directory })
+                                                                   // and this one sends it back to main
 
 ## The buckets, and what each one licenses
 
@@ -403,6 +491,15 @@ against the worktree on \`main\` in the same reading. One worktree per session. 
 fanning-out parent therefore stays on main and each worker starts its own; see
 \`playbook-hillclimb\` and \`playbook-shipping\`.
 
+## And remove is the trip back
+
+Deleting a directory does not move the session standing in it, so \`remove\` reads this
+session's own directory and, when it is the one being removed, moves to \`main\` **first**.
+By the time \`removed\` returns this session is in \`main\`, and \`moved\` says so. A removal
+of somebody else's worktree leaves you where you were. A failed move removes nothing, and
+a repository with no worktree on \`main\` is \`rejected\` rather than performed — there would
+be nowhere to send you.
+
 ## Where a worktree goes
 
 Beside the repository, in a \`…-worktrees\` directory: \`~/dev/spectre-worktrees/\`
@@ -426,8 +523,10 @@ to, and it is on the branch you asked for.
   **The session was not moved.**
 - \`rejected\` — nothing was created. \`problems\` says which rule.
 - \`failed\` — a step errored. \`directory\` is present when something landed, and
-  the session has not moved.
-- \`removed\` — the directory is gone. The branch was kept.
+  \`moved\` is present when the session had already been sent home before it failed.
+  A failed \`start\` has no \`moved\`, which is how you read that its session stayed put.
+- \`removed\` — the directory is gone. The branch was kept, and this session is in
+  \`main\` when it was the one removed.
 - \`already-gone\` — nothing to do. Removing twice is not an error.
 
 ## What it will not do
@@ -436,7 +535,8 @@ No \`force\`, and there is no input that produces one. A dirty or untracked
 worktree is refused by git and comes back as \`failed\` with git's own message;
 the tree is still there, which is the point. It never deletes a branch: removal
 reclaims a directory, and a branch is somebody's work. It never removes the main
-worktree. It never edits, commits, or pushes.
+worktree. It never edits, commits, or pushes, and the one session it ever moves
+is the one asking, which it only moves out of its own way.
 
 A collected worktree is named in \`problems\` rather than listed as a row, because
 there is no tree to measure: git keeps a \`prunable\` row for a directory that is
@@ -453,7 +553,7 @@ export const worktrees = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof O
   execute: (input, context) =>
     Effect.gen(function* () {
       if (input.action === "start") return { output: yield* runStart(ctx)(input, context?.sessionID) };
-      if (input.action === "remove") return { output: yield* runRemove(ctx)(input) };
+      if (input.action === "remove") return { output: yield* runRemove(ctx)(input, context?.sessionID) };
 
       const report = yield* Effect.promise(() => audit(input.repo ?? ctx.location.directory));
       return {

@@ -232,3 +232,46 @@ export const mismatch = (reads: Reads): string | undefined => {
   if (reads.branch !== reads.wanted) return `it is on ${reads.branch}, not ${reads.wanted}`;
   return undefined;
 };
+
+/**
+ * Deleting a directory does not move the session that was standing in it. A removal
+ * reclaims a path; a session's location is its own row, and nothing in the host's
+ * removal touches it. So a `removed` that leaves the caller where it was leaves it
+ * somewhere with no inode, and the next call fails on a cwd that is not there.
+ *
+ * `main` is the only worktree a removal never takes, so it is where the caller goes.
+ */
+export type Escort =
+  | { readonly kind: "stay" }
+  | { readonly kind: "escort"; readonly to: string }
+  | { readonly kind: "nowhere"; readonly why: string };
+
+export type Removal = {
+  /** The calling session's worktree, or undefined when the call has no session. */
+  readonly sessionDirectory: string | undefined;
+  readonly target: string;
+  readonly rows: ReadonlyArray<ListedWorktree>;
+};
+
+/**
+ * Ordered, and the order is the contract: a session that is not in the way is none of
+ * this tool's business, and a removal that dragged the caller to main would cost the
+ * caller the directory it was working in for nothing.
+ *
+ * The no-main case is a refusal rather than a removal, for the same reason it is one on
+ * the start side: there is nowhere to put the session, and going ahead deletes the
+ * directory out from under it.
+ */
+export const escort = (removal: Removal): Escort => {
+  if (removal.sessionDirectory === undefined) return { kind: "stay" };
+  if (removal.sessionDirectory !== removal.target) return { kind: "stay" };
+
+  const main = mainOf(removal.rows);
+  if (main === undefined)
+    return {
+      kind: "nowhere",
+      why: `this session is in ${removal.target}, which is the directory being removed, and git lists no worktree on main to send it to. Move this session to another worktree first, or remove ${removal.target} from a session that is not in it.`,
+    };
+
+  return { kind: "escort", to: main };
+};

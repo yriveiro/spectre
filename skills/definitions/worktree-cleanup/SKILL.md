@@ -73,9 +73,12 @@ So `safe` is the list to work from, in this order:
    asks git to remove it without force and then reads the result back, so a
    worktree holding modified or untracked files comes back as `failed` with
    git's own message and the tree is still there — that refusal is the guard.
-   Never `rm -rf` the directory: the worktree metadata lives in the main
-   repository's `.git/worktrees`, and removing the directory behind git's back
-   leaves a stale entry that every later `git worktree list` still reports.
+   When the directory being removed is the one you are standing in, the tool
+   moves you to `main` first and says so in `moved`, so read that field before
+   your next command. Never `rm -rf` the directory: the worktree metadata lives
+   in the main repository's `.git/worktrees`, and removing the directory behind
+   git's back leaves a stale entry that every later `git worktree list` still
+   reports.
 4. `git worktree prune` only when a `failed` or `already-gone` status names a
    stale entry, which clears metadata for a directory that is already gone.
 5. `git branch -d <branch>` only for a branch that was merged. `-d` refuses to
