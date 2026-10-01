@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import {
   BASES,
   branchProblem,
+  escort,
   mismatch,
   nameProblem,
   refusal,
@@ -189,6 +190,37 @@ describe("the base order", () => {
   test("trunk is preferred over the checkout's own HEAD, which is how a worktree gets cut off a feature", () => {
     expect(BASES.indexOf("origin/HEAD")).toBeLessThan(BASES.indexOf("HEAD"));
     expect(BASES.indexOf("origin/main")).toBeLessThan(BASES.indexOf("HEAD"));
+  });
+});
+
+describe("getting the caller out of the removed directory", () => {
+  const target = "/dev/spectre-worktrees/spectre-agent";
+
+  test("a caller standing in the directory being removed is sent to main first", () => {
+    expect(escort({ sessionDirectory: target, target, rows: BARE_LAYOUT })).toEqual({
+      kind: "escort",
+      to: "/dev/spectre-worktrees/main",
+    });
+  });
+
+  test("a caller in another worktree is left alone, because it is not in the way", () => {
+    // The over-reach: dragging the caller home on every removal costs it the directory
+    // it was working in, for nothing.
+    expect(escort({ sessionDirectory: "/dev/spectre-worktrees/main", target, rows: BARE_LAYOUT })).toEqual({
+      kind: "stay",
+    });
+  });
+
+  test("a call with no session is left alone, and there is nobody to send anywhere", () => {
+    expect(escort({ sessionDirectory: undefined, target, rows: BARE_LAYOUT })).toEqual({ kind: "stay" });
+  });
+
+  test("no main worktree is a refusal that names both sides, not a removal nobody is told about", () => {
+    // The bare repository is not a worktree a session can sit in, so this layout has
+    // nowhere to send the caller.
+    const blocked = escort({ sessionDirectory: target, target, rows: [row("/dev/spectre", undefined, true)] });
+    expect(blocked.kind).toBe("nowhere");
+    expect(blocked.kind === "nowhere" && blocked.why).toContain(target);
   });
 });
 

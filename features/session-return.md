@@ -149,8 +149,25 @@ repo's own layout, and `mainOf` finds the row whose branch is `main` instead.
   `action: "remove"`, and it keeps its own guards.
 - **No enumeration, and no register.** A session nobody talks to and that makes
   no tool call stays where it is. Nothing can observe that it is doing nothing.
-- **No tool, and no input.** The `worktrees` catalogue is unchanged, and every
-  existing status means what it meant.
+- **No tool, and no input.** The `worktrees` catalogue is unchanged: `remove`
+  takes no new input, and every existing status means what it meant. `removed`
+  and `failed` can now also carry `moved`, naming where the calling session went
+  when it was standing in the directory being removed.
+
+## What `remove` got instead
+
+This hook is a rescue, and a rescue is the wrong shape for the common case. A
+session that removes its own worktree used to be left pointing at a deleted
+path, so the next tool call failed on a cwd that was not there and *this* hook
+was what brought it home — a failed call and a re-issued intent to pay for a
+deletion that had already succeeded.
+
+`action: "remove"` now reads the calling session's directory and moves it to
+`main` before asking the host to delete anything. The host's removal reclaims a
+path and its row and nothing else (`packages/core/src/worktree.ts` at v2.0.21),
+so the ordering has to live here. The hook still owns what `remove` does not: a
+directory deleted behind the tool's back, or one removed while no session was in
+it, still lands the session on the next prompt.
 
 ## Modules
 
