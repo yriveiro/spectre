@@ -10,6 +10,7 @@ for each, and what is still open. It is not a log of how the design was reached.
 | [data-root.md](./data-root.md) | built | Where a skill writes when the output has to outlive the session. The path shape, the permission that covers it, and who writes there. |
 | [arena.md](./arena.md) | reserved, not built | Run the same question on several models at once. The main chat picks the best answer. |
 | [session-return.md](./session-return.md) | built, unverified live | A session whose worktree was collected moves itself back to main and is told what happened to its work. No fetch: the user updates main. |
+| [canvas.md](./canvas.md) | built | A standalone HTML page saved outside the project and opened for a human. A PR canvas is that page built from a real diff, so a reviewer can reach the hunk a claim is about. |
 
 The skill `skills/definitions/arena/` shares this file's name and is not the same
 thing. The collision, and which one gives way, is recorded once in
