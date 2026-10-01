@@ -33,9 +33,13 @@ Open a `todolist` with one entry per phase before launching anything.
    a cheap model per slice, since the work is mechanical. A race wants different
    families per arm, because two arms on one model share its blind spots and the
    race proves nothing. Name each arm's model and agent before you spawn.
-5. Give each worker its own writable path when it writes:
-   `~/.local/share/spectre/<worktree-name>/swarms/<slug>/worker-<n>/`. Workers
-   sharing one path serialize on it and the fan-out is a lie.
+5. Give each worker its own writable path, and `mkdir -p` it before the fan-out:
+   `~/.local/share/spectre/<worktree-name>/swarms/<slug>/worker-<n>/`. The brief
+   goes there as `brief.md` and the report lands beside it as `report.md`, so one
+   directory holds everything the run decided about one worker. Workers sharing
+   one path serialize on it and the fan-out is a lie. Assign the path even when
+   the deliverable is a commit rather than a file, so a run that changes the
+   repository still leaves a record a later run can read.
 
 When workers check or measure commits, each brief names the exact SHAs, and a
 measurement brief also names the method: how many samples, what one sample is,
@@ -44,13 +48,15 @@ what order. The worker records both in its result.
 ## Phase B: Fan out
 
 Spawn all N workers in one message with `background: true`, each with its agent,
-its model, and its own brief. Every brief stands alone, because a worker cannot ask you a
-question. Each one carries the goal, its scope, its exact slice or race arm, how
-to verify, and what to report back.
+its model, and the path to its own `brief.md`. Every brief stands alone, because a
+worker cannot ask you a question. Each one carries the goal, its scope, its exact
+slice or race arm, its own output path, how to verify, and what to report back.
 
 Reports come back as `PASS`, `ISSUES` or `BLOCKED`, with the evidence attached. A
 worker that can prove a defect reports `ISSUES` and lists every issue it proved,
-not only the first one it found.
+not only the first one it found. The report goes in the worker's path as well as
+in the reply, because a result that exists only in this conversation is gone when
+the session ends.
 
 If a worker drops out, carry on with N-1 and name it. Do not quietly report a
 smaller swarm than the one you said you would run.
@@ -64,7 +70,8 @@ result. Drop it and rerun that worker once. If it misses again, record a gap, an
 a gap is not a pass.
 
 For coverage, every slice you promised needs a result. Missing one means the
-coverage claim is wrong, not that the slice was fine.
+coverage claim is wrong, not that the slice was fine. A worker whose path is empty
+is that same gap: it reported into the conversation and left nothing to read.
 
 For a race, apply the rule you declared in Phase A. Do not re-rank because you
 like a different answer.
