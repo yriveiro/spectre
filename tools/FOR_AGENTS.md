@@ -58,7 +58,7 @@ away with it.
 
 ## How `options` becomes a call path
 
-Read at tag `v2.0.20`, not inferred. A tool added through
+Read at tag `v2.0.21`, not inferred. A tool added through
 `ctx.tool.transform` lands in the **same** registry as the builtins. There is no
 separate plugin path, and the three fields in `Tool.Options` decide where it
 surfaces:
@@ -83,7 +83,7 @@ Two filters, and both are about the **caller**, not the tool:
 Wholly disabled means one shape and no other. `whollyDisabled` at
 `packages/core/src/tool.ts` is three lines: take the last rule matching the
 action, and drop the tool only when that rule is `{resource: "*", effect:
-"deny"}`. Re-read at tag `v2.0.20`, so this paragraph and the filter definition
+"deny"}`. Re-read at tag `v2.0.21`, so this paragraph and the filter definition
 above are current; the schema table further up is still measured at 2.0.18 and
 has not been re-run.
 

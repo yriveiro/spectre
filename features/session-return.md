@@ -19,7 +19,7 @@ otherwise advances the trunk. The feature reports the distance and says so.
 
 ## Mechanism
 
-Four properties of OpenCode 2.0.20 decide the shape. All read at the tag;
+Four properties of OpenCode 2.0.21 decide the shape. All read at the tag;
 sources in the appendix.
 
 1. **A plugin cannot enumerate sessions.** `ctx.session` is a `Pick` over
@@ -211,7 +211,7 @@ read as a fact about the repository.
 
 ## Appendix: sources
 
-Read at tag `v2.0.20`. A path that does not exist at that tag is not evidence
+Read at tag `v2.0.21`. A path that does not exist at that tag is not evidence
 for anything in this file; the rule for reading the source is in `AGENTS.md`.
 
 | Claim | Where, at the tag |

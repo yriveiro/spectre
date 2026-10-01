@@ -9,7 +9,7 @@ type Agent = { id: string; permissions: Rule[] } & Record<string, unknown>;
 const HOME = Bun.env.HOME ?? Bun.env.USERPROFILE ?? "";
 const ROOT = `${HOME}/.local/share/spectre`;
 
-/** Mirrors `Agent.State`'s editor at v2.0.20: `get(id) ?? fresh`, then the mutation runs. */
+/** Mirrors `Agent.State`'s editor at v2.0.21: `get(id) ?? fresh`, then the mutation runs. */
 const register = async (): Promise<Map<string, Agent>> => {
   const agents = new Map<string, Agent>();
   const ctx = {

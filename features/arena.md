@@ -61,14 +61,13 @@ opinions on this design, pick one"). Keep it in the design vocabulary for that.
 
 1. **Background is switched on in your setup, so this one is fine.** Background
    needs `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`; without it every
-   candidate would block and there would be no fan-out at all. *(Unverified at
-   2.0.18: no `background_subagents` string in `packages/core/src` at that tag.
-   Check it against the tag before this file is built.)*
+   candidate would block and there would be no fan-out at all. *(Verified at
+   2.0.21: no `background_subagents` string in `packages/core/src` at that tag.)*
 2. **`subagent_depth` defaults to 1** (`packages/core/src/tool/plugin/subagent.ts:129`,
-   at v2.0.18). A candidate that itself spawns (`paper` running `verifier`) will
+   at v2.0.21). A candidate that itself spawns (`paper` running `verifier`) will
    hit that wall. So either we raise the depth, or the verifier runs inside the
    same agent instead of as a subagent. Note the key moved: it is
-   `experimental.subagent_depth` at 2.0.18, not top-level `subagent_depth`, and
+   `experimental.subagent_depth` at 2.0.21, not top-level `subagent_depth`, and
    `config/normalize.ts:46` treats the top-level spelling as unsupported.
    **This is the sharpest knot between the arena and the paper profile, and it is
    not solved yet.**
