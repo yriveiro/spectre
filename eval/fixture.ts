@@ -348,6 +348,32 @@ export const heldOut: ReadonlyArray<Row> = [
     label: "principle-evidence",
     provenance: "judged",
   },
+  {
+    prompt: "draw me a page that shows what that endpoint returns",
+    label: "canvas",
+    provenance: "judged",
+  },
+  {
+    prompt: "make me something I can actually open and click through",
+    label: "canvas",
+    provenance: "judged",
+  },
+  {
+    prompt: "can you show me what the login flow would look like as an app",
+    label: "canvas",
+    provenance: "judged",
+  },
+  { prompt: "review PR 42 visually", label: "pr-canvas", provenance: "judged" },
+  {
+    prompt: "I just opened a PR, walk me through the diff in a page",
+    label: "pr-canvas",
+    provenance: "judged",
+  },
+  {
+    prompt: "build me a page from the diff between main and my branch",
+    label: "pr-canvas",
+    provenance: "judged",
+  },
   { prompt: "add a dark mode toggle to the header", label: "none", provenance: "neg" },
   { prompt: "why does this page render twice", label: "none", provenance: "neg" },
   { prompt: "change the port to 4000", label: "none", provenance: "neg" },

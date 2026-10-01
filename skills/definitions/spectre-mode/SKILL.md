@@ -143,6 +143,8 @@ skipped and why.
 | Nobody has measured a claim about the code and you are about to report it | `ripwire` |
 | You are about to type a `//` or a `/**` | the comment disposition, above |
 | What you wrote has comments or lint suppressions | `no-comments` |
+| The reader asks for a page that shows something, a visual artifact, or an idea presented as a UI they can open | `canvas` |
+| The reader asks to review a pull request visually, or to see a diff as a page they can open | `pr-canvas` |
 
 Two of these fire far more often than they get loaded, and both are cheap:
 

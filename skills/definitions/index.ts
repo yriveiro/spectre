@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { arena } from "./arena";
 import { bro } from "./bro";
+import { canvas } from "./canvas";
 import { type Definition } from "./definition";
 import { iHaveAdhd } from "./i-have-adhd";
 import { modelRouter } from "./model-router";
@@ -47,6 +48,7 @@ import { teach } from "./teach";
 import { technicalWriting } from "./technical-writing";
 import { typescriptBestPractices } from "./typescript-best-practices";
 import { playbook } from "./playbook";
+import { prCanvas } from "./pr-canvas";
 import { playbookAuthoringASkill } from "./playbook-authoring-a-skill";
 import { playbookAutonomousRun } from "./playbook-autonomous-run";
 import { playbookAutopilotFull } from "./playbook-autopilot-full";
@@ -114,8 +116,10 @@ const definitions: ReadonlyArray<Definition> = [
   playbookShipping,
   playbookTraceForensics,
   playbookVisualParity,
+  prCanvas,
   arena,
   bro,
+  canvas,
   iHaveAdhd,
   modelRouter,
   noComments,
@@ -164,6 +168,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "automate-me",
   "blast-radius",
   "bro",
+  "canvas",
   "create-verification-skill",
   "figure-it-out",
   "how",
@@ -192,6 +197,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "playbook-shipping",
   "playbook-trace-forensics",
   "playbook-visual-parity",
+  "pr-canvas",
   "ripwire",
   "show-me-your-work",
   "spectre-mode",

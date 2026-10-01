@@ -11,7 +11,7 @@ import { load } from "../../skills/definitions/index";
  * so a substring check would report the mutating tool reachable off the back of
  * a read-only mention — a test that cannot fail.
  */
-const TOOLS = ["comments", "history", "routing", "stack", "worktrees"];
+const TOOLS = ["canvas", "comments", "history", "routing", "stack", "worktrees"];
 
 describe("every registered tool is reachable from some skill", () => {
   test("a name a leaf never mentions is a name no agent will find", async () => {
@@ -30,6 +30,7 @@ describe("every registered tool is reachable from some skill", () => {
     // tool added without it lands at `tools.<name>` and looks fine everywhere.
     const ctx = { location: { project: { id: "p", directory: "/d", canonical: "/d" } } } as never;
     const registered = [
+      (await import("../../tools/definitions/canvas")).canvases(ctx),
       (await import("../../tools/definitions/comments")).comments(ctx),
       (await import("../../tools/definitions/history")).historyTool(ctx),
       (await import("../../tools/definitions/routing")).routing(ctx),
@@ -38,6 +39,7 @@ describe("every registered tool is reachable from some skill", () => {
     ];
 
     expect(registered.map((tool) => tool.options?.namespace)).toEqual([
+      "spectre",
       "spectre",
       "spectre",
       "spectre",
