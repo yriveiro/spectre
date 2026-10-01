@@ -60,7 +60,7 @@ reproducible and are not quoted here. Re-measure before quoting any diff count.
 
 ## Mechanism
 
-Four properties of spectre decide the shape. All read at `v2.0.20`; sources in
+Four properties of spectre decide the shape. All read at `v2.0.21`; sources in
 the appendix.
 
 1. **A spectre agent can load a second skill.** `packages/core/src/tool/plugin/skill.ts`
@@ -76,7 +76,7 @@ the appendix.
    and the grant in `agents/index.ts` covers `${dataRoot}/*` only. A
    `references/pr-canvas-template.md` would need a `read` grant for the install
    cache. **The template is merged into the `pr-canvas` body.** Independently: all
-   75 definition folders under `skills/definitions/` are exactly `index.ts` +
+   76 definition folders under `skills/definitions/` are exactly `index.ts` +
    `SKILL.md`, `definition.ts` aside, so a third file would be the first of its
    kind.
 3. **One tool for a read and a write.** `options.permission` decides only whether
@@ -431,17 +431,17 @@ than a coincidence of two wrong counts.
 
 ## Appendix: sources
 
-Read at tag `v2.0.20`. A path that does not resolve at the tag is not evidence for
+Read at tag `v2.0.21`. A path that does not resolve at the tag is not evidence for
 anything here; `AGENTS.md` holds the rule.
 
 | Claim | Where, at the tag |
 | ----- | ----------------- |
-| `skill` is a host builtin, `codemode: false` | `packages/core/src/tool/plugin/skill.ts:33` |
-| its permission is on the skill id, not a path | `packages/core/src/tool/plugin/skill.ts:49-51` |
+| `skill` is a host builtin, `codemode: false` | `packages/core/src/tool/plugin/skill.ts:33-42` |
+| its permission is on the skill id, not a path | `packages/core/src/tool/plugin/skill.ts:51-53` |
 | a skill body comes from the in-memory registry | `packages/core/src/skill.ts:100-104` |
-| `prepare` lists sibling files via `fs.scan` | `packages/core/src/skill.ts:50-58` |
+| `prepare` lists sibling files via `fs.scan` | `packages/core/src/skill.ts:55-60` |
 | skills reach the model as `<skill_content>` blocks | `packages/core/src/skill.ts:29-42` |
-| `permission` is consulted for offer, not at run time | `tools/FOR_AGENTS.md:94-106`, read at `packages/core/src/tool.ts` |
+| `permission` is consulted for offer, not at run time | `tools/FOR_AGENTS.md:90-106`, read at `packages/core/src/tool.ts` |
 
 Probed on this machine: `start` is absent on darwin; `Bun.randomUUIDv7`, `Bun.Glob`
 and `Bun.which` are functions; `~/.local/share/spectre/main/` is what the

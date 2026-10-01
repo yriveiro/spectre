@@ -18,8 +18,8 @@ The two motivating cases:
 
 ## Mechanism
 
-Three properties of OpenCode 2.0.18 make this possible without intercepting
-anything. All three verified at tag `v2.0.18`; sources in the appendix.
+Three properties of OpenCode 2.0.21 make this possible without intercepting
+anything. All three verified at tag `v2.0.21`; sources in the appendix.
 
 1. **The subagent tool takes a model per call.** `agent`, `description`, `prompt`,
    `model`, `sessionID`, `background`. `model` is optional and written as
@@ -355,7 +355,7 @@ paragraph in a prompt.
 
 ## Appendix: sources
 
-Read at tag `v2.0.18`. A path that does not exist at that tag is not evidence for
+Read at tag `v2.0.21`. A path that does not exist at that tag is not evidence for
 anything in this file; the rule for reading the source is in `AGENTS.md`.
 
 | Claim | Where, at the tag |
@@ -366,16 +366,16 @@ anything in this file; the rule for reading the source is in `AGENTS.md`.
 | the subagent tool validates the model ref itself | `packages/core/src/tool/plugin/subagent.ts:77-80` |
 | a bad model string fails loudly | `packages/core/src/tool/plugin/subagent.ts:86-95` |
 | subagent depth limit and its key | `packages/core/src/tool/plugin/subagent.ts:129` |
-| model re-read per step | `packages/core/src/session/runner/llm.ts:178`, `:187`, `:197` |
+| model re-read per step | `packages/core/src/session/runner/llm.ts:206`, `:215-216` |
 | `switchModel` writes the record | `packages/core/src/session/session.ts:97-110` |
 | `Model.Ref.parse` and its brands | `packages/schema/src/model.ts:20-49` |
 | `Model.Info.variants` | `packages/schema/src/model.ts:130` |
-| the catalogue reaches a plugin as `ctx.model` | `packages/plugin/src/effect/model.ts:25-27`, `packages/client/src/effect/api/api.ts:1503-1505` |
+| the catalogue reaches a plugin as `ctx.model` | `packages/plugin/src/effect/model.ts:25-27`, `packages/client/src/effect/api/api.ts:1524-1526` |
 | resolution failures and their wording | `packages/core/src/model-resolver.ts:24`, `packages/core/src/generate.ts:60` |
 | an agent's model is stored unresolved | `packages/core/src/config/plugin/agent.ts:105-109` |
 | `Config.Agent.Info` carries `model` and `description` | `packages/schema/src/config/agent.ts:12-16` |
 | `ConfigModel.Selection` decodes a ref string | `packages/schema/src/config/model.ts:12-31` |
-| global config dir precedence | `packages/core/src/config/global.ts:79`, `global-roots.ts:8` |
+| global config dir precedence | `packages/util/src/global.ts:79`, `packages/util/src/global-roots.ts:7`, `:15` |
 | a duplicate plugin id is marked failed, not refused | `packages/core/src/plugin/supervisor.ts:105-110` |
 
 A plugin has **no** `ctx.config`. The config plugins in `packages/core/src/config/plugin/`
