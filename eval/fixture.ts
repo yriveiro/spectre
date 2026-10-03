@@ -3,8 +3,12 @@ export type Provenance = "judged" | "desc" | "neg";
 export type Row = { prompt: string; label: string; provenance: Provenance };
 
 export const tuned: ReadonlyArray<Row> = [
-  { prompt: "summarize what you just changed", label: "i-have-adhd", provenance: "judged" },
-  { prompt: "reply with just the answer, no preamble", label: "i-have-adhd", provenance: "judged" },
+  { prompt: "summarize what you just changed", label: "communication", provenance: "judged" },
+  {
+    prompt: "reply with just the answer, no preamble",
+    label: "communication",
+    provenance: "judged",
+  },
   {
     prompt: "should I use a map or a lookup table here",
     label: "principle-evidence,ripwire",
@@ -112,20 +116,55 @@ export const tuned: ReadonlyArray<Row> = [
     label: "ripwire",
     provenance: "judged",
   },
-  { prompt: "strip the comments from this diff", label: "no-comments", provenance: "judged" },
+  { prompt: "strip the comments from this diff", label: "code-hygiene", provenance: "judged" },
   {
     prompt: "delete the narration in the function I just wrote",
-    label: "no-comments",
+    label: "code-hygiene",
     provenance: "judged",
   },
   {
-    prompt: "this readme reads like it was written by a chatbot",
-    label: "unslop",
+    prompt: "this doc says utilize and leverage everywhere, it reads like marketing",
+    label: "grammar",
     provenance: "judged",
   },
   {
-    prompt: "tighten this paragraph, it has a lot of filler",
-    label: "unslop",
+    prompt: "the user is called the customer in one paragraph and the client in the next",
+    label: "grammar",
+    provenance: "judged",
+  },
+  {
+    prompt: "i had to read this sentence three times to work out who is validating what",
+    label: "grammar",
+    provenance: "judged",
+  },
+  {
+    prompt: "this sentence runs on for half a page",
+    label: "grammar",
+    provenance: "judged",
+  },
+  {
+    prompt: "every heading in this doc is just a noun",
+    label: "grammar",
+    provenance: "judged",
+  },
+  {
+    prompt: "the refactor is done, tell me what to do next",
+    label: "communication",
+    provenance: "judged",
+  },
+  {
+    prompt: "i do not understand what you want me to change, ask me one question",
+    label: "communication",
+    provenance: "judged",
+  },
+  {
+    prompt: "the build is red and i cannot tell which of these two causes it",
+    label: "communication",
+    provenance: "judged",
+  },
+  {
+    prompt: "give me the three ways we could do this and pick one",
+    label: "communication",
     provenance: "judged",
   },
   { prompt: "say that again, i did not follow", label: "none", provenance: "neg" },
@@ -336,7 +375,7 @@ export const heldOut: ReadonlyArray<Row> = [
     provenance: "judged",
   },
   { prompt: "is the parser branch covered by any test", label: "ripwire", provenance: "judged" },
-  { prompt: "get rid of the comments you just added", label: "no-comments", provenance: "judged" },
+  { prompt: "get rid of the comments you just added", label: "code-hygiene", provenance: "judged" },
   {
     prompt: "use a cheaper model for the file reading part",
     label: "model-router",

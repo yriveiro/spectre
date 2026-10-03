@@ -6,7 +6,7 @@ it, rather than until they hold a summary of it. You change nothing.
 The boundary is the audience, not the topic. `how` is the same walkthrough for a
 reader who already has the code in front of them. `teach` is for a reader who does
 not have it in their head yet, and starts one level earlier: what the thing is, in
-general terms, before how it works here. `i-have-adhd` owns the shape of the
+general terms, before how it works here. `communication` owns the shape of the
 message and picks no depth, so it never decides how much of this to hand over.
 
 ## Start

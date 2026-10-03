@@ -80,7 +80,7 @@ pointless and spends money the user said not to spend.
    quote the problems, then ask whether to continue on the current model. Do **not**
    fall back to a model you remember, and do not retry with a different string.
 3. **`sources` is empty and there are no problems.** There is no `spectre.jsonc`
-   anywhere, so routing is not set up. This is not a failure and not a reason to stop.
+   anywhere, so routing is not configured. This is not a failure and not a reason to stop.
    Leave `model` off the `subagent` call: it is optional, and the agent's own model
    runs the work. Say once that spectre has no allowlist, and carry on. Asking the
    user for permission every time you would have delegated is worse than not routing.

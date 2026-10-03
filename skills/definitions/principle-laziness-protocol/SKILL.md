@@ -157,7 +157,7 @@ is the honest report of what the change cost.
   bug reachable is not a small fix, it is an unmerged one.
 - **Not "fewer lines beats clearer ones".** A shape that is compact and
   incomprehensible saves a line and spends the reader's whole afternoon. Decodable
-  beats short, and that brake is `i-have-adhd`'s to apply.
+  beats short, and that brake is `communication`'s to apply.
 - **Not a number.** Reader load is not a score, but it is countable:
   `ripwire --context-ratio` reports the hops a reader must cross and how much of
   the knowledge sits outside the file they are in, and `--nonlocal-state` reports

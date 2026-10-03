@@ -95,7 +95,7 @@ Close with the part that saves the reader the work: what this answer changes.
 Leave it alone, run a phase in another playbook, delete something, or decide
 something. One line.
 
-Then run the reply past `unslop` and cut what would survive unchanged in another
+Then run the reply past `grammar` and cut what would survive unchanged in another
 project's documentation.
 
 ## Outputs

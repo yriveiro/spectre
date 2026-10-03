@@ -2,10 +2,11 @@ import { Effect } from "effect";
 import { arena } from "./arena";
 import { bro } from "./bro";
 import { canvas } from "./canvas";
+import { codeHygiene } from "./code-hygiene";
+import { communication } from "./communication";
 import { type Definition } from "./definition";
-import { iHaveAdhd } from "./i-have-adhd";
+import { grammar } from "./grammar";
 import { modelRouter } from "./model-router";
-import { noComments } from "./no-comments";
 import { principleBoundaryDiscipline } from "./principle-boundary-discipline";
 import { principleEvidence } from "./principle-evidence";
 import { principleHygiene } from "./principle-hygiene";
@@ -73,7 +74,6 @@ import { playbookTraceForensics } from "./playbook-trace-forensics";
 import { playbookVisualParity } from "./playbook-visual-parity";
 import { ripwire } from "./ripwire";
 import { swarm } from "./swarm";
-import { unslop } from "./unslop";
 import { why } from "./why";
 import { worktreeCleanup } from "./worktree-cleanup";
 
@@ -120,9 +120,10 @@ const definitions: ReadonlyArray<Definition> = [
   arena,
   bro,
   canvas,
-  iHaveAdhd,
+  codeHygiene,
+  communication,
+  grammar,
   modelRouter,
-  noComments,
   principleBoundaryDiscipline,
   principleEvidence,
   principleHygiene,
@@ -153,7 +154,6 @@ const definitions: ReadonlyArray<Definition> = [
   principleGuardTheContextWindow,
   ripwire,
   swarm,
-  unslop,
 ];
 
 /**
@@ -169,6 +169,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "blast-radius",
   "bro",
   "canvas",
+  "communication",
   "create-verification-skill",
   "figure-it-out",
   "how",

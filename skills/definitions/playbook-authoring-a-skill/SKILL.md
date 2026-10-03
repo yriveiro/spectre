@@ -11,7 +11,7 @@ the file. A skill is a decision somebody does not have to make again.
 3. Place the reason
 4. Point at structure
 5. Check
-6. Hand off
+6. Hand the leaf over
 
 ## Phase A: Fix the shape
 
@@ -58,7 +58,7 @@ Then check it by asking whether a real prompt's words appear in it. If they do
 not, the description is about the wrong thing.
 
 One word for each action, keep the articles, and avoid an `-ing` form where a
-plain verb does the work. `unslop` is the pass for all of this and it is not
+plain verb does the work. `grammar` is the pass for all of this and it is not
 optional on a leaf.
 
 ## Phase D: Point at structure
@@ -97,7 +97,7 @@ first phase; a principle about prose does not.
 Do not run the typecheck or the tests as part of authoring. They are the change
 that opened the pull request's job, not this one's.
 
-## Phase F: Hand off
+## Phase F: Hand the leaf over
 
 Open the pull request through `playbook-opening-a-pr`: small commits, a
 Conventional Commit title, a body that says what the leaf now claims and what it

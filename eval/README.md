@@ -61,7 +61,7 @@ tests beside them. A harness whose scoring is untested is the failure
 
 ## What is measured
 
-The activation, not the prose. A model saying "I would load no-comments" stated
+The activation, not the prose. A model saying "I would load code-hygiene" stated
 a preference; a model that loaded it did the thing OpenCode routes on. `observe.ts`
 grades four kinds of evidence and the table prints one column each, as
 `skill/tool/text/silent`:

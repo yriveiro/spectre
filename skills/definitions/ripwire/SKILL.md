@@ -45,10 +45,9 @@ Keyed on the test, not the name. The test is the falsifiable half.
 | `principle-test-behavior-not-implementation` | would this test pass if every import returned undefined | `--test-gate` names the tests; the mutation itself has no verb here. `--seams` gives the complement, which is the test that should exist and does not. |
 | `principle-outcome-oriented-execution` | is the named end reached, and did a check at the boundary | none. Whether a declared end was reached is a fact about a plan and a diff, not about a graph. The reachability half has an instrument: `--callers` on what the end says should be gone, and `--test-gate` for the check the boundary was supposed to run. Whether the plan still means anything is a person reading it. |
 | `principle-make-operations-idempotent` | does the second run converge to the same end state | none. Convergence is a property of a run, not of a graph. The reachability half has a floor with `--exercises=FILE`; whether the second run agrees with the first has no oracle here. The check is running the thing twice, and crashing it on purpose. |
-| `no-comments` | does the comment say what the name does not | `--comment-coherence` |
+| `code-hygiene` | does the comment say what the name does not | `--comment-coherence` |
 | `principle-guard-the-context-window` | what did this cost | `--token-budget` `--pack-top-n` |
-| `i-have-adhd` | does the first line name an action, and is anything left open | none. Whether a message lands is a person reading it. `unslop` is the half that is greppable. |
-| `unslop` | would this sentence read the same in another project | none. Rules 13 and 3 are greppable, and a grep for a dash and a grep for an -ing clause cover them. Rule 27 has a mechanical check too: try the sentence in another project's docs. The rest are a person reading it. |
+| `grammar` | does the sentence name one actor, and is this the plainest word | `tools.spectre.prose` on the body: semicolon, phrasal verb, nominalization, marketing adjective, long sentence, passive voice. Four are hard and two advisory, so a clean run is not a clean sentence. The present perfect is advisory because it can carry a hedge the simple past cannot. Whether a sentence lands, whether a word sounds bigger than the fact, and whether a heading says what is under it are a person reading the page. |
 | `model-router` | none | none. The allowlist in `spectre.jsonc` is the check. |
 | `principle-attack-the-premise` | do not start the next fix before the premise is written down and the failures counted | none. The count spans sessions and no verb reads it. What a verb does give is the premise's blast radius: `--callers` on the symbol every failed fix touched, which is how you notice the fixes were all in one place. |
 | `principle-build-the-lever` | did the diff contain the codemod, script, generator, or delegate the work needed | none. Whether a lever was built is a fact about a diff, not a graph. `--map-diff` names the files the change spread across, which is the thing a lever exists to prevent. A floor, not the test. |
@@ -133,7 +132,7 @@ you delete anything.
 assumed: `ripwire . --doc-drift` on this repository reported 26 failed anchors,
 and every one of them was an example. `features/model-routing.md` cites
 `packages/core/src/tool/plugin/subagent.ts` at five line numbers, and those are
-OpenCode's source paths, not this repo's. `i-have-adhd/SKILL.md` cites
+OpenCode's source paths, not this repo's. `communication/SKILL.md` cites
 `src/auth.ts:42`, which is the Bad example inside a prose rule. The verb reads a
 path in backticks and looks for it here, so a doc quoting another project, or
 showing a path inside an example, comes back as rot. Open a hit before you act on

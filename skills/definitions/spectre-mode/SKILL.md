@@ -6,7 +6,7 @@ Spectre mode is a disposition, not a formatting specification: ultra focus, asse
 
 Short is not the goal. Decodable is. A message the reader has to read twice is a
 failure even when it is brief, and removing words does not fix it. When brevity
-and clarity disagree, clarity wins. `unslop` rule 28 is the full rule.
+and clarity disagree, clarity wins. `communication` rule 28 is the full rule: keep the reader's budget and cut the padding.
 
 It is also the index. Everything Spectre mode actually consists of lives in a
 leaf skill, and this file tells you which one to load and when. Read the index
@@ -69,7 +69,8 @@ from: a legal or license header, behavior forced from outside this repo, a
 constraint. Judge it against that list as you type. A clause you cannot name is
 not a keep.
 
-`no-comments` is the review pass, not the rule. The trigger below loads it.
+`code-hygiene` is the review pass, not the rule. The trigger below loads it. It runs
+`sicko` to judge comments in code and is not about prose in a document.
 
 ## Two things about this set
 
@@ -105,11 +106,14 @@ skipped and why.
 
 | When this is true | Load |
 | ----------------- | ---- |
-| You are about to write anything for a person to read | `i-have-adhd` |
-| The answer is right and the response is too long, too padded, or shaped wrong | `i-have-adhd` |
-| The reader asks for just the answer, no preamble, or a summary | `i-have-adhd` |
-| The words are right and the sentence still has a tell in it | `unslop` |
-| You are writing a commit message, a code comment, or a doc where the wording carries the meaning | `unslop` |
+| You are about to write anything for a person to read | `communication` |
+| The answer is right and the response is too long, too padded, or shaped wrong | `communication` |
+| The reader asks for just the answer, no preamble, or a summary | `communication` |
+| The work is done and you have to report it, or blocked and you need one answer | `communication` |
+| The words are right and the sentence still has a tell in it | `grammar` |
+| One sentence is hard to parse, too long, or names no actor | `grammar` |
+| You are writing a file a reader navigates rather than reads once | `grammar` |
+| You are writing a commit message, a code comment, or a doc where the wording carries the meaning | `grammar` |
 | You are about to send a response holding items the reader never saw resolved | `principle-laziness-protocol` |
 | You are about to state a fact you have not read at its source | `principle-evidence` |
 | You are choosing between two ways to build something | `principle-evidence` |
@@ -142,7 +146,7 @@ skipped and why.
 | An assertion restates a constant, a prompt string, or a value from the code under test | `principle-test-behavior-not-implementation` |
 | Nobody has measured a claim about the code and you are about to report it | `ripwire` |
 | You are about to type a `//` or a `/**` | the comment disposition, above |
-| What you wrote has comments or lint suppressions | `no-comments` |
+| What you wrote has comments or lint suppressions | `code-hygiene` |
 | The reader asks for a page that shows something, a visual artifact, or an idea presented as a UI they can open | `canvas` |
 | The reader asks to review a pull request visually, or to see a diff as a page they can open | `pr-canvas` |
 
@@ -167,21 +171,21 @@ A principle holds one claim and has no phases. A whole task whose order matters 
 here, because this file is the binding constraint on the set and a row per
 procedure is what would break it.
 
-- `i-have-adhd`. Shapes the message: lead with the next action, number multi-step
-  work, restate state, suppress tangents, make wins visible, and say "I do not
-  understand" instead of guessing. Load it before writing anything for the reader.
-  Every rule states a test, and the numbers are stable ids other skills cite, so
-  renumbering one breaks a reference. The words inside a sentence are
-  `unslop`, and the pre-send check is how you run both.
-- `unslop`. Cuts the tells out of writing so the reader spends nothing on decoding.
-  Load it before sending anything a person will read, and when a commit message, a
-  code comment, a doc, or a report carries meaning in its wording. Each rule has a
-  check: a dash, an -ing clause at the end of a sentence, an adjective with no fact
-  behind it, three items where the content has two, a colon doing a sentence's job,
-  a bold label restating the line after it, an attribution with no name. The
-  sharpest is rule 27: if the sentence could appear unchanged in another project's
-  docs, it says nothing about this one, so cut it. Say what the thing does, not how
-  it feels. Grep for the two mechanical ones, read the rest.
+- `communication`. The channel to the person reading, and the eleven rules of message
+  shape. Load it before writing anything for the reader, and when the work is done,
+  stuck, or waiting on the reader. Lead with the next action, number multi-step work,
+  restate state, suppress tangents, make wins visible, name the cause and the fix,
+  and say "I do not understand" instead of guessing. Never for the work itself:
+  running a procedure is a playbook and settling a judgement call is a principle. The
+  numbers are stable ids other skills cite. The words inside a sentence belong to
+  `grammar`, and the pre-send check is how you run both.
+- `grammar`. The standard's rules for how the text reads, plus the tells it does not
+  cover. Load it when the writing is wrong and you cannot say which part is wrong: a
+  sentence too long or hard to parse, nobody named as the actor, a word bigger than
+  the fact, one thing going by several names, a document that is a wall of text, a
+  heading that is just a noun, or a semicolon. Holds the sentence rules, the word rules
+  and the document rules in one body, because a prompt that names one of them does not
+  say which group it is in. `tools.spectre.prose` checks the mechanical half.
 - `principle-evidence`. Get the proof instead of arguing for it. Find the thing
   that settles the question, check that your check can actually fail, and test
   more than one case. Load it before stating any fact you have not read, and
@@ -282,7 +286,7 @@ procedure is what would break it.
   and keep its summary in the main thread, never the raw payload.
 - `ripwire`. The map from a principle to the command that can falsify its test.
   Load it when a principle applies and you have not measured the code, so the
-  claim gets a run instead of an assertion. It also names the twelve leaves with no
+  claim gets a run instead of an assertion. It also names the ten leaves with no
   instrument, and the ways ripwire is wrong, which is the half that keeps the map
   from becoming deference to a tool. The principles stay generic about tools;
   this is the one file allowed to name one.
@@ -290,14 +294,14 @@ procedure is what would break it.
 ## How to work
 
 1. Read this hub.
-2. Load `i-have-adhd` before writing anything for the reader.
+2. Load `communication` before writing anything for the reader.
 3. **Name the leaf, in a line you write down.** `principle-verification: the doc
    states two line numbers I have not read.` A step you cannot fail is not a step,
    and "whatever discipline the task turns on" is unfalsifiable, which is why it
    gets skipped. If no leaf applies, write `none` and say why.
 4. When a principle would delete the answer itself, the task wins. The shape
    stays.
-5. Before sending, run the pre-send check in `i-have-adhd`. That one is about
+5. Before sending, run the pre-send check in `communication`. That one is about
    **prose**. Does this sentence land in one pass.
 6. Before sending, run the claim check, which is a different pass: re-read every
    factual sentence you just wrote and put each one in one of three boxes, **read

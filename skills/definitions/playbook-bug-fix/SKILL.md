@@ -55,7 +55,7 @@ the source says and what the state is.
 
 Drive the passes yourself, or hand the hunt to a background `subagent` with one
 written predicate per pass and have it write a note per elimination. Whichever you
-pick, a long hunt is a written trail of what was ruled out and why, not a session
+pick, a long hunt is a written trail of what was excluded and why, not a session
 of re-reading the same file.
 
 Confirm the surviving mechanism with runtime evidence before Phase C. "The code
@@ -102,5 +102,5 @@ verified it.
 ## Outputs
 
 What was broken, the root cause, the fix, and the failing-then-passing output of
-the reproduction, verbatim. Plus the hypotheses you ruled out and the evidence
+the reproduction, verbatim. Plus the hypotheses you excluded and the evidence
 that ruled them out, which is the part a reviewer cannot reconstruct.

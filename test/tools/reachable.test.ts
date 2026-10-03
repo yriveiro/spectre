@@ -11,7 +11,7 @@ import { load } from "../../skills/definitions/index";
  * so a substring check would report the mutating tool reachable off the back of
  * a read-only mention — a test that cannot fail.
  */
-const TOOLS = ["canvas", "comments", "history", "routing", "stack", "worktrees"];
+const TOOLS = ["canvas", "comments", "history", "prose", "routing", "stack", "worktrees"];
 
 describe("every registered tool is reachable from some skill", () => {
   test("a name a leaf never mentions is a name no agent will find", async () => {
@@ -33,19 +33,18 @@ describe("every registered tool is reachable from some skill", () => {
       (await import("../../tools/definitions/canvas")).canvases(ctx),
       (await import("../../tools/definitions/comments")).comments(ctx),
       (await import("../../tools/definitions/history")).historyTool(ctx),
+      (await import("../../tools/definitions/prose")).prose(ctx),
       (await import("../../tools/definitions/routing")).routing(ctx),
       (await import("../../tools/definitions/stack")).stack(ctx),
       (await import("../../tools/definitions/worktrees")).worktrees(ctx),
     ];
 
-    expect(registered.map((tool) => tool.options?.namespace)).toEqual([
-      "spectre",
-      "spectre",
-      "spectre",
-      "spectre",
-      "spectre",
-      "spectre",
-    ]);
+    // Length is checked against TOOLS, not spelled out as literals, so adding a
+    // tool cannot pass by leaving this array the length it was.
+    expect(registered.map((tool) => tool.options?.namespace)).toEqual(
+      TOOLS.map(() => "spectre"),
+    );
+    expect(registered).toHaveLength(TOOLS.length);
     expect(registered.every((tool) => tool.options?.codemode === true)).toBe(true);
   });
 });
