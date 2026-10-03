@@ -1,8 +1,12 @@
-# No comments
+# code-hygiene
 
-Spawn @sicko. Act on accepted findings.
+The hygiene pass for comments in code. Spawn @sicko. Act on accepted findings.
 
 Defer to the fresh perspective it brings. It judges the comments; you fix them.
+
+A comment in code is the record of a meaning the code failed to express, so this
+pass is about custody rather than taste. `grammar` owns the prose in a document,
+`communication` owns the shape of a reply, and neither is in scope here.
 
 Requires Code Mode. Step 1 is the check, and the audit in step 3 runs on a Code
 Mode tool that has no other surface.

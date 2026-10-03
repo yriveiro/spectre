@@ -69,7 +69,8 @@ from: a legal or license header, behavior forced from outside this repo, a
 constraint. Judge it against that list as you type. A clause you cannot name is
 not a keep.
 
-`no-comments` is the review pass, not the rule. The trigger below loads it.
+`code-hygiene` is the review pass, not the rule. The trigger below loads it. It runs
+`sicko` to judge comments in code and is not about prose in a document.
 
 ## Two things about this set
 
@@ -145,7 +146,7 @@ skipped and why.
 | An assertion restates a constant, a prompt string, or a value from the code under test | `principle-test-behavior-not-implementation` |
 | Nobody has measured a claim about the code and you are about to report it | `ripwire` |
 | You are about to type a `//` or a `/**` | the comment disposition, above |
-| What you wrote has comments or lint suppressions | `no-comments` |
+| What you wrote has comments or lint suppressions | `code-hygiene` |
 | The reader asks for a page that shows something, a visual artifact, or an idea presented as a UI they can open | `canvas` |
 | The reader asks to review a pull request visually, or to see a diff as a page they can open | `pr-canvas` |
 

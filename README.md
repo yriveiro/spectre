@@ -209,7 +209,7 @@ permissions: [{ action: "execute", resource: "*", effect: "allow" }],
 A tool registered with `codemode: true` is invisible to the model without it, so
 a skill that depends on one has to be able to assume it. This is a floor, not an
 override: session and project permission rules merge over an agent's own and the
-last match wins, so a user who denies `execute` still wins. `no-comments` is the
+last match wins, so a user who denies `execute` still wins. `code-hygiene` is the
 skill that tests the assumption. Step 1 checks for `execute` and stops with a
 message rather than falling back to `grep`.
 

@@ -3,7 +3,7 @@ import { fromText, observe, type Transcript } from "../observe";
 import { NONE } from "../score";
 import type { Message } from "../opencode";
 
-const catalogue = ["no-comments", "principle-evidence", "principle-hygiene"];
+const catalogue = ["code-hygiene", "principle-evidence", "principle-hygiene"];
 
 const text = (body: string): Message => ({
   type: "assistant",
@@ -25,17 +25,17 @@ const turn = (
 
 describe("fromText", () => {
   test("a bare id is the answer", () => {
-    expect(fromText("no-comments", catalogue)).toBe("no-comments");
+    expect(fromText("code-hygiene", catalogue)).toBe("code-hygiene");
   });
 
   test("an explained reply still scores on the id it names", () => {
-    expect(fromText("I would load no-comments, because the diff is the question.", catalogue)).toBe(
-      "no-comments",
+    expect(fromText("I would load code-hygiene, because the diff is the question.", catalogue)).toBe(
+      "code-hygiene",
     );
   });
 
   test("a catalogue id beats a stray none in the same reply", () => {
-    expect(fromText("none of these except no-comments", catalogue)).toBe("no-comments");
+    expect(fromText("none of these except code-hygiene", catalogue)).toBe("code-hygiene");
   });
 
   test("none is none when no id is named", () => {
@@ -53,18 +53,18 @@ describe("fromText", () => {
 
 describe("observe", () => {
   test("an activation is the decision, and beats any prose around it", () => {
-    const got = observe(turn([text("I will load principle-hygiene.")], ["no-comments"]), catalogue);
-    expect(got).toEqual({ got: "no-comments", via: "skill" });
+    const got = observe(turn([text("I will load principle-hygiene.")], ["code-hygiene"]), catalogue);
+    expect(got).toEqual({ got: "code-hygiene", via: "skill" });
   });
 
   test("the first activation wins when there are two", () => {
-    const got = observe(turn([], ["no-comments", "principle-hygiene"]), catalogue);
-    expect(got.got).toBe("no-comments");
+    const got = observe(turn([], ["code-hygiene", "principle-hygiene"]), catalogue);
+    expect(got.got).toBe("code-hygiene");
   });
 
   test("a skill tool call is the next best evidence", () => {
-    expect(observe(turn([tool("skill", { id: "no-comments" })]), catalogue)).toEqual({
-      got: "no-comments",
+    expect(observe(turn([tool("skill", { id: "code-hygiene" })]), catalogue)).toEqual({
+      got: "code-hygiene",
       via: "tool",
     });
   });
@@ -73,26 +73,26 @@ describe("observe", () => {
     expect(observe(turn([tool("skill", { skill: "principle-evidence" })]), catalogue).got).toBe(
       "principle-evidence",
     );
-    expect(observe(turn([tool("skills", { name: "no-comments" })]), catalogue).got).toBe(
-      "no-comments",
+    expect(observe(turn([tool("skills", { name: "code-hygiene" })]), catalogue).got).toBe(
+      "code-hygiene",
     );
   });
 
   test("another tool is not a skill decision", () => {
     expect(
-      observe(turn([tool("read", { id: "no-comments" }), text("no-comments")]), catalogue).via,
+      observe(turn([tool("read", { id: "code-hygiene" }), text("code-hygiene")]), catalogue).via,
     ).toBe("text");
   });
 
   test("a tool call with no usable input falls through to the prose", () => {
-    expect(observe(turn([tool("skill", {}), text("no-comments")]), catalogue)).toEqual({
-      got: "no-comments",
+    expect(observe(turn([tool("skill", {}), text("code-hygiene")]), catalogue)).toEqual({
+      got: "code-hygiene",
       via: "text",
     });
   });
 
   test("prose alone is reported as text, so it is never counted as an activation", () => {
-    expect(observe(turn([text("no-comments")]), catalogue).via).toBe("text");
+    expect(observe(turn([text("code-hygiene")]), catalogue).via).toBe("text");
   });
 
   test("a turn with nothing in it is silent", () => {
@@ -113,7 +113,7 @@ describe("observe", () => {
   test("reasoning parts are not mistaken for an answer", () => {
     const reasoning: Message = {
       type: "assistant",
-      content: [{ type: "reasoning", text: "no-comments seems right" }],
+      content: [{ type: "reasoning", text: "code-hygiene seems right" }],
     };
     expect(observe(turn([reasoning]), catalogue).via).toBe("silent");
   });

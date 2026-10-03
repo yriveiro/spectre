@@ -143,7 +143,7 @@ Write the title, the body and every commit message under `technical-writing`, th
 pass the result through `grammar`. Apply every technical-writing layer except
 Diátaxis. One word for each action, keep the articles, and avoid an `-ing` form
 where a plain verb does the work. Run `interrogate` over the diff before you
-commit, and `no-comments` before review.
+commit, and `code-hygiene` before review.
 
 A reviewer reads the body before the diff. Fill this in and delete what does not
 apply:
@@ -239,7 +239,7 @@ user asks for it. A babysit per new pull request stalls the build and spends
 checks on commits the next wave will restart anyway.
 
 A subagent that opens a pull request runs `interrogate`, `grammar` and
-`no-comments`, posts the URL, and returns to its parent. It does not babysit.
+`code-hygiene`, posts the URL, and returns to its parent. It does not babysit.
 
 ## Outputs
 

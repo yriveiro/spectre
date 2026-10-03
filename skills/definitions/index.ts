@@ -2,11 +2,11 @@ import { Effect } from "effect";
 import { arena } from "./arena";
 import { bro } from "./bro";
 import { canvas } from "./canvas";
+import { codeHygiene } from "./code-hygiene";
 import { communication } from "./communication";
 import { type Definition } from "./definition";
 import { grammar } from "./grammar";
 import { modelRouter } from "./model-router";
-import { noComments } from "./no-comments";
 import { principleBoundaryDiscipline } from "./principle-boundary-discipline";
 import { principleEvidence } from "./principle-evidence";
 import { principleHygiene } from "./principle-hygiene";
@@ -120,10 +120,10 @@ const definitions: ReadonlyArray<Definition> = [
   arena,
   bro,
   canvas,
+  codeHygiene,
   communication,
   grammar,
   modelRouter,
-  noComments,
   principleBoundaryDiscipline,
   principleEvidence,
   principleHygiene,

@@ -4,7 +4,7 @@ Read this before writing a leaf: which of three shapes you are writing, the
 template, the measurements behind it, and what a leaf owes the map and the hub.
 
 A **leaf** is a skill this set routes to: 31 of the 76 definitions. 27 are
-`principle-*`, and the other 4 are `grammar`, `communication`, `no-comments` and
+`principle-*`, and the other 4 are `grammar`, `communication`, `code-hygiene` and
 `model-router`. The remaining 46 ids are in the `notALeaf` set in
 `skills/definitions/index.ts` — the hub, the map, 23 `playbook-*`, and 18 more
 procedures — and they are registered and read on demand, carrying no row.
@@ -15,7 +15,7 @@ Three shapes, and picking wrong is the mistake that costs the most:
 
 - **A principle** states a test and a moment you load it on. The template below
   is theirs.
-- **A procedure** runs steps or phases. `no-comments` has one `Steps` section and
+- **A procedure** runs steps or phases. `code-hygiene` has one `Steps` section and
   nothing else; `why` and `blast-radius` run `Start` / `Phase A` … `Outputs`. A
   moves list that is really a step list is the tell.
 - **A compact port** can have no sections at all, as
