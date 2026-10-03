@@ -4,7 +4,11 @@ export type Row = { prompt: string; label: string; provenance: Provenance };
 
 export const tuned: ReadonlyArray<Row> = [
   { prompt: "summarize what you just changed", label: "communication", provenance: "judged" },
-  { prompt: "reply with just the answer, no preamble", label: "communication", provenance: "judged" },
+  {
+    prompt: "reply with just the answer, no preamble",
+    label: "communication",
+    provenance: "judged",
+  },
   {
     prompt: "should I use a map or a lookup table here",
     label: "principle-evidence,ripwire",

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { fromText, observe, type Transcript } from "../observe";
-import { NONE } from "../score";
 import type { Message } from "../opencode";
+import { NONE } from "../score";
 
 const catalogue = ["code-hygiene", "principle-evidence", "principle-hygiene"];
 
@@ -29,9 +29,9 @@ describe("fromText", () => {
   });
 
   test("an explained reply still scores on the id it names", () => {
-    expect(fromText("I would load code-hygiene, because the diff is the question.", catalogue)).toBe(
-      "code-hygiene",
-    );
+    expect(
+      fromText("I would load code-hygiene, because the diff is the question.", catalogue),
+    ).toBe("code-hygiene");
   });
 
   test("a catalogue id beats a stray none in the same reply", () => {
@@ -53,7 +53,10 @@ describe("fromText", () => {
 
 describe("observe", () => {
   test("an activation is the decision, and beats any prose around it", () => {
-    const got = observe(turn([text("I will load principle-hygiene.")], ["code-hygiene"]), catalogue);
+    const got = observe(
+      turn([text("I will load principle-hygiene.")], ["code-hygiene"]),
+      catalogue,
+    );
     expect(got).toEqual({ got: "code-hygiene", via: "skill" });
   });
 
