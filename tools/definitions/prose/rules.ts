@@ -33,31 +33,36 @@ const RULES: ReadonlyArray<Spec> = [
   {
     rule: "phrasal-verb",
     level: "hard",
-    pattern: /\b(?:spin(?:ning|s)? up|spun up|reach(?:ing|es|ed)? out|div(?:e|es|ing|ed) into|dove into|kick(?:ing|s|ed)? off|circl(?:e|es|ing) back|touch(?:ing|es)? base|hand(?:ing|ed)? off|rule[ds]? out|look(?:ing|s|ed)? into|set up)\b/i,
+    pattern:
+      /\b(?:spin(?:ning|s)? up|spun up|reach(?:ing|es|ed)? out|div(?:e|es|ing|ed) into|dove into|kick(?:ing|s|ed)? off|circl(?:e|es|ing) back|touch(?:ing|es)? base|hand(?:ing|ed)? off|rule[ds]? out|look(?:ing|s|ed)? into|set up)\b/i,
     why: "STE 9.3. A verb plus a preposition has a meaning the parts do not predict. Use the single plain verb.",
   },
   {
     rule: "nominalization",
     level: "hard",
-    pattern: /\b(?:perform|performs|performed|conduct|conducts|conducted|carry out|carries out|carried out|provide assistance to|gives? an indication of)\s+(?:a|an|the)\s+\w+(?:tion|sion|ment|ance|ence|ysis)\b/i,
+    pattern:
+      /\b(?:perform|performs|performed|conduct|conducts|conducted|carry out|carries out|carried out|provide assistance to|gives? an indication of)\s+(?:a|an|the)\s+\w+(?:tion|sion|ment|ance|ence|ysis)\b/i,
     why: "STE 3.7. Use the verb that names the action, not a noun built from it.",
   },
   {
     rule: "marketing-adjective",
     level: "hard",
-    pattern: /\b(?:seamless(?:ly)?|robust(?:ly)?|cutting-edge|effortless(?:ly)?|blazing[- ]fast|world-class|state-of-the-art|game-chang(?:ing|er)|best-in-class)\b/i,
+    pattern:
+      /\b(?:seamless(?:ly)?|robust(?:ly)?|cutting-edge|effortless(?:ly)?|blazing[- ]fast|world-class|state-of-the-art|game-chang(?:ing|er)|best-in-class)\b/i,
     why: "Claiming quality instead of showing it. Delete it, or replace it with the measurement that earns the claim.",
   },
   {
     rule: "passive-voice",
     level: "advisory",
-    pattern: /\b(?:is|are|was|were|been|being)\s+(\w+ed|given|taken|made|done|found|seen|known|shown|written|built|sent|set|run|read|kept|held|left|put)\b/i,
+    pattern:
+      /\b(?:is|are|was|were|been|being)\s+(\w+ed|given|taken|made|done|found|seen|known|shown|written|built|sent|set|run|read|kept|held|left|put)\b/i,
     why: "STE 3.6. Name the actor. Passive is correct when the actor is unknown or irrelevant.",
   },
   {
     rule: "present-perfect",
     level: "advisory",
-    pattern: /\b(?:has|have|had)\s+(?:been\s+)?(?:read|written|verified|measured|confirmed|tested|checked|seen|found|done|added|removed|left|held|kept|set|run|made|taken|given|shown|built|sent|put)\b/i,
+    pattern:
+      /\b(?:has|have|had)\s+(?:been\s+)?(?:read|written|verified|measured|confirmed|tested|checked|seen|found|done|added|removed|left|held|kept|set|run|made|taken|given|shown|built|sent|put)\b/i,
     why: "STE 3.2 permits simple tenses only. Advisory because 'has not been read at source' carries a hedge the simple past cannot.",
   },
 ];
@@ -121,7 +126,7 @@ export const sentences = (line: string): Array<string> =>
   line
     .replace(/(\b[A-Za-z])\.(?=\s*[A-Za-z])/g, `$1${ABBREV_DOT}`)
     .replace(/(\d)\.(\d)/g, `$1${NUM_DOT}$2`)
-    .split(/(?<=[.!?])\s+(?=[A-Z*`(\[])/)
+    .split(/(?<=[.!?])\s+(?=[A-Z*`([])/)
     .filter((s) => s.trim().length > 0)
     .map((s) => s.split(ABBREV_DOT).join(".").split(NUM_DOT).join("."));
 
@@ -132,7 +137,9 @@ export const sentences = (line: string): Array<string> =>
  * what makes the span state survive the line break; `inSpan` is returned because
  * the next line continues whatever this one left open.
  */
-const stripSpans = (lines: ReadonlyArray<{ line: number; text: string }>): ReadonlyArray<{
+const stripSpans = (
+  lines: ReadonlyArray<{ line: number; text: string }>,
+): ReadonlyArray<{
   line: number;
   text: string;
 }> => {
@@ -157,7 +164,11 @@ const stripSpans = (lines: ReadonlyArray<{ line: number; text: string }>): Reado
   return out;
 };
 
-const ruleFindings = (line: number, bare: string, disabled: ReadonlySet<string>): Array<Finding> => {
+const ruleFindings = (
+  line: number,
+  bare: string,
+  disabled: ReadonlySet<string>,
+): Array<Finding> => {
   const out: Array<Finding> = [];
 
   for (const spec of SPECS) {

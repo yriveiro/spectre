@@ -1,8 +1,8 @@
 import { relative, resolve } from "node:path";
+import type { AbsolutePath } from "@opencode/schema/schema";
+import type { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
-import { AbsolutePath } from "@opencode/schema/schema";
-import { Tool } from "@opencode/schema/tool";
-import { RULE_NAMES, lint } from "./rules";
+import { lint, RULE_NAMES } from "./rules";
 
 const Input = Schema.Struct({
   targets: Schema.Array(Schema.String).annotate({
@@ -159,7 +159,8 @@ const inventory = async (
   const limit = input.limit ?? DEFAULT_LIMIT;
   const disabled = new Set(input.disable ?? []);
   const unknown = [...disabled].filter((name) => !RULE_NAMES.includes(name));
-  if (unknown.length > 0) throw new Error(`unknown rule: ${unknown.join(", ")}. known: ${RULE_NAMES.join(", ")}`);
+  if (unknown.length > 0)
+    throw new Error(`unknown rule: ${unknown.join(", ")}. known: ${RULE_NAMES.join(", ")}`);
 
   const found: Array<Page["findings"][number]> = [];
   const errors: Array<{ target: string; reason: string }> = [];
