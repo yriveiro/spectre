@@ -2,6 +2,7 @@ import { relative, resolve } from "node:path";
 import type { AbsolutePath } from "@opencode/schema/schema";
 import type { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
+import { approves, type Loaded, loadDictionary, lookup, type Ruling } from "./dictionary";
 import { lint, RULE_NAMES } from "./rules";
 
 const Input = Schema.Struct({
@@ -11,6 +12,14 @@ const Input = Schema.Struct({
   }),
   disable: Schema.optional(Schema.Array(Schema.String)).annotate({
     description: `Rule names to skip. Known: ${RULE_NAMES.join(", ")}.`,
+  }),
+  words: Schema.optional(Schema.Array(Schema.String)).annotate({
+    description:
+      "Words to rule on against the dictionary, lowercased or not. Returns the approved or not-approved verdict and the part of speech it holds for. Omit to skip the lexical half.",
+  }),
+  dictionary: Schema.optional(Schema.String).annotate({
+    description:
+      "A dictionary export to use instead of the one spectre.jsonc names. Omit to use the configured path, which is the normal case.",
   }),
   limit: Schema.optional(Schema.Number).annotate({
     description: "Maximum findings to return. Default 400.",
@@ -38,6 +47,26 @@ const Output = Schema.Struct({
   total: Schema.Number,
   scanned: Schema.Number,
   truncated: Schema.Boolean,
+  rulings: Schema.Array(
+    Schema.Struct({
+      word: Schema.String,
+      verdict: Schema.Literals(["approved", "not-approved", "unknown"]),
+      pos: Schema.optional(Schema.String),
+      headword: Schema.String,
+      approvedFor: Schema.Array(Schema.String),
+      alternatives: Schema.Array(Schema.Struct({ word: Schema.String, pos: Schema.String })),
+      meaning: Schema.String,
+      page: Schema.String,
+    }),
+  ),
+  dictionary: Schema.optional(
+    Schema.Struct({
+      path: Schema.String,
+      issue: Schema.String,
+      entries: Schema.Number,
+      problem: Schema.optional(Schema.String),
+    }),
+  ),
 });
 
 type Page = typeof Output.Type;
@@ -73,9 +102,22 @@ What it will never report, on purpose:
   a regex false-positives on every hyphenated compound.
 - **Dropped articles.** Noticing a missing article needs semantics.
 
-The lexical half of the standard is not here at all. It needs the ~900-word approved
-dictionary, which Issue 9 does not let this project carry. What a rule here catches is
-structure; which word is the approved one is a person reading it.
+The lexical half of the standard is off unless \`spectre.jsonc\` names a \`dictionary\`.
+Pass \`words\` to rule on them: \`words: ["check", "secure", "grommet"]\` returns approved /
+not-approved / unknown, the part of speech each ruling holds for, the alternatives the
+dictionary offers, and the page label so you can check it in your own PDF. A word with no
+entry comes back \`unknown\`, never \`not-approved\`: a missing word may be a technical noun
+you declared, and the standard hands those to the project.
+
+The dictionary is a path, not a word list. Issue 9 restricts reproduction of it to eight
+categories of organisation, so no file in this repository carries one. Point \`dictionary\`
+at a JSON export of your own copy and nothing is reproduced here.
+
+Two things a lookup will not do. It does not read the export's \`senses[].non_ste\` examples
+into a rule, so a word can be approved and still be wrong in context. And a
+\`not-approved\` verdict on a software-engineering word is usually correct and usually not
+actionable: this set is built on a technical glossary, and STE rule 1.5 hands that to the
+project rather than forbidding it.
 
 Four limits are lexical. A file mid-edit still reads. A semicolon inside a fenced block,
 a table row, a heading or a blockquote is not prose, so it is skipped, which means a
@@ -146,14 +188,57 @@ const scanTarget = async (
   return { findings, errors: [], empty: findings.length === 0 ? [asked] : [], scanned };
 };
 
+/** One word, one row. The verdict plus the entry a reader would check in their own PDF. */
+const rule = (loaded: Loaded, word: string): Page["rulings"][number] => {
+  const asked = word.trim();
+  const got = approves(loaded, asked);
+  const exact = lookup(loaded, asked);
+
+  return {
+    word: asked,
+    verdict: got.verdict,
+    pos: got.rulings[0]?.pos === "" ? undefined : got.rulings[0]?.pos,
+    headword: exact[0]?.headword ?? "",
+    approvedFor: got.rulings.filter((one) => one.approved).map((one: Ruling) => one.pos || "any"),
+    alternatives: got.rulings.flatMap((one) => one.alternatives),
+    meaning: got.rulings[0]?.meaning ?? "",
+    page: got.rulings[0]?.page ?? "",
+  };
+};
+
+/** Words, or nothing. The structural half does not need a dictionary. */
+const rulings = async (
+  words: ReadonlyArray<string> | undefined,
+  path: string | undefined,
+): Promise<{
+  rulings: Array<Page["rulings"][number]>;
+  dictionary?: Page["dictionary"];
+}> => {
+  if (words === undefined || path === undefined) return { rulings: [] };
+
+  const loaded = await loadDictionary(path);
+  return {
+    rulings: words.map((one) => rule(loaded, one)),
+    dictionary: {
+      path,
+      issue: loaded.issue,
+      entries: loaded.count,
+      problem: loaded.problem,
+    },
+  };
+};
+
 const inventory = async (
   directory: string,
   input: {
     readonly targets: ReadonlyArray<string>;
     readonly disable?: ReadonlyArray<string>;
+    readonly words?: ReadonlyArray<string>;
+    readonly dictionary?: string;
     readonly limit?: number;
     readonly offset?: number;
   },
+  configured: string | undefined,
 ): Promise<Page> => {
   const offset = input.offset ?? 0;
   const limit = input.limit ?? DEFAULT_LIMIT;
@@ -181,6 +266,8 @@ const inventory = async (
   const ordered = found.toSorted((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
   const page = ordered.slice(offset, offset + limit);
 
+  const said = await rulings(input.words, input.dictionary ?? configured);
+
   return {
     findings: page,
     errors,
@@ -190,14 +277,25 @@ const inventory = async (
     total: ordered.length,
     scanned,
     truncated: offset + page.length < ordered.length,
+    rulings: said.rulings,
+    dictionary: said.dictionary,
   };
 };
 
-export const prose = (directory: AbsolutePath): Tool.Info<typeof Input, typeof Output> => ({
+/**
+ * `dictionary` is the path from `spectre.jsonc`, passed in by the caller so this
+ * file reads no config. A missing key means the lexical half is off, which is not
+ * an error: the structural rules do not need it.
+ */
+export const prose = (
+  directory: AbsolutePath,
+  dictionary?: string,
+): Tool.Info<typeof Input, typeof Output> => ({
   name: "prose",
   description: DESCRIPTION,
   input: Input,
   output: Output,
   options: { namespace: "spectre", codemode: true, pinned: true, permission: "read" },
-  execute: (input) => Effect.promise(async () => ({ output: await inventory(directory, input) })),
+  execute: (input) =>
+    Effect.promise(async () => ({ output: await inventory(directory, input, dictionary) })),
 });

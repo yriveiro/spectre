@@ -144,3 +144,60 @@ description `"Objects"` rather than a type name. A script that walks for tags
 therefore finds nothing and reports success, which is worse than having no check:
 it is a check that cannot fail. Read the table, keep to the primitives, and let
 the real call be the proof.
+
+## The dictionary export
+
+`tools.spectre.prose` reads the lexical half of ASD-STE100 from a JSON export the
+reader produced from their own copy of the specification. `spectre.jsonc` names the path
+under `dictionary`, and a relative one resolves against the config file that named it.
+
+The export is **not in this repository**. Issue 9, page 2 restricts reproduction of the
+dictionary to eight categories of organisation, and this project is in none of them. The
+config carries a path, the tool reads the file at the path, and nothing here holds a word
+list. Anyone who wants the lexical half requests the standard from
+[asd-ste100.org](https://www.asd-ste100.org/STE_downloads.html) and exports it.
+
+The shape the tool reads, with the fields it uses marked:
+
+```jsonc
+{
+  "meta": {
+    // Reported back so a caller can say which issue it ruled against.
+    "issue": "9 (2025-01-15)",
+    "source_url": "https://www.asd-ste100.org/assets/files/ASD-STE100_ISSUE9.pdf",
+    "copyright": "© ASD, 2025 – All rights reserved",
+  },
+  "entries": [
+    {
+      // The headword carries the part of speech, the way the dictionary prints it:
+      // `CHECK (n)`. A lookup strips the marker, so `check` finds this entry.
+      "headword": "CHECK (n)",
+      "pos": "n",
+      // UPPERCASE in the source means approved. The export says so as a boolean, and
+      // a missing flag is read as approved, which is the safe default for a word the
+      // dictionary lists at all.
+      "approved": true,
+      "meaning": "an inspection",
+      "page": "2-1-C2",
+      // The approved replacements, for a word that is not approved.
+      "alternatives": [{ "word": "ATTACH", "pos": "v" }],
+      "senses": [
+        { "meaning": "an inspection", "ste": "Do a check.", "non_ste": "" },
+      ],
+    },
+  ],
+}
+```
+
+`senses`, `annotation`, `forms`, `raw` and `replacement_hint` are read as present or absent
+and not otherwise. `senses[].non_ste` is the example of the misuse the standard warns
+about, and the tool does **not** turn it into a rule: a word can be approved and still be
+wrong in context, which is `meaning-fidelity`'s subject rather than a lookup's.
+
+Two readings that are worth stating because both are decisions rather than defaults:
+
+- **A word with no entry is `unknown`, not `not-approved`.** A word missing from the export
+  may be a technical noun the reader declared, and STE rule 1.5 hands those to the project.
+  Reporting it as a violation would be wrong more often than right.
+- **An entry with no part of speech answers any part of speech.** A ruling for the word
+  itself is not a ruling for one use of it.
