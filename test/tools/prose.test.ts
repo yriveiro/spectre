@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
 import { AbsolutePath } from "@opencode/schema/schema";
+import { Effect } from "effect";
 import { prose } from "../../tools/definitions/prose";
 import { countWords, lint, sentences } from "../../tools/definitions/prose/rules";
 
@@ -10,11 +10,17 @@ import { countWords, lint, sentences } from "../../tools/definitions/prose/rules
  */
 
 const rules = (text: string) => lint(text).map((f) => f.rule);
-const hard = (text: string) => lint(text).filter((f) => f.level === "hard").map((f) => f.rule);
+const hard = (text: string) =>
+  lint(text)
+    .filter((f) => f.level === "hard")
+    .map((f) => f.rule);
 
 describe("sentence splitting", () => {
   test("splits on a full stop followed by a capital", () => {
-    expect(sentences("Read the file. Then close it.")).toEqual(["Read the file.", "Then close it."]);
+    expect(sentences("Read the file. Then close it.")).toEqual([
+      "Read the file.",
+      "Then close it.",
+    ]);
   });
 
   test("a version is not two sentences", () => {
@@ -97,11 +103,16 @@ describe("advisory rules never fail a run", () => {
 
 describe("modality is content, never flagged", () => {
   test("may, might and could produce no finding of any kind", () => {
-    expect(lint("The job may have failed and could still be running, so it might need a retry.")).toEqual([]);
+    expect(
+      lint("The job may have failed and could still be running, so it might need a retry."),
+    ).toEqual([]);
   });
 
   test("a hedge next to a real violation still reports only the violation", () => {
-    expect(rules("It may be seamless; the cause is unknown.")).toEqual(["semicolon", "marketing-adjective"]);
+    expect(rules("It may be seamless; the cause is unknown.")).toEqual([
+      "semicolon",
+      "marketing-adjective",
+    ]);
   });
 });
 
@@ -124,7 +135,9 @@ describe("markdown structure is not prose", () => {
 
   test("a code span that wraps a line break is one span", () => {
     // The semicolon is inside a TypeScript discriminant, not in prose.
-    const text = ['`{ kind: "open" } | { kind: "done";', "at: Date }` cannot be built wrong."].join("\n");
+    const text = ['`{ kind: "open" } | { kind: "done";', "at: Date }` cannot be built wrong."].join(
+      "\n",
+    );
     expect(hard(text)).not.toContain("semicolon");
   });
 });
@@ -199,13 +212,16 @@ describe("the tool", () => {
     // caller believe it turned something off.
     // execute takes a call context as well as the input, per Tool.Info at
     // tool.d.ts:75, and this tool never reads it, so the fields are stand-ins.
-    const rejected = tool.execute({ targets: ["README.md"], disable: ["no-such-rule"] }, {
-      sessionID: "ses_test" as never,
-      agent: "build" as never,
-      messageID: "msg_test" as never,
-      id: "call_test" as never,
-      progress: () => Effect.void,
-    });
+    const rejected = tool.execute(
+      { targets: ["README.md"], disable: ["no-such-rule"] },
+      {
+        sessionID: "ses_test" as never,
+        agent: "build" as never,
+        messageID: "msg_test" as never,
+        id: "call_test" as never,
+        progress: () => Effect.void,
+      },
+    );
     await expect(Effect.runPromise(rejected)).rejects.toThrow(/unknown rule: no-such-rule/);
   });
 });
@@ -214,13 +230,16 @@ describe("the set's own prose", () => {
   const call = async (targets: ReadonlyArray<string>, disable?: ReadonlyArray<string>) => {
     const tool = prose(AbsolutePath.make(process.cwd()));
     const result = await Effect.runPromise(
-      tool.execute({ targets, disable }, {
-        sessionID: "ses_test" as never,
-        agent: "build" as never,
-        messageID: "msg_test" as never,
-        id: "call_test" as never,
-        progress: () => Effect.void,
-      }),
+      tool.execute(
+        { targets, disable },
+        {
+          sessionID: "ses_test" as never,
+          agent: "build" as never,
+          messageID: "msg_test" as never,
+          id: "call_test" as never,
+          progress: () => Effect.void,
+        },
+      ),
     );
     // `output` is optional on Tool.Info, so a tool that declared none would arrive
     // undefined here. The guard turns that into a readable failure.
@@ -260,12 +279,65 @@ describe("the set's own prose", () => {
   test("the debt is still on the books, and it is all semicolons", async () => {
     // The rest of the set has not been swept yet. This test is the receipt, and it
     // fails when the debt is paid so the line goes with it rather than rotting.
-    const out = await call(["skills/definitions", "AGENTS.md", "TODO.md", "README.md", "skills/FOR_AGENTS.md"]);
+    const out = await call([
+      "skills/definitions",
+      "AGENTS.md",
+      "TODO.md",
+      "README.md",
+      "skills/FOR_AGENTS.md",
+    ]);
     const byRule: Record<string, number> = {};
     for (const f of out.findings) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
-    expect({ semicolons: byRule["semicolon"] ?? 0, other: Object.keys(byRule).filter((r) => r !== "semicolon").toSorted() }).toEqual({
+    expect({
+      semicolons: byRule["semicolon"] ?? 0,
+      other: Object.keys(byRule)
+        .filter((r) => r !== "semicolon")
+        .toSorted(),
+    }).toEqual({
       semicolons: 150,
       other: ["marketing-adjective", "passive-voice", "phrasal-verb", "present-perfect"],
     });
   }, 60_000);
+});
+
+describe("with no dictionary configured", () => {
+  const bare = prose(AbsolutePath.make(process.cwd()));
+
+  const call = async (input: Parameters<typeof bare.execute>[0]) => {
+    const result = await Effect.runPromise(
+      bare.execute(input, {
+        sessionID: "ses_test" as never,
+        agent: "build" as never,
+        messageID: "msg_test" as never,
+        id: "call_test" as never,
+        progress: () => Effect.void,
+      }),
+    );
+    if (result.output === undefined) throw new Error("the tool returned no output");
+    return result.output;
+  };
+
+  test("the structural half runs with no dictionary at all", async () => {
+    // The six structural rules need no word list. A caller with no `dictionary` in
+    // spectre.jsonc still gets them, which is the whole point of splitting them.
+    const out = await call({ targets: ["skills/definitions/grammar/SKILL.md"] });
+    expect(out.findings.length).toBeGreaterThan(0);
+    expect(out.rulings).toEqual([]);
+    expect(out.dictionary).toBeUndefined();
+  }, 30_000);
+
+  test("asking about words with no dictionary is not an error and not an answer", async () => {
+    // Silently returning `unknown` for every word would look like a verdict. An
+    // empty `rulings` with no `dictionary` block says the question was not answerable.
+    const out = await call({ words: ["check", "secure", "grommet"] });
+    expect(out.rulings).toEqual([]);
+    expect(out.dictionary).toBeUndefined();
+    expect(out.errors).toEqual([]);
+  }, 30_000);
+
+  test("targets may be omitted, so a words-only call does not read the tree", async () => {
+    const out = await call({ words: ["check"] });
+    expect(out.findings).toEqual([]);
+    expect(out.scanned).toBe(0);
+  }, 30_000);
 });

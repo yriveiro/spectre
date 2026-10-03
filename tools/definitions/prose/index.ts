@@ -6,9 +6,9 @@ import { approves, type Loaded, loadDictionary, lookup, type Ruling } from "./di
 import { lint, RULE_NAMES } from "./rules";
 
 const Input = Schema.Struct({
-  targets: Schema.Array(Schema.String).annotate({
+  targets: Schema.optional(Schema.Array(Schema.String)).annotate({
     description:
-      "Files or directories holding prose, relative to the project directory or absolute. A directory is walked for .md and .mdx.",
+      "Files or directories holding prose, relative to the project directory or absolute. A directory is walked for .md and .mdx. Omit to ask about words only, which is what a caller does when it has no dictionary and wants the structural rules on nothing.",
   }),
   disable: Schema.optional(Schema.Array(Schema.String)).annotate({
     description: `Rule names to skip. Known: ${RULE_NAMES.join(", ")}.`,
@@ -102,7 +102,14 @@ What it will never report, on purpose:
   a regex false-positives on every hyphenated compound.
 - **Dropped articles.** Noticing a missing article needs semantics.
 
-The lexical half of the standard is off unless \`spectre.jsonc\` names a \`dictionary\`.
+**With no \`dictionary\` in \`spectre.jsonc\`, only the structural half runs.** The six
+rules above need no word list, so they work unchanged. A call that passes \`words\` with no
+dictionary configured returns an empty \`rulings\` and no \`dictionary\` block rather than a
+verdict, because the question was not answerable and saying so is the honest answer. Both
+\`targets\` and \`words\` are optional, so a caller can ask about words alone and read
+nothing.
+
+The lexical half is off unless \`spectre.jsonc\` names a \`dictionary\`.
 Pass \`words\` to rule on them: \`words: ["check", "secure", "grommet"]\` returns approved /
 not-approved / unknown, the part of speech each ruling holds for, the alternatives the
 dictionary offers, and the page label so you can check it in your own PDF. A word with no
@@ -231,7 +238,7 @@ const rulings = async (
 const inventory = async (
   directory: string,
   input: {
-    readonly targets: ReadonlyArray<string>;
+    readonly targets?: ReadonlyArray<string>;
     readonly disable?: ReadonlyArray<string>;
     readonly words?: ReadonlyArray<string>;
     readonly dictionary?: string;
@@ -253,7 +260,7 @@ const inventory = async (
   let scanned = 0;
 
   const scans = await Promise.all(
-    input.targets.map((asked) => scanTarget(asked, directory, disabled)),
+    (input.targets ?? []).map((asked) => scanTarget(asked, directory, disabled)),
   );
 
   for (const one of scans) {
