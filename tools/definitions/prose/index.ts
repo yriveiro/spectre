@@ -106,6 +106,46 @@ const filesIn = async (target: string): Promise<ReadonlyArray<string>> => {
   return found.toSorted();
 };
 
+type Scan = {
+  findings: Array<Page["findings"][number]>;
+  errors: Array<{ target: string; reason: string }>;
+  empty: Array<string>;
+  scanned: number;
+};
+
+const reason = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+
+/** One target, one answer. A target that cannot be read is an error row, never a throw. */
+const scanTarget = async (
+  asked: string,
+  directory: string,
+  disabled: ReadonlySet<string>,
+): Promise<Scan> => {
+  const none: Scan = { findings: [], errors: [], empty: [], scanned: 0 };
+  const target = resolve(directory, asked);
+
+  let files: ReadonlyArray<string>;
+  try {
+    files = await filesIn(target);
+  } catch (cause) {
+    return { ...none, errors: [{ target: asked, reason: reason(cause) }] };
+  }
+
+  const findings: Array<Page["findings"][number]> = [];
+  let scanned = 0;
+
+  for (const file of files) {
+    if (!PROSE.has(file.slice(file.lastIndexOf(".")).toLowerCase())) continue;
+    const found = lint(await Bun.file(file).text(), disabled);
+    if (found.length === 0) continue;
+    scanned += 1;
+    const name = relative(directory, file).split("\\").join("/");
+    for (const one of found) findings.push({ ...one, file: name });
+  }
+
+  return { findings, errors: [], empty: findings.length === 0 ? [asked] : [], scanned };
+};
+
 const inventory = async (
   directory: string,
   input: {
@@ -126,31 +166,15 @@ const inventory = async (
   const empty: Array<string> = [];
   let scanned = 0;
 
-  for (const asked of input.targets) {
-    const target = resolve(directory, asked);
-    const before = found.length;
+  const scans = await Promise.all(
+    input.targets.map((asked) => scanTarget(asked, directory, disabled)),
+  );
 
-    let files: ReadonlyArray<string>;
-    try {
-      files = await filesIn(target);
-    } catch (cause) {
-      errors.push({
-        target: asked,
-        reason: cause instanceof Error ? cause.message : String(cause),
-      });
-      continue;
-    }
-
-    for (const file of files) {
-      if (!PROSE.has(file.slice(file.lastIndexOf(".")).toLowerCase())) continue;
-      const findings = lint(await Bun.file(file).text(), disabled);
-      if (findings.length === 0) continue;
-      scanned += 1;
-      const name = relative(directory, file).split("\\").join("/");
-      for (const one of findings) found.push({ ...one, file: name });
-    }
-
-    if (found.length === before) empty.push(asked);
+  for (const one of scans) {
+    found.push(...one.findings);
+    errors.push(...one.errors);
+    empty.push(...one.empty);
+    scanned += one.scanned;
   }
 
   const ordered = found.toSorted((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
