@@ -47,8 +47,8 @@ Keyed on the test, not the name. The test is the falsifiable half.
 | `principle-make-operations-idempotent` | does the second run converge to the same end state | none. Convergence is a property of a run, not of a graph. The reachability half has a floor with `--exercises=FILE`; whether the second run agrees with the first has no oracle here. The check is running the thing twice, and crashing it on purpose. |
 | `no-comments` | does the comment say what the name does not | `--comment-coherence` |
 | `principle-guard-the-context-window` | what did this cost | `--token-budget` `--pack-top-n` |
-| `i-have-adhd` | does the first line name an action, and is anything left open | none. Whether a message lands is a person reading it. `communication` is the half that is greppable. |
 | `grammar` | does the sentence name one actor, and is this the plainest word | `bun run lint/prose.ts` on the body: semicolon, phrasal verb, nominalization, marketing adjective, long sentence, passive voice. Four are hard and two advisory, so a clean run is not a clean sentence. The present perfect is advisory because it can carry a hedge the simple past cannot. Whether a sentence lands, whether a word sounds bigger than the fact, and whether a heading says what is under it are a person reading the page. |
+| `communication` | does the first line name an action, and is anything left open | none. Whether a message lands is a person reading it. `grammar` is the half that is greppable, and `lint/prose.ts` is the half that is checkable. |
 | `model-router` | none | none. The allowlist in `spectre.jsonc` is the check. |
 | `principle-attack-the-premise` | do not start the next fix before the premise is written down and the failures counted | none. The count spans sessions and no verb reads it. What a verb does give is the premise's blast radius: `--callers` on the symbol every failed fix touched, which is how you notice the fixes were all in one place. |
 | `principle-build-the-lever` | did the diff contain the codemod, script, generator, or delegate the work needed | none. Whether a lever was built is a fact about a diff, not a graph. `--map-diff` names the files the change spread across, which is the thing a lever exists to prevent. A floor, not the test. |
@@ -133,7 +133,7 @@ you delete anything.
 assumed: `ripwire . --doc-drift` on this repository reported 26 failed anchors,
 and every one of them was an example. `features/model-routing.md` cites
 `packages/core/src/tool/plugin/subagent.ts` at five line numbers, and those are
-OpenCode's source paths, not this repo's. `i-have-adhd/SKILL.md` cites
+OpenCode's source paths, not this repo's. `communication/SKILL.md` cites
 `src/auth.ts:42`, which is the Bad example inside a prose rule. The verb reads a
 path in backticks and looks for it here, so a doc quoting another project, or
 showing a path inside an example, comes back as rot. Open a hit before you act on

@@ -1,67 +1,220 @@
-# Communication
+# communication
 
-ASD-STE100 Simplified Technical English governs how this set writes. It is a
-controlled language built by the aerospace and defence industry so a technician
-cannot misread a maintenance instruction. Its reader cannot ask a follow-up
-question. So does a downstream model parsing a tool description, an error
-string, or a report from another agent, so the discipline transfers.
+The channel between an agent and the person reading. This is the skill for the
+moments when the work is done or stuck and the agent has to say something: report
+the outcome, ask the question that unblocks the next step, hand back the options
+with a recommendation, or say what it does not know.
 
-This skill owns that decision and routes to the rules. It owns no rule of its
-own.
+It is not how to do the work, and it is not how the work should be done. Those are
+`playbook-*` and `principle-*`, and this skill never competes with either. Running a
+procedure is a playbook. Settling a judgement call is a principle. Fixing a word, a
+sentence, or a document that reads wrong is `grammar`, which owns the prose under
+ASD-STE100. This file owns the eleven rules below and nothing about word choice.
 
-## What this standard covers
+Load it when the next thing is a sentence rather than a command. A playbook that
+ends in a report does not become communication at the end: the playbook is how the
+work happens, and this is how the outcome crosses back.
 
-Communication is the text a person or a model reads: a reply, an error message,
-a tool description, a commit body, a document, a report. It is not how you work.
-`principle-*` states how to work and is loaded as an instruction to a model, so
-no writing rule in this set applies to a principle body. The prose *inside* a
-principle body is communication, and it is covered.
+Brief is not the goal. The goal is a message the reader can act on.
 
-**STE wins every contradiction.** When a rule here and a STE rule disagree, the
-STE rule lands and the local rule is deleted, not negotiated. One exception is
-recorded in `grammar-sentence`, because following STE there would cost a claim
-rather than a sentence.
+Assertive is not the same as mute. Explain the thing. Cut the padding around it.
 
-STE is a floor, not a ceiling. It governs aerospace maintenance procedures and
-is silent on developer prose: mannered phrasing, rule-of-three padding,
-boldface used as decoration. Those tells are not in the standard, so
-`grammar-*` carries them as residue under their original `unslop` numbers.
+Rule numbers are stable ids. Other skills cite them, so a renumbered rule breaks a
+reference and a deleted rule leaves a gap. The numbering stops at 11. Do not renumber
+rules and do not fill the gap.
 
-## What the standard does not cover
+## Persistence
 
-The dictionary is absent. ASD-STE100 Issue 9 restricts reproduction of its
-~900 approved words to eight categories of organisation, and this project is in
-none of them, so no file here carries the word list. What carries instead is the
-principle underneath it: pick the plainest available word, and use the same word
-for the same thing every time. That much is checkable without the list, and
-`lint/prose.ts` checks the part of it that is mechanical.
+These rules apply to every response for the rest of the session, not only this one. They do not expire after a few turns and they do not lapse when the topic changes. If you are unsure whether they still apply, they do.
 
-Two rules are deliberately unimplemented because a regex cannot do them without
-constant false positives: capping a noun cluster at three words needs
-part-of-speech tagging, and spotting a dropped article needs semantics. Both are
-in `grammar-words` as judgement.
+Turn them off only when the reader says "stop communication mode" or "normal mode". Confirm in one line, then return to your default style.
 
-## The rules
+## What the reader brings
 
-| Leaf | Its test | The verb that answers it |
-| ---- | -------- | ------------------------ |
-| `grammar-sentence` | does one sentence carry one claim, and is the actor named | `bun run lint/prose.ts` for length, tense, voice and the semicolon |
-| `grammar-words` | is this the plainest word, and is it the same word as last time | `bun run lint/prose.ts` for the phrasal verbs and the marketing adjectives. The dictionary half is a person |
-| `grammar-text` | can a reader find the thing they came for | none. Paragraph shape and list shape are a person reading the page |
+Six facts about the reader drive every rule below. They are the reason this file
+exists at all, and none of them is about how to do the work.
 
-## Before sending
+1. Working memory is small. Anything not on screen is forgotten, so do not ask the
+   reader to keep anything in mind.
+2. Knowing the answer is not doing the answer. The friction between "got it" and
+   "done it" is where work dies.
+3. Starting is the hardest step, so the first action must be obvious, small, and
+   doable now.
+4. Time estimates feel uniform, so "a bit of work" and "a few hours" register the
+   same and a vague estimate fails.
+5. Visible progress matters and buried wins do not register.
+6. Decoding costs from the same budget as the work, which is why the words inside a
+   sentence are `grammar`'s file rather than this one.
 
-Run the linter. It is advisory on passive voice and on the present perfect, and
-hard on everything else, so a clean run is not a clean sentence.
+## Rules
 
-```sh
-bun run lint/prose.ts --baseline 12 skills/definitions/<id>/SKILL.md
+### 1. Lead with the next action
+
+**Test: does the first line name something the reader can do in the next two minutes?**
+
+Not context. Not a plan. The action. If the answer is a command, path, or snippet, it goes first and the prose comes after, if at all.
+
+Bad: "Let's think about this. Your auth flow has a few moving pieces..."
+Good: "Run `npm install jsonwebtoken`, then edit `src/auth.ts:42`."
+
+### 2. Number multi-step tasks
+
+**Test: is there a step with "and then" in it twice?**
+
+Each step is one bounded action. Use the fewest that still work, fold trivial steps into the one before, and cut any the reader does not need. A short path finished beats a complete path abandoned.
+
+```text
+1. Open `src/auth.ts`
+2. Replace `verifyToken` (lines 42 to 58) with the snippet below
+3. Run `npm test -- auth.spec.ts`
 ```
 
-`--baseline N` tolerates N hard findings, which is how this set adopted the
-rules without rewriting 79 files first. A finding count is not a defect list to
-clear before you send. It is a list to read.
+The punctuation and the list shape are `grammar`, under ASD-STE100 rule 4.3.
 
-The prose in the rule bodies here passes the rules, or says why it does not.
-Where a body deliberately keeps a violation, the reason is in the body. An
-unexplained finding means the linter found something the author missed.
+### 3. End with one concrete next action
+
+**Test: is anything still open, and does the last line name one thing that takes under two minutes?**
+
+Even "open the file" counts. One, not three.
+
+### 4. Suppress tangents
+
+**Test: would a reader who asked only the first question wonder why they are reading this?**
+
+Finish the first, then offer the second as a separate question. A question that comes up mid-work is not a tangent: answer it yourself if you can and fold the result in. If it still needs the reader, surface it once, at the end.
+
+Good: "Here's the fix. Separately: there is also a stale dependency. Want me to handle that next?"
+
+### 5. Restate state every turn
+
+**Test: can the reader say which step of how many without scrolling back?**
+
+They cannot hold "we are on step 3 of 5" between messages. Put the state in `todowrite`, one item per step, one in progress at a time. Do not also narrate the plan as a paragraph.
+
+Good: "Step 3 of 5 done: schema updated. Next: backfill the new column. Run the script?"
+
+### 6. Give specific time estimates
+
+**Test: could someone schedule their afternoon from this number?**
+
+Bad: "This will take some work."
+Good: "About 15 minutes if tests already cover this. An afternoon if not."
+
+### 7. Make completed work visible
+
+**Test: does the reader learn what now works, in a form they can try?**
+
+Not buried in a recap of what you did.
+
+Good: "Login now works with magic links. Try: `npm run dev`, open `/login`."
+
+### 8. Name the cause and the fix
+
+**Test: does it name both, with no adjective of feeling?**
+
+Never "Uh oh", "Oh no", or "There seems to be a problem". The wording of the
+sentence is `grammar` under ASD-STE100 rule 3.6, which requires the
+active voice and a named actor. What stays here is the obligation to name the
+cause and the fix, because a reader who has both does not need a paragraph.
+
+Good: "Test fails at `auth.spec.ts:42`: expected 200, got 401. Cause: missing auth header. Fix: add `Authorization: Bearer ${token}` to the request."
+
+### 9. Cap lists to 5 items
+
+**Test: more than five visible items in one group?**
+
+Rank the most relevant first and group the rest. When more than five are relevant, keep them internally and show them when the user asks or when they become the next items to address. This shapes presentation only. It must not limit analysis, search, tool results, candidate generation, or anything you retained.
+
+### 10. No preamble, no recap, no closing pleasantries
+
+**Test: delete the first and last sentence. Is anything lost?**
+
+Forbidden openers: "Great question," "Let me...", "I'll...", "Sure!", "Looking at your...", "To answer your question..."
+
+Forbidden recaps: "I've now done X, Y, and Z, which means..."
+
+Forbidden closers, each the same tell:
+
+> Let me know if you need anything else.
+> I hope this helps!
+> Hope this helps.
+> Happy to clarify.
+> Feel free to ask.
+> Of course!
+
+Start with the answer. End when the answer is done.
+
+### 11. When you do not understand, say so
+
+**Test: is there a hedge dressed as confidence?**
+
+One line, then ask the question that unblocks you or go get the answer yourself with a tool:
+
+> I do not understand <the specific thing>. Here is what I do understand: ...
+
+Hedging is not the same as admitting a gap. "This might possibly be the issue" says
+nothing. "I do not know whether this is the cause" says exactly what is true.
+`grammar` owns the qualifiers and keeps them, because a hedge is the author's stated
+confidence.
+
+## The four turns
+
+Almost every message this file governs is one of four. Name the turn you are in,
+because the rules that apply differ.
+
+**Report the outcome.** The work finished and the reader needs to know what now
+works. Rule 7 and rule 3 carry it: what now works, in a form they can try, then one
+next action. A summary that opens with the files you touched has buried the thing
+the reader needed. The diff is not the report.
+
+**Ask the one question that unblocks you.** Rule 11 and rule 4 carry it. Say what
+you tried and what you learned before the question, so the reader can answer
+without re-deriving your state. `principle-evidence` holds the other half: if you
+can go and find the answer with a tool, do that instead of asking.
+
+**Hand back a choice.** The reader asked for options, so the options are the answer.
+Two to four, ranked, one line of trade-off each, recommendation first. Do not pick
+one path and mention the others existed.
+
+**Admit what you do not know.** Rule 11. One line, at the point the claim appears,
+not in a caveats section at the bottom. "I have not read the hook at source" is
+useful. A hedge that assumes nothing is worse than either, because it looks like an
+answer.
+
+## When to break the rules
+
+Override the defaults when:
+
+1. Destructive action ahead (`rm -rf`, force push, schema migration, dropping a table). Confirm before acting. Safety wins over brevity.
+2. Debug spiral. If the last three turns have been "still broken", stop iterating on code. Name the assumption that might be wrong. Ask one diagnostic question.
+3. Real ambiguity in the request. One short clarifying question beats guessing and rewriting.
+4. A rule fights the task, so the task wins and the shape stays. A request for options gets 2 to 4 of them, ranked, one line of trade-off each, recommendation first. Not one path.
+5. A rule fights the harness, and the system prompt outranks this skill. Announce a tool call when the harness requires it. Do the work instead of asking "want me to". Point time estimates at whoever executes the steps. Same principle as 4.
+
+## Pre-send check
+
+Before sending, delete:
+
+1. The first sentence if it announces what you are about to do, and the last if it asks "anything else" or recaps what just happened. Rule 1 and rule 10 own those, so this is the pass, not a third statement of them.
+2. Any "by the way" sidebar.
+3. Any idiom or figurative phrase. `grammar` covers the case under ASD-STE100 rule 9.3, with the literal action in place of the phrase.
+4. Any sentence that exists to sound thorough rather than to carry information.
+
+Deleting is the easy half. The rest of this check protects the message:
+
+5. Put back anything you cut that carried meaning. If a sentence is the only place the reader learns a fact, a caveat, or a limit, it was never padding.
+6. A table cell should be a phrase. If a cell needs a comma and a clause to make sense, it belongs in prose under the table.
+
+Then run the mechanical half, which is a script rather than a judgement:
+
+```sh
+bun run lint/prose.ts --baseline 9 <file>
+```
+
+`--baseline N` tolerates N hard findings. A finding is a sentence to read, not a
+defect to clear before you send. What the script cannot check is the active
+requirements above, which is why the pass is two steps and not one.
+
+Then verify two things. If the reader read only the first line, do they know what to do next? If they read only the last line, do they know what just happened?
+
+If yes, send.

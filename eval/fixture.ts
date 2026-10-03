@@ -3,8 +3,8 @@ export type Provenance = "judged" | "desc" | "neg";
 export type Row = { prompt: string; label: string; provenance: Provenance };
 
 export const tuned: ReadonlyArray<Row> = [
-  { prompt: "summarize what you just changed", label: "i-have-adhd", provenance: "judged" },
-  { prompt: "reply with just the answer, no preamble", label: "i-have-adhd", provenance: "judged" },
+  { prompt: "summarize what you just changed", label: "communication", provenance: "judged" },
+  { prompt: "reply with just the answer, no preamble", label: "communication", provenance: "judged" },
   {
     prompt: "should I use a map or a lookup table here",
     label: "principle-evidence,ripwire",
@@ -164,10 +164,28 @@ export const tuned: ReadonlyArray<Row> = [
     provenance: "judged",
   },
   {
-    prompt: "an agent is going to parse this output, make it unambiguous",
+    prompt: "the refactor is done, tell me what to do next",
     label: "communication",
     provenance: "judged",
   },
+  {
+    prompt: "i do not understand what you want me to change, ask me one question",
+    label: "communication",
+    provenance: "judged",
+  },
+  {
+    prompt: "the build is red and i cannot tell which of these two causes it, should i ask you or dig",
+    label: "communication",
+    provenance: "judged",
+  },
+  {
+    prompt: "give me the three ways we could do this and pick one",
+    label: "communication",
+    provenance: "judged",
+  },
+  { prompt: "run the gauntlet across all six packages and tell me which one wins", label: "none", provenance: "neg" },
+  { prompt: "i think this is a race but i am not sure, prove it", label: "none", provenance: "neg" },
+  { prompt: "what are my options for the storage layer", label: "none", provenance: "neg" },
   { prompt: "say that again, i did not follow", label: "none", provenance: "neg" },
   { prompt: "throw it in the arena", label: "none", provenance: "neg" },
   { prompt: "swarm this across the six packages", label: "none", provenance: "neg" },

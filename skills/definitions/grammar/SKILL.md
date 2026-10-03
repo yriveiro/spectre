@@ -9,16 +9,26 @@ word bigger than the fact, one thing going by several names, a document that is 
 wall of text, a heading that is just a noun, a list of fourteen items, or a
 semicolon holding two clauses together.
 
-STE wins every contradiction with a rule this set used to hold. Where it does,
-the local rule was deleted and the deletion is recorded under `## Deleted by this
-standard`. STE is a floor rather than a ceiling: it governs aerospace maintenance
-prose and is silent on developer prose, so the residue is here under its original
-`unslop` numbers.
+STE wins every contradiction with a local rule. Where it does, the local rule is
+gone rather than negotiated, and what survives here is what STE does not cover. STE
+is a floor rather than a ceiling: it governs aerospace maintenance prose and is
+silent on developer prose, so the residue below carries its own numbers rather than
+one from the standard.
 
 The dictionary is absent. Issue 9 restricts reproduction of its ~900 approved
 words to eight categories of organisation, and this project is in none of them.
 What carries instead is the principle underneath: the plainest available word, and
 the same word for the same thing every time.
+
+## Why this body trips its own linter
+
+`lint/prose.ts` reports the marketing adjectives in the section below, and it is
+right to. They are the list of the words the rule bans, so naming them is the rule.
+The only way to clear the finding would be to stop naming them, which would leave
+the rule unusable.
+
+Every other hard rule is clean in this file, and the passive-voice findings are
+advisory: the actor is genuinely irrelevant in a sentence about how a prompt reads.
 
 ## What has an instrument
 
@@ -113,9 +123,9 @@ This is not the expensive rule it looks like.
 `Open the file and read line 3, then check it against the spec` is three
 instructions in one sentence. Split it, or make it a numbered list.
 
-This rule replaced `unslop` rule 28, which said to judge a sentence by whether it
-lands in one pass. The standard won that disagreement. A reader cannot compute
-"lands in one pass", and a rule a reader cannot compute is a rule nobody applies.
+Judge by the count and not by whether it reads well in one pass. A reader cannot
+compute whether a sentence lands, and a rule a reader cannot compute is a rule
+nobody applies.
 
 ## No semicolons (STE 8.1)
 
@@ -127,8 +137,7 @@ mark, so the em dash is legal and stays legal here.
 Bad: `The agent deletes the file; then it logs the path.`
 Good: `The agent deletes the file. Then it logs the path.`
 
-This replaced `unslop` rule 13, which banned the em dash and kept the semicolon.
-Inverted, because the standard says so.
+The em dash is permitted, because rule 8.1 permits every other standard mark.
 
 Measured on this set before adoption: 168 semicolons in prose across 79 files,
 and 0 inside a code fence or a table row. This is the rule that costs the most,
@@ -141,35 +150,20 @@ and it is one character per finding.
 Bad: `Files not backed up will be lost.`
 Good: `The tool does not back up files. Files that are not backed up are lost.`
 
-This replaced `unslop` rule 33, over-compression. The standard and the local rule
-agreed here, so only the numbering moved.
+A dropped word spends the budget the work needs, so put it back.
 
-## Keep modality exactly (STE 3.2, and the linter's silence)
+## Keep modality exactly (STE 3.2)
 
 **Test: does the rewrite still say what the author was confident about?**
 
 `May have failed` and `failed` are different claims. A hedge is the author's
 stated uncertainty, and it is content.
 
-This replaced `unslop` rule 24, which told the writer to count qualifiers and
-delete them. The standard does the opposite, and `lint/prose.ts` never flags
-`may`, `might` or `could` at all. A linter that pressured hedges out would
-rewrite claims into facts.
+`lint/prose.ts` never flags `may`, `might` or `could` at all. A linter that
+pressured hedges out would rewrite claims into facts.
 
 The line to hold: hedge down to one qualifier, never to zero. "Could potentially
 possibly be argued that it might" becomes `may`. "May have failed" stays.
-
-## Deleted by this standard
-
-| Was | Rule | Why |
-| --- | ---- | --- |
-| `unslop` 13 | no em dashes | STE 8.1 permits the dash and bans the semicolon instead |
-| `unslop` 24 | delete hedges | the standard treats confidence as content |
-| `unslop` 28 | judge by landing, not count | STE 5.1 and 6.3 give numbers |
-
-The numbers are gaps on purpose, the way `unslop` 17, 18, 19, 20 and 22 were.
-Other files still cite rule 28 by number, and those citations now mean this
-leaf.
 
 ## One word, one meaning (STE 1.1 to 1.3)
 
@@ -187,7 +181,7 @@ dictionary sense and one part of speech, which is checkable only against the
 ~900-word dictionary this project does not carry. What carries is the part that
 survives without it: consistency within a document.
 
-## Prefer the plain word (STE 1.x, and `unslop` 31)
+## Prefer the plain word (STE 1.x)
 
 **Test: is the longer word clearer?**
 
@@ -270,7 +264,7 @@ real STE, and it is the escape hatch that makes the rest of the standard usable.
 `Apply oil to the valve` with oil as a noun. Not `Oil the valve`, unless the
 document declared oil a verb. Prefer the form that reads unambiguously.
 
-## Say what it does, not how it feels (`unslop` 27)
+## Say what it does, not how it feels
 
 **Test: could this sentence appear unchanged in another project's docs?**
 
@@ -285,38 +279,38 @@ Then ask what the sentence tells the reader to do or know. If you cannot restate
 it as a concrete instruction, a fact, or a number, cut it. This is the sharpest
 check in the file, and it is mechanical.
 
-## The rest of the residue (`unslop` 9, 10, 12, 15, 16, 25, 32)
+## The rest of the residue
 
 These are not STE rules. The standard has nothing to say about them, and they
 earn their place by costing a decode.
 
-**Not just X, but Y** (`unslop` 9). Delete `not just` and read what is left. The
+**Not just X, but Y** Delete `not just` and read what is left. The
 clause after `but` is the point, and the setup makes one claim feel like two.
 
-**Rule of three** (`unslop` 10). Count the items. Forcing two real points into
+**Rule of three** Count the items. Forcing two real points into
 three is a shape the writer wanted rather than a number the content has.
 
-**False ranges** (`unslop` 12). Do both ends sit on one scale? `from 200ms to 3
+**False ranges** Do both ends sit on one scale? `from 200ms to 3
 seconds` is a scale. `from types to docs, from tests to release` is not, so list
 the things.
 
-**Boldface and inline headers** (`unslop` 15, 16). Read the paragraph with the
+**Boldface and inline headers** Read the paragraph with the
 bold removed. If it still reads, the bold is decoration. A bold lead-in that
 names the item and is followed by genuinely new detail is fine: **Schema in
 TypeScript.** Tables live in one file.
 
-**Generic conclusions** (`unslop` 25). Could this sentence be in any document?
+**Generic conclusions** Could this sentence be in any document?
 State the specific plan or the fact, or end without a conclusion.
 
-**Mannered prose** (`unslop` 32). Aphorisms, rhetorical fragments for effect,
+**Mannered prose** Aphorisms, rhetorical fragments for effect,
 personified code (`the plan holds it`), figurative verbs (`rides along`). Say
 what you mean.
 
-## Vague attributions moved out (`unslop` 5)
+## Vague attributions belong to evidence
 
 `Experts believe`, `industry reports suggest`, `it is widely known`: either name
-who, or delete. This is not a word-choice rule, it is a truth rule, and
-`principle-evidence` owns it. It holds this rule for technical claims.
+who, or delete. This is not a word-choice rule but a truth rule, so
+`principle-evidence` owns it and holds this for technical claims.
 
 ## One topic per paragraph, at most six sentences (STE 6.4 to 6.6)
 
@@ -381,7 +375,7 @@ If an approved term is unavoidably longer than three words, write it in full at
 first use, then either hyphenate the words that function as one unit or give it a
 short form and use that consistently after.
 
-## Cap what a reader sees at a time (`i-have-adhd` 9, kept)
+## Cap what a reader sees at a time
 
 **Test: more than five visible items in one group?**
 
@@ -394,7 +388,7 @@ on what you know.
 
 The standard has no word-count rule for lists, so this one is local and stays.
 
-## A table cell is a phrase (`i-have-adhd` pre-send, kept)
+## A table cell is a phrase
 
 **Test: does the cell need a comma and a clause to make sense?**
 

@@ -120,7 +120,7 @@ folder it cannot find.
 
 ## Phase F: Cut
 
-Run `unslop` and `i-have-adhd` over every line. Neither is restated here.
+Run `grammar` and `communication` over every line. Neither is restated here.
 
 Show the draft and take the feedback. Expect two or three rounds. A personal
 skill is not a manual: every line that does not change a decision goes, and a

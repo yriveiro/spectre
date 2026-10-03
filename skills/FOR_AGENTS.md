@@ -4,8 +4,8 @@ Read this before writing a leaf: which of three shapes you are writing, the
 template, the measurements behind it, and what a leaf owes the map and the hub.
 
 A **leaf** is a skill this set routes to: 31 of the 77 definitions. 27 are
-`principle-*`, and the other 4 are `grammar`, `no-comments`, `model-router` and
-`i-have-adhd`. The remaining 46 ids are in the `notALeaf` set in
+`principle-*`, and the other 4 are `grammar`, `communication`, `no-comments` and
+`model-router`. The remaining 46 ids are in the `notALeaf` set in
 `skills/definitions/index.ts` — the hub, the map, 23 `playbook-*`, and 20 more
 procedures — and they are registered and read on demand, carrying no row.
 
@@ -88,7 +88,6 @@ same move:
 | --- | --- | --- | --- |
 | `principle-laziness-protocol` | "reader load, hops to trace, state to hold" | "impossible to follow", "one caller", "just forwards", "flatten it" | 48.8% to 60.5% desc, 0 of 6 rows won to 5 of 6 |
 | `principle-make-states-unrepresentable` | "a shape that cannot hold a wrong value" | "a boolean and a flag that must stay in sync", "a cast", "any" | 3 false fires to 1 |
-| `i-have-adhd` | "shape the message, lead with the next action" | "too long", "just the answer", "no preamble" | 0 of 2 rows won to 2 of 2 |
 
 The failure is the same every time: a description written about the principle
 competes with every leaf on that vocabulary, and a prompt carries the prompt's.

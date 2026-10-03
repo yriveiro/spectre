@@ -126,9 +126,9 @@ finding about the tests, and it is the cheapest finding you will get all session
 believe", "industry reports suggest", "it is widely known", "best practice is")
 gives the reader nothing and hides the fact that nobody said it. Either cite who,
 or delete the sentence. If the claim matters it can be checked, so it can carry a
-citation. If it does not matter, it is not there. This was `unslop` rule 5 and
-lives here now: it is a rule about the truth of a claim rather than about the
-sentence around it, and `communication` owns the sentence.
+citation. If it does not matter, it is not there. This is a rule about the truth of
+a claim rather than about the sentence around it, so `grammar` owns the sentence
+and this principle owns the claim.
 
 ## What this principle is not
 

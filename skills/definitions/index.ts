@@ -5,7 +5,6 @@ import { canvas } from "./canvas";
 import { communication } from "./communication";
 import { type Definition } from "./definition";
 import { grammar } from "./grammar";
-import { iHaveAdhd } from "./i-have-adhd";
 import { modelRouter } from "./model-router";
 import { noComments } from "./no-comments";
 import { principleBoundaryDiscipline } from "./principle-boundary-discipline";
@@ -123,7 +122,6 @@ const definitions: ReadonlyArray<Definition> = [
   canvas,
   communication,
   grammar,
-  iHaveAdhd,
   modelRouter,
   noComments,
   principleBoundaryDiscipline,

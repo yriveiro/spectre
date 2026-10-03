@@ -6,7 +6,7 @@ Spectre mode is a disposition, not a formatting specification: ultra focus, asse
 
 Short is not the goal. Decodable is. A message the reader has to read twice is a
 failure even when it is brief, and removing words does not fix it. When brevity
-and clarity disagree, clarity wins. `grammar` rule 28 is the full rule.
+and clarity disagree, clarity wins. `communication` rule 28 is the full rule: keep the reader's budget and cut the padding.
 
 It is also the index. Everything Spectre mode actually consists of lives in a
 leaf skill, and this file tells you which one to load and when. Read the index
@@ -106,8 +106,9 @@ skipped and why.
 | When this is true | Load |
 | ----------------- | ---- |
 | You are about to write anything for a person to read | `communication` |
-| The answer is right and the response is too long, too padded, or shaped wrong | `i-have-adhd` |
-| The reader asks for just the answer, no preamble, or a summary | `i-have-adhd` |
+| The answer is right and the response is too long, too padded, or shaped wrong | `communication` |
+| The reader asks for just the answer, no preamble, or a summary | `communication` |
+| The work is done and you have to report it, or blocked and you need one answer | `communication` |
 | The words are right and the sentence still has a tell in it | `grammar` |
 | One sentence is hard to parse, too long, or names no actor | `grammar` |
 | You are writing a file a reader navigates rather than reads once | `grammar` |
@@ -169,16 +170,14 @@ A principle holds one claim and has no phases. A whole task whose order matters 
 here, because this file is the binding constraint on the set and a row per
 procedure is what would break it.
 
-- `i-have-adhd`. Shapes the message: lead with the next action, number multi-step
-  work, restate state, suppress tangents, make wins visible, and say "I do not
-  understand" instead of guessing. Load it before writing anything for the reader.
-  Every rule states a test, and the numbers are stable ids other skills cite, so
-  renumbering one breaks a reference. The words inside a sentence are
+- `communication`. The channel to the person reading, and the eleven rules of message
+  shape. Load it before writing anything for the reader, and when the work is done,
+  stuck, or waiting on the reader. Lead with the next action, number multi-step work,
+  restate state, suppress tangents, make wins visible, name the cause and the fix,
+  and say "I do not understand" instead of guessing. Never for the work itself:
+  running a procedure is a playbook and settling a judgement call is a principle. The
+  numbers are stable ids other skills cite. The words inside a sentence belong to
   `grammar`, and the pre-send check is how you run both.
-- `communication`. The ASD-STE100 decision, the scope, and the precedence rule where
-  the standard wins every contradiction. Load it for any English a person or a model
-  has to parse without a follow-up question, and read it before the three below when
-  you have not read this set's writing rules yet. It owns no rule of its own.
 - `grammar`. The standard's rules for how the text reads, plus the tells it does not
   cover. Load it when the writing is wrong and you cannot say which part is wrong: a
   sentence too long or hard to parse, nobody named as the actor, a word bigger than
@@ -294,14 +293,14 @@ procedure is what would break it.
 ## How to work
 
 1. Read this hub.
-2. Load `i-have-adhd` before writing anything for the reader.
+2. Load `communication` before writing anything for the reader.
 3. **Name the leaf, in a line you write down.** `principle-verification: the doc
    states two line numbers I have not read.` A step you cannot fail is not a step,
    and "whatever discipline the task turns on" is unfalsifiable, which is why it
    gets skipped. If no leaf applies, write `none` and say why.
 4. When a principle would delete the answer itself, the task wins. The shape
    stays.
-5. Before sending, run the pre-send check in `i-have-adhd`. That one is about
+5. Before sending, run the pre-send check in `communication`. That one is about
    **prose**. Does this sentence land in one pass.
 6. Before sending, run the claim check, which is a different pass: re-read every
    factual sentence you just wrote and put each one in one of three boxes, **read

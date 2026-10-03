@@ -5,7 +5,7 @@ question each: what kind of document this is, how the sentence addresses the
 reader, how much a sentence carries, and whether it reads two ways.
 
 This file owns document structure and the layer the reader is in. `grammar` owns
-the tells inside a sentence and `i-have-adhd` owns the shape of a message. Run
+the tells inside a sentence and `communication` owns the shape of a message. Run
 both over the result rather than reading either again.
 
 ## Start
