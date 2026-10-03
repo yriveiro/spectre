@@ -184,7 +184,7 @@ procedure is what would break it.
   the fact, one thing going by several names, a document that is a wall of text, a
   heading that is just a noun, or a semicolon. Holds the sentence rules, the word rules
   and the document rules in one body, because a prompt that names one of them does not
-  say which group it is in. `lint/prose.ts` checks the mechanical half.
+  say which group it is in. `tools.spectre.prose` checks the mechanical half.
 - `principle-evidence`. Get the proof instead of arguing for it. Find the thing
   that settles the question, check that your check can actually fail, and test
   more than one case. Load it before stating any fact you have not read, and
@@ -285,7 +285,7 @@ procedure is what would break it.
   and keep its summary in the main thread, never the raw payload.
 - `ripwire`. The map from a principle to the command that can falsify its test.
   Load it when a principle applies and you have not measured the code, so the
-  claim gets a run instead of an assertion. It also names the eleven leaves with no
+  claim gets a run instead of an assertion. It also names the ten leaves with no
   instrument, and the ways ripwire is wrong, which is the half that keeps the map
   from becoming deference to a tool. The principles stay generic about tools;
   this is the one file allowed to name one.

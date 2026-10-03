@@ -3,10 +3,10 @@
 Read this before writing a leaf: which of three shapes you are writing, the
 template, the measurements behind it, and what a leaf owes the map and the hub.
 
-A **leaf** is a skill this set routes to: 31 of the 77 definitions. 27 are
+A **leaf** is a skill this set routes to: 31 of the 76 definitions. 27 are
 `principle-*`, and the other 4 are `grammar`, `communication`, `no-comments` and
 `model-router`. The remaining 46 ids are in the `notALeaf` set in
-`skills/definitions/index.ts` — the hub, the map, 23 `playbook-*`, and 20 more
+`skills/definitions/index.ts` — the hub, the map, 23 `playbook-*`, and 18 more
 procedures — and they are registered and read on demand, carrying no row.
 
 ## What you are writing
@@ -74,9 +74,7 @@ moves list. Do not copy them.
 Measured with `ripwire --eval-skills` over a mirror of the bodies — the call
 `test/skills/routing.test.ts` makes — on a 13-leaf, 54-row corpus. **Figures from
 a single session are not quotes.** Re-run `eval/` before you cite one, and say
-which corpus and which slice it came from. The corpus has since moved: the set
-is 31 leaves over 77 definitions and 85 judged-positive rows, so the figures below
-are a record of what was true at 13 leaves, not a number to quote today.
+which corpus and which slice it came from.
 
 **The description is the routing surface, so it names the moment and not the
 subject.** This costs the most and is the hardest to see, because the body is
@@ -154,7 +152,7 @@ one means four things, and skipping any of them is how a port rots.
 
    Two facts they need, kept here so they are not copied into the definition
    files. They are registered only because `load()` dies on a body it does not
-   list. And nothing in this set is auto-invoked — all 77 definitions carry
+   list. And nothing in this set is auto-invoked — all 74 definitions carry
    `autoinvoke: false` — so the hub's trigger table is the only router there is,
    and a skill in neither the table nor the index is reached only by a reader who
    asks for it by name, which is why its description is written for that reader.

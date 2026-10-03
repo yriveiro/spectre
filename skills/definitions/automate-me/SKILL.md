@@ -79,7 +79,7 @@ Group the findings into sections, and ship only the ones with something in them:
 - **Response style**: length, tone, format.
 - **Autonomy**: how much to do without asking, and which tools to reach for.
 - **Understand first**: what to read before scoping a change.
-- **Subagents**: when to delegate, how to split the work, what to hand off.
+- **Subagents**: when to delegate, how to split the work, what to hand over.
 - **Code and prose discipline**: the rules they cite, the linter, the formatter.
 - **Verify**: what "done" means to them, and what counts as proof.
 - **Process**: worktrees, commits, PRs, the review tool.

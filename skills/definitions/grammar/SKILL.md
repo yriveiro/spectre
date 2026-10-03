@@ -22,7 +22,7 @@ the same word for the same thing every time.
 
 ## Why this body trips its own linter
 
-`lint/prose.ts` reports the marketing adjectives in the section below, and it is
+`tools.spectre.prose` reports the marketing adjectives in the section below, and it is
 right to. They are the list of the words the rule bans, so naming them is the rule.
 The only way to clear the finding would be to stop naming them, which would leave
 the rule unusable.
@@ -32,15 +32,18 @@ advisory: the actor is genuinely irrelevant in a sentence about how a prompt rea
 
 ## What has an instrument
 
-`bun run lint/prose.ts` checks the mechanical half. Six rules: semicolon,
-phrasal verb, nominalization, marketing adjective, long sentence, and passive
-voice. Four are hard and two are advisory, so a clean run is not a clean sentence.
+`tools.spectre.prose` checks the mechanical half. Six rules: semicolon, phrasal
+verb, nominalization, marketing adjective, long sentence, and passive voice. Four
+are hard and two are advisory, so a clean run is not a clean sentence.
 
-```sh
-bun run lint/prose.ts --baseline 4 skills/definitions/grammar/SKILL.md
+```js
+await tools.spectre.prose({ targets: ["skills/definitions/grammar/SKILL.md"], disable: ["marketing-adjective"] })
 ```
 
-Advisory means a finding that never fails the run: passive voice, because "is
+That one disables the marketing adjectives, because the section below names them
+and naming them is the rule. Every other hard finding in this file is a real one.
+
+Advisory means a finding that never fails anything: passive voice, because "is
 left" is correct when nothing did the leaving, and the present perfect, because
 `has not been read at source` carries a hedge the simple past cannot.
 
@@ -78,7 +81,7 @@ model cannot call to ask.
 Bad: `State is validated before the write proceeds.`
 Good: `The compiler validates the query before the write proceeds.`
 
-`lint/prose.ts` reports `passive-voice` as advisory, because "is left" is
+`tools.spectre.prose` reports `passive-voice` as advisory, because "is left" is
 correct when nothing did the leaving.
 
 ## Simple tenses (STE 3.2)
@@ -99,7 +102,7 @@ current relevance, and current relevance is the point. Rewrite as `The report is
 not verified at source` and the meaning survives.
 
 So: simple past where the simple past is true, compound where the relevance is
-the claim. `lint/prose.ts` reports `present-perfect` as advisory for this
+the claim. `tools.spectre.prose` reports `present-perfect` as advisory for this
 reason.
 
 ## Length
@@ -159,7 +162,7 @@ A dropped word spends the budget the work needs, so put it back.
 `May have failed` and `failed` are different claims. A hedge is the author's
 stated uncertainty, and it is content.
 
-`lint/prose.ts` never flags `may`, `might` or `could` at all. A linter that
+`tools.spectre.prose` never flags `may`, `might` or `could` at all. A linter that
 pressured hedges out would rewrite claims into facts.
 
 The line to hold: hedge down to one qualifier, never to zero. "Could potentially
@@ -199,7 +202,7 @@ gold-plating, ratchet, endgame, north star, flywheel.
 Substrate becomes base. Wedge in becomes add. Gold-plating becomes more than the
 job needs. Endgame becomes the last phase.
 
-`lint/prose.ts` reports `marketing-adjective` as hard for the small set that
+`tools.spectre.prose` reports `marketing-adjective` as hard for the small set that
 claims quality without showing it: seamless, robust, cutting-edge, effortless,
 blazing-fast, world-class, state-of-the-art, game-changing, best-in-class.
 
@@ -216,7 +219,7 @@ Good: `The wrapper helps the caller.`
 Also: fancy ways to say is. `Serves as`, `stands as`, `boasts` and `features`
 are `is` and `has` wearing a costume. Just write `is`.
 
-`lint/prose.ts` reports `nominalization` as hard, and catches the frozen-action
+`tools.spectre.prose` reports `nominalization` as hard, and catches the frozen-action
 shape. It cannot catch `serves as`, which is a person reading it.
 
 ## No phrasal verbs (STE 9.3)
@@ -241,7 +244,7 @@ Measured on this set before adoption: 10 occurrences across 79 files.
 `fuel pump valve` is three and fine. `high pressure fuel pump inlet valve
 assembly` is six and unreadable.
 
-`lint/prose.ts` does not check this one, and the header says why: it needs
+`tools.spectre.prose` does not check this one, and the header says why: it needs
 part-of-speech tagging, and a regex false-positives on every hyphenated
 compound. It is a judgement. Count the stack.
 

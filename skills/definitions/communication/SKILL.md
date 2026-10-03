@@ -207,13 +207,13 @@ Deleting is the easy half. The rest of this check protects the message:
 
 Then run the mechanical half, which is a script rather than a judgement:
 
-```sh
-bun run lint/prose.ts --baseline 9 <file>
+```js
+await tools.spectre.prose({ targets: ["<the file or message you are about to send>"] })
 ```
 
-`--baseline N` tolerates N hard findings. A finding is a sentence to read, not a
-defect to clear before you send. What the script cannot check is the active
-requirements above, which is why the pass is two steps and not one.
+A finding is a sentence to read, not a defect to clear before you send. What the
+tool cannot check is the active requirements above, which is why the pass is two
+steps and not one.
 
 Then verify two things. If the reader read only the first line, do they know what to do next? If they read only the last line, do they know what just happened?
 

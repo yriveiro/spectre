@@ -30,7 +30,7 @@ Open a `todolist` with one entry per phase.
 3. Work the blocker
 4. Classify a red check
 5. Answer the bots
-6. Hand off
+6. Hand the session over
 
 ## Phase A: Declare
 
@@ -105,7 +105,7 @@ to `gh api --method POST "repos/<owner>/<repo>/pulls/<pr>/comments/<id>/replies"
 pattern and still escalate anything touching security, auth, billing, data or
 migrations. Never churn code to quiet a bot.
 
-## Phase F: Hand off
+## Phase F: Hand the session over
 
 **Stop at the human's line.** Owner approval is a wait, not a blocker to fix.
 This playbook never authorizes a merge, an auto-merge, or a merge-when-ready

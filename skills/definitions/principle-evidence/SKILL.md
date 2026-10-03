@@ -122,14 +122,6 @@ it is an improvement instead of asserting it.
 **Let a red suite be the good outcome.** A mutation that no test catches is a
 finding about the tests, and it is the cheapest finding you will get all session.
 
-**Name the source or drop the claim.** An attribution with no name ("experts
-believe", "industry reports suggest", "it is widely known", "best practice is")
-gives the reader nothing and hides the fact that nobody said it. Either cite who,
-or delete the sentence. If the claim matters it can be checked, so it can carry a
-citation. If it does not matter, it is not there. This is a rule about the truth of
-a claim rather than about the sentence around it, so `grammar` owns the sentence
-and this principle owns the claim.
-
 ## What this principle is not
 
 - **Not a substitute for judgement.** A number narrows the field; it does not pick.
