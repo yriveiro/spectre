@@ -120,47 +120,47 @@ export const tuned: ReadonlyArray<Row> = [
   },
   {
     prompt: "this readme reads like it was written by a chatbot",
-    label: "grammar-words",
+    label: "grammar",
     provenance: "judged",
   },
   {
     prompt: "tighten this paragraph, it has a lot of filler",
-    label: "grammar-words",
+    label: "grammar",
     provenance: "judged",
   },
   {
     prompt: "this doc says utilize and leverage everywhere, it reads like marketing",
-    label: "grammar-words",
+    label: "grammar",
     provenance: "judged",
   },
   {
     prompt: "the user is called the customer in one paragraph and the client in the next",
-    label: "grammar-words",
+    label: "grammar",
     provenance: "judged",
   },
   {
     prompt: "i had to read this sentence three times to work out who is validating what",
-    label: "grammar-sentence",
+    label: "grammar",
     provenance: "judged",
   },
   {
     prompt: "this sentence runs on for half a page",
-    label: "grammar-sentence",
+    label: "grammar",
     provenance: "judged",
   },
   {
     prompt: "the config file is one long run-on sentence, can you fix the punctuation",
-    label: "grammar-sentence",
+    label: "grammar",
     provenance: "judged",
   },
   {
     prompt: "this readme is a wall of text, i cannot find the install step",
-    label: "grammar-text",
+    label: "grammar",
     provenance: "judged",
   },
   {
     prompt: "every heading in this doc is just a noun",
-    label: "grammar-text",
+    label: "grammar",
     provenance: "judged",
   },
   {

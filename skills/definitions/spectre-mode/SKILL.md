@@ -6,7 +6,7 @@ Spectre mode is a disposition, not a formatting specification: ultra focus, asse
 
 Short is not the goal. Decodable is. A message the reader has to read twice is a
 failure even when it is brief, and removing words does not fix it. When brevity
-and clarity disagree, clarity wins. `unslop` rule 28 is the full rule.
+and clarity disagree, clarity wins. `grammar` rule 28 is the full rule.
 
 It is also the index. Everything Spectre mode actually consists of lives in a
 leaf skill, and this file tells you which one to load and when. Read the index
@@ -108,10 +108,10 @@ skipped and why.
 | You are about to write anything for a person to read | `communication` |
 | The answer is right and the response is too long, too padded, or shaped wrong | `i-have-adhd` |
 | The reader asks for just the answer, no preamble, or a summary | `i-have-adhd` |
-| The words are right and the sentence still has a tell in it | `grammar-words` |
-| One sentence is hard to parse, too long, or names no actor | `grammar-sentence` |
-| You are writing a file a reader navigates rather than reads once | `grammar-text` |
-| You are writing a commit message, a code comment, or a doc where the wording carries the meaning | `grammar-sentence` |
+| The words are right and the sentence still has a tell in it | `grammar` |
+| One sentence is hard to parse, too long, or names no actor | `grammar` |
+| You are writing a file a reader navigates rather than reads once | `grammar` |
+| You are writing a commit message, a code comment, or a doc where the wording carries the meaning | `grammar` |
 | You are about to send a response holding items the reader never saw resolved | `principle-laziness-protocol` |
 | You are about to state a fact you have not read at its source | `principle-evidence` |
 | You are choosing between two ways to build something | `principle-evidence` |
@@ -174,23 +174,18 @@ procedure is what would break it.
   understand" instead of guessing. Load it before writing anything for the reader.
   Every rule states a test, and the numbers are stable ids other skills cite, so
   renumbering one breaks a reference. The words inside a sentence are
-  `unslop`, and the pre-send check is how you run both.
+  `grammar`, and the pre-send check is how you run both.
 - `communication`. The ASD-STE100 decision, the scope, and the precedence rule where
   the standard wins every contradiction. Load it for any English a person or a model
   has to parse without a follow-up question, and read it before the three below when
   you have not read this set's writing rules yet. It owns no rule of its own.
-- `grammar-sentence`. One sentence, one claim, one named actor. Load it when a
-  sentence is hard to parse, too long, in the wrong tense, in the passive with nobody
-  named, or joined to a second instruction. Holds the standard's sentence rules and
-  the 25-word cap. Passivity and the present perfect are advisory, because both can
-  carry a claim.
-- `grammar-words`. One word, one meaning, the plainest one. Load it when choosing a
-  word, naming something, or when one thing is going by several names in the same
-  document. Holds the standard's word rules and the tells the standard does not
-  cover.
-- `grammar-text`. The shape of a document, for a file a reader navigates. Load it for
-  a README, a SKILL.md, a design note, a runbook. One topic per paragraph, a list for
-  a sequence, a heading that says what is under it. Nothing here has an instrument.
+- `grammar`. The standard's rules for how the text reads, plus the tells it does not
+  cover. Load it when the writing is wrong and you cannot say which part is wrong: a
+  sentence too long or hard to parse, nobody named as the actor, a word bigger than
+  the fact, one thing going by several names, a document that is a wall of text, a
+  heading that is just a noun, or a semicolon. Holds the sentence rules, the word rules
+  and the document rules in one body, because a prompt that names one of them does not
+  say which group it is in. `lint/prose.ts` checks the mechanical half.
 - `principle-evidence`. Get the proof instead of arguing for it. Find the thing
   that settles the question, check that your check can actually fail, and test
   more than one case. Load it before stating any fact you have not read, and
@@ -291,7 +286,7 @@ procedure is what would break it.
   and keep its summary in the main thread, never the raw payload.
 - `ripwire`. The map from a principle to the command that can falsify its test.
   Load it when a principle applies and you have not measured the code, so the
-  claim gets a run instead of an assertion. It also names the twelve leaves with no
+  claim gets a run instead of an assertion. It also names the eleven leaves with no
   instrument, and the ways ripwire is wrong, which is the half that keeps the map
   from becoming deference to a tool. The principles stay generic about tools;
   this is the one file allowed to name one.

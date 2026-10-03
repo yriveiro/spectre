@@ -58,7 +58,7 @@ Then check it by asking whether a real prompt's words appear in it. If they do
 not, the description is about the wrong thing.
 
 One word for each action, keep the articles, and avoid an `-ing` form where a
-plain verb does the work. `unslop` is the pass for all of this and it is not
+plain verb does the work. `grammar` is the pass for all of this and it is not
 optional on a leaf.
 
 ## Phase D: Point at structure

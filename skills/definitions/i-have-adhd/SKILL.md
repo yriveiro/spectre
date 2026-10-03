@@ -11,7 +11,8 @@ reader's own state across a whole response, which no rule in either file covers 
 which is `principle-laziness-protocol`.
 
 Rule numbers are stable ids. Other skills cite them, so a renumbered rule breaks a
-reference and a deleted rule leaves a gap. The numbering stops at 11; do not renumber rules or fill the gap.
+reference and a deleted rule leaves a gap. The numbering stops at 11. Do not renumber
+rules and do not fill the gap.
 
 ## Persistence
 

@@ -47,7 +47,7 @@ Write the plan to a file. Unless the user names a path, put it under `docs/`.
 Keep the headings and the order below: one section per pull request, and one
 pull request is one change carrying its own evidence.
 
-Write under `technical-writing`, then pass it through `unslop`. The body is one
+Write under `technical-writing`, then pass it through `grammar`. The body is one
 mode throughout, a how-to; explanation and reference go in the appendices. Each
 heading states the task or the finding rather than naming a category. No long
 dashes, and no colon in the middle of a sentence.

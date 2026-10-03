@@ -60,7 +60,7 @@ bun run lint/prose.ts --baseline 12 skills/definitions/<id>/SKILL.md
 
 `--baseline N` tolerates N hard findings, which is how this set adopted the
 rules without rewriting 79 files first. A finding count is not a defect list to
-clear before you send; it is a list to read.
+clear before you send. It is a list to read.
 
 The prose in the rule bodies here passes the rules, or says why it does not.
 Where a body deliberately keeps a violation, the reason is in the body. An

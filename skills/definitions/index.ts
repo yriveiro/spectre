@@ -4,6 +4,7 @@ import { bro } from "./bro";
 import { canvas } from "./canvas";
 import { communication } from "./communication";
 import { type Definition } from "./definition";
+import { grammar } from "./grammar";
 import { iHaveAdhd } from "./i-have-adhd";
 import { modelRouter } from "./model-router";
 import { noComments } from "./no-comments";
@@ -40,9 +41,6 @@ import { automateMe } from "./automate-me";
 import { blastRadius } from "./blast-radius";
 import { createVerificationSkill } from "./create-verification-skill";
 import { figureItOut } from "./figure-it-out";
-import { grammarSentence } from "./grammar-sentence";
-import { grammarText } from "./grammar-text";
-import { grammarWords } from "./grammar-words";
 import { how } from "./how";
 import { interrogate } from "./interrogate";
 import { maintainVerificationSkill } from "./maintain-verification-skill";
@@ -124,9 +122,7 @@ const definitions: ReadonlyArray<Definition> = [
   bro,
   canvas,
   communication,
-  grammarSentence,
-  grammarText,
-  grammarWords,
+  grammar,
   iHaveAdhd,
   modelRouter,
   noComments,
