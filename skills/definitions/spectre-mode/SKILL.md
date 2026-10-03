@@ -105,11 +105,13 @@ skipped and why.
 
 | When this is true | Load |
 | ----------------- | ---- |
-| You are about to write anything for a person to read | `i-have-adhd` |
+| You are about to write anything for a person to read | `communication` |
 | The answer is right and the response is too long, too padded, or shaped wrong | `i-have-adhd` |
 | The reader asks for just the answer, no preamble, or a summary | `i-have-adhd` |
-| The words are right and the sentence still has a tell in it | `unslop` |
-| You are writing a commit message, a code comment, or a doc where the wording carries the meaning | `unslop` |
+| The words are right and the sentence still has a tell in it | `grammar-words` |
+| One sentence is hard to parse, too long, or names no actor | `grammar-sentence` |
+| You are writing a file a reader navigates rather than reads once | `grammar-text` |
+| You are writing a commit message, a code comment, or a doc where the wording carries the meaning | `grammar-sentence` |
 | You are about to send a response holding items the reader never saw resolved | `principle-laziness-protocol` |
 | You are about to state a fact you have not read at its source | `principle-evidence` |
 | You are choosing between two ways to build something | `principle-evidence` |
@@ -173,15 +175,22 @@ procedure is what would break it.
   Every rule states a test, and the numbers are stable ids other skills cite, so
   renumbering one breaks a reference. The words inside a sentence are
   `unslop`, and the pre-send check is how you run both.
-- `unslop`. Cuts the tells out of writing so the reader spends nothing on decoding.
-  Load it before sending anything a person will read, and when a commit message, a
-  code comment, a doc, or a report carries meaning in its wording. Each rule has a
-  check: a dash, an -ing clause at the end of a sentence, an adjective with no fact
-  behind it, three items where the content has two, a colon doing a sentence's job,
-  a bold label restating the line after it, an attribution with no name. The
-  sharpest is rule 27: if the sentence could appear unchanged in another project's
-  docs, it says nothing about this one, so cut it. Say what the thing does, not how
-  it feels. Grep for the two mechanical ones, read the rest.
+- `communication`. The ASD-STE100 decision, the scope, and the precedence rule where
+  the standard wins every contradiction. Load it for any English a person or a model
+  has to parse without a follow-up question, and read it before the three below when
+  you have not read this set's writing rules yet. It owns no rule of its own.
+- `grammar-sentence`. One sentence, one claim, one named actor. Load it when a
+  sentence is hard to parse, too long, in the wrong tense, in the passive with nobody
+  named, or joined to a second instruction. Holds the standard's sentence rules and
+  the 25-word cap. Passivity and the present perfect are advisory, because both can
+  carry a claim.
+- `grammar-words`. One word, one meaning, the plainest one. Load it when choosing a
+  word, naming something, or when one thing is going by several names in the same
+  document. Holds the standard's word rules and the tells the standard does not
+  cover.
+- `grammar-text`. The shape of a document, for a file a reader navigates. Load it for
+  a README, a SKILL.md, a design note, a runbook. One topic per paragraph, a list for
+  a sequence, a heading that says what is under it. Nothing here has an instrument.
 - `principle-evidence`. Get the proof instead of arguing for it. Find the thing
   that settles the question, check that your check can actually fail, and test
   more than one case. Load it before stating any fact you have not read, and

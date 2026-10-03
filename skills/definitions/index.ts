@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { arena } from "./arena";
 import { bro } from "./bro";
 import { canvas } from "./canvas";
+import { communication } from "./communication";
 import { type Definition } from "./definition";
 import { iHaveAdhd } from "./i-have-adhd";
 import { modelRouter } from "./model-router";
@@ -39,6 +40,9 @@ import { automateMe } from "./automate-me";
 import { blastRadius } from "./blast-radius";
 import { createVerificationSkill } from "./create-verification-skill";
 import { figureItOut } from "./figure-it-out";
+import { grammarSentence } from "./grammar-sentence";
+import { grammarText } from "./grammar-text";
+import { grammarWords } from "./grammar-words";
 import { how } from "./how";
 import { interrogate } from "./interrogate";
 import { maintainVerificationSkill } from "./maintain-verification-skill";
@@ -73,7 +77,6 @@ import { playbookTraceForensics } from "./playbook-trace-forensics";
 import { playbookVisualParity } from "./playbook-visual-parity";
 import { ripwire } from "./ripwire";
 import { swarm } from "./swarm";
-import { unslop } from "./unslop";
 import { why } from "./why";
 import { worktreeCleanup } from "./worktree-cleanup";
 
@@ -120,6 +123,10 @@ const definitions: ReadonlyArray<Definition> = [
   arena,
   bro,
   canvas,
+  communication,
+  grammarSentence,
+  grammarText,
+  grammarWords,
   iHaveAdhd,
   modelRouter,
   noComments,
@@ -153,7 +160,6 @@ const definitions: ReadonlyArray<Definition> = [
   principleGuardTheContextWindow,
   ripwire,
   swarm,
-  unslop,
 ];
 
 /**
@@ -169,6 +175,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "blast-radius",
   "bro",
   "canvas",
+  "communication",
   "create-verification-skill",
   "figure-it-out",
   "how",

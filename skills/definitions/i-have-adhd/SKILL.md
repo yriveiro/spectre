@@ -6,9 +6,9 @@ Assertive is not the same as mute. Explain the thing. Cut the padding around it.
 
 These are the rules about the shape of a message: what comes first, what is left
 open, what the reader has to hold. The words inside a sentence belong to
-`unslop`, and so does the question of whether a sentence lands in one pass. The
-gap between those two files is the reader's own state across a whole response,
-which no rule in either file covers and which is `principle-laziness-protocol`.
+`communication`, which owns that under ASD-STE100. The gap between the two is the
+reader's own state across a whole response, which no rule in either file covers and
+which is `principle-laziness-protocol`.
 
 Rule numbers are stable ids. Other skills cite them, so a renumbered rule breaks a
 reference and a deleted rule leaves a gap. The numbering stops at 11; do not renumber rules or fill the gap.
@@ -53,6 +53,8 @@ Each step is one bounded action. Use the fewest that still work, fold trivial st
 3. Run `npm test -- auth.spec.ts`
 ```
 
+The punctuation and the list shape are `grammar-text`, under ASD-STE100 rule 4.3.
+
 ### 3. End with one concrete next action
 
 **Test: is anything still open, and does the last line name one thing that takes under two minutes?**
@@ -90,11 +92,14 @@ Not buried in a recap of what you did.
 
 Good: "Login now works with magic links. Try: `npm run dev`, open `/login`."
 
-### 8. Matter-of-fact tone for errors
+### 8. Name the cause and the fix
 
-**Test: does it name cause and fix, with no adjective of feeling?**
+**Test: does it name both, with no adjective of feeling?**
 
-Never "Uh oh", "Oh no", or "There seems to be a problem".
+Never "Uh oh", "Oh no", or "There seems to be a problem". The wording of the
+sentence is `grammar-sentence` under ASD-STE100 rule 3.6, which requires the
+active voice and a named actor. What stays here is the obligation to name the
+cause and the fix, because a reader who has both does not need a paragraph.
 
 Good: "Test fails at `auth.spec.ts:42`: expected 200, got 401. Cause: missing auth header. Fix: add `Authorization: Bearer ${token}` to the request."
 
@@ -124,7 +129,8 @@ One line, then ask the question that unblocks you or go get the answer yourself 
 
 > I do not understand <the specific thing>. Here is what I do understand: ...
 
-Hedging is not the same as admitting a gap. "This might possibly be the issue" says nothing. "I do not know whether this is the cause" says exactly what is true. `unslop` rule 24 owns the qualifiers you can count and delete.
+Hedging is not the same as admitting a gap. "This might possibly be the issue" says nothing. "I do not know whether this is the cause" says exactly what is true. `grammar-sentence` owns the qualifiers, and it is on the side of keeping them: a
+hedge is the author's stated confidence, so it is content.
 
 ## When to break the rules
 
@@ -142,13 +148,23 @@ Before sending, delete:
 
 1. The first sentence if it announces what you are about to do, and the last if it asks "anything else" or recaps what just happened. Rule 1 and rule 10 own those, so this is the pass, not a third statement of them.
 2. Any "by the way" sidebar.
-3. Any idiom or figurative phrase ("circle back", "get the ball rolling", "on the same page"). Replace with the literal action.
+3. Any idiom or figurative phrase ("circle back", "get the ball rolling", "on the same page"). Replace with the literal action. `grammar-words` covers the case under ASD-STE100 rule 9.3.
 4. Any sentence that exists to sound thorough rather than to carry information.
 
 Deleting is the easy half. The rest of this check protects the message:
 
 5. Put back anything you cut that carried meaning. If a sentence is the only place the reader learns a fact, a caveat, or a limit, it was never padding.
 6. A table cell should be a phrase. If a cell needs a comma and a clause to make sense, it belongs in prose under the table.
+
+Then run the mechanical half, which is a script rather than a judgement:
+
+```sh
+bun run lint/prose.ts --baseline 4 <file>
+```
+
+`--baseline N` tolerates N hard findings. A finding is a sentence to read, not a
+defect to clear before you send. What the script cannot check is the active
+requirements above, which is why the pass is two steps and not one.
 
 Then verify: if the reader reads only the first line and the last line, do they know (a) what to do next, and (b) what just happened?
 
