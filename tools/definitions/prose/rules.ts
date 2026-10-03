@@ -125,14 +125,21 @@ export const sentences = (line: string): Array<string> =>
     .filter((s) => s.trim().length > 0)
     .map((s) => s.split(ABBREV_DOT).join(".").split(NUM_DOT).join("."));
 
-export const lint = (text: string, disabled: ReadonlySet<string> = new Set()): Array<Finding> => {
-  const findings: Array<Finding> = [];
-
-  // Inline code spans wrap across line breaks, so the span state carries between lines.
-  // A per-line `[^`]*` match cannot see a closing backtick on the next line and reports a
-  // semicolon inside a TypeScript type literal as prose.
+/**
+ * Drop inline code spans, carrying the span state between lines. A per-line
+ * `[^`]*` match cannot see a closing backtick on the next line, so a semicolon
+ * inside a TypeScript type literal would read as prose. A per-character walk is
+ * what makes the span state survive the line break; `inSpan` is returned because
+ * the next line continues whatever this one left open.
+ */
+const stripSpans = (lines: ReadonlyArray<{ line: number; text: string }>): ReadonlyArray<{
+  line: number;
+  text: string;
+}> => {
+  const out: Array<{ line: number; text: string }> = [];
   let inSpan = false;
-  for (const { line, text: raw } of proseLines(text)) {
+
+  for (const { line, text: raw } of lines) {
     if (isStructural(raw)) continue;
     const stripped = raw.replace(/\[[^\]]*\]\([^)]*\)/g, " link ");
     let bare = "";
@@ -144,26 +151,35 @@ export const lint = (text: string, disabled: ReadonlySet<string> = new Set()): A
       }
       if (!inSpan) bare += ch;
     }
-
-    for (const spec of SPECS) {
-      if (disabled.has(spec.rule)) continue;
-      for (const m of bare.matchAll(spec.pattern)) {
-        findings.push({ rule: spec.rule, level: spec.level, line, text: m[0].trim(), why: spec.why });
-      }
-    }
-    for (const sentence of sentences(bare)) {
-      const n = wordList(sentence).length;
-      if (n > WORD_LIMIT) {
-        findings.push({
-          rule: "long-sentence",
-          level: "hard",
-          line,
-          text: `${n} words`,
-          why: `STE 6.3 caps descriptive prose at ${WORD_LIMIT} words. Split it.`,
-        });
-      }
-    }
+    if (bare.trim().length > 0) out.push({ line, text: bare });
   }
 
-  return findings;
+  return out;
 };
+
+const ruleFindings = (line: number, bare: string, disabled: ReadonlySet<string>): Array<Finding> => {
+  const out: Array<Finding> = [];
+
+  for (const spec of SPECS) {
+    if (disabled.has(spec.rule)) continue;
+    for (const m of bare.matchAll(spec.pattern)) {
+      out.push({ rule: spec.rule, level: spec.level, line, text: m[0].trim(), why: spec.why });
+    }
+  }
+  for (const sentence of sentences(bare)) {
+    const n = wordList(sentence).length;
+    if (n <= WORD_LIMIT) continue;
+    out.push({
+      rule: "long-sentence",
+      level: "hard",
+      line,
+      text: `${n} words`,
+      why: `STE 6.3 caps descriptive prose at ${WORD_LIMIT} words. Split it.`,
+    });
+  }
+
+  return out;
+};
+
+export const lint = (text: string, disabled: ReadonlySet<string> = new Set()): Array<Finding> =>
+  stripSpans(proseLines(text)).flatMap(({ line, text }) => ruleFindings(line, text, disabled));
