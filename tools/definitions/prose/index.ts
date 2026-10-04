@@ -2,7 +2,7 @@ import { relative, resolve } from "node:path";
 import type { AbsolutePath } from "@opencode/schema/schema";
 import type { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
-import { approves, type Loaded, loadDictionary, lookup, type Ruling } from "./dictionary";
+import { approves, deciding, type Loaded, loadDictionary, lookup } from "./dictionary";
 import { lint, RULE_NAMES } from "./rules";
 
 const Input = Schema.Struct({
@@ -57,6 +57,8 @@ const Output = Schema.Struct({
       alternatives: Schema.Array(Schema.Struct({ word: Schema.String, pos: Schema.String })),
       meaning: Schema.String,
       page: Schema.String,
+      /** Parts of speech this word is NOT approved for, when it splits by part of speech. */
+      alsoNotApprovedFor: Schema.Array(Schema.String),
     }),
   ),
   dictionary: Schema.optional(
@@ -199,17 +201,25 @@ const scanTarget = async (
 const rule = (loaded: Loaded, word: string): Page["rulings"][number] => {
   const asked = word.trim();
   const got = approves(loaded, asked);
-  const exact = lookup(loaded, asked);
+  // The entry that decided the verdict, not the first one in the file: `check`
+  // has two, and the noun is approved while the verb is not.
+  const decided = deciding(got);
+  const known = decided === undefined ? lookup(loaded, asked) : got.all;
 
   return {
     word: asked,
     verdict: got.verdict,
-    pos: got.rulings[0]?.pos === "" ? undefined : got.rulings[0]?.pos,
-    headword: exact[0]?.headword ?? "",
-    approvedFor: got.rulings.filter((one) => one.approved).map((one: Ruling) => one.pos || "any"),
-    alternatives: got.rulings.flatMap((one) => one.alternatives),
-    meaning: got.rulings[0]?.meaning ?? "",
-    page: got.rulings[0]?.page ?? "",
+    pos: decided?.pos === "" || decided === undefined ? undefined : decided.pos,
+    headword: decided?.headword ?? "",
+    approvedFor: got.applicable.filter((one) => one.approved).map((one) => one.pos || "any"),
+    // The alternatives belong to the entries that were ruled on, not to every
+    // sense the word happens to have.
+    alternatives: got.applicable.flatMap((one) => one.alternatives),
+    meaning: decided?.meaning ?? "",
+    page: decided?.page ?? "",
+    // One word, more than one verdict, when the dictionary splits it by part of
+    // speech and the caller did not say which. A reader needs to see both.
+    alsoNotApprovedFor: known.filter((one) => !one.approved).map((one) => one.pos || "any"),
   };
 };
 

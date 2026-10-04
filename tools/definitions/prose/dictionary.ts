@@ -50,6 +50,14 @@ type Export_ = {
   readonly entries?: ReadonlyArray<Entry>;
 };
 
+export type Verdict = {
+  readonly verdict: "approved" | "not-approved" | "unknown";
+  /** The entries that decided it. */
+  readonly applicable: ReadonlyArray<Ruling>;
+  /** Every entry for the word, whatever its part of speech. */
+  readonly all: ReadonlyArray<Ruling>;
+};
+
 export type Loaded = {
   readonly entries: ReadonlyMap<string, ReadonlyArray<Ruling>>;
   readonly issue: string;
@@ -162,23 +170,40 @@ export const lookup = (loaded: Loaded, word: string): ReadonlyArray<Ruling> =>
  * a word missing from the export may be a technical noun the reader declared,
  * and reporting that as a violation would be wrong.
  */
-export const approves = (
-  loaded: Loaded,
-  word: string,
-  pos?: string,
-): {
-  readonly verdict: "approved" | "not-approved" | "unknown";
-  readonly rulings: ReadonlyArray<Ruling>;
-} => {
-  const rulings = lookup(loaded, word);
-  if (rulings.length === 0) return { verdict: "unknown", rulings };
+export const approves = (loaded: Loaded, word: string, pos?: string): Verdict => {
+  const all = lookup(loaded, word);
+  if (all.length === 0) return { verdict: "unknown", applicable: all, all };
 
   const wanted = pos?.trim().toLowerCase() ?? "";
-  const applicable =
-    wanted === ""
-      ? rulings
-      : rulings.filter((one) => one.pos === "" || one.pos.toLowerCase() === wanted);
 
-  if (applicable.length === 0) return { verdict: "not-approved", rulings };
-  return { verdict: applicable.some((one) => one.approved) ? "approved" : "not-approved", rulings };
+  // A part of speech was asked for, so the entries for it decide the verdict and
+  // the others are reported beside it. `check` without a part of speech is
+  // genuinely two answers: CHECK (n) is approved and check (v) is not, and
+  // reporting the first one found would answer a question nobody asked.
+  const matched =
+    wanted === "" ? all : all.filter((one) => one.pos === "" || one.pos.toLowerCase() === wanted);
+  if (matched.length === 0) return { verdict: "not-approved", applicable: [], all };
+
+  // No part of speech asked for, so only the approved entries decide it. When
+  // nothing is approved, every entry is reported instead: those are the ones
+  // carrying the alternatives, and reporting none would answer "not approved"
+  // with no way forward.
+  const approved = matched.filter((one) => one.approved);
+  const applicable = wanted === "" && approved.length > 0 ? approved : matched;
+
+  return {
+    verdict: approved.length > 0 ? "approved" : "not-approved",
+    applicable,
+    all,
+  };
+};
+
+/**
+ * The entry a reader would open in their own PDF: the first one that decided the
+ * verdict, and a not-approved entry when the word has nothing approved at all.
+ */
+export const deciding = (asked: Verdict): Ruling | undefined => {
+  const approved = asked.applicable.find((one) => one.approved);
+  if (approved !== undefined) return approved;
+  return asked.applicable[0] ?? asked.all[0];
 };

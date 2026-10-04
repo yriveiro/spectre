@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   approves,
   buildIndex,
+  deciding,
   type Entry,
   loadDictionary,
   lookup,
@@ -27,6 +28,15 @@ const SECURE: Entry = {
   alternatives: [{ word: "ATTACH", pos: "v" }],
   page: "2-1-S7",
 };
+const CHECK_V: Entry = {
+  headword: "check (v)",
+  pos: "v",
+  approved: false,
+  alternatives: [{ word: "CHECK", pos: "n" }],
+  page: "2-1-C6",
+};
+const USE_N: Entry = { headword: "use (n)", pos: "n", approved: false, page: "2-1-U8" };
+const USE_V: Entry = { headword: "USE (v)", pos: "v", approved: true, page: "2-1-U8" };
 const COME_ON: Entry = {
   headword: "COME ON (v)",
   pos: "v",
@@ -119,15 +129,48 @@ describe("a ruling", () => {
     const loaded = await one([SECURE]);
     const got = approves(loaded, "secure");
     expect(got.verdict).toBe("not-approved");
-    expect(got.rulings[0]?.alternatives).toEqual([{ word: "ATTACH", pos: "v" }]);
+    expect(got.applicable[0]?.alternatives).toEqual([{ word: "ATTACH", pos: "v" }]);
   });
 
   test("a part of speech the entry does not hold for is not approved", async () => {
     // CHECK is approved as a noun only, so `check the valve` is rule 1.2 broken.
-    const loaded = await one([CHECK]);
+    const loaded = await one([CHECK, CHECK_V]);
+    // No part of speech asked for, and the dictionary splits it: CHECK (n) is
+    // approved and check (v) is not. Reporting the approved one would be a lie by
+    // omission, because `check` is a verb in 231 places in this set.
     expect(approves(loaded, "check").verdict).toBe("approved");
+    expect(approves(loaded, "check").applicable.map((one) => `${one.pos}:${one.approved}`)).toEqual(
+      ["n:true"],
+    );
     expect(approves(loaded, "check", "n").verdict).toBe("approved");
     expect(approves(loaded, "check", "v").verdict).toBe("not-approved");
+  });
+
+  test("a word split by part of speech is approved and not approved at once", async () => {
+    // The real export has CHECK (n) approved and check (v) not approved. Reporting
+    // only "approved" would read as a clean bill for a verb this set uses 231 times.
+    const loaded = await one([CHECK, CHECK_V]);
+    const got = approves(loaded, "check");
+    expect(got.verdict).toBe("approved");
+    expect(got.applicable.map((one) => one.pos)).toEqual(["n"]);
+    expect(got.all.filter((one) => !one.approved).map((one) => one.pos)).toEqual(["v"]);
+  });
+
+  test("the entry that decided is the approved one, not the first in the file", async () => {
+    // The export lists the lowercase, not-approved noun after the uppercase verb for
+    // USE, so reading the first entry found would invert the answer.
+    const loaded = await one([USE_N, USE_V]);
+    expect(deciding(approves(loaded, "use"))?.pos).toBe("v");
+  });
+
+  test("a word with nothing approved still reports its alternatives", async () => {
+    // The bug this pins: reporting no alternatives answers "not approved" with no
+    // way forward, which is the one case where the reader needs them most.
+    const loaded = await one([SECURE]);
+    const got = approves(loaded, "secure");
+    expect(got.verdict).toBe("not-approved");
+    expect(got.applicable).toHaveLength(1);
+    expect(got.applicable[0]?.alternatives).toEqual([{ word: "ATTACH", pos: "v" }]);
   });
 
   test("an entry with no part of speech answers any part of speech", () => {
