@@ -6,7 +6,7 @@ Status: designed, not built. Every signature below is a sketch with
 ## Goal
 
 A coding agent forgets everything between sessions. `AGENTS.md` says what is true
-about a project and rots; `ripwire` says what the code currently does and knows
+about a project and rots. `ripwire` says what the code currently does and knows
 nothing about why. The brain is the third thing: **what the code cannot show**.
 
 It holds the feature map of whatever project spectre runs in — which surfaces are
@@ -292,7 +292,7 @@ near-synonym routers for one job. The body is the procedure:
 4. **Supersede, never edit. Demote, never delete.** Both are edges with a `why`,
    and `git log` is the recovery path.
 5. **Hand a sweep to `mnemonic`.** Seeding, reconciling and pruning are a
-   300-note scan; doing that in the session that asked the question evicts the
+   300-note scan. Doing that in the session that asked the question evicts the
    question. A session asserts and relates. `mnemonic` curates.
 6. **Stop when `ripwire` is the right instrument.** Callers, blast radius,
    history and co-change already have a tool, a measurement and a map row.
@@ -371,7 +371,7 @@ already state. It stops at a claim cap or a token cap, whichever comes first.
 
 The cap is small on purpose. The seed's job is to make the **first recall**
 useful, not to be complete. Aider budgets a repo map at ~1k tokens and OpenHands
-injects ~6k characters; a seed that tries to hold the whole project reproduces
+injects ~6k characters. A seed that tries to hold the whole project reproduces
 exactly the `AGENTS.md` rot the research found — bloat, stale claims, and
 contradictions between nested files that the resolver settles arbitrarily.
 
@@ -383,9 +383,9 @@ symbol is a grouping the model got wrong, and it is visible **in the return valu
 of the call that created it**. `mnemonic` supersedes it or re-asserts it.
 
 This is where the graft from seat 1 earns its keep, and it is aimed at the least
-trustworthy write the system makes: a cold seed is a guess about a codebase
-nobody has read yet, so it is the one write that arrives with a measurement
-beside it instead of a promise.
+trustworthy write the system makes. A cold seed is a guess about a codebase
+nobody read yet, so it is the one write that arrives with a measurement beside it
+instead of a promise.
 
 **The unit of rigor is the feature, not the sentence.** Borrowed from
 `maintain-verification-skill`, and it changes the shape of what gets minted: one
@@ -479,7 +479,7 @@ neuron is an immutable claim and a synapse is an append-only ledger line, which 
 the only shape that makes a relation a **dated, supersedable thing** — which is
 what "memory with relations" asks for. Seat 1 shipped the opposite and better
 argument: **the map is a derived view and nothing derived is committed**, so it
-cannot drift. Seat 1 also wanted a hook-captured observation trace; that graft was
+cannot drift. Seat 1 also wanted a hook-captured observation trace. That graft was
 rejected, because git history and `ripwire.cochange` already carry the same
 evidence with zero new state, and a trace that duplicates both is a second source
 of truth.
@@ -558,14 +558,14 @@ already does".
 ## Sources
 
 - Generative Agents, arXiv:2304.03442 — recency + importance + relevance scoring.
-- MemGPT, arXiv:2310.08560 — recall separated from archival; the agent pages.
+- MemGPT, arXiv:2310.08560 — recall separated from archival. The agent pages.
 - CoALA, arXiv:2309.02427 — working / episodic / semantic / procedural.
-- Zep, arXiv:2501.13956 — validity windows; supersede rather than co-retrieve.
+- Zep, arXiv:2501.13956 — validity windows. Supersede rather than co-retrieve.
 - A-MEM, arXiv:2502.12110 — why rewriting a neighbour note drifts.
 - Reflexion, arXiv:2303.11366 — bounded reflection, 1 to 3 lessons, no provenance.
 - HippoRAG, arXiv:2405.14831 — multi-hop retrieval as graph spread.
 - MemoryBank, arXiv:2305.10250 — why recency decay deletes what matters.
-- BEIR, arXiv:2104.08663 — BM25 is the robust zero-shot baseline at this scale.
+- BEIR, arXiv:2104.08663 — BM25 is the zero-shot baseline that holds at this scale.
 - CodeRAG-Bench, arXiv:2406.14497 — retrieval can hurt a strong model.
 - SWE-Bench-CL, arXiv:2507.00014 — measure memory by downstream delta.
 - Anthropic, "Effective context engineering for AI agents" — hybrid: tiny

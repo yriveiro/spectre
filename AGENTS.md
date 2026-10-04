@@ -210,7 +210,7 @@ tools/definitions/<id>/index.ts       the declaration
 
 Agent definitions are the exception: flat files, `agents/definitions/<id>.ts`,
 matching the tree (`spectre.ts`, `sicko.ts`). Do not restructure the existing
-agents into folders; that is a migration, not a doc fix.
+agents into folders. That is a migration, not a doc fix.
 
 A definition that needs one file still gets a folder with one file in it. That is
 not ceremony: a mix of `comments.ts` and a `routing/` folder in the same directory
