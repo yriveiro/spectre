@@ -62,6 +62,59 @@ A prompt naming a long sentence is a sentence rule. A prompt naming marketing
 adjectives is a word rule. The grouping is for a reader who already knows which
 one they are looking for, not for the router.
 
+## Never change a fact to fit a word
+
+**Test: after the rewrite, does the text still say what it said before?**
+
+The standard removes ambiguity, not content. A sentence of approved words that
+states something false is a worse failure than a sentence with one unapproved
+word. The dictionary constrains the wording of a fact, and never licenses a
+change to the fact.
+
+Every word rule below is under this one. When no approved word carries the
+meaning, four moves, in this order:
+
+1. Restructure the sentence so approved words carry the idea in a different
+   shape. Most cases end here.
+2. Use an approved verb phrase rather than one word: `get access to` for
+   `access`, `make sure that` for `check`, `find the cause of` for `diagnose`.
+3. Declare a technical noun or verb from the project glossary and record it.
+   That is STE 1.5, and it is the move that makes the rest of the standard usable.
+4. Keep the accurate word and flag it, with the reason, in what you hand back.
+
+The move that is forbidden is taking the nearest plain word and accepting the
+shift. The result looks compliant and reads plausibly, which is why it survives
+review. A limit on how much data can be lost after a failure became a limit on
+how much can decrease, because `decrease` was plain and `loss` was not. The
+sentence was compliant and wrong. Data is not smaller after a failure. It is gone.
+
+**Test every substitution, not only the hard words.** Write the source word's
+meaning in context, in your own words. Write the candidate's single approved
+meaning. If the two are not the same, the substitution is invalid, and you are
+back at move one.
+
+Near misses are worse than distant ones, because they survive a quick read.
+`stop` for a failure, because a stop can be intentional and a failure cannot.
+`find` for monitoring, because finding is an event and monitoring is continuous.
+`change` for a migration, because the source named one specific operation.
+
+Never invent a ruling to justify a substitution. If you did not check the
+candidate against a dictionary, say that you did not.
+`tools.spectre.prose` reports a missing entry as `unknown` rather than as not
+approved, and that distinction is the whole point.
+
+**Before and after a rewrite, list the propositions.** Each fact, each relation,
+each qualifier. Then check the output against the list: nothing dropped, nothing
+altered to fit a word, nothing added that the source did not say, every hedge
+still there, and every object of a transitive verb still attached. A rewrite
+that fails any of those is not compliant, whatever its word list says.
+
+This branch borrowed this section and cut it down. The source is
+`references/meaning-fidelity.md` in `nuelcyoung/asd-ste100`, which is the
+counterweight that repository's `dictionary.md` and `pos-analysis.md` need and
+this one lacked. Its worked example is aerospace, so what came across is the rule
+and not the RPO paragraph.
+
 ## Active voice, and name the actor (STE 3.6)
 
 **Test: who is doing this, and did the sentence say so?**
@@ -83,6 +136,19 @@ Good: `The compiler validates the query before the write proceeds.`
 
 `tools.spectre.prose` reports `passive-voice` as advisory, because "is left" is
 correct when nothing did the leaving.
+
+**Naming the actor is not free.** The standard asks for the active voice in
+descriptive writing as much as possible, not at any cost. The passive is correct
+when the actor is unknown, when the actor does not matter to the reader, and when
+the active would force you to name someone the source never named.
+
+Inventing a subject to escape the passive is a fabrication. "Backups should be
+taken frequently" never says whose obligation a backup is, so "The teams must
+take backups frequently" adds a fact.
+
+If a passage needs an actor on every sentence and the source supplies none, the
+passage is a procedure wearing descriptive clothes. Reclassify it and use the
+imperative, which removes the passive and the invented actor at once.
 
 ## Simple tenses (STE 3.2)
 
@@ -118,6 +184,13 @@ count as one word, so a long snippet does not make a short sentence long.
 
 Measured on this set before adoption: 7 sentences over 25 words across 79 files.
 This is not the expensive rule it looks like.
+
+Meet the limit by splitting, never by deleting. When a sentence will not fit,
+ask which proposition needs a sentence of its own. Never ask which words can go.
+
+A rollback is a possible step when a release caused the incident, and it does not
+help when a data migration caused it. Cutting that to "A rollback is a possible
+step" keeps every approved word and loses the condition, which was the point.
 
 ## One instruction per sentence (STE 5.2)
 
@@ -164,6 +237,9 @@ Good: `The tool does not back up files. Files that are not backed up are lost.`
 
 A dropped word spends the budget the work needs, so put it back.
 
+The rule keeps articles. It does not add wrong ones. `use` is uncountable in
+this sense, so "a high CPU use" is wrong and "high CPU use" is right.
+
 ## Keep modality exactly (STE 3.2)
 
 **Test: does the rewrite still say what the author was confident about?**
@@ -174,8 +250,19 @@ stated uncertainty, and it is content.
 `tools.spectre.prose` never flags `may`, `might` or `could` at all. A linter that
 pressured hedges out would rewrite claims into facts.
 
-The line to hold: hedge down to one qualifier, never to zero. "Could potentially
-possibly be argued that it might" becomes `may`. "May have failed" stays.
+This set decides against the standard here, so it is worth saying why in one
+place. The standard approves `can` and `must` and does not approve `may`, `might`
+or `could`. Its reason is that a technician must not act on an unverified claim.
+That reason does not transfer. Here a hedge is the writer reporting the limit of
+what they checked, and deleting it does not make the claim more true. It makes it
+a fact nobody established.
+
+The STE-purist source agrees on the outcome by a different route. Its Pass 1
+holds that every hedge must survive, and its worked example deletes a modal that
+was itself approved, which it still calls a meaning failure.
+
+So: hedge down to one qualifier, never to zero. "Could potentially possibly be
+argued that it might" becomes `may`. "May have failed" stays.
 
 ## One word, one meaning (STE 1.1 to 1.3)
 
@@ -257,6 +344,11 @@ assembly` is six and unreadable.
 part-of-speech tagging, and a regex false-positives on every hyphenated
 compound. It is a judgement. Count the stack.
 
+Three is a ceiling, not a target. The rule says when a cluster is too long. It
+does not say to pull a legal two-word phrase apart into an `of`-chain, which
+makes the text heavier than the source was. `the database query times` is three
+words and shorter than `the times of the database queries`.
+
 ## Define a domain term once (STE 1.5 to 1.13)
 
 **Test: is this term common English, and is it defined where it first appears?**
@@ -333,6 +425,18 @@ If the paragraph needs a colon, or an "also", it has two topics. Split it.
 The six-sentence cap is the standard's, written for a technician who reads one
 page and moves on. It holds here for prose, and it does not hold for a table, a
 code block, or a bulleted list, which are structure rather than sentences.
+
+## Vary the construction (STE 6.5)
+
+**Test: does the same sentence opener appear more than twice in a row?**
+
+A page of identical frames is a rule violation, not a neutral style choice. It is
+what makes a machine rewrite unreadable. Check for one opener repeated in a row,
+for sentences at the same length, and for every paragraph built as subject plus
+`must` plus verb.
+
+Fix it by mixing. A conditional sentence. A vertical list. An imperative where
+the passage is really a procedure. One short sentence after two long ones.
 
 ## Lists for sequences (STE 4.3, 8.4)
 
