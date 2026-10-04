@@ -182,7 +182,7 @@ survive there.
 `## Review`, `## Scope`, `## Validation`, `## Risk and Rollback` and
 `## Merge Gate` are always present. Drop `## Tradeoffs` and
 `## Breaking Changes` when there is nothing to say, and never write a section
-filled with `None.`; a heading holding `None.` is a line a reviewer spends
+filled with `None.`. A heading holding `None.` is a line a reviewer spends
 reading nothing. Desired feedback is the type that best predicts acceptance
 (arXiv 2602.14611, 80,000 pull requests across 156 projects).
 
@@ -190,7 +190,7 @@ reading nothing. Desired feedback is the type that best predicts acceptance
 `1.` / `2.` / `3.` counter, no "rebased onto main" line, and no section per
 commit. Three commit summaries under numbered headings is a changelog wearing a
 pull request's clothes, and `git log` already holds that text. Name the symbols
-and paths instead; a reviewer needs the shape of the change, not its packaging.
+and paths instead. A reviewer needs the shape of the change, not its packaging.
 
 Cut anything a reviewer would not ask about. A branch-protection `GET` returning
 403, a safety argument citing another commit's SHA, and a list of defects found
