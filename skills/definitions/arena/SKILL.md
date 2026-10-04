@@ -40,7 +40,7 @@ The candidates get the same prompt, so the prompt is the contract.
 
    Candidates writing to one path serialize on it and the fan-out is a lie. The
    root being outside the project directory is what makes the first write ask for
-   permission; every spectre agent already allows `external_directory`, `read`
+   permission, because every spectre agent already allows `external_directory`, `read`
    and `edit` on it, subagents included, so a candidate never stops on the prompt.
 
 ## Phase B: Fan out

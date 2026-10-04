@@ -2,7 +2,7 @@
 
 The hygiene pass for comments in code. Spawn @sicko. Act on accepted findings.
 
-Defer to the fresh perspective it brings. It judges the comments; you fix them.
+Defer to the fresh perspective it brings. It judges the comments. You fix them.
 
 A comment in code is the record of a meaning the code failed to express, so this
 pass is about custody rather than taste. `grammar` owns the prose in a document,
@@ -30,8 +30,8 @@ Mode tool that has no other surface.
 2. Spawn Sicko with the `subagent` tool. `agent` is `sicko`, which is the agent
    id, not the persona name. Pass the scope in `prompt`: the caller's files or
    diff, or the working-tree diff against the base branch, default `main`. Set
-   `description` to a short phrase naming the scope. Do not restate its rules;
-   the keep list is its own.
+   `description` to a short phrase naming the scope. Do not restate its rules.
+   The keep list is its own.
 
    The tool is `subagent` and the argument is `agent`. There is no other way to
    spawn an agent, so if the name you reach for is not `subagent`, name the tool
@@ -76,18 +76,18 @@ Mode tool that has no other surface.
    type, or restructure until the behavior is obvious without prose. `edit` for a
    bounded change, `apply_patch` when the fix spans hunks. If a fix needs a shape
    rather than a change, sketch it once for the accepted set and stop at the
-   sketch; step 5 implements.
+   sketch. Step 5 implements.
 
 5. Implement the smallest root-cause fix in scope, and remove every named
    workaround. If the root cause is out of scope, land the smallest in-scope fix
-   and report the rest open. `principle-hygiene` guides the intent; it does not
+   and report the rest open. `principle-hygiene` guides the intent. It does not
    authorize widening the fence or fixing instances outside it. Never bolt on a
    symptom guard.
 
 6. A comment that claims a constraint, such as `do not remove`, `do not change
    wording`, or `talk to X before changing`, is not a keep on its own. Judge it
    with the
-   same keep list; if it survives, offer the cheapest in-scope encoding: a type
+   same keep list. If it survives, offer the cheapest in-scope encoding: a type
    constraint, a runtime check, a test, or a CI lint. Name which one and what it
    would assert.
 

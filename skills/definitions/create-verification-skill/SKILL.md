@@ -75,9 +75,9 @@ a stable handle, an ARIA label, a data attribute, a prompt string, a route path,
 over a coordinate or a tab index.
 
 **Evidence.** What to capture for a proof and where it goes. The standards:
-drive the real user path rather than an internal setter or a test-only endpoint;
-capture the action and the state it produced, not the last screen alone; check
-the side effects, the files written, the rows inserted, the message sent; mock
+drive the real user path rather than an internal setter or a test-only endpoint.
+Capture the action and the state it produced, not the last screen alone. Check
+the side effects, the files written, the rows inserted, the message sent. Mock
 only where a production boundary already isolates the external system. Where a
 dry run is the safe path, watch what it skips rather than trusting the name,
 because a dry run that opens a browser still runs.

@@ -50,7 +50,7 @@ everything, which is what asking that model once would have given you.
 
 One brief, byte for byte the same, to every reviewer: the intent paragraph, the
 artifact with its context, the lenses below, and the shape a finding takes. Pick
-the lenses that apply; a one line bug fix does not need architectural integrity.
+the lenses that apply. A one line bug fix does not need architectural integrity.
 
 - **Correctness.** Boundary inputs, swallowed errors, stale state, what happens if
   this runs twice, and whether two writers are serialized by structure or by

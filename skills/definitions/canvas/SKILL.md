@@ -17,14 +17,14 @@ a PR number.
 2. Allocate the canvas directory with the tool. Pick a descriptive,
    filesystem-safe slug for the concept and call
    `tools.spectre.canvas({ action: "save", slug })`. The tool refuses a taken
-   slug rather than overwriting; on `taken`, pick a different slug. Never
+   slug rather than overwriting. On `taken`, pick a different slug. Never
    overwrite an existing canvas when creating a new one.
 3. Build a complete, responsive HTML document for the requested concept. Make
    the most useful information and actions apparent in the UI, with coherent
    hierarchy, realistic content, readable typography, and thoughtful spacing.
    Add interactions when they help explain or explore the concept. State
-   assumptions visibly when the prompt leaves important details unspecified;
-   do not invent real-world facts or imply mock data is live.
+   assumptions visibly when the prompt leaves important details unspecified.
+   Do not invent real-world facts or imply mock data is live.
 4. Keep the artifact self-contained: inline CSS and JavaScript, no CDN, no
    build step, no external image dependency, and no project-wide configuration
    change. Use semantic HTML, accessible labels and contrast, responsive
@@ -57,5 +57,5 @@ use a browser tool for canvas presentation, even if one appears in the catalog:
 a canvas outlives its session, so delivering it through a session-scoped view
 ties a persistent artifact to a transient surface, and a page that is written
 but never shown reads as a bug in the code under test. If the tool reports it
-could not open the page, report the failure and give the saved path; do not
+could not open the page, report the failure and give the saved path. Do not
 fall back.

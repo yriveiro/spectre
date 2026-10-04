@@ -107,7 +107,7 @@ metadata:
 
 The description triggers on their name and on the mode, not on "write code" or
 "review a PR", which every other skill already claims. `opencode/autoinvoke:
-"false"` keeps the model from loading it uninvited; drop it only when they ask
+"false"` keeps the model from loading it uninvited. Drop it only when they ask
 for it on every turn.
 
 Write "the user" or "the reader" in the imperatives, not their first name, so

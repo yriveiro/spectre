@@ -123,7 +123,7 @@ rules: allow tools, ask on `.env` reads and outside the worktree.
 The editor behind `ctx.agent.transform` has no `add`. Its `update` creates an
 agent that does not exist yet, which is how a plugin introduces one, and how
 OpenCode's own `build`, `plan`, and `explore` are declared. Registering does not
-make an agent the default; the user's `default_agent` is left alone.
+make an agent the default. The user's `default_agent` is left alone.
 
 A file-based alternative exists. OpenCode reads `agent/` and `agents/` folders
 of markdown with YAML frontmatter, but only inside a _config_ directory, the
