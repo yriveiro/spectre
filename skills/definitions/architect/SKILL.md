@@ -41,7 +41,7 @@ candidate produces the same package, in this order:
    three realistic ones, before any type is written. The sketch is derived from
    the usage, and where they disagree the usage wins.
 2. **Data structures**, then the flow through the signatures. Trace each
-   dominant access pattern through the structure; "we will add a map later" is
+   dominant access pattern through the structure. "We will add a map later" is
    the answer that means it is wrong.
 3. **The module map**, with what each module owns.
 4. **The rationale**: problem, shape, tradeoffs accepted, at least one
@@ -60,7 +60,7 @@ Screen every candidate before synthesis. Four red flags disqualify a shape:
   internal stages, are the tells. A deep call chain is not a deep module.
 - **Information leakage**: a representation, policy or protocol detail living in
   more than one module, so changing it needs coordinated edits. Wire and
-  transport types stay private; parse into domain types behind the interface.
+  Transport types stay private. Parse into domain types behind the interface.
 - **Temporal decomposition**: modules named `load`, `validate`, `transform`,
   `save`. That is an execution order, not knowledge somebody owns.
 - **A pass-through method**: the same arguments forwarded on. Keep a boundary
@@ -89,7 +89,7 @@ The sketch is the contract.
 A deviation is signal, not friction to absorb silently. When a function needs a
 parameter the sketch did not anticipate, decide which of three it is: the
 sketch was wrong, a requirement was missed, or the implementation reaches past
-what was asked. Write the answer down; recurring ones are Phase E evidence.
+what was asked. Write the answer down. Recurring ones are Phase E evidence.
 
 ## Phase E: Scrap the sketch
 

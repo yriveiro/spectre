@@ -38,7 +38,7 @@ argument again.
 
 **Trust is a property of position, not of caution.** Code inside the system does
 not re-check what the edge proved. The alternative is a codebase where every
-function defends against a bug that was already ruled out, and where a real bug
+function defends against a bug the edge already excluded, and where a real bug
 disappears into the noise.
 
 **A guard no input can reach is a check that cannot fail.** This is

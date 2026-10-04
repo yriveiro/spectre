@@ -8,7 +8,7 @@ because nobody deleted it. The change works, and the codebase gets heavier by
 both the old weight and the new. Do that for a year and the simple change becomes
 the one nobody volunteers for. This is the builder's sequence. `principle-laziness-protocol`
 already owns deletion-first as reader-load discipline, and this leaf does not
-repeat it; what laziness does not say is that the deletions come first, are
+repeat it. What laziness does not say is that the deletions come first, are
 checked on their own, and are the ground the addition is written against.
 
 There is no single question that proves you subtracted enough, and a rule that
@@ -70,7 +70,7 @@ verified.
 **Do not subtract the code you were asked to change.** The diff is the work.
 Deleting a neighbour inside the same change is a review tax that hides the real
 edit, and the rule that a diff is about one thing is `principle-hygiene`'s. Clean
-what you are already changing; the rest is a change of its own.
+what you are already changing. The rest is a change of its own.
 
 **When the subtraction is the whole task, stop.** A change that ends smaller and
 does more is complete. Continuing to build because the ticket said feature is
@@ -100,7 +100,7 @@ part that never ends.
   next change pays for it in full.
 - **Not a licence to widen the change into the repository.** The scope is the area
   the change touches. What else is nearby is real work and a legitimate separate
-  change; folding it in is what makes the review fail and the subtraction get
+  change. Folding it in is what makes the review fail and the subtraction get
   reverted with the feature.
 - **Not a demand to clean the repository.** A sweep of what else is lying around
   is `principle-hygiene`'s, and it competes with the change for the attention the

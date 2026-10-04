@@ -23,15 +23,15 @@ is outside the project directory, so the first write asks for permission, which 
 State the done predicate as something countable — *126 units merged, each
 `unit-test-verified` or better in `ledger.tsv`* — and quantify the scope: unit count, rough
 effort, expected stacks, wall-clock budget. If one session could finish inside that
-budget, stop and run `playbook-autonomous-run`; the store costs more to maintain than the
-work it organises.
+budget, stop and run `playbook-autonomous-run`. The store costs more to maintain
+than the work it organises.
 
 Name the tracks: `build`, `landing`, and `verification` are common cuts, not a required
 shape. By roughly 70% of the budget, stop spawning and land what is verified.
 
 ## Phase B: Lay out the store
 
-Every file has one writer; readers aggregate at read time.
+Every file has one writer. Readers aggregate at read time.
 
 - `preferences.md` is the standing-orders register.
   Numbered lines, one constraint each: model policy, stack shape, verification bar,

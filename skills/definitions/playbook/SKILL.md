@@ -1,10 +1,10 @@
 # Playbook
 
 Twenty-two procedures, one per shape of task. This file is the index and the
-selection rule; each playbook is a folder beside it.
+selection rule. Each playbook is a folder beside it.
 
 `principle-*` tells you how to hold yourself while you work. These tell you what
-to do and in what order. A principle has no phases; a playbook does. If a request
+to do and in what order. A principle has no phases. A playbook does. If a request
 is small enough that the order does not matter, no playbook is the right answer
 and a principle or nothing is.
 
@@ -62,7 +62,7 @@ shape of work. It is in the same table under its own name.
 `playbook-autopilot-stack` are long programmes, and a session is one unit of one.
 Each of them writes its objective, its queue and its progress to a file, so the
 next run reads state and continues rather than starting over. Ask for the next
-unit, or leave it and come back to it; do not expect it to finish while you wait.
+unit, or leave it and come back to it. Do not expect it to finish while you wait.
 
 ## How to use one
 

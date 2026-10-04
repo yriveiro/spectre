@@ -11,7 +11,7 @@ thing left to do, `architect` alone is the right load.
 
 ## Start
 
-Open a `todolist` with one entry per phase. Rewrite it at each phase boundary;
+Open a `todolist` with one entry per phase. Rewrite it at each phase boundary.
 a checklist written once at the start is a wish list by the fourth phase.
 
 1. Ground
@@ -70,8 +70,8 @@ Delegate the code to a `subagent` with a specific scope: the file paths, the
 named data shape and the structure holding it, the success criteria. Choose the
 model with `tools.spectre.routing({})` and never write a model id by hand.
 
-Make surgical edits and re-ground against the upstream file for anything derived from it, because a file you did not read is a file you cannot edit safely. When a shared primitive improves, apply the improvement to every consumer
-and verify each one; leaving three consumers on the old behaviour is a
+Make surgical edits, and re-ground against the upstream file for anything derived from it. A file you did not read is a file you cannot edit safely. When a shared primitive improves, apply the improvement to every consumer
+and verify each one. Leaving three consumers on the old behaviour is a
 migration you did not finish.
 
 Before deleting a comment or a suppression, run `tools.spectre.comments` over
@@ -81,11 +81,11 @@ deleting the code under it throws the record away with it.
 ## Phase E: Prove
 
 Verify on the matching surface, the same way `playbook-bug-fix` does.
-"Inconclusive" or the wrong surface is not a pass; flag it.
+"Inconclusive" or the wrong surface is not a pass. Flag it.
 
 Work in small units: build one, verify it, commit it, then the next
 (`principle-sequence-verifiable-units`). A branch of twenty commits that were
-each green in turn is a branch a reviewer can take in a week; one commit of
+each green in turn is a branch a reviewer can take in a week. One commit of
 twenty changes is a branch nobody reads.
 
 ## Phase F: Ship

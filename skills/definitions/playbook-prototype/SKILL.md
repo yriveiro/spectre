@@ -28,12 +28,12 @@ timing, which approach. Write it down, because the artifact gets judged against
 this sentence and not against your taste.
 
 No decision means no prototype. Two designs that are both fine is not a
-decision either; find the one that is not fine and prototype against that. When
+decision either. Find the one that is not fine and prototype against that. When
 the decision does not exist yet, route to `playbook-feature`.
 
 Decide what evidence would settle it. A screenshot, a timing number, a count of
 misclicks, a rendered page. Without that, "I like it better" is the output and
-you have written nothing worth keeping.
+you wrote nothing worth keeping.
 
 ## Phase B: Reference
 
@@ -71,7 +71,7 @@ Drive each variant with the `playwright` tools and take one screenshot per
 variant with `tools.playwright.browser_take_screenshot`. Read the console with
 `browser_console_messages`, because a variant that looks right and throws is not
 a variant. For a behavioural or timing decision the observation is the test, so
-log the timings or print the output; an assertion is not what you are looking for
+log the timings or print the output. An assertion is not what you are looking for
 here, and writing one puts you back in a testing mindset the prototype exists to
 avoid.
 

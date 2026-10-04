@@ -63,7 +63,7 @@ the plain type.
 place the proof stopped and a latent crash took its place. Either the fact is
 provable and belongs in the model, or it is not provable and the cast is a hazard
 you have chosen to carry. `ripwire --seams` and the typecheck find these
-mechanically; read where each one came from rather than silencing it.
+mechanically. Read where each one came from rather than silencing it.
 
 **Derive the second value, do not synchronize it.** Two booleans that must agree
 are one fact stored twice, and the rule keeping them equal is invisible at both

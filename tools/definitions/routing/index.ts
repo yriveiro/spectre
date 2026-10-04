@@ -4,8 +4,8 @@ import type { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
 import { agentIds } from "../../../agents";
 import { check } from "./check";
-import { FILE_NAME } from "./locate";
 import { load } from "./load";
+import { FILE_NAME } from "./locate";
 import { DEFAULT_AGENT } from "./types";
 
 /**

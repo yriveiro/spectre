@@ -19,7 +19,7 @@ otherwise advances the trunk. The feature reports the distance and says so.
 
 ## Mechanism
 
-Four properties of OpenCode 2.0.21 decide the shape. All read at the tag;
+Four properties of OpenCode 2.0.21 decide the shape. All read at the tag.
 sources in the appendix.
 
 1. **A plugin cannot enumerate sessions.** `ctx.session` is a `Pick` over
@@ -31,7 +31,7 @@ sources in the appendix.
    and `tool.hook("execute.before")` carry `sessionID`, so a session can be found
    at the moment it acts on itself.
 3. **Moving out of a deleted directory is supported.** `SessionMove` validates
-   the *destination* and fails loudly if it is gone; for the *source* it has a
+   the *destination* and fails loudly if it is gone. For the *source* it has a
    first-class path, publishing `SessionEvent.Moved` directly instead of going
    through the inbox and the runner.
 4. **Nothing announces a worktree removal.** `worktree.updated` carries
@@ -119,7 +119,7 @@ because `start` defaults `branch` to `name`. `Landing` (`on-main` / `not-on-main
 / `unknown`) answers "what do I tell a session with no directory", which is a
 different question from `classify.bucket`'s "may this directory be deleted" —
 `bucket` reads `dirty` and treats a failed read as `clean`, and `dirty` is not
-measurable at all here. `prFor` is imported; `bucket` is not.
+measurable at all here. `prFor` is imported. `bucket` is not.
 
 `behind: number | undefined` earns its optional: `undefined` means
 `origin/main` is unknown, which is a different fact from `0`.
@@ -185,7 +185,7 @@ repository and no running session.
 
 ## Two bugs this fixed on the way
 
-Neither was asked for; both sat in this feature's path.
+Neither was asked for. Both sat in this feature's path.
 
 - **`tools.spectre.worktrees({})` threw `ENOENT`** on any repository holding a
   collected worktree. `Bun.spawn` throws from `posix_spawn` for a missing `cwd`
@@ -229,7 +229,7 @@ read as a fact about the repository.
 ## Appendix: sources
 
 Read at tag `v2.0.21`. A path that does not exist at that tag is not evidence
-for anything in this file; the rule for reading the source is in `AGENTS.md`.
+for anything in this file. The rule for reading the source is in `AGENTS.md`.
 
 | Claim | Where, at the tag |
 | ----- | ----------------- |
@@ -245,9 +245,12 @@ for anything in this file; the rule for reading the source is in `AGENTS.md`.
 | `canonical` is derived from that position | `packages/core/src/project.ts:350-356` |
 | `worktree.updated` names no directory | `packages/schema/src/worktree.ts:56-59` |
 
-Probed at runtime on Bun 1.4.2: `Bun.file(dir).exists()` is `false`;
-`Bun.file(p).stat().isDirectory()` is `true` for a directory and throws `ENOENT`
-for a missing path; `Bun.spawn` with a missing `cwd` throws `ENOENT` from
-`posix_spawn`; a collected worktree leaves a `prunable` row carrying its branch
-and HEAD, and `git worktree prune` removes the row while the ref survives; on a
-bare-backed project the bare entry is listed first.
+Probed at runtime on Bun 1.4.2:
+
+- `Bun.file(dir).exists()` is `false`.
+- `Bun.file(p).stat().isDirectory()` is `true` for a directory and throws
+  `ENOENT` for a missing path.
+- `Bun.spawn` with a missing `cwd` throws `ENOENT` from `posix_spawn`.
+- A collected worktree leaves a `prunable` row carrying its branch and HEAD, and
+  `git worktree prune` removes the row while the ref survives.
+- On a bare-backed project the bare entry is listed first.

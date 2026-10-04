@@ -3,9 +3,9 @@
 Read this before writing a leaf: which of three shapes you are writing, the
 template, the measurements behind it, and what a leaf owes the map and the hub.
 
-A **leaf** is a skill this set routes to: 31 of the 74 definitions. 27 are
-`principle-*`, and the other 4 are `unslop`, `no-comments`, `model-router` and
-`i-have-adhd`. The remaining 43 ids are in the `notALeaf` set in
+A **leaf** is a skill this set routes to: 31 of the 76 definitions. 27 are
+`principle-*`, and the other 4 are `grammar`, `communication`, `code-hygiene` and
+`model-router`. The remaining 46 ids are in the `notALeaf` set in
 `skills/definitions/index.ts` — the hub, the map, 23 `playbook-*`, and 18 more
 procedures — and they are registered and read on demand, carrying no row.
 
@@ -15,8 +15,8 @@ Three shapes, and picking wrong is the mistake that costs the most:
 
 - **A principle** states a test and a moment you load it on. The template below
   is theirs.
-- **A procedure** runs steps or phases. `no-comments` has one `Steps` section and
-  nothing else; `why` and `blast-radius` run `Start` / `Phase A` … `Outputs`. A
+- **A procedure** runs steps or phases. `code-hygiene` has one `Steps` section and
+  nothing else. `why` and `blast-radius` run `Start` / `Phase A` … `Outputs`. A
   moves list that is really a step list is the tell.
 - **A compact port** can have no sections at all, as
   `principle-guard-the-context-window` shows: one heading and no `##` under it.
@@ -86,7 +86,6 @@ same move:
 | --- | --- | --- | --- |
 | `principle-laziness-protocol` | "reader load, hops to trace, state to hold" | "impossible to follow", "one caller", "just forwards", "flatten it" | 48.8% to 60.5% desc, 0 of 6 rows won to 5 of 6 |
 | `principle-make-states-unrepresentable` | "a shape that cannot hold a wrong value" | "a boolean and a flag that must stay in sync", "a cast", "any" | 3 false fires to 1 |
-| `i-have-adhd` | "shape the message, lead with the next action" | "too long", "just the answer", "no preamble" | 0 of 2 rows won to 2 of 2 |
 
 The failure is the same every time: a description written about the principle
 competes with every leaf on that vocabulary, and a prompt carries the prompt's.
@@ -120,7 +119,7 @@ is written", and the row stopped routing. Put the literal nouns back.
   update the hub count in the same change.
 - **A description.** `test/skills/routing.test.ts` fails on a blank one, and on
   `bm25-desc` or `bm25-full` stopping beating chance. The routing arm is skipped
-  when `ripwire` is missing; the blank check always runs.
+  when `ripwire` is missing. The blank check always runs.
 - **Registration**, as above.
 
 Indexing is what the hub pays, and it is why the hub is the binding constraint: it
@@ -182,7 +181,7 @@ argument for fewer, sharper leaves.
 
 ## Measuring the routing
 
-BM25 is a lexical proxy; the thing that routes is a model reading the same
+BM25 is a lexical proxy. The thing that routes is a model reading the same
 descriptions, so `eval/` asks both and prints them in one table.
 `eval/README.md` holds the commands, the evidence columns, and why the catalogue
 is checked against OpenCode's `Registered skills` log line rather than

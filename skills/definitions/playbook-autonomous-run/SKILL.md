@@ -37,7 +37,7 @@ never seen this conversation can act on: no pronouns, no "as discussed", no "the
 ## Phase B: Read the ledger, pick one unit
 
 Read `.spectre/run.md` and the last few commit bodies on the branch. That file is the
-only thing carrying the thread across sessions; the conversation is gone by the time
+only thing carrying the thread across sessions. The conversation is gone by the time
 anyone comes back, and so is anything you remembered but never wrote down.
 
 Pick exactly one unit: the smallest change the current evidence justifies, sized so its
@@ -86,14 +86,14 @@ spend an iteration rediscovering it.
 
 A plateau is not a stop. If the last two iterations moved the predicate by nothing,
 change the approach rather than loosening the predicate. Never relax the predicate to
-declare victory; the one honest way to stop early is a real dead end, and a dead end is a
+declare victory. The one honest way to stop early is a real dead end, and a dead end is a
 finding to report rather than a failure to hide.
 
 ## Phase F: Stop and name the next check
 
 The last thing the run does is write down the next check. One
 sentence, in `.spectre/run.md`, naming the event or condition and the exact command that
-would settle it: *"CI on `feat/queue` is still running; next run calls
+would settle it. *"CI on `feat/queue` is still running. Next run calls
 `tools.spectre.stack({ prs: [218] })` and reads the verdict."*
 
 Then stop. Coming back is a separate invocation and it is not yours to take.

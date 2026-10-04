@@ -68,7 +68,7 @@ one, so their canvas stores merge. pstack namespaced by origin remote
 
 Defining the placeholder properly is this file's job, not one tool's. The options
 are the basename, the repository slug, or the basename under a repository-named
-parent directory; the second and third cost one more level and stop the collision.
+parent directory. The second and third cost one more level and stop the collision.
 Whichever is chosen, every row above moves in the same change.
 
 `playbook-eval` has a contradiction this convention does not settle. Its blinding

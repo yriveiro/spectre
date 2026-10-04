@@ -56,12 +56,12 @@ you cannot reconstruct afterwards.
   Read it. It may be a half-finished change, or a complete one that was never
   committed.
 - In other worktrees: `tools.spectre.worktrees({})` already reports which ones hold
-  uncommitted work. Do not read a diff out of curiosity; read the ones the handover
+  uncommitted work. Do not read a diff out of curiosity. Read the ones the handover
   points at.
 
 Also look for a resume note on disk. `playbook-pause-safely` writes one, and it is
 the part of a transcript that survives here. `/tmp/<slug>-resume.md` from a previous
-session may be gone; a note committed to the branch will not be.
+session may be gone. A note committed to the branch will not be.
 
 ## Phase D: Name the resume point
 
@@ -79,7 +79,7 @@ they could not, the gap is in the pickup, not in the handover.
 The failure to avoid is a fresh verification pass over what the prior session already
 verified. "Let me check from scratch" treats the inherited work as untrustworthy, and
 it is how a pickup doubles a session's cost. Check what was not checked, not what
-was. `principle-verification` owns the general form; here the unchecked claim is the
+was. `principle-verification` owns the general form. Here the unchecked claim is the
 prior summary.
 
 ## Phase E: Route the rest

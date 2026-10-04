@@ -87,9 +87,7 @@ describe("load", () => {
   });
 
   test("a later entry replaces the earlier one whole", async () => {
-    await scratch.writeGlobal(
-      JSON.stringify({ models: { light: "acme/falcon-mini#high" } }),
-    );
+    await scratch.writeGlobal(JSON.stringify({ models: { light: "acme/falcon-mini#high" } }));
     await scratch.writeProject(JSON.stringify({ models: { light: "opencode/gpt-5" } }));
     expect((await run(scratch.projectDir())).tables.models).toEqual({
       light: "opencode/gpt-5",
@@ -135,5 +133,64 @@ describe("load", () => {
     expect(found.problems).toHaveLength(1);
     expect(found.sources).toHaveLength(1);
     expect(found.tables.models).toEqual({ light: "acme/falcon-mini" });
+  });
+});
+
+describe("the dictionary path", () => {
+  test("absent means the lexical half is off, and that is not a problem", async () => {
+    await scratch.writeProject(JSON.stringify({ models: { light: "acme/falcon-mini" } }));
+    const found = await run(scratch.projectDir());
+    expect(found.tables.dictionary).toBeUndefined();
+    expect(found.problems).toEqual([]);
+  });
+
+  test("a relative path resolves against the config file that named it", async () => {
+    // Not against the process cwd: a global config can point anywhere, and a
+    // relative path written there means next to that file.
+    await scratch.writeProject(JSON.stringify({ dictionary: "refs/ste100.json" }));
+    const found = await run(scratch.projectDir());
+    expect(found.tables.dictionary?.path).toBe(`${scratch.projectDir()}/refs/ste100.json`);
+    expect(found.tables.dictionary?.from).toBe(`${scratch.projectDir()}/spectre.jsonc`);
+  });
+
+  test("a relative path in the global file resolves against the global file", async () => {
+    await scratch.writeGlobal(JSON.stringify({ dictionary: "ste100.json" }));
+    await scratch.writeProject(JSON.stringify({ models: { light: "acme/falcon-mini" } }));
+    const found = await run(scratch.projectDir());
+    expect(found.tables.dictionary?.path).toBe(`${scratch.globalDir()}/ste100.json`);
+  });
+
+  test("an absolute path is kept as written", async () => {
+    await scratch.writeProject(JSON.stringify({ dictionary: "/Users/x/dict.json" }));
+    const found = await run(scratch.projectDir());
+    expect(found.tables.dictionary?.path).toBe("/Users/x/dict.json");
+  });
+
+  test("the project file overrides the global one", async () => {
+    await scratch.writeGlobal(JSON.stringify({ dictionary: "global.json" }));
+    await scratch.writeProject(JSON.stringify({ dictionary: "project.json" }));
+    const found = await run(scratch.projectDir());
+    expect(found.tables.dictionary?.path).toBe(`${scratch.projectDir()}/project.json`);
+  });
+
+  test("null removes a path an earlier file set", async () => {
+    await scratch.writeGlobal(JSON.stringify({ dictionary: "global.json" }));
+    await scratch.writeProject(JSON.stringify({ dictionary: null }));
+    const found = await run(scratch.projectDir());
+    expect(found.tables.dictionary).toBeUndefined();
+  });
+
+  test("a key nobody wrote leaves the earlier path standing", async () => {
+    // The distinction that matters: absent is not the same as cleared.
+    await scratch.writeGlobal(JSON.stringify({ dictionary: "global.json" }));
+    await scratch.writeProject(JSON.stringify({ models: { light: "acme/falcon-mini" } }));
+    const found = await run(scratch.projectDir());
+    expect(found.tables.dictionary?.path).toBe(`${scratch.globalDir()}/global.json`);
+  });
+
+  test("a dictionary that is not a path is a problem that names itself", async () => {
+    await scratch.writeProject(JSON.stringify({ dictionary: 7 }));
+    const found = await run(scratch.projectDir());
+    expect(found.problems.join("\n")).toContain("dictionary");
   });
 });

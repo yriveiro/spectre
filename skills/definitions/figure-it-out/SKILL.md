@@ -8,7 +8,7 @@ person can audit after they have stepped away.
 `spectre-mode` routes to a leaf, and when nothing fits it says so by writing
 `none` with reasons. This is the answer to that line. It is not
 `principle-exhaust-the-design-space`, which settles one decision by building
-alternatives; this is what you write when there is no decision left to settle
+alternatives. This is what you write when there is no decision left to settle
 and the whole sequence is yours to define.
 
 ## Start
@@ -37,7 +37,7 @@ three:
    catches the obvious. Rigor is gates and artifacts, not more effort.
 
 Show the framing before a long run begins. Reversible work proceeds without
-asking (`principle-never-block-on-the-human`); a run measured in hours earns one
+asking (`principle-never-block-on-the-human`). A run measured in hours earns one
 checkpoint.
 
 ## Phase B: Design the workflow

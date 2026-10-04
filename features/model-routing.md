@@ -1,12 +1,12 @@
 # Model routing (`spectre.jsonc`)
 
-Status: built. The tool is `tools/definitions/routing/`; `model-router` is the
+Status: built. The tool is `tools/definitions/routing/`. `model-router` is the
 skill that calls it.
 
 ## Goal
 
 Given a task, pick a model that fits the difficulty and run the work on it, from a
-config file a human writes and edits. The `spectre` agent serves both roles; the
+config file a human writes and edits. The `spectre` agent serves both roles. The
 model is chosen per call.
 
 The two motivating cases:
@@ -19,7 +19,7 @@ The two motivating cases:
 ## Mechanism
 
 Three properties of OpenCode 2.0.21 make this possible without intercepting
-anything. All three verified at tag `v2.0.21`; sources in the appendix.
+anything. All three verified at tag `v2.0.21`. Sources in the appendix.
 
 1. **The subagent tool takes a model per call.** `agent`, `description`, `prompt`,
    `model`, `sessionID`, `background`. `model` is optional and written as
@@ -52,7 +52,7 @@ agent: "spectre",  model: "opencode/muse-spark-1.3-contributor-free#high"
 ## What OpenCode already does
 
 The point of this section is what spectre does **not** have to do. Every claim is
-read at the tag; the appendix cites each one.
+read at the tag. The appendix cites each one.
 
 - **Parsing a ref.** `Model.Ref.parse` splits `providerID/modelID#variant` into a
   branded `{ id, providerID, variant? }` and throws on a bad shape. `ConfigModel.Selection`
@@ -133,7 +133,7 @@ may write one notes file are not "less" and "more" of each other. They differ in
 permissions, which is not a model property and cannot sit on a line.
 
 **The model is not a property of the agent.** It is a call argument. A rung needs
-no agent of its own; it needs a different string in the same call.
+no agent of its own. It needs a different string in the same call.
 
 **The power axis is not reachable from the config, and that is a choice.** It lives on
 the agent, and the only agents a profile may name are spectre's own. Today that is
@@ -356,7 +356,7 @@ paragraph in a prompt.
 ## Appendix: sources
 
 Read at tag `v2.0.21`. A path that does not exist at that tag is not evidence for
-anything in this file; the rule for reading the source is in `AGENTS.md`.
+anything in this file. The rule for reading the source is in `AGENTS.md`.
 
 | Claim | Where, at the tag |
 | ----- | ----------------- |

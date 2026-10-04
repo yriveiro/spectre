@@ -123,7 +123,7 @@ rules: allow tools, ask on `.env` reads and outside the worktree.
 The editor behind `ctx.agent.transform` has no `add`. Its `update` creates an
 agent that does not exist yet, which is how a plugin introduces one, and how
 OpenCode's own `build`, `plan`, and `explore` are declared. Registering does not
-make an agent the default; the user's `default_agent` is left alone.
+make an agent the default. The user's `default_agent` is left alone.
 
 A file-based alternative exists. OpenCode reads `agent/` and `agents/` folders
 of markdown with YAML frontmatter, but only inside a _config_ directory, the
@@ -209,7 +209,7 @@ permissions: [{ action: "execute", resource: "*", effect: "allow" }],
 A tool registered with `codemode: true` is invisible to the model without it, so
 a skill that depends on one has to be able to assume it. This is a floor, not an
 override: session and project permission rules merge over an agent's own and the
-last match wins, so a user who denies `execute` still wins. `no-comments` is the
+last match wins, so a user who denies `execute` still wins. `code-hygiene` is the
 skill that tests the assumption. Step 1 checks for `execute` and stops with a
 message rather than falling back to `grep`.
 

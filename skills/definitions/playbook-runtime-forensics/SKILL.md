@@ -20,12 +20,12 @@ wants a heap snapshot. A UI that stutters on scroll or hover wants a trace, and 
 `playwright` and browser tools in this session can drive the page and record one.
 
 The capture has to be an artefact, not an impression. "It feels like the parser" is a
-starting guess; a profile with the parser at 80% of self time is the finding, and
+starting guess. A profile with the parser at 80% of self time is the finding, and
 they are separated by exactly this phase.
 
 Capture under the conditions that produce the complaint, because a profile of an
 idle process profiles nothing. Save the artefact under the project's scratch space
-and keep the path; the next two phases read it more than once.
+and keep the path. The next two phases read it more than once.
 
 ## Phase B: Reduce the artifact
 
@@ -42,14 +42,14 @@ samples inside a 3.2s window" is, and it is falsifiable against the artefact.
 ## Phase C: Prove the mechanism
 
 You believe the reduced finding because the profile says so. The profile says
-something *correlates*; a mechanism says *because*. Confirm it cheaply, on the live
+something *correlates*. A mechanism says *because*. Confirm it cheaply, on the live
 process, before writing it down as a cause.
 
 That usually means an intervention and an observation: evaluate an expression in the
 running process to read a value the profile only implied, patch a counter into the
 suspect path and watch the number it counts, disable the suspect call and see the
 symptom go. The `playwright` and browser tools reach into a running page for
-evaluation; on a server, a temporary log line or a counter in the hot path does the
+evaluation. On a server, a temporary log line or a counter in the hot path does the
 same work.
 
 If the mechanism will not confirm, say it did not. A hypothesis that survived

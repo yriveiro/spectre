@@ -10,7 +10,7 @@ the other half. The failing run comes first, before any production edit, and it
 is the only thing that shows the test can fail at all.
 
 Skip it when the test path is unclear, expensive, or integration-heavy, and say
-which of those it was. A skipped procedure with a stated reason is a decision; a
+which of those it was. A skipped procedure with a stated reason is a decision. A
 skipped procedure with no reason is a hole in the report.
 
 ## Start
@@ -31,7 +31,7 @@ Open a `todolist` with one entry per phase before launching anything.
    and a test written from a guess pins the guess.
 2. Find the smallest observable reproduction. The narrowest input that shows the
    wrong answer, not the one the reporter happened to use.
-3. Name the path, not the file. "Where does this value get read" is a path; a
+3. Name the path, not the file. "Where does this value get read" is a path. A
    filename is a guess about where to look. When the stack trace names a frame
    you do not recognize, `ripwire.from_trace` starts from the trace rather than
    from a guess about which project owns it.
@@ -60,7 +60,7 @@ Assert the output, not the calls. `expect(f("")).toBe("")` plus
 `expect(f("x")).toBe("x")` in one test is a claim about the function; the first
 half alone is a claim about the absence of a crash. And do not take the expected
 value from the code under test, because both sides then run the same logic and
-the comparison cannot fail. The leaf named above owns that in full; here it is
+the comparison cannot fail. The leaf named above owns that in full. Here it is
 one rule applied while the test is still being written.
 
 ## Phase D: Watch it fail

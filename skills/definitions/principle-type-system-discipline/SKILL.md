@@ -45,7 +45,7 @@ compiler will not let you touch until you narrow it, which is the whole reason t
 put it there.
 
 **Write `as const satisfies T`, not `as T`.** `as const` keeps each literal's own
-members, so the caller gets `"retries"` rather than `string`; `satisfies` checks
+members, so the caller gets `"retries"` rather than `string`. `satisfies` checks
 the object against the shape without widening what it is. `as T` does the second
 half only, and the widening it introduces is the mistake the type existed to
 prevent. This is a spelling choice with a specific failure mode, so it has no
@@ -68,7 +68,7 @@ check was for.
 **Brand primitives with a unique symbol, and export the constructor rather than
 the brand.** `type UserId = string & { readonly __brand: unique symbol }`,
 produced only by the parse that made it, so a swap is an error at the call site
-that makes it. The brand is that leaf's claim; the TypeScript part is that the
+that makes it. The brand is that leaf's claim. The TypeScript part is that the
 constructor has to be the only way one is made, which means grepping for the cast
 that bypasses it, because a brand with a public cast is a suggestion.
 
@@ -102,7 +102,7 @@ command rather than reasoned about, and it is the answer this leaf can give that
 the language-agnostic one cannot.
 
 **Make the cast findable.** `@ts-expect-error` fails the build when the
-underlying problem is fixed, which `as` never does; `@ts-ignore` is `any` with a
+underlying problem is fixed, which `as` never does. `@ts-ignore` is `any` with a
 comment on it. Prefer fixing the type, and where the type genuinely cannot express
 the fact, `expectTypeOf` in a `*.test-d.ts` file keeps the property you are asking
 the compiler to check.
@@ -123,7 +123,7 @@ the work.
 
 - **Not a replacement for `principle-make-states-unrepresentable`.** That leaf
   owns the claim and this one is its TypeScript spelling plus the compiler flags.
-  Reading one is not choosing between two disciplines; it is the same discipline
+  Reading one is not choosing between two disciplines. It is the same discipline
   at two resolutions, and the flags are the half with no language-agnostic form.
 - **Not a licence to enable every flag in a change you are only passing through.**
   `noUncheckedIndexedAccess` on a tree with four hundred hits is its own change

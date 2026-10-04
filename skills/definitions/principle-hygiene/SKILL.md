@@ -103,7 +103,7 @@ goes to waste.
 
 ## Tactics
 
-The mechanical habits. These are the details; the values above are why they are
+The mechanical habits. These are the details. The values above are why they are
 not optional.
 
 **Remove what nothing reaches.** Unused exports, unreachable branches,
@@ -122,7 +122,7 @@ appears nowhere.
 
 **Re-read every comment in a hunk you touched.** A comment describing what the
 code did before your change is now a lie. The ones that survived your edit should
-still be true; the rest go with the code they described.
+still be true. The rest go with the code they described.
 
 **Let the linter tell you where you stopped reading.** A warning you have seen and
 ignored is a decision you made. Fix it, or write down why it stays, so the next
@@ -139,7 +139,7 @@ on it is `principle-verification`.
 
 **Judge the rot you are standing on.** If you notice a stale comment, an outdated
 dependency, or dead code in the area you are already inside, it is now yours to
-judge. Ignoring it on purpose is a decision; make it consciously or do not make
+judge. Ignoring it on purpose is a decision. Make it consciously or do not make
 it.
 
 ## What this principle is not
@@ -148,6 +148,6 @@ it.
   for. This principle concerns what is true and what is reachable, not what is
   aligned.
 - **Not maximalism.** Hygiene is proportional to the stakes. A throwaway probe
-  owes nobody a tidy-up; the artifact other people depend on owes everybody one.
+  owes nobody a tidy-up. The artifact other people depend on owes everybody one.
   Cleaning code nobody will read is a cost paid for nothing.
 

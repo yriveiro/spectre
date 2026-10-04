@@ -22,7 +22,7 @@ not evidence about what a model will do with it.
 ## Phase A: Frame
 
 State which variant is under test and what behaviour would count as success. A
-description rewrite is usually under test because a prompt stopped routing; name
+description rewrite is usually under test because a prompt stopped routing. Name
 the prompt shape you expect to be fixed, because a generic answer means you
 cannot tell afterwards whether it worked.
 

@@ -14,7 +14,7 @@ for calling it done.
 The test is reproduction followed by honest asking. Reproduce the failure
 somewhere that cannot damage the real thing, then ask why, and keep asking until
 the answer is a defect you can point at rather than a condition you can guard
-against. Five whys is a ritual; one genuine why, followed honestly, usually
+against. Five whys is a ritual. One genuine why, followed honestly, usually
 reaches the cause. A condition you can name is the shape of the symptom, not its
 cause: when the file is empty, when the third party is slow, when two people edit
 at once. Those are descriptions of when the report fires. And the second half of
@@ -34,7 +34,7 @@ week it reads as cautious code rather than as a wall.
 
 **Do not write the patch until the failure has been seen.** A fix for a failure
 you have not watched is a story with a diff attached. `principle-verification`
-owns the reproduction; what is new here is the ordering, because a patch written
+owns the reproduction. What is new here is the ordering, because a patch written
 first is a guess that arrives pre-validated by its own test.
 
 **Ask why until the answer is a place you can point at.** The cause is a defect:
@@ -67,7 +67,7 @@ more than one place. A fix applied at the first report leaves the others live, a
 the second report will cite the first patch as the reason nobody looked further.
 
 **Ask whether the flake is a race.** A test that passes on retry has two code
-paths and no ordering guarantee. The retry hides a race; the cause is the
+paths and no ordering guarantee. The retry hides a race. The cause is the
 synchronization that is missing, and it is a defect like any other.
 
 **Name the invariant that was broken.** Most causes are an assumption that was
@@ -90,8 +90,8 @@ any caller reaching this with X now gets Y. A sentence that names only the
 reported input describes a patch on the report.
 
 **Prove the cause was the cause.** Change the cause alone and the symptom must
-disappear; change something else and it must not. `principle-evidence` owns
-building the oracle; applying it to a causal claim rather than to a performance
+disappear. Change something else and it must not. `principle-evidence` owns
+building the oracle. Applying it to a causal claim rather than to a performance
 claim is the step this leaf asks for, and it is the one that distinguishes a fix
 from a coincidence.
 
@@ -107,7 +107,7 @@ to end.
   architecture project, and it usually ends with the bug still there.
 - **Not "add a test and call it fixed".** A test that pins the symptom stops the
   next person looking further, which is the opposite of what you wanted. A test
-  that reproduces the failure is evidence; a test that asserts the guard holds is
+  that reproduces the failure is evidence. A test that asserts the guard holds is
   a lock on the workaround.
 - **Not a ban on defensive code at a real edge.** Where untrusted input genuinely
   enters, validation is not a workaround, and the ban here is on guards for states

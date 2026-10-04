@@ -22,7 +22,7 @@ whether the design it is being fitted into is the design. The moment differs
 too. `principle-foundational-thinking` asks that question before any downstream
 code exists, which is cheap. This leaf asks it after, when the code is already
 here and the answer costs. And `principle-migrate-callers-then-delete-legacy-apis`
-owns the commit sequence once the decision is made; the decision itself, that
+owns the commit sequence once the decision is made. The decision itself, that
 the old shape is the wrong shape, is made here.
 
 ## The moves
@@ -56,7 +56,7 @@ branch inside a shape that cannot express it is a second shape with a worse
 name.
 
 **Name what the redesign deletes.** A redesign that keeps every existing
-special case has not redesigned anything. It has written the old design in a
+special case did not redesign anything. It wrote the old design in a
 new file. The list of things that stop existing is the evidence that this is a
 redesign rather than a rename.
 

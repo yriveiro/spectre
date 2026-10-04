@@ -41,8 +41,8 @@ Open a `todolist` with one entry per phase before launching anything.
 ## Phase B: Find the fact
 
 Almost every change that looks risky is safe because of a single fact: this call
-only drops already-dead entries and does nothing else; these two callers are
-already inside the guard; this field is only read behind the feature flag.
+only drops already-dead entries and does nothing else. These two callers are
+already inside the guard. This field is only read behind the feature flag.
 
 Spend the session here rather than on a long list of maybes. If the fact holds,
 most of the risk list clears at once. If you cannot find one, say that: it is
@@ -73,7 +73,7 @@ hour.
 Each risk names how it breaks, the `file:line`, how likely it is, how bad it is
 if true, and the cheapest check that would settle it. A search that finds nothing
 is a result and belongs on the cleared list with the query written down. Never
-invent a caller and never invent an API signature; a fabricated `file:line` is
+invent a caller and never invent an API signature. A fabricated `file:line` is
 worse than an honest gap.
 
 ## Phase E: Prove
@@ -104,7 +104,7 @@ asking more than one.
 
 - **What it changed**, including the part the diff does not show.
 - **The one fact it is safe because of**, with the step it reached and the
-  output of what you ran. `unproven` is a valid answer; a confident sentence with
+  output of what you ran. `unproven` is a valid answer. A confident sentence with
   nothing under it is not.
 - **Risks**, each with how it breaks, the `file:line`, likelihood, cost and the
   check that settles it.

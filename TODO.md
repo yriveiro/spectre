@@ -51,3 +51,13 @@ Each for a stated reason, not for lack of time.
 | `setup-pstack` | `spectre.jsonc` and `tools.spectre.routing` do this, and the routing tool also checks every ref against the live catalogue |
 | `blast-radius` as a port | already `ripwire.impact` and `ripwire.edit_check`; the procedure around it says so rather than reimplementing |
 | `interrogate` as a port | already `arena` plus `model-router`; the procedure states the difference, which is that arena builds and interrogate breaks |
+
+## After the STE branch
+
+| Item | Where it stands |
+| ---- | -------------- |
+| 191 semicolons | paid. Every one was read in its paragraph. `test/tools/prose.test.ts` now reads the whole repo and expects zero, so a new file cannot add one back |
+| the passive voice count | 321, and the number is the decision. Every finding is a statement of state about code, where the actor is not the subject. `tools.spectre.prose` reports it as advisory for that reason. The rule that passive is correct when the actor is unknown is also what `references/meaning-fidelity.md` calls Pass 3, and it adds that inventing an actor is a fabrication. If you want it active, say so and it is 321 sentences |
+| `dictionary` path | yours to set. The repo copy carries the line commented out, so nobody else inherits your `~/Dump` path |
+| dictionary export | the extractor from the PDF is not written. The export exists. Regenerating it does not |
+| the two routing misses | `summarize what you just changed` and `reply with just the answer, no preamble` still go to playbooks. Not fixable by description, see the PR body |

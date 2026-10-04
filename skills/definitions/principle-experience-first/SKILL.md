@@ -7,7 +7,7 @@ forever. The principle says the second cost wins, and that paying it well means
 shipping fewer things. It exists because the second cost is invisible at the
 moment you spend the first one, and the first one is the only one you can feel.
 It is adjacent to `principle-laziness-protocol`, which owns the decision to refuse
-the addition while it is still hypothetical; this leaf owns the surface that
+the addition while it is still hypothetical. This leaf owns the surface that
 survives the refusal, which is the part nobody measures.
 
 There is no falsifiable test here, and no command reports that an experience is

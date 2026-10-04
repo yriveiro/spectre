@@ -3,15 +3,15 @@ import { parseRegistered } from "../boot";
 
 const REAL =
   'timestamp=2026-09-28T16:25:49.096Z level=INFO run=363fd257 message="Registered skills" ' +
-  'skills="[\\"i-have-adhd\\", \\"model-router\\", \\"no-comments\\", \\"principle-evidence\\", ' +
+  'skills="[\\"communication\\", \\"model-router\\", \\"code-hygiene\\", \\"principle-evidence\\", ' +
   '\\"spectre-mode\\", \\"ripwire\\"]" http.span=1 role=server';
 
 describe("parseRegistered", () => {
   test("reads the real line, escapes and all", () => {
     expect(parseRegistered(REAL)).toEqual([
-      "i-have-adhd",
+      "communication",
       "model-router",
-      "no-comments",
+      "code-hygiene",
       "principle-evidence",
       "spectre-mode",
       "ripwire",

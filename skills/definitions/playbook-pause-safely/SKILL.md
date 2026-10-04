@@ -48,7 +48,7 @@ Commit whatever is uncommitted, as one commit, on the current branch.
 - Stage only the files you touched. `git add <files>`, never `-A`, because the tree
   may hold a generated file or a scratch artefact that has no business in history.
 - If the tree does not build, say so in the body, in one line, and say why. An
-  inherited broken tree with a stated reason is recoverable; one you discover by
+  inherited broken tree with a stated reason is recoverable. One you discover by
   running the build is a wasted half hour.
 - If a real commit already covers the change and only scratch files remain, do not
   manufacture a `wip:` commit. Say the tree is clean in the note instead.

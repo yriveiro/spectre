@@ -31,7 +31,7 @@ Open a `todolist` with one entry per phase before launching anything.
    part they cannot see from where they stand. Name the assumption out loud.
 3. Set the depth. Walk until the picture holds together without hand-waving,
    which is not the same as reading every file. One module or one narrow question
-   is a single pass you do yourself; a subsystem spanning several files or
+   is a single pass you do yourself. A subsystem spanning several files or
    services needs more than one reader.
 
 ## Phase B: Orient
@@ -44,7 +44,7 @@ When the answer comes back thin, run `--skipped` before you believe it. A
 subsystem that looks like three files is usually one large unparsed or generated
 file, and the index is a snapshot rather than a total.
 
-Then read the entry point yourself. The map says where to look; only the code
+Then read the entry point yourself. The map says where to look. Only the code
 says what it does.
 
 ## Phase C: Trace
@@ -60,17 +60,22 @@ times.
 
 Pick the models with `tools.spectre.routing({})` and pass the strings exactly as
 they came back. Read-only tracing is mechanical, so a cheap profile is usually
-right for the explorers; the writing in Phase D is judgement and goes on a
+right for the explorers. The writing in Phase D is judgement and goes on a
 stronger one. Never write a model id from memory, and do not put several
 explorers on one model and call the agreement a cross-check, because they share
 whatever that model cannot see.
 
-Each explorer reports, in this order: the components it found, each by name, file
-and one sentence; the flow as an ordered list of what runs, in which file, what
-it does and what it calls next, with the data moving between steps; every file it
-read; where the subsystem's boundary is and what crosses it; anything surprising,
-historically motivated or easy to get wrong; and what it could not trace. An edge
-the explorer could not follow, written down as an open question, beats a
+Each explorer reports, in this order:
+
+1. The components it found, each by name, file and one sentence.
+2. The flow as an ordered list of what runs, in which file, what it does and what
+   it calls next, with the data moving between steps.
+3. Every file it read.
+4. Where the subsystem's boundary is and what crosses it.
+5. Anything surprising, historically motivated or easy to get wrong.
+6. What it could not trace.
+
+An edge the explorer could not follow, written down as an open question, beats a
 confident guess, because the guess becomes a fact in the paragraph above it.
 
 ## Phase D: Write
@@ -94,7 +99,7 @@ Write it yourself, in this order, dropping what does not apply:
 Prose, not pseudocode. Name the file and the function so the reader knows where
 to look, and paste a snippet only where the snippet is the point. Add a diagram
 when several components hand data to each other and prose would force the reader
-to hold all of it at once; leave it out when the prose already carries the flow.
+to hold all of it at once. Leave it out when the prose already carries the flow.
 Carry the open questions into the writeup: a reader who finds out the explanation
 hid a gap is worse off than one told where the map runs out.
 

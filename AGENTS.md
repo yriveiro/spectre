@@ -11,7 +11,7 @@ tools, nested plugins, MCP servers) is registered from inside that `effect`,
 through the domains on the plugin context.
 
 Minimum supported OpenCode version: **2.0.21**. The installed CLI is the only
-runtime; there is no build step, and TypeScript source is shipped as-is.
+runtime. There is no build step, and TypeScript source is shipped as-is.
 
 ## Runtime: Bun first
 
@@ -92,7 +92,7 @@ it is not a drop-in answer for a config file a human edits:
   is not a parse failure and cannot be reported as one.
 
 Getting a line number means writing a position mapper, which is a hand-rolled
-JSONC scanner. That is a deliberate cost, not a free one; pay it only if a
+JSONC scanner. That is a deliberate cost, not a free one. Pay it only if a
 requirement actually needs it.
 
 To re-verify after a Bun upgrade, probe by direct property access. `n in Bun`
@@ -211,7 +211,7 @@ A definition that needs one file still gets a folder with one file in it. That i
 not ceremony: a mix of `comments.ts` and a `routing/` folder in the same directory
 reads as though the second one is a different kind of thing, and the next person
 copies the wrong shape. A tool that grows past a single file adds siblings beside
-its `index.ts`; it never moves out to the repository root, because a root folder
+its `index.ts`. It never moves out to the repository root, because a root folder
 would be a fourth kind of surface the plugin does not have.
 
 `index.ts` is the declaration and is what the parent imports, so
@@ -285,7 +285,7 @@ These are exact pins, not ranges, and they are not incidental:
 
 Before changing any of them, check what the target OpenCode tag actually pins
 (`packages/*/package.json` → `workspaces.catalog` at that tag). The `effect` pin
-is the one that moves least; read it rather than assuming it tracks the release.
+is the one that moves least, so read it rather than assuming it tracks the release.
 
 ## Checks
 
@@ -342,7 +342,7 @@ every symptom looks like a bug in the code under test. Check which copy is live
 before debugging anything.
 
 A log line that says a domain registered is not proof that what it registered
-runs. `opencode plugin list` resolves an entrypoint; a session proves the
+runs. `opencode plugin list` resolves an entrypoint. A session proves the
 `effect`. For a tool, the proof is a call. See `tools/FOR_AGENTS.md`, which
 holds the sandbox boundary's rules for `input` and `output` schemas and the
 command that proves one.

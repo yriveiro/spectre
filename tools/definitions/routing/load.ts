@@ -1,3 +1,4 @@
+import { dirname, resolve } from "node:path";
 import { Effect, Schema } from "effect";
 import { configPaths } from "./locate";
 import { Config, type File, type ProfileEntry, type Tables } from "./types";
@@ -70,6 +71,10 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
     // value standing.
     let models: Record<string, string | null> = {};
     let profiles: Record<string, ProfileEntry | null> = {};
+    // A string here is the path as written, and the file it was written in, so a
+    // relative path resolves against the config that named it rather than against
+    // whatever the process happens to be in.
+    let dictionary: { path: string; from: string } | undefined;
     const sources: Array<string> = [];
     const problems: Array<string> = [];
 
@@ -84,12 +89,22 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
       sources.push(source.path);
       models = { ...models, ...read.file.models };
       profiles = { ...profiles, ...read.file.profiles };
+
+      // `null` removes a path an earlier file set, and `undefined` leaves the
+      // earlier one standing. A key the reader did not write must not clear it.
+      if (read.file.dictionary !== undefined) {
+        dictionary =
+          read.file.dictionary === null
+            ? undefined
+            : { path: resolve(dirname(source.path), read.file.dictionary), from: source.path };
+      }
     }
 
     return {
       tables: {
         models: settle(models, (value) => value),
         profiles: settle(profiles, one),
+        dictionary,
       },
       sources,
       problems,

@@ -14,7 +14,7 @@ Open a `todolist` with one entry per phase before the first push.
 5. Body
 6. Stack
 7. Open
-8. Hand off
+8. Handover
 
 ## Phase A: Worktree
 
@@ -140,10 +140,10 @@ gh pr view <number> --json title -q .title \
 ## Phase E: Body
 
 Write the title, the body and every commit message under `technical-writing`, then
-pass the result through `unslop`. Apply every technical-writing layer except
+pass the result through `grammar`. Apply every technical-writing layer except
 Diátaxis. One word for each action, keep the articles, and avoid an `-ing` form
 where a plain verb does the work. Run `interrogate` over the diff before you
-commit, and `no-comments` before review.
+commit, and `code-hygiene` before review.
 
 A reviewer reads the body before the diff. Fill this in and delete what does not
 apply:
@@ -182,7 +182,7 @@ survive there.
 `## Review`, `## Scope`, `## Validation`, `## Risk and Rollback` and
 `## Merge Gate` are always present. Drop `## Tradeoffs` and
 `## Breaking Changes` when there is nothing to say, and never write a section
-filled with `None.`; a heading holding `None.` is a line a reviewer spends
+filled with `None.`. A heading holding `None.` is a line a reviewer spends
 reading nothing. Desired feedback is the type that best predicts acceptance
 (arXiv 2602.14611, 80,000 pull requests across 156 projects).
 
@@ -190,7 +190,7 @@ reading nothing. Desired feedback is the type that best predicts acceptance
 `1.` / `2.` / `3.` counter, no "rebased onto main" line, and no section per
 commit. Three commit summaries under numbered headings is a changelog wearing a
 pull request's clothes, and `git log` already holds that text. Name the symbols
-and paths instead; a reviewer needs the shape of the change, not its packaging.
+and paths instead. A reviewer needs the shape of the change, not its packaging.
 
 Cut anything a reviewer would not ask about. A branch-protection `GET` returning
 403, a safety argument citing another commit's SHA, and a list of defects found
@@ -238,8 +238,8 @@ Finish the phase or the whole stack first, then run `playbook-babysit` when the
 user asks for it. A babysit per new pull request stalls the build and spends
 checks on commits the next wave will restart anyway.
 
-A subagent that opens a pull request runs `interrogate`, `unslop` and
-`no-comments`, posts the URL, and returns to its parent. It does not babysit.
+A subagent that opens a pull request runs `interrogate`, `grammar` and
+`code-hygiene`, posts the URL, and returns to its parent. It does not babysit.
 
 ## Outputs
 

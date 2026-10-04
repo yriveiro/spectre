@@ -6,7 +6,7 @@ answer, and state to hold, which is how much hidden or mutable context they carr
 while they read. The axes are independent, and that is the part worth keeping. A
 flat file with fifty globals has no hops and bottomless state. A pure pipeline ten
 frames deep has no state and exhausting hops. Cutting one while growing the other
-is a transfer, not an improvement. This leaf is about code already on the page;
+is a transfer, not an improvement. This leaf is about code already on the page.
 `principle-laziness-protocol` is about the addition that does not exist yet, and
 the clause that separates them is before versus after. Laziness owns the refusal,
 this leaf owns the two axes once there is something to read, and neither answer is
@@ -74,8 +74,8 @@ restarts.
 **Scope the change with the state question, before you make it.** "What can change
 X" asked at a call site is the same question asked before an edit, and it is what
 makes a change safe to make rather than a thing to wrap afterwards. The file count
-is laziness's instrument for it; the reason it is worth running first is that a
-reader who cannot answer the question does not edit, they add a flag.
+is laziness's instrument for it. The reason it is worth running first is that a
+reader who cannot answer the question does not edit. They add a flag.
 
 **Use a comment where the shape cannot carry the fact.** A comment that exists
 because the code was unclear is a record of a simplification that did not happen.

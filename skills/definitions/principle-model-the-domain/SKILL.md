@@ -90,7 +90,7 @@ compiler can check.
 
 **Name each case in the domain's words.** `"done"` and `"archived"` are
 different states. `3` and `"complete"` are the same state with a history behind
-it. When the domain's word changes, the compiler finds every site; a search
+it. When the domain's word changes, the compiler finds every site. A search
 finds some of them.
 
 **Delete the chain the structure made unreachable.** The old comparisons stay

@@ -78,7 +78,7 @@ being parity.
 
 When the diff is nonzero, find the pixel delta and name it. Antialiasing on a text
 baseline, a one-pixel border, a different font fallback, a shadow blur radius — these
-are four different bugs and only the last one is a real defect. Read the diff image;
+are four different bugs and only the last one is a real defect. Read the diff image
 do not infer the cause from a summary line.
 
 Then fix the implementation and diff again. Re-running the harness is cheap, so

@@ -24,7 +24,7 @@ Open a `todolist` with one entry per phase before reading source.
 ## Phase A: Baseline
 
 State the symptom as a number on a named surface, before reading any source.
-"Feels slow" is a complaint; "the list takes 900ms past fifty items" is a
+"Feels slow" is a complaint. "The list takes 900ms past fifty items" is a
 baseline you can improve and prove.
 
 This setup has no APM, no error service and no metrics service, so nothing
@@ -53,7 +53,7 @@ optimizing or correcting.
 
 Ground the hypothesis with `how` over the affected subsystem so you know what
 the work is for, then pick from eight families. They are hypothesis generators,
-not a checklist; a family earns an attempt only when the measurement shows the
+not a checklist. A family earns an attempt only when the measurement shows the
 signal it names.
 
 - **Elimination.** Does the hot path need to exist? A computation nobody consumes,
@@ -93,8 +93,8 @@ changes and no idea which one moved the number.
 ## Phase D: Re-measure
 
 Same harness, same surface, same machine state. Parse and diff the two
-artifacts. "Inconclusive", or a number from a different surface, is not a pass;
-flag it.
+artifacts. "Inconclusive", or a number from a different surface, is not a pass.
+Flag it.
 
 If the number did not move, revert. An unproven change is not a cheap change,
 because it is now in the file and the next person has to reason about it.

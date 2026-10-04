@@ -3,13 +3,20 @@ import { Effect } from "effect";
 import { canvases } from "./definitions/canvas";
 import { comments } from "./definitions/comments";
 import { historyTool } from "./definitions/history";
+import { prose } from "./definitions/prose";
+import { load } from "./definitions/routing/load";
 import { routing } from "./definitions/routing";
 import { stack } from "./definitions/stack";
 import { sessionReturn, worktrees } from "./definitions/worktrees";
 
 export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.Context) =>
   Effect.gen(function* () {
+    // The dictionary path is config, and a config mistake must be reported to
+    // whoever asked for a word rather than stopping the session. The routing tool
+    // reports the same problems, so the two do not disagree about what is wrong.
+    const configured = yield* load(ctx.location.directory);
     const listed = comments(ctx.location.directory);
+    const said = prose(ctx.location.directory, configured.tables.dictionary?.path);
     const route = routing(ctx);
     const trees = worktrees(ctx);
     const prs = stack(ctx.location.directory);
@@ -20,6 +27,7 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
     // neither and the call will not typecheck.
     yield* ctx.tool.transform((editor) => {
       editor.add(listed);
+      editor.add(said);
       editor.add(route);
       editor.add(trees);
       editor.add(prs);
@@ -28,7 +36,7 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
     });
 
     yield* Effect.logInfo("Registered tools", {
-      tools: [listed, route, trees, prs, why, pages].map(
+      tools: [listed, said, route, trees, prs, why, pages].map(
         (tool) => `${tool.options?.namespace}_${tool.name}`,
       ),
     });

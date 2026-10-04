@@ -3,7 +3,7 @@ import { NONE, type Via } from "./score";
 
 /**
  * The decision is the `skill` activation, not the prose. A model that says "I
- * would load no-comments" has stated a preference; a model that activates the
+ * would load code-hygiene" has stated a preference; a model that activates the
  * skill has done the thing OpenCode routes on. `via` records which was observed,
  * so a model that never activates anything is visible as its own measurement
  * rather than folded into the same column.

@@ -11,7 +11,7 @@ the file. A skill is a decision somebody does not have to make again.
 3. Place the reason
 4. Point at structure
 5. Check
-6. Hand off
+6. Hand the leaf over
 
 ## Phase A: Fix the shape
 
@@ -52,13 +52,13 @@ Match tone to scope. A leaf about a comment's punctuation is written differently
 The description is the routing surface, so it is the most important sentence in
 the folder and the one most often written wrong. It names the **moment**, not
 the subject: a real prompt's words, not the principle's vocabulary. "Hard to
-follow", "just forwards", "one caller" route; "reader load" does not.
+follow", "just forwards", "one caller" route. "Reader load" does not.
 
 Then check it by asking whether a real prompt's words appear in it. If they do
 not, the description is about the wrong thing.
 
 One word for each action, keep the articles, and avoid an `-ing` form where a
-plain verb does the work. `unslop` is the pass for all of this and it is not
+plain verb does the work. `grammar` is the pass for all of this and it is not
 optional on a leaf.
 
 ## Phase D: Point at structure
@@ -70,7 +70,7 @@ goes stale at the next refactor and lies quietly until somebody trusts it.
 Delegate by path. Name the skill that owns a topic and let that leaf carry the
 claim.
 
-A workflow you have run three times and cannot find written down is the input
+A workflow you ran three times and cannot find written down is the input
 to a new leaf. Say so to the user rather than quietly adding one: a leaf nobody
 asked for is a leaf nobody will read.
 
@@ -92,12 +92,12 @@ Structural checks, and they are cheap:
 
 Write test cases when the skill is structural, and skip them when the claim is
 subjective. A procedure with phases has a first phase you can check is the right
-first phase; a principle about prose does not.
+first phase. A principle about prose does not.
 
 Do not run the typecheck or the tests as part of authoring. They are the change
 that opened the pull request's job, not this one's.
 
-## Phase F: Hand off
+## Phase F: Hand the leaf over
 
 Open the pull request through `playbook-opening-a-pr`: small commits, a
 Conventional Commit title, a body that says what the leaf now claims and what it

@@ -79,7 +79,7 @@ Group the findings into sections, and ship only the ones with something in them:
 - **Response style**: length, tone, format.
 - **Autonomy**: how much to do without asking, and which tools to reach for.
 - **Understand first**: what to read before scoping a change.
-- **Subagents**: when to delegate, how to split the work, what to hand off.
+- **Subagents**: when to delegate, how to split the work, what to hand over.
 - **Code and prose discipline**: the rules they cite, the linter, the formatter.
 - **Verify**: what "done" means to them, and what counts as proof.
 - **Process**: worktrees, commits, PRs, the review tool.
@@ -107,7 +107,7 @@ metadata:
 
 The description triggers on their name and on the mode, not on "write code" or
 "review a PR", which every other skill already claims. `opencode/autoinvoke:
-"false"` keeps the model from loading it uninvited; drop it only when they ask
+"false"` keeps the model from loading it uninvited. Drop it only when they ask
 for it on every turn.
 
 Write "the user" or "the reader" in the imperatives, not their first name, so
@@ -120,7 +120,7 @@ folder it cannot find.
 
 ## Phase F: Cut
 
-Run `unslop` and `i-have-adhd` over every line. Neither is restated here.
+Run `grammar` and `communication` over every line. Neither is restated here.
 
 Show the draft and take the feedback. Expect two or three rounds. A personal
 skill is not a manual: every line that does not change a decision goes, and a

@@ -14,8 +14,8 @@ The moment is any task with more than one step: a migration, a refactor across
 files, a feature with setup plus behaviour plus cleanup. Cut the sequence before
 you start and write each bracket down, because a bracket that lives only in your
 head dissolves at the first surprise. Whether a check is honest about what it
-covers is `principle-verification`; which checks belong at which boundary across
-a whole plan is `principle-outcome-oriented-execution`; what the closing assertion
+covers is `principle-verification`. Which checks belong at which boundary across
+a whole plan is `principle-outcome-oriented-execution`. What the closing assertion
 should say is `principle-test-behavior-not-implementation`. This one is the unit,
 the check, and the rule about not advancing on red.
 
@@ -44,7 +44,7 @@ built on an unobserved one while looking exactly like a known-good one.
 
 **Stop on red and fix inside the unit that went red.** Not in the next one, and
 not on top. Work stacked on an unverified base inherits the doubt, and by the
-third unit a failure could belong to any layer of everything you have done since.
+third unit a failure could belong to any layer of everything you did since.
 
 **Do not batch the checks.** Three changes followed by one check is three units
 collapsed into one, and it is the most common way a session ends with a red suite
@@ -89,7 +89,7 @@ suite waiting.
 
 **Check the end once, at the end, yourself.** The last unit's green says the tree
 is green. It does not say the tree does the thing, and a plan that verifies only
-its final bracket has verified its own bookkeeping. Which surface proves the thing
+its final bracket verified its own bookkeeping. Which surface proves the thing
 is `principle-prove-it-works`.
 
 **Count what a unit bought.** A unit that changes no behaviour and moves no check

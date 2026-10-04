@@ -32,7 +32,7 @@ is reading and judging rather than replacing text.
 
 **Keep the lever in the diff.** A script run from memory and deleted afterwards is
 hand work with extra steps. The question is whether a stranger could rerun this
-pass tomorrow without you; if the answer is no, the artefact is missing and the
+pass tomorrow without you. If the answer is no, the artefact is missing and the
 next person rebuilds it by hand.
 
 **Build the set into the tool, so review sees intent once.** Forty hand edits are
@@ -87,7 +87,7 @@ that they were converted.
   the tree somebody has to maintain. Build when the work recurs or the sites
   multiply, not because a tool is available.
 - **Not a substitute for deciding what the change means.** A tool applies the
-  transformation you chose; it does not choose it. The wrong transformation applied
+  transformation you chose. It does not choose it. The wrong transformation applied
   forty times is forty wrong edits, and machine-made ones read as deliberate in
   review, which is the part that hurts.
 - **Not a licence to delegate the decision.** A subagent that reports done without

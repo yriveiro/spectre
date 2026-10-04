@@ -39,7 +39,7 @@ is executed the allowlist will have moved and the plan will be wrong.
 Each subagent returns file pointers, the conventions in force, the test commands
 and the entry points. No inlined dumps and no prose summary of a file the plan
 could just point at. A plan that quotes code goes stale the first time the file
-moves; one that names the file does not.
+moves. One that names the file does not.
 
 ## Phase D: Write
 
@@ -47,8 +47,8 @@ Write the plan to a file. Unless the user names a path, put it under `docs/`.
 Keep the headings and the order below: one section per pull request, and one
 pull request is one change carrying its own evidence.
 
-Write under `technical-writing`, then pass it through `unslop`. The body is one
-mode throughout, a how-to; explanation and reference go in the appendices. Each
+Write under `technical-writing`, then pass it through `grammar`. The body is one
+mode throughout, a how-to. Explanation and reference go in the appendices. Each
 heading states the task or the finding rather than naming a category. No long
 dashes, and no colon in the middle of a sentence.
 
@@ -78,7 +78,7 @@ list.
 
 **The verification rule.** Tests alone are not sufficient verification. A pull
 request is verified only when its unit, live, and perf boxes are all checked, and
-the live block is mandatory. A test proves a function; it does not prove the
+the live block is mandatory. A test proves a function. It does not prove the
 thing a user does.
 
 The live block is a set of lanes at the head, each one a subagent whose model
