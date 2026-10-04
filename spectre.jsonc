@@ -21,8 +21,6 @@
 // config file set, and leaving the key out leaves an earlier one standing.
 //   "dictionary": "/Users/yriveiro/Dump/asd-ste100-dictionary.json",
 {
-  "dictionary": "/Users/yriveiro/Dump/asd-ste100-dictionary.json",
-
   "models": {
     "flash": "opencode/mimo-v2.6-flash-free",
     "spark-low": "opencode/muse-spark-1.3-contributor-free#low",

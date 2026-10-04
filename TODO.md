@@ -51,3 +51,12 @@ Each for a stated reason, not for lack of time.
 | `setup-pstack` | `spectre.jsonc` and `tools.spectre.routing` do this, and the routing tool also checks every ref against the live catalogue |
 | `blast-radius` as a port | already `ripwire.impact` and `ripwire.edit_check`; the procedure around it says so rather than reimplementing |
 | `interrogate` as a port | already `arena` plus `model-router`; the procedure states the difference, which is that arena builds and interrogate breaks |
+
+## After the STE branch
+
+| Item | Where it stands |
+| ---- | -------------- |
+| 150 semicolons | tracked by `test/tools/prose.test.ts`, which fails when the count drops. `tools.spectre.prose` finds them in one call |
+| `dictionary` path | yours to set. The repo copy carries the line commented out, so nobody else inherits your `~/Dump` path |
+| dictionary export | the extractor from the PDF is not written. The export exists; regenerating it does not |
+| the two routing misses | `summarize what you just changed` and `reply with just the answer, no preamble` still go to playbooks. Not fixable by description, see the PR body |
