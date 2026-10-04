@@ -8,6 +8,7 @@ type Agent = { id: string; permissions: Rule[] } & Record<string, unknown>;
 
 const HOME = Bun.env.HOME ?? Bun.env.USERPROFILE ?? "";
 const ROOT = `${HOME}/.local/share/spectre`;
+const BRAIN = ".spectre/brain/*";
 
 /** Mirrors `Agent.State`'s editor at v2.0.21: `get(id) ?? fresh`, then the mutation runs. */
 const register = async (): Promise<Map<string, Agent>> => {
@@ -39,12 +40,40 @@ describe("data root permissions", () => {
 
     for (const id of agentIds) {
       const rules = agents.get(id)?.permissions ?? [];
-      expect(rules).toEqual([
+      expect(rules.slice(0, 3)).toEqual([
         { action: "external_directory", resource: `${ROOT}/*`, effect: "allow" },
         { action: "read", resource: `${ROOT}/*`, effect: "allow" },
         { action: "edit", resource: `${ROOT}/*`, effect: "allow" },
       ]);
     }
+  });
+
+  test("only mnemonic may write the brain, and the allow lands after the deny", async () => {
+    const agents = await register();
+    const brain = (id: string) =>
+      (agents.get(id)?.permissions ?? []).filter((rule) => rule.resource === BRAIN);
+
+    for (const id of agentIds.filter((one) => one !== "mnemonic"))
+      expect(brain(id)).toEqual([{ action: "edit", resource: BRAIN, effect: "deny" }]);
+
+    expect(brain("mnemonic")).toEqual([
+      { action: "edit", resource: BRAIN, effect: "deny" },
+      { action: "edit", resource: BRAIN, effect: "allow" },
+    ]);
+
+    // The matcher takes the last rule that matches, so an allow before the deny
+    // would be dead. Order is the whole mechanism, not a formatting detail.
+    for (const id of agentIds)
+      expect((agents.get(id)?.permissions ?? []).some((rule) => rule.resource === BRAIN && rule.effect === "allow")).toBe(
+        id === "mnemonic",
+      );
+  });
+
+  test("the brain glob is project-relative, because a project file's resource is too", async () => {
+    const agents = await register();
+    for (const id of agentIds)
+      for (const rule of agents.get(id)?.permissions ?? [])
+        if (rule.resource === BRAIN) expect(rule.resource).not.toMatch(/^\//);
   });
 
   test("a subagent gets them too, because it never inherits the parent's", async () => {

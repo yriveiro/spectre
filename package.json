@@ -22,6 +22,7 @@
     "eval": "bun run eval/run.ts"
   },
   "dependencies": {
+    "@opencode/ai": "2.0.21",
     "@opencode/plugin": "2.0.21",
     "@opencode/schema": "2.0.21",
     "effect": "4.0.0-rc.112"

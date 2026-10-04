@@ -1,9 +1,10 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Effect } from "effect";
+import { mnemonic } from "./definitions/mnemonic";
 import { sicko } from "./definitions/sicko";
 import { spectre } from "./definitions/spectre";
 
-const definitions = [spectre, sicko];
+const definitions = [spectre, sicko, mnemonic];
 
 /** The only agents model routing may name. Read from the same list that registers them. */
 export const agentIds = definitions.map((one) => one.id);
@@ -34,13 +35,32 @@ const dataPermissions = ["external_directory", "read", "edit"].map((action) => (
   effect: "allow" as const,
 }));
 
+/**
+ * Invariant 8 of `features/brain.md`: only `mnemonic` may write the brain, and
+ * the mechanism is order, not a separate field. The deny is pushed onto every
+ * agent and the allow is pushed after it for `mnemonic` alone, because the
+ * matcher is `findLast` over the flattened ruleset (`packages/core/src/
+ * permission.ts`, `evaluate`, at `v2.0.21`): the last matching rule wins, so a
+ * deny written after the allow would silence the one writer the brain has.
+ *
+ * The resource is the relative glob `.spectre/brain/*`, for the same reason a
+ * rule here never spells `~`. `FileAccess.resolve` sends
+ * `path.relative(location.directory, absolute)` as the resource for a file
+ * inside the project (`packages/core/src/file-access.ts:100-120`), so an
+ * absolute-path rule matches nothing. `read` is denied to nobody: a brain the
+ * reader cannot read is not a memory.
+ */
+const brainDeny = { action: "edit", resource: ".spectre/brain/*", effect: "deny" as const };
+const brainAllow = { action: "edit", resource: ".spectre/brain/*", effect: "allow" as const };
+
 export const update = (ctx: Pick<Plugin.Context, "agent">) =>
   Effect.gen(function* () {
     yield* ctx.agent.transform((editor) => {
       for (const definition of definitions) {
         editor.update(definition.id, (agent) => {
           Object.assign(agent, definition);
-          agent.permissions.push(...dataPermissions);
+          agent.permissions.push(...dataPermissions, brainDeny);
+          if (definition.id === mnemonic.id) agent.permissions.push(brainAllow);
         });
       }
     });
