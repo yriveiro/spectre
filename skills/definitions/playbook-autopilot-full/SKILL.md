@@ -50,7 +50,7 @@ prevention is structural: one writer per branch, disjoint files, and sequenced w
 before the dependent PR branches. Where two items genuinely overlap, run them in separate
 runs.
 
-Never stack here. Self-contained PRs branch off trunk; sequenced work is merge-then-branch.
+Never stack here. Self-contained PRs branch off trunk. Sequenced work is merge-then-branch.
 
 ## Phase D: Verify each round
 
@@ -60,7 +60,7 @@ changes the patch. At that SHA, fan out independent verifiers in one message wit
 to one verdict. The lanes:
 
 - Re-run the gates at that exact SHA.
-- Prove the load-bearing behaviour on the real surface the change touches; a verdict
+- Prove the load-bearing behaviour on the real surface the change touches. A verdict
   without this lane is not clean.
 - Audit the diff and distrust the pull request body.
 - Run the same scenario against current trunk, and where trunk lacks the feature, record
@@ -80,17 +80,17 @@ matches the merge-ready head. Squash-merge its own PR, then re-run
 self-contained item in the same run and appends its row to `.spectre/autopilot.md` first.
 
 The merge is the one step an owner may not take on babysitting alone. An operator's
-autonomy grant plus a clean root verdict is the authorisation; neither substitutes for the
+autonomy grant plus a clean root verdict is the authorisation. Neither substitutes for the
 other.
 
 ## Phase F: Run the audit tick
 
-Run it when you are next in the room; the cadence is the human's, not yours.
+Run it when you are next in the room. The cadence is the human's, not yours.
 
 Re-read this file from trunk, then re-read the objective in `.spectre/autopilot.md`, and
 audit the operation against both. Fix drift during that tick. Count only side effects as
 progress: commits, pushes, PR or check deltas, and reports. An owner that passed its
-expected runtime with no side effect is stuck; stand it down and dispatch a replacement at
+expected runtime with no side effect is stuck. Stand it down and dispatch a replacement at
 once. A stall is never evidence the work is wrong, and never a reason to drop it.
 
 The tick ends only when no delegated work is left, even after the last merge.

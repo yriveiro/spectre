@@ -52,7 +52,7 @@ they cost one command each:
   motivated the branch above it, and that reason exists nowhere else.
   `ripwire.for` with the symbol name finds them.
 - **In-repo records.** `docs/adr/`, `docs/decisions/`, a `NOTES.md`. Search for
-  them; a repository that keeps them has usually kept them for years.
+  them. A repository that keeps them has usually kept them for years.
 - **TODO and FIXME near the target.** A `// FIXME: the retry is wrong when the
   clock skews` is the reason the retry looks like it does. It is also a
   confession that nobody knows, and both facts matter.

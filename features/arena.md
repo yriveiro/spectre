@@ -60,7 +60,7 @@ opinions on this design, pick one"). Keep it in the design vocabulary for that.
 ### Two gates on the subagent path
 
 1. **Background is switched on in your setup, so this one is fine.** Background
-   needs `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`; without it every
+   needs `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`. Without it every
    candidate would block and there would be no fan-out at all. *(Verified at
    2.0.21: no `background_subagents` string in `packages/core/src` at that tag.)*
 2. **`subagent_depth` defaults to 1** (`packages/core/src/tool/plugin/subagent.ts:129`,

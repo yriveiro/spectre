@@ -38,8 +38,8 @@ and a claim, not the file.
 
 Do not read the raw artefact. Transform it into a shape you can ask questions of:
 one row per sample, per stack frame, per heap node, per trace event. For a profile
-that is a flat table of self time per frame. for a heap snapshot, nodes and retainer
-edges. for a spindump, one row per thread per sample.
+that is a flat table of self time per frame. For a heap snapshot, nodes and retainer
+edges. For a spindump, one row per thread per sample.
 
 The point is that you get to *query*. "Which frames hold the most time" stops being
 inspection of a wall of JSON and starts being a sort. Where the rows are numerous
@@ -76,7 +76,7 @@ symbols the artefact carries. Most profiles embed a `url` and a line number per 
 A frame with no source mapping is not yet a diagnosis. Either resolve the symbols —
 no map was collected, the build was minified, the file has moved since — or say
 plainly that the artefact does not carry them. Do not guess a file from a function
-name. that is an inference wearing a citation.
+name. That is an inference wearing a citation.
 
 `ripwire` confirms the symbol on the source side once you have a name, and
 `tools.spectre.history` tells you whether the line was deliberate when the code looks

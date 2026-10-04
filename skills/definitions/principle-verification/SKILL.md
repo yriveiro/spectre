@@ -35,7 +35,7 @@ is gone:
 grep -R '<old-value>' . | grep -v '<generated-or-vendored>'   # expect no hits
 ```
 
-The command differs per toolchain; the assertion does not.
+The command differs per toolchain. The assertion does not.
 
 **Prove coherence rather than assume it.** After changing a dependency, confirm
 that everything which must agree with it actually did: the direct pin, the lockfile
@@ -44,7 +44,7 @@ class of bug where two versions of the same thing coexist and quietly disagree.
 
 **What is true is what the tool says now.** Recall is a hypothesis and a diff is
 evidence. Read the file rather than reporting what it should contain. To learn what
-a version range changed, diff the range; commit subjects, release notes, changelog
+a version range changed, diff the range. Commit subjects, release notes, changelog
 prose, and ancestry heuristics are each independently misleading, and when the tool
 that gives the truth is available, a cheaper signal is a worse one.
 

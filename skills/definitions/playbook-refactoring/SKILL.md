@@ -7,7 +7,7 @@ lower the load on whoever reads the code next gets reverted.
 `principle-laziness-protocol` states the claim: a hop or a piece of state that
 exists for nobody should go. This is the procedure for a change that has to come
 out the other side identical in behaviour, and holding that identity is the whole
-difficulty. A bug you find along the way is `playbook-bug-fix`. a capability you
+difficulty. A bug you find along the way is `playbook-bug-fix`. A capability you
 realise is missing is `playbook-feature`. Ship the structural change first
 against the pinned contract, then the other one on its own branch.
 
@@ -37,7 +37,7 @@ happily pass on code whose behaviour you just changed without noticing.
 
 Name the structure the code is missing, in terms of the domain rather than the
 file layout. Boring code stays exactly where it is when the shape is already
-clear and local. The reshape has to delete branches or invalid states. a reshape
+clear and local. The reshape has to delete branches or invalid states. A reshape
 that only adds a hop has not changed anything a reader benefits from.
 
 State what the module layout, the types and the call graph should be if this were
@@ -64,7 +64,7 @@ A speculative cleanup that "might help" gets reverted.
 ## Phase D: Move
 
 Small behaviour-preserving steps, each one keeping the pin green. Run the pin
-between steps, not at the end. a step that turns it red has changed behaviour and
+between steps, not at the end. A step that turns it red has changed behaviour and
 is not a refactor.
 
 For an API reshape, migrate every caller and delete the old API in the same wave.

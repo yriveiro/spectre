@@ -64,6 +64,15 @@ describe("hard rules", () => {
     expect(hard("Spin up the job before you read the plan.")).toContain("phrasal-verb");
   });
 
+  test("the noun in `rule out of prose` is not the phrasal verb", () => {
+    // Found by the sweep: the pattern matched the noun and reported a defect where
+    // there was none. A rule that cries wolf gets ignored, so this holds the line.
+    expect(hard("Every structure is a way of moving one rule out of prose.")).not.toContain(
+      "phrasal-verb",
+    );
+    expect(hard("The tests rule out the theory.")).toContain("phrasal-verb");
+  });
+
   test("STE 3.7 nominalization", () => {
     expect(hard("It performs an analysis of the log.")).toContain("nominalization");
   });
@@ -98,6 +107,20 @@ describe("advisory rules never fail a run", () => {
 
   test("it is still not a hard finding", () => {
     expect(hard("I have verified the claim at source.")).not.toContain("present-perfect");
+  });
+
+  test("a modal or conditional perfect is a different form", () => {
+    // Four of these turned up in the sweep. No simple past carries the meaning, so
+    // the rule reads past the modal instead of asking for worse prose.
+    expect(rules("The diff you might have written costs minutes.")).not.toContain(
+      "present-perfect",
+    );
+    expect(rules("That is what asking once would have given you.")).not.toContain(
+      "present-perfect",
+    );
+    expect(rules("The shape should have made the bug impossible.")).not.toContain(
+      "present-perfect",
+    );
   });
 });
 
@@ -276,28 +299,50 @@ describe("the set's own prose", () => {
     );
   }, 30_000);
 
-  test("the debt is still on the books, and it is all semicolons", async () => {
-    // The rest of the set has not been swept yet. This test is the receipt, and it
-    // fails when the debt is paid so the line goes with it rather than rotting.
-    const out = await call([
-      "skills/definitions",
-      "AGENTS.md",
-      "TODO.md",
-      "README.md",
-      "skills/FOR_AGENTS.md",
-    ]);
+  test("the debt is on the books, and the semicolons are paid", async () => {
+    // The whole repo, not a chosen list of it, so a new file cannot add to the debt
+    // quietly. The 150 semicolons are gone: each one was read in its paragraph and
+    // rewritten, most as a full stop, four clusters as the list they were.
+    //
+    // What is left is not a debt to pay. The nine marketing adjectives are the ban
+    // list in `grammar`, which names the words the rule bans. The passive voice is
+    // this repo's house style for stating what is true of the code, where the actor
+    // is the point of the sentence not its subject, and the rule's own `why` says
+    // passive is correct there. Both counts are held so a change to either is a
+    // decision someone made rather than a drift nobody saw.
+    const out = await call(["."]);
     const byRule: Record<string, number> = {};
     for (const f of out.findings) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
     expect({
       semicolons: byRule["semicolon"] ?? 0,
-      other: Object.keys(byRule)
-        .filter((r) => r !== "semicolon")
+      phrasalVerbs: byRule["phrasal-verb"] ?? 0,
+      presentPerfect: byRule["present-perfect"] ?? 0,
+      longSentences: byRule["long-sentence"] ?? 0,
+      marketingAdjectives: byRule["marketing-adjective"] ?? 0,
+      passiveVoice: byRule["passive-voice"] ?? 0,
+      otherRules: Object.keys(byRule)
+        .filter(
+          (r) =>
+            ![
+              "semicolon",
+              "phrasal-verb",
+              "present-perfect",
+              "long-sentence",
+              "marketing-adjective",
+              "passive-voice",
+            ].includes(r),
+        )
         .toSorted(),
     }).toEqual({
-      semicolons: 150,
-      other: ["marketing-adjective", "passive-voice", "phrasal-verb", "present-perfect"],
+      semicolons: 0,
+      phrasalVerbs: 0,
+      presentPerfect: 0,
+      longSentences: 0,
+      marketingAdjectives: 9,
+      passiveVoice: 321,
+      otherRules: [],
     });
-  }, 60_000);
+  }, 120_000);
 });
 
 describe("with no dictionary configured", () => {

@@ -38,7 +38,7 @@ output line, the changed prompt, the log entry. Cut explanation to one clause
 and a link. Write as "we", in commands.
 
 **How-to.** Steps to a goal the reader arrived with. Assume competence. No
-digressions, no background, no completeness for its own sake; link those
+digressions, no background, no completeness for its own sake. Link those
 instead. Allow forks and judgment: "If you want x, do y." Name the page for the
 task, "How to calibrate the radar array", not for the subsystem.
 

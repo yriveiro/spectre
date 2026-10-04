@@ -4,7 +4,7 @@ Status: built. `tools/definitions/canvas/` holds the tool — `index.ts` the
 declaration, `parse.ts` the diff parser, `read.ts` the `gh`/`git` reads, and
 `store.ts` the artifact store. The two skills are `skills/definitions/canvas/`
 and `skills/definitions/pr-canvas/`. `~/Downloads/main-2` holds the source
-skills; this is what spectre builds instead of copying them.
+skills. This is what spectre builds instead of copying them.
 
 ## Goal
 
@@ -55,12 +55,12 @@ like a slightly bigger diff, and nobody re-derives the numbers on a rendered pag
 
 The anchor matters: **both counters above use `/^-/`, not `/-/`.** An unanchored
 deletion filter also counts hunk headers, `index` lines, and prose. One arena
-candidate published `49 16` from an unanchored script; those figures are not
+candidate published `49 16` from an unanchored script. Those figures are not
 reproducible and are not quoted here. Re-measure before quoting any diff count.
 
 ## Mechanism
 
-Four properties of spectre decide the shape. All read at `v2.0.21`; sources in
+Four properties of spectre decide the shape. All read at `v2.0.21`. Sources in
 the appendix.
 
 1. **A spectre agent can load a second skill.** `packages/core/src/tool/plugin/skill.ts`
@@ -80,7 +80,7 @@ the appendix.
    `SKILL.md`, `definition.ts` aside, so a third file would be the first of its
    kind.
 3. **One tool for a read and a write.** `options.permission` decides only whether
-   a tool is *offered*; the call path goes `beforeExecute` straight to
+   a tool is *offered*. The call path goes `beforeExecute` straight to
    `executeTool`. A read/write split buys two catalog entries and no safety.
    `worktrees` is the precedent: `list` + `start` + `remove` under one permission.
 4. **The data root is already granted.** `agents/index.ts` pushes
@@ -115,7 +115,7 @@ revision policy, when a request is canvas-shaped at all.
 
 **`pr-canvas`** owns consent, subject resolution, evidence *interpretation* —
 reviewer-oriented grouping, sourced requirement→hunk links, uncertainty phrased as
-questions — and the merged template. It never names a filename or a launcher; it
+questions — and the merged template. It never names a filename or a launcher. It
 asks the tool.
 
 ### Usage
@@ -194,7 +194,7 @@ that opened something cannot carry a reason for having not. **No fallback to a
 browser tool, ever.**
 
 The reason is ownership and persistence, not availability. `browser.preview` is a
-tool spectre does not register and cannot guarantee; naming it in a skill body
+tool spectre does not register and cannot guarantee. Naming it in a skill body
 produces the worst failure mode available — the canvas is written and never shown,
 which reads as a bug in the code under test. And a canvas is *defined* as
 outliving its session, so delivering it through a session-scoped view ties a
@@ -202,7 +202,7 @@ persistent artifact to a transient surface and leaves two paths with no rule for
 which one proves delivery.
 
 **Not claimed:** whether `browser.preview` is present in TUI sessions. pstack
-asserts it may be absent; that was not measured here. The decision stands on the
+asserts it may be absent. That was not measured here. The decision stands on the
 two reasons above without it.
 
 **Not claimed:** that `start` and `xdg-open` are the right commands everywhere.
@@ -229,7 +229,7 @@ is not on the type at all.
   `tools/definitions/stack/read.ts` already follows with `threads: -1`.
 
 **The tool does not truncate.** It writes every changed file, whole. A large PR
-produces a large evidence tree; the *page* chooses what to render and says which
+produces a large evidence tree. The *page* chooses what to render and says which
 paths it left out, which is the escape the source template already provides
 ("identify omitted files/ranges and retain the complete changed-file inventory").
 
@@ -243,12 +243,16 @@ Both are procedures, so both go in `notALeaf` with **no ripwire map row and no
 change to the hub's `none` count**, which is what
 `test/skills/ripwire-map.test.ts` asserts.
 
-`canvas` covers, from the source: treat a direct request as the instruction to
-build and present rather than to plan; the self-contained rules (inline CSS and
-JS, no CDN, no build step, escaped content, no `eval`); state assumptions visibly
-and never present mock data as live; meaningful `<title>`, visible heading, and a
-stable in-page identifier; iterate **in place** so identity and path stay stable;
-reopen without regenerating; and refuse to guess when several canvases match.
+`canvas` covers, from the source:
+
+- Treat a direct request as the instruction to build and present rather than to plan.
+- The self-contained rules: inline CSS and JavaScript, no CDN, no build step, escaped
+  content, no `eval`.
+- State assumptions visibly and never present mock data as live.
+- A meaningful `<title>`, a visible heading, and a stable in-page identifier.
+- Iterate **in place** so identity and path stay stable.
+- Reopen without regenerating.
+- Refuse to guess when several canvases match.
 
 `pr-canvas` carries four things from the source that a typed tool surface does not
 give for free, and they are the reason the skill exists at all:
@@ -261,13 +265,15 @@ give for free, and they are the reason the skill exists at all:
 2. **Subject resolution.** A bare number needs verified repository context. A
    branch ref resolves to a PR only when it matches exactly one open PR. A local
    diff needs explicit base and head — nothing is inferred. Ambiguous → ask.
-   Closed or merged → state the actual status and ask; never call it open.
+   Closed or merged → state the actual status and ask. Never call it open.
 3. **The pin.** Pin the analysed head commit where possible, so a PR that moves
    mid-gather is still described by one consistent commit.
-4. **Evidence and limits.** Every changed path accounted for; stated intent kept
-   distinct from observed implementation; uncertainty phrased as a question, never
-   a confirmed defect; only check results actually observed; every coverage gap
-   named.
+4. **Evidence and limits.**
+   - Every changed path accounted for.
+   - Stated intent kept distinct from observed implementation.
+   - Uncertainty phrased as a question, never a confirmed defect.
+   - Only check results actually observed.
+   - Every coverage gap named.
 
 Plus, from the template, the merged visual contract: metadata header with grouped
 label/value pairs, at-a-glance summary, Overview/Diff tabs, a grouped change map
@@ -315,21 +321,24 @@ numbers, count verification, pair alignment — into code, and it chose correctl
 the install-cache residue. Seat 1 returns a raw diff string and leaves pairing to
 prose, which is the hope this file measured failing.
 
-**Grafted from seat 1**, all of it prose the typed surface does not supply: the
-consent paragraph and the `question`-tool offer; the four subject-resolution rules;
-the observed-checks and omission-confession fields, which seat 2's `Read` arm
-lacks entirely; ambiguity refused at the pick step.
+**Grafted from seat 1**, all of it prose the typed surface does not supply:
+
+- The consent paragraph and the `question`-tool offer.
+- The four subject-resolution rules.
+- The observed-checks and omission-confession fields, which seat 2's `Read` arm
+  lacks entirely.
+- Ambiguity refused at the pick step.
 
 **Rejected.** Seat 2's open question 1 ("how does a spectre agent load a second
 skill") — settled above, and its fallback to one skill is moot. Seat 2's printed
 `--patch` figures — unanchored counters, unreproducible, replaced by the
 re-measurement in this file. Seat 2's `browser.preview` dismissal, which reasoned
 from spectre tools reaching the same registry as builtins, a fact that says nothing
-about a third-party plugin's tools; the conclusion is kept and seat 1's reasoning
+about a third-party plugin's tools. The conclusion is kept and seat 1's reasoning
 used instead. Seat 2's `path.ts` purity claim, which cannot hold while it spawns
 git: the built tool splits the two claims across `store.ts` (paths, allocation,
 presentation) and `read.ts` (every `Bun.spawn`), so no module both derives a path
-and shells out. Seat 1's carried-over `references/pr-canvas-template.md`, ruled out twice
+and shells out. Seat 1's carried-over `references/pr-canvas-template.md`, excluded twice
 over. Seat 1's registration list, one edit short: `reachable.test.ts` has two
 hardcoded sites, not one.
 
@@ -376,13 +385,13 @@ Three places where the document was a design and the code had to decide.
 ## Open questions
 
 1. **Where `<worktree-name>` comes from.** `main` collides across repositories.
-   The placeholder is undefined repo-wide; the fix belongs in `data-root.md`.
+   The placeholder is undefined repo-wide. The fix belongs in `data-root.md`.
    **Partly settled:** this port picks `basename(project directory)` falling back
    to `basename(git rev-parse --show-toplevel)`, and the collision plus the
    options are now written down in `data-root.md` under "Open" rather than only
    here. Defining the placeholder for all seven skills is still undecided.
 2. **Diff size policy.** PR 10 is 164 files and 575 KB. Measure real PR sizes
-   against page weight before freezing any cap. The tool does not truncate; the
+   against page weight before freezing any cap. The tool does not truncate. The
    page chooses and confesses. **Partly settled:** the tool result is an
    inventory of paths and counts, and the rows live in `evidence/files/`, so a
    large pull request does not arrive as one large tool result. A 1500-row file is

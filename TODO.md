@@ -56,7 +56,8 @@ Each for a stated reason, not for lack of time.
 
 | Item | Where it stands |
 | ---- | -------------- |
-| 150 semicolons | tracked by `test/tools/prose.test.ts`, which fails when the count drops. `tools.spectre.prose` finds them in one call |
+| 191 semicolons | paid. Every one was read in its paragraph. `test/tools/prose.test.ts` now reads the whole repo and expects zero, so a new file cannot add one back |
+| the passive voice count | 321, and the number is the decision. Every finding is a statement of state about code, where the actor is not the subject. `tools.spectre.prose` reports it as advisory for that reason. If you want it active, say so and it is 321 sentences |
 | `dictionary` path | yours to set. The repo copy carries the line commented out, so nobody else inherits your `~/Dump` path |
-| dictionary export | the extractor from the PDF is not written. The export exists; regenerating it does not |
+| dictionary export | the extractor from the PDF is not written. The export exists. Regenerating it does not |
 | the two routing misses | `summarize what you just changed` and `reply with just the answer, no preamble` still go to playbooks. Not fixable by description, see the PR body |

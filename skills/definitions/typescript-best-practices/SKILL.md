@@ -93,7 +93,7 @@ already trusts, not a new dependency for one guard.
 `principle-boundary-discipline` owns where the parse lives and what stops at it.
 
 An `as` is a runtime crash waiting for the input that contradicts it, and a cast
-is earned only after the type system has verified the claim. Every `as` in a
+is earned only after the type system verified the claim. Every `as` in a
 function you are refactoring names one of four causes, and three are fixable: a
 missing discriminant, a source type too wide such as `Record<string, unknown>`, or
 an untyped boundary that wants a parse function. The fourth, a fact TypeScript

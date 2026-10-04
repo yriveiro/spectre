@@ -82,7 +82,7 @@ So `safe` is the list to work from, in this order:
 4. `git worktree prune` only when a `failed` or `already-gone` status names a
    stale entry, which clears metadata for a directory that is already gone.
 5. `git branch -d <branch>` only for a branch that was merged. `-d` refuses to
-   delete an unmerged branch, which is the guard you want; `-D` overrides it and
+   delete an unmerged branch, which is the guard you want. `-D` overrides it and
    is how work disappears. `tools.spectre.worktrees` never deletes a branch —
    removal reclaims a directory, and a branch is somebody's work.
 

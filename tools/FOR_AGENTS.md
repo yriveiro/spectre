@@ -84,7 +84,7 @@ Wholly disabled means one shape and no other. `whollyDisabled` at
 `packages/core/src/tool.ts` is three lines: take the last rule matching the
 action, and drop the tool only when that rule is `{resource: "*", effect:
 "deny"}`. Re-read at tag `v2.0.21`, so this paragraph and the filter definition
-above are current; the schema table further up is still measured at 2.0.18 and
+above are current. The schema table further up is still measured at 2.0.18 and
 has not been re-run.
 
 **`options.permission` is a label, not a boundary.** It decides whether the tool
@@ -133,7 +133,7 @@ const result = await tools.spectre.comments({ targets: ["<file>"] })
 
 `AGENTS.md` has the command that starts such a session, and the
 `OPENCODE_CONFIG_DIR` isolation it needs. Re-run the measurement when the
-supported OpenCode version moves; do not trust this table across a bump.
+supported OpenCode version moves. Do not trust this table across a bump.
 
 There is no cheap pre-check for this table, and it is worth saying why rather than
 leaving the gap. The accepted set is decided by a walk of the Schema AST inside

@@ -66,7 +66,7 @@ for.
 **Prefer a write target that cannot be written twice.** An append-only log line,
 a new file per run, a content-addressed path: each has no lost update to protect,
 because there is no in-place edit to lose. A value that must be kept equal in two
-places is the derive-don't-synchronize move, already owned in two other leaves; a
+places is the derive-don't-synchronize move, already owned in two other leaves. A
 target two writers mutate is the same defect at the level of the write rather
 than the value.
 

@@ -16,7 +16,7 @@ Three shapes, and picking wrong is the mistake that costs the most:
 - **A principle** states a test and a moment you load it on. The template below
   is theirs.
 - **A procedure** runs steps or phases. `code-hygiene` has one `Steps` section and
-  nothing else; `why` and `blast-radius` run `Start` / `Phase A` … `Outputs`. A
+  nothing else. `why` and `blast-radius` run `Start` / `Phase A` … `Outputs`. A
   moves list that is really a step list is the tell.
 - **A compact port** can have no sections at all, as
   `principle-guard-the-context-window` shows: one heading and no `##` under it.
@@ -119,7 +119,7 @@ is written", and the row stopped routing. Put the literal nouns back.
   update the hub count in the same change.
 - **A description.** `test/skills/routing.test.ts` fails on a blank one, and on
   `bm25-desc` or `bm25-full` stopping beating chance. The routing arm is skipped
-  when `ripwire` is missing; the blank check always runs.
+  when `ripwire` is missing. The blank check always runs.
 - **Registration**, as above.
 
 Indexing is what the hub pays, and it is why the hub is the binding constraint: it
@@ -181,7 +181,7 @@ argument for fewer, sharper leaves.
 
 ## Measuring the routing
 
-BM25 is a lexical proxy; the thing that routes is a model reading the same
+BM25 is a lexical proxy. The thing that routes is a model reading the same
 descriptions, so `eval/` asks both and prints them in one table.
 `eval/README.md` holds the commands, the evidence columns, and why the catalogue
 is checked against OpenCode's `Registered skills` log line rather than

@@ -66,7 +66,7 @@ to design against, and the design that assumes it is the one that behaves.
 one that cannot be answered in a sentence is a design that is not finished.
 
 **Make the operation a pure function of current state plus input.** If what it
-does depends on how many times it has run, there is a counter, and the counter is
+does depends on how many times it ran, there is a counter, and the counter is
 state you now own, persist, and reconcile.
 
 **Clean up by content.** "Remove what matches what I just wrote" survives a

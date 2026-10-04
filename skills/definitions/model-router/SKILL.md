@@ -125,7 +125,7 @@ subagent({ agent: t.profiles[0].agent, prompt: "choose the change",     model: s
 
 `cheap` and `strong` are rows you picked from what came back. A cheap model is
 genuinely good at the mechanical parts: grep, read, run, report. Spending the
-expensive model on that is waste; spending the cheap one on the judgement is the
+expensive model on that is waste. Spending the cheap one on the judgement is the
 failure above. Decomposing is how you get both right.
 
 ## A worked example

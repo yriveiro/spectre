@@ -46,7 +46,7 @@ is a version, a "cannot", a "does not", and an "already". None of them are free.
 A smooth wrong guess costs the reader more than an honest gap, because they cannot
 tell which one they are reading. Assertive is not mute: explain the thing. Cut the
 padding around the explanation, never the explanation itself. Keep a hedge when
-the uncertainty is real; drop it when it is only filler.
+the uncertainty is real. Drop it when it is only filler.
 
 Those two halves fight each other, and that fight is where messages get lost.
 Cutting is allowed on the padding and forbidden on the meaning. Before you cut
@@ -288,7 +288,7 @@ procedure is what would break it.
   Load it when a principle applies and you have not measured the code, so the
   claim gets a run instead of an assertion. It also names the ten leaves with no
   instrument, and the ways ripwire is wrong, which is the half that keeps the map
-  from becoming deference to a tool. The principles stay generic about tools;
+  from becoming deference to a tool. The principles stay generic about tools.
   this is the one file allowed to name one.
 
 ## How to work

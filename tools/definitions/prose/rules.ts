@@ -34,7 +34,8 @@ const RULES: ReadonlyArray<Spec> = [
     rule: "phrasal-verb",
     level: "hard",
     pattern:
-      /\b(?:spin(?:ning|s)? up|spun up|reach(?:ing|es|ed)? out|div(?:e|es|ing|ed) into|dove into|kick(?:ing|s|ed)? off|circl(?:e|es|ing) back|touch(?:ing|es)? base|hand(?:ing|ed)? off|rule[ds]? out|look(?:ing|s|ed)? into|set up)\b/i,
+      // `rule out of` is two words, not the verb, so it needs the negative lookahead.
+      /\b(?:spin(?:ning|s)? up|spun up|reach(?:ing|es|ed)? out|div(?:e|es|ing|ed) into|dove into|kick(?:ing|s|ed)? off|circl(?:e|es|ing) back|touch(?:ing|es)? base|hand(?:ing|ed)? off|rule[ds]? out(?!\s+of\b)|look(?:ing|s|ed)? into|set up)\b/i,
     why: "STE 9.3. A verb plus a preposition has a meaning the parts do not predict. Use the single plain verb.",
   },
   {
@@ -61,8 +62,12 @@ const RULES: ReadonlyArray<Spec> = [
   {
     rule: "present-perfect",
     level: "advisory",
+    // A modal or conditional perfect (`would have written`, `might have left`) is a
+    // different form, and no simple past carries the same meaning. The sweep found
+    // four of them, so the rule looks past the modal rather than reporting a defect
+    // nobody can fix without writing worse prose.
     pattern:
-      /\b(?:has|have|had)\s+(?:been\s+)?(?:read|written|verified|measured|confirmed|tested|checked|seen|found|done|added|removed|left|held|kept|set|run|made|taken|given|shown|built|sent|put)\b/i,
+      /\b(?<!(?:would|could|should|might|may|must)\s)(?:has|have|had)\s+(?:been\s+)?(?:read|written|verified|measured|confirmed|tested|checked|seen|found|done|added|removed|left|held|kept|set|run|made|taken|given|shown|built|sent|put)\b/i,
     why: "STE 3.2 permits simple tenses only. Advisory because 'has not been read at source' carries a hedge the simple past cannot.",
   },
 ];

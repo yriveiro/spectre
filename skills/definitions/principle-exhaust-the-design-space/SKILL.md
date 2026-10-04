@@ -2,14 +2,14 @@
 
 For a decision with no precedent, the first design is a guess, and a guess
 presents its first answer with total confidence. You build it out, and by the time
-its flaws show, the code is load-bearing and the flaws are architecture; redesign
+its flaws show, the code is load-bearing and the flaws are architecture. Redesign
 then means a rewrite, so the flaws stay, annotated as trade-offs nobody ever
 traded, and the team inherits a guess wearing the authority of shipped code. So
 build two or three competing prototypes, compare them on the same evidence, and
 only then commit, because a design chosen from one option was never chosen. There is no count to
 pass and no gate to clear, because the whole rule is a moment, novelty with no
 precedent where being wrong costs more than two throwaways. The comparison itself
-is `principle-evidence`'s oracle; this leaf is the workflow that builds the oracle
+is `principle-evidence`'s oracle. This leaf is the workflow that builds the oracle
 before the commitment rather than after the failure.
 
 ## The moves
@@ -47,7 +47,7 @@ that keeps the result a comparison.
 
 **Push each prototype at the case it is least comfortable with.** The cheapest way
 to kill an option is the one it was designed around. An option that survives its
-worst case has been decided; one that dies on it was never going to ship, and
+worst case has been decided. One that dies on it was never going to ship, and
 finding that out now is the entire return on the throwaway.
 
 **Include the option you are not tempted by.** The obvious alternative is the one

@@ -21,7 +21,7 @@ what make the rule exact rather than approximate. Waiting for a third means payi
 the telling twice for a rule you could already write.
 
 **Write the lesson in the imperative, as a sentence a machine could check.** Prose
-explains why; structure states what. If the sentence cannot be phrased as
+explains why. Structure states what. If the sentence cannot be phrased as
 something a tool can decide, that is information about the form you should pick,
 not a reason to give up on encoding it.
 
@@ -34,8 +34,8 @@ distance between mistake and report is the cost paid on every recurrence.
 
 **Encode at the cheapest layer that can fail.** A rule in the type or the schema
 stops the mistake before there is code to run. A rule in CI runs after the work
-has been written, on somebody's afternoon, and reports a defect that could have
-been unmakeable. Both are worth having; only one was free.
+is written, on an afternoon somebody spent, and reports a defect that could have
+been unmakeable. Both are worth having. Only one was free.
 
 **Name the exception inside the rule itself.** A check with no escape hatch is
 disabled on its first legitimate use, and a disabled check is worse than the
@@ -86,7 +86,7 @@ repetition you have not spent yet.
 
 - **Not a licence to encode everything.** A rule for a case that has not recurred
   fires on a legitimate use, and a rule that fires wrongly is how a linter gets
-  turned off for the whole project. Two occurrences is evidence; one is an
+  turned off for the whole project. Two occurrences is evidence. One is an
   anecdote, and the cost of a wrong rule is paid by everybody.
 - **Not a replacement for saying it out loud once.** Structure encodes a lesson you
   have understood. A rule you do not yet understand is a rule that will be wrong,

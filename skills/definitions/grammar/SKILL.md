@@ -146,6 +146,15 @@ Measured on this set before adoption: 168 semicolons in prose across 79 files,
 and 0 inside a code fence or a table row. This is the rule that costs the most,
 and it is one character per finding.
 
+The branch that adopted this paid 191 of them across 63 files, which is 23 more
+than the 168 because the sweep went past the set of skill bodies and into
+`features/`, `eval/` and the two `FOR_AGENTS.md`. `test/tools/prose.test.ts`
+reads the whole repo and expects zero, so a new file cannot bring one back
+quietly. Four of the sentences held five or more items in a list, and those
+became lists rather than a run of full stops, which is what STE 4.3 asks for.
+The rest were a contrast or two instructions where the mark was doing the work
+of a full stop.
+
 ## Keep the subject, the verb, and the article (STE 4.2, 4.5)
 
 **Test: was a word dropped to make the line shorter?**

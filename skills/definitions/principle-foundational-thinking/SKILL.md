@@ -8,7 +8,7 @@ are still cheap to change, and the rest of the work turns obvious rather than
 inherited. Effort spent on the foundation pays every later phase. Effort spent
 downstream, on a bad foundation, pays once and charges interest. It is adjacent to
 `principle-make-states-unrepresentable`, which owns which shape to reach for once
-you have decided to reach for one; this leaf owns when, and what the early
+you have decided to reach for one. This leaf owns when, and what the early
 decisions are that the late phases will be living inside.
 
 The test is forward-looking and it is the only one: does every subsequent phase

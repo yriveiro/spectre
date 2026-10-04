@@ -50,7 +50,7 @@ frame list into a starting point instead of a reading exercise.
 
 When program state is unclear, add instrumentation or logging and read it as
 the
-code runs. Do not guess at state from the source; the bug is the gap between what
+code runs. Do not guess at state from the source. The bug is the gap between what
 the source says and what the state is.
 
 Drive the passes yourself, or hand the hunt to a background `subagent` with one
@@ -70,8 +70,8 @@ first, because a boundary crossed by accident is a redesign by the back door.
 Delegate the implementation to a `subagent` with a specific scope: the file
 paths, the mechanism, the behaviour to hold, and what done looks like. Choose
 the model with `tools.spectre.routing({})` — the judgement profile is the right
-seat for a mechanism nobody has confirmed. No model id is written by hand
-anywhere in this playbook; a hardcoded slug rots the day the allowlist moves.
+seat for a mechanism nobody confirmed. No model id is written by hand
+anywhere in this playbook. A hardcoded slug rots the day the allowlist moves.
 
 Read the diff yourself before running anything.
 
@@ -86,13 +86,13 @@ Unit tests show branch behaviour, not the absence of the bug. Where the defect
 has a cheap local test path, load `tdd` here: the failing run lands in git
 before the fix, and the fix is the commit that turns it green. Where the test
 would be expensive, integration-heavy or unclear, say which of those it was. A
-skipped step with a stated reason is a decision; a skipped step with no reason is
+skipped step with a stated reason is a decision. A skipped step with no reason is
 a hole.
 
 ## Phase E: Ship
 
 Stage the commits so the failing reproduction lands before the fix. Two commits
-read as a story; one commit asks the reviewer to trust you on both halves at
+read as a story. One commit asks the reviewer to trust you on both halves at
 once.
 
 Order the branch with `tools.spectre.stack`, and open the pull request with

@@ -14,7 +14,7 @@ Open a `todolist` with one entry per phase before the first push.
 5. Body
 6. Stack
 7. Open
-8. Hand off
+8. Handover
 
 ## Phase A: Worktree
 

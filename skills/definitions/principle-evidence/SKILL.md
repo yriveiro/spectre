@@ -17,7 +17,7 @@ argument into a number. The reasoning was never the bottleneck.
 
 The second is **a check that cannot fail.** A suite that is green because it
 asserts nothing is indistinguishable, from the outside, from a suite that is green
-because the code is right. Nobody has been lied to; the report has simply stopped
+because the code is right. Nobody has been lied to. The report has simply stopped
 carrying information. The only way to tell the two apart is to break the thing on
 purpose and watch the suite go red.
 
@@ -25,7 +25,7 @@ Neither failure announces itself. The first feels like rigour. The second feels
 like safety. Both ship.
 
 This principle is not a gate, and it is not a demand for measurement everywhere.
-Some questions are settled by reading the file. What it rules out is the specific
+Some questions are settled by reading the file. What it excludes is the specific
 substitution of *sounding right* for *having checked*, in either direction: the
 unmeasured claim, and the unfalsifiable check.
 
@@ -34,7 +34,7 @@ unmeasured claim, and the unfalsifiable check.
 **An oracle beats an argument.** When two things are both plausible, build the
 thing that knows the answer, such as a reference implementation, a parser, a
 schema, a query, or two or three prototypes compared side by side, and ask it.
-Reasoning about which is better is cheap and frequently wrong; the oracle is
+Reasoning about which is better is cheap and frequently wrong. The oracle is
 usually already installed and takes one command. Two prototypes is the same move
 when the surface is a screen rather than a function: you cannot argue a feel into
 existence, and you can look at two of them next to each other.
@@ -89,7 +89,7 @@ reader can act on. "Perfect precision" is a slogan. The denominator is the claim
 
 ## Tactics
 
-The mechanical habits. These are the details; the values above are why they are not
+The mechanical habits. These are the details. The values above are why they are not
 optional.
 
 **Break one thing on purpose per new check.** If a suite has never been red, it has
@@ -104,7 +104,7 @@ supports the change.
 **Diff the two implementations over real input.** For a change to a scanner, a
 parser, a matcher, or a formatter, the honest check is a before/after over every
 file of the kind it handles, with both diffs printed and each line classified as a
-gain or a loss. Sampling tells you the direction; only the full diff tells you the
+gain or a loss. Sampling tells you the direction. Only the full diff tells you the
 size.
 
 **Use the reference implementation as the scoreboard.** A language's own tokenizer,
@@ -112,7 +112,7 @@ a schema validator, a compiler, a linter's own output: whatever already knows th
 answer will score both candidates for free, and its verdict is not your opinion.
 
 **Time it if you changed how it runs.** A change to a hot path is not done until
-someone has measured it against the version it replaces, on realistic input, with
+someone measured it against the version it replaces, on realistic input, with
 the numbers in the report. "It should be faster" is a hypothesis with a cost.
 
 **Keep the harness.** The corpus, the oracle, and the command that produced the

@@ -6,7 +6,7 @@ merges: the chain is handed to a person who lands it. Capacity is `subagent` wit
 
 ## Start
 
-State the plan when asked and stop; a request to state the protocol is not a go. On an
+State the plan when asked and stop. A request to state the protocol is not a go. On an
 explicit go, the run begins by writing the objective down.
 
 1. Take the go, write the objective down

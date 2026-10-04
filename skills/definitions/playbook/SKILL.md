@@ -1,7 +1,7 @@
 # Playbook
 
 Twenty-two procedures, one per shape of task. This file is the index and the
-selection rule. each playbook is a folder beside it.
+selection rule. Each playbook is a folder beside it.
 
 `principle-*` tells you how to hold yourself while you work. These tell you what
 to do and in what order. A principle has no phases. A playbook does. If a request

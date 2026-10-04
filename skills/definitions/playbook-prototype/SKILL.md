@@ -33,7 +33,7 @@ the decision does not exist yet, route to `playbook-feature`.
 
 Decide what evidence would settle it. A screenshot, a timing number, a count of
 misclicks, a rendered page. Without that, "I like it better" is the output and
-you have written nothing worth keeping.
+you wrote nothing worth keeping.
 
 ## Phase B: Reference
 

@@ -33,7 +33,7 @@ would have to defend.
 
 **Answer the counterfactual: what would I try if this sentence were false?** If
 the answer is nothing, the sentence is not the cause and the attack has not
-happened. If the answer is a whole second plan, you have found the shape of the
+happened. If the answer is a whole second plan, you found the shape of the
 work, and the plan is the thing worth building.
 
 **Name the gate both fixes failed.** Two failures at the same check are evidence
@@ -76,7 +76,7 @@ fails.
 
 **Record the attack even when it fails.** A premise that survives negation,
 replacement, and a direct proof has earned its fixes, and the record is what stops
-the next person from re-running the whole investigation. Attacking is expensive;
+the next person from re-running the whole investigation. Attacking is expensive.
 the evidence that it held is the part that would otherwise be re-derived.
 
 **Name who holds the premise, not only what it is.** A premise that keeps

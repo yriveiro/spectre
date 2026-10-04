@@ -4,7 +4,7 @@ Improve one measurable thing against a target, over many iterations, keeping onl
 the attempts the measurement says are wins. The metric, the direction that counts
 as better, and the stop condition are fixed before the first attempt, and every
 claim of improvement is a pair of numbers from one frozen harness. You supervise
-and review; the attempts themselves are delegated.
+and review. The attempts themselves are delegated.
 
 ## Start
 
@@ -42,7 +42,7 @@ effect, and revising the workload or the metric comes before any optimization.
 
 Then freeze it. One repeatable command, sampled enough to clear the noise — a median
 over N runs, not one run, because a single sample of a noisy system is a coin flip
-with extra steps. Write the command down and do not touch it again; a harness edited
+with extra steps. Write the command down and do not touch it again. A harness edited
 mid-run makes every number in the log incomparable with the numbers before it.
 
 Before the first change, record two things: the **baseline metric**, and a **green

@@ -66,7 +66,7 @@ the check ran against a double and what that leaves unverified.
 
 **Read the log line and check that it names the value you expect.** "Server
 started on port 3000" proves a process is listening. The line has to carry the
-thing you are claiming, or you have checked the port and not the behaviour.
+thing you are claiming, or you checked the port and not the behaviour.
 
 **Do not use the typecheck as a behaviour check.** `tsc` proves assignability. A
 handler that returns the right type and the wrong value is a passing build, and

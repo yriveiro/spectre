@@ -109,7 +109,7 @@ so rather than reading readiness into it.
 
 After every merge: fetch trunk, confirm the merged SHA is present, drop that
 pull request from the bottom-to-top list, and inspect the new bottom one's base,
-head, checks and patch-id. A host may retarget a child for you; do not assume
+head, checks and patch-id. A host may retarget a child for you. Do not assume
 it did. Repeat Phases C through E for that one pull request. Independent work
 stays outside this chain and ships on its own.
 

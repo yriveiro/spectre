@@ -26,7 +26,7 @@ turning into a broad read.
 ## Phase A: Frame
 
 Write the question as a sentence that has an ending. "How does session refresh
-work" does not end; "which of these two shapes keeps a revoked token from
+work" does not end. "which of these two shapes keeps a revoked token from
 re-entering the pool" does. Say what an answer would change, because a question
 whose answer changes nothing is a question to decline.
 
@@ -35,7 +35,7 @@ decision recorded somewhere outside the tree. A vague surface is how an
 investigation turns into reading a repository.
 
 Push back on a wrong premise before investigating it. `principle-attack-the-premise`
-owns the move; what it hands you is a better question, not a rejected request.
+owns the move. What it hands you is a better question, not a rejected request.
 
 If the answer turns out to require a code change, stop here and hand back. Say
 which playbook takes it next, `playbook-bug-fix` or `playbook-feature`, and why
@@ -73,7 +73,7 @@ Two shapes, and which one you owe depends on the question.
 
 For "are we sure" questions, give the real judgment with the reasons attached,
 including the cases where you are not sure and what would settle it. An
-investigation that ends in "it depends" and names the dependency has done the
+investigation that ends in "it depends" and names the dependency did the
 job.
 
 ## Phase D: Weigh the evidence
