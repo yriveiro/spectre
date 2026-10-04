@@ -38,8 +38,8 @@ and a claim, not the file.
 
 Do not read the raw artefact. Transform it into a shape you can ask questions of:
 one row per sample, per stack frame, per heap node, per trace event. For a profile
-that is a flat table of self time per frame; for a heap snapshot, nodes and retainer
-edges; for a spindump, one row per thread per sample.
+that is a flat table of self time per frame. for a heap snapshot, nodes and retainer
+edges. for a spindump, one row per thread per sample.
 
 The point is that you get to *query*. "Which frames hold the most time" stops being
 inspection of a wall of JSON and starts being a sort. Where the rows are numerous
@@ -55,7 +55,7 @@ reproduce.
 Now query the shape you built. The query differs by symptom:
 
 - **Slowness.** Sort by self time, take the top frames, walk the call tree down to
-  the hot path. The frame with the most self time is the one to attribute; the tree
+  the hot path. The frame with the most self time is the one to attribute. The tree
   says what called it.
 - **Leak.** Start from the object whose retained size is anomalous and follow its
   retainer chain up to a GC root. The retaining path is the finding, and every link
@@ -76,7 +76,7 @@ symbols the artefact carries. Most profiles embed a `url` and a line number per 
 A frame with no source mapping is not yet a diagnosis. Either resolve the symbols —
 no map was collected, the build was minified, the file has moved since — or say
 plainly that the artefact does not carry them. Do not guess a file from a function
-name; that is an inference wearing a citation.
+name. that is an inference wearing a citation.
 
 `ripwire` confirms the symbol on the source side once you have a name, and
 `tools.spectre.history` tells you whether the line was deliberate when the code looks
@@ -88,7 +88,7 @@ A paired capture settles it: a before and an after the same change, read through
 same queries. A frame that was 74% and is now 3% is a confirmed cause, and the delta
 is the proof — `principle-evidence` in one operation, with the second capture as the
 oracle. Without one, the honest label is that this is the strongest hypothesis the
-artefact supports. A single capture says where the time went; it cannot say that
+artefact supports. A single capture says where the time went. It cannot say that
 changing that would move the symptom.
 
 ## Outputs
