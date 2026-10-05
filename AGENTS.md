@@ -10,7 +10,7 @@ once per project instance. Everything Spectre adds to OpenCode (skills, agents,
 tools, nested plugins, MCP servers) is registered from inside that `effect`,
 through the domains on the plugin context.
 
-Minimum supported OpenCode version: **2.0.21**. The installed CLI is the only
+Minimum supported OpenCode version: **2.0.23**. The installed CLI is the only
 runtime. There is no build step, and TypeScript source is shipped as-is.
 
 ## Runtime: Bun first
@@ -131,9 +131,9 @@ The version floor is not a guess. It is the npm dist-tag:
 curl -s https://registry.npmjs.org/@opencode/cli | grep -o '"latest":"[^"]*"'
 ```
 
-At the time of writing that is `2.0.21`, published 2026-09-30. Three places in
+At the time of writing that is `2.0.23`, published 2026-10-05. Three places in
 this repo carry that number and they mean different things: `engines.opencode` is
-the **floor** (`>=2.0.21`), while `@opencode/plugin` and `@opencode/schema` are
+the **floor** (`>=2.0.23`), while `@opencode/plugin` and `@opencode/schema` are
 **exact** pins. The exact pins are what source-reading must match, because they
 are what resolves into `node_modules` and what the plugin is handed at runtime.
 Re-run the registry check before any bump.
@@ -273,7 +273,7 @@ package that cannot load.
 These are exact pins, not ranges, and they are not incidental:
 
 - `effect` is pinned to the exact build OpenCode ships (`4.0.0-rc.112` at
-  2.0.21). The plugin's `effect` values are handed straight to OpenCode's Effect
+  2.0.23). The plugin's `effect` values are handed straight to OpenCode's Effect
   runtime, so a different major/minor is a real hazard, not a style choice.
 - `@opencode/plugin` tracks the OpenCode version whose plugin contract we target.
 - `@opencode/schema` is pinned to the same version, because `skills/definitions/`
