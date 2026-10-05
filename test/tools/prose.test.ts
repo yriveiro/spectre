@@ -24,7 +24,11 @@ describe("sentence splitting", () => {
   });
 
   test("a version is not two sentences", () => {
-    expect(sentences("The floor is 2.0.21. Read the tag.")).toHaveLength(2);
+    // `1.2.3`, never this repository's own version. The rule under test is the digit-dot-
+    // digit rewrite in `sentences`, and any version-shaped token exercises it, so a fixture
+    // carrying a real version number would be one more number to bump and one more chance
+    // to read as a claim about the floor.
+    expect(sentences("The floor is 1.2.3. Read the tag.")).toHaveLength(2);
   });
 
   test("an abbreviation is not a full stop", () => {
