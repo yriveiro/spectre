@@ -322,7 +322,7 @@ const runRecall = (ctx: Plugin.Context) =>
     };
   });
 
-const DESCRIPTION = `What this project knows that the code cannot say: which surfaces are one feature, why a decision was made, what bit someone last month.
+export const DESCRIPTION = `What this project knows that the code cannot say: which surfaces are one feature, why a decision was made, what bit someone last month.
 
   const hit = await tools.spectre.brain({ action: "recall", query: "why does routing read spectre.jsonc" })
   hit.claims[0].path      // the note. One Read away — the body never enters context
