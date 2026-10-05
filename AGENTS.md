@@ -113,7 +113,8 @@ Rules that follow from this:
 
 | Import      | Why Bun has no equivalent |
 | ----------- | ------------------------- |
-| `node:path` | Only `join` and `relative`. Checked against `docs/runtime/`: the complete set of Bun path utilities is `Bun.fileURLToPath`, `Bun.pathToFileURL`, and `Bun.resolveSync`, none of which join, split, or relativize. `Bun.$`'s `dirname`/`basename` are shell binaries, not functions. Four files import it: `skills/definitions/definition.ts`, whose `SKILL.md` anchor is `join(import.meta.dir, "SKILL.md")`; `tools/definitions/comments/index.ts`, which resolves a target against the project directory and reports every hit back as a project-relative path; `tools/definitions/routing/locate.ts`, which joins the config directory to the file name; and `tools/definitions/routing/load.ts`, which uses `basename` to name a file in an error message without printing a path the user cannot click. |
+| `node:path` | Only `join` and `relative`. Checked against `docs/runtime/`: the complete set of Bun path utilities is `Bun.fileURLToPath`, `Bun.pathToFileURL`, and `Bun.resolveSync`, none of which join, split, or relativize. `Bun.$`'s `dirname`/`basename` are shell binaries, not functions. Six files import it: `skills/definitions/definition.ts`, whose `SKILL.md` anchor is `join(import.meta.dir, "SKILL.md")`; `tools/definitions/comments/index.ts`, which resolves a target against the project directory and reports every hit back as a project-relative path; `tools/definitions/routing/locate.ts`, which joins the config directory to the file name; `tools/definitions/routing/load.ts`, which uses `basename` to name a file in an error message without printing a path the user cannot click; and `tools/definitions/brain/{index,ledger,inject}.ts`, which compose `.spectre/brain` under the project directory and read a note's `basename` into its error messages. |
+| `node:fs/promises` | `rename` and `mkdir`. Probed on Bun 1.4.2: `Bun.rename` is `undefined` and `Bun.mkdir` does not exist, so `Bun.file(x).writer()` can write a temporary file but nothing can move it over the target. `Bun.write` documents no atomicity, so a brain note that is renamed into place is the only way a reader never sees a half-written claim. `tools/definitions/canvas/store.ts` imports `mkdir`, and `tools/definitions/brain/ledger.ts` imports `rename` and `mkdir`. |
 
 ## Reading OpenCode's source
 
@@ -196,16 +197,20 @@ node's ambient declarations. `Bun.Blob` and the `BunFile` type both stop
 resolving. Both entries are load-bearing: `bun` supplies the Bun globals, `node`
 supplies the ambient declarations and `node:*` compatibility that Bun implements.
 
-## Every definition is a folder
+## Every skill and tool definition is a folder
 
-One rule under every `definitions/`, and it has no exceptions:
+One rule under `skills/definitions/` and `tools/definitions/`, and it has no
+exceptions:
 
 ```
-agents/definitions/<id>/index.ts      the definition
 skills/definitions/<id>/index.ts      the declaration
 skills/definitions/<id>/SKILL.md      its body
 tools/definitions/<id>/index.ts       the declaration
 ```
+
+Agent definitions are the exception: flat files, `agents/definitions/<id>.ts`,
+matching the tree (`spectre.ts`, `sicko.ts`). Do not restructure the existing
+agents into folders. That is a migration, not a doc fix.
 
 A definition that needs one file still gets a folder with one file in it. That is
 not ceremony: a mix of `comments.ts` and a `routing/` folder in the same directory

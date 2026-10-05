@@ -310,6 +310,11 @@ describe("the set's own prose", () => {
     // is the point of the sentence not its subject, and the rule's own `why` says
     // passive is correct there. Both counts are held so a change to either is a
     // decision someone made rather than a drift nobody saw.
+    //
+    // The passive count rose from 321 to 344 with `features/brain.md` and
+    // `playbook-brain`, which state what the format does rather than who does it:
+    // "the frontmatter is the index", "a claim is minted once". Naming the actor
+    // there would say less, so the house style applies and the number moved.
     const out = await call(["."]);
     const byRule: Record<string, number> = {};
     for (const f of out.findings) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
@@ -339,7 +344,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 321,
+      passiveVoice: 344,
       otherRules: [],
     });
   }, 120_000);

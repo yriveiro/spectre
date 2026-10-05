@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Effect } from "effect";
 import { canvases } from "./definitions/canvas";
+import { attach, brain } from "./definitions/brain";
 import { comments } from "./definitions/comments";
 import { historyTool } from "./definitions/history";
 import { prose } from "./definitions/prose";
@@ -22,6 +23,7 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
     const prs = stack(ctx.location.directory);
     const why = historyTool(ctx.location.directory);
     const pages = canvases(ctx);
+    const memory = brain(ctx);
 
     // Not looped: `add` is generic, so a union of the two schemas instantiates to
     // neither and the call will not typecheck.
@@ -33,13 +35,15 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
       editor.add(prs);
       editor.add(why);
       editor.add(pages);
+      editor.add(memory);
     });
 
     yield* Effect.logInfo("Registered tools", {
-      tools: [listed, said, route, trees, prs, why, pages].map(
+tools: [listed, said, route, trees, prs, why, pages, memory].map(
         (tool) => `${tool.options?.namespace}_${tool.name}`,
       ),
     });
 
     yield* sessionReturn(ctx);
+    yield* attach(ctx);
   });

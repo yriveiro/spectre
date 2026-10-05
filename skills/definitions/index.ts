@@ -55,6 +55,7 @@ import { playbookAutonomousRun } from "./playbook-autonomous-run";
 import { playbookAutopilotFull } from "./playbook-autopilot-full";
 import { playbookAutopilotStack } from "./playbook-autopilot-stack";
 import { playbookBabysit } from "./playbook-babysit";
+import { playbookBrain } from "./playbook-brain";
 import { playbookBugFix } from "./playbook-bug-fix";
 import { playbookEval } from "./playbook-eval";
 import { playbookFeature } from "./playbook-feature";
@@ -99,6 +100,7 @@ const definitions: ReadonlyArray<Definition> = [
   playbookAutopilotFull,
   playbookAutopilotStack,
   playbookBabysit,
+  playbookBrain,
   playbookBugFix,
   playbookEval,
   playbookFeature,
@@ -181,6 +183,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "playbook-autopilot-full",
   "playbook-autopilot-stack",
   "playbook-babysit",
+  "playbook-brain",
   "playbook-bug-fix",
   "playbook-eval",
   "playbook-feature",
