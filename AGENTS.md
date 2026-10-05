@@ -197,15 +197,17 @@ node's ambient declarations. `Bun.Blob` and the `BunFile` type both stop
 resolving. Both entries are load-bearing: `bun` supplies the Bun globals, `node`
 supplies the ambient declarations and `node:*` compatibility that Bun implements.
 
-## Every skill and tool definition is a folder
+## Every skill, tool and command definition is a folder
 
-One rule under `skills/definitions/` and `tools/definitions/`, and it has no
-exceptions:
+One rule under `skills/definitions/`, `tools/definitions/` and `commands/definitions/`,
+and it has no exceptions:
 
 ```
 skills/definitions/<id>/index.ts      the declaration
 skills/definitions/<id>/SKILL.md      its body
 tools/definitions/<id>/index.ts       the declaration
+commands/definitions/<id>/index.ts    the declaration
+commands/definitions/<id>/prompt.md   the prompt it hands the session
 ```
 
 Agent definitions are the exception: flat files, `agents/definitions/<id>.ts`,

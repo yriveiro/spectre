@@ -145,6 +145,8 @@ Spectre declares agents in TypeScript.
 | `tools/definitions/comments.ts`    | One tool: the comment and suppression inventory.              |
 | `tools/index.ts`                   | Applies every definition to OpenCode's tool registry.         |
 | `tools/FOR_AGENTS.md`              | Read by hand before touching a tool schema. Not auto-loaded.  |
+| `commands/definitions/<id>/`       | One command per directory: `index.ts`, `prompt.md`.           |
+| `commands/index.ts`                | Applies every definition to OpenCode's command registry.      |
 
 ## Tools
 

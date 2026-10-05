@@ -10,6 +10,7 @@
   "files": [
     "index.ts",
     "agents",
+    "commands",
     "skills",
     "tools"
   ],

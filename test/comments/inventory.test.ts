@@ -321,7 +321,7 @@ describe("this repository", () => {
     // because it is in-repo TypeScript a maintainer reads, not because it ships:
     // package.json's `files` keeps it out of the tarball, which npm pack confirms.
     const root = `${import.meta.dir}/../..`;
-    const sources = ["agents", "eval", "skills", "tools"].map((f) => `${root}/${f}`);
+    const sources = ["agents", "commands", "eval", "skills", "tools"].map((f) => `${root}/${f}`);
     const files: Record<string, string> = {};
     for (const folder of sources) {
       for await (const entry of new Bun.Glob("**/*.{ts,py,sh,yml,yaml,toml}").scan({

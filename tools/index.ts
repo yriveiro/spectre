@@ -6,6 +6,7 @@ import { comments } from "./definitions/comments";
 import { historyTool } from "./definitions/history";
 import { prose } from "./definitions/prose";
 import { load } from "./definitions/routing/load";
+import { pr } from "./definitions/pr";
 import { routing } from "./definitions/routing";
 import { stack } from "./definitions/stack";
 import { sessionReturn, worktrees } from "./definitions/worktrees";
@@ -21,6 +22,7 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
     const route = routing(ctx);
     const trees = worktrees(ctx);
     const prs = stack(ctx.location.directory);
+    const opening = pr(ctx);
     const why = historyTool(ctx.location.directory);
     const pages = canvases(ctx);
     const memory = brain(ctx);
@@ -33,13 +35,14 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
       editor.add(route);
       editor.add(trees);
       editor.add(prs);
+      editor.add(opening);
       editor.add(why);
       editor.add(pages);
       editor.add(memory);
     });
 
     yield* Effect.logInfo("Registered tools", {
-tools: [listed, said, route, trees, prs, why, pages, memory].map(
+tools: [listed, said, route, trees, prs, opening, why, pages, memory].map(
         (tool) => `${tool.options?.namespace}_${tool.name}`,
       ),
     });
