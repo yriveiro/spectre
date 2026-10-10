@@ -53,7 +53,7 @@ const layout = async () => {
 };
 
 /**
- * The host's remove as v2.0.20 shapes it (`packages/core/src/worktree.ts` delegating to
+ * The host's remove as v2.0.23 shapes it (`packages/core/src/worktree.ts` delegating to
  * `packages/core/src/git.ts`): `git worktree remove` is spawned with the repository's
  * common directory as its cwd, so the removal itself works whatever the caller's cwd
  * is. That is why this test needs a tool-side fix and not a git workaround.
