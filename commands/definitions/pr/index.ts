@@ -18,12 +18,10 @@ import { Effect } from "effect";
 const PROMPT = "prompt.md";
 
 /**
- * The prompt lives in a file rather than a template literal for the same reason a skill's
- * body does: it is prose a maintainer reads and edits, and a multi-paragraph instruction
- * inside a `.ts` file reads as part of the code. `import.meta.dir` is this module's own
- * directory, so the path is the filename beside it and survives moving the tree. It is
- * the same anchor `skills/definitions/definition.ts` uses, which joins instead because a
- * skill's body sits one level above its declaration.
+ * `import.meta.dir` is this module's own directory, so the prompt is the filename beside
+ * this file and the path survives moving the tree. `skills/definitions/definition.ts`
+ * reaches its body by `join` because it takes the directory as a parameter and cannot
+ * read `import.meta.dir` itself.
  */
 const prompt = () =>
   Effect.tryPromise({
@@ -38,11 +36,8 @@ const prompt = () =>
  * in `tools.spectre.pr`. A command that composed the title here would reintroduce the
  * improvisation the tool exists to remove.
  *
- * Anything the user typed after `/pr` is appended, so `note text` rides along instead of
- * being dropped. It cannot be a template parameter, because there is no argument here to
- * parameterize: `input.prompt.text` is whatever the composer holds, and a command
- * registered this way has no `$ARGUMENTS` substitution of its own. That is the host's
- * config-command feature (`config/plugin/command.ts`), not the plugin API.
+ * `$ARGUMENTS` is the host's config-command feature (`config/plugin/command.ts`), not the
+ * plugin API, so anything the user typed is appended rather than substituted.
  */
 export const pr = (ctx: Pick<Plugin.Context, "session">): CommandDefinition => ({
   name: "pr",

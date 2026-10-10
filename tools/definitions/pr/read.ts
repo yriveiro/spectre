@@ -1,8 +1,9 @@
 import type { Finding } from "./fields";
 
 /**
- * `git` and `gh` out, one verdict in. The only impure module of the three, and impure in
- * one shape: every process goes through `run` below.
+ * `git` and `gh` out, one verdict in. `compose` and `lint` are pure and take no
+ * `cwd`, so this is the only module that reads a repository or the forge, and every
+ * process it starts goes through `spawn` below.
  *
  * The operation converges. It reads what exists, compares against the desired state,
  * and acts on the difference, in that order: push only what the remote lacks, edit an
@@ -319,9 +320,9 @@ const create = async (cwd: string, draft: Draft, base: string): Promise<Written>
 };
 
 /**
- * The edit path, and the convergence: an open pull request on this branch is rewritten to
- * the composed bytes rather than a second one opened. `changed: false` is the answer a
- * re-run gives, and it is the property that makes running this twice safe.
+ * The edit path. A pull request already on this branch is rewritten to the composed bytes
+ * rather than a second one opened, so `held` below is what makes `changed: false` the
+ * answer a second run gives.
  */
 const edit = async (cwd: string, number: number, draft: Draft, base: string): Promise<Written> => {
   const before = await confirm(cwd, String(number));

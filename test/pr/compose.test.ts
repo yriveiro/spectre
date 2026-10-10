@@ -49,7 +49,6 @@ describe("the composition is the literal bytes", () => {
   });
 });
 
-/** The lint result as rule names, so a failure names the rule that broke. */
 const rules = (over: Partial<Fields> = {}) => lint(fields(over), compose(fields(over))).map((one) => one.rule);
 
 describe("the lint is fail-closed and each rule is reachable", () => {

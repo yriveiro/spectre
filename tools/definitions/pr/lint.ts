@@ -15,7 +15,7 @@ import type { Draft } from "./render";
 const MAX_TITLE = 72;
 const MAX_BODY_LINES = 40;
 
-/** The playbook's own check, so the tool and the grep a reader runs cannot disagree. */
+/** The eleven types the playbook names, in the shape it requires them. */
 const TITLE = /^(feat|fix|refactor|docs|style|test|build|ci|chore|perf|revert)(\([^)]+\))?!?: [^ ].*/;
 
 const SHA = /\b[0-9a-f]{7,40}\b/;
@@ -36,7 +36,7 @@ const titleRule = (fields: Fields, draft: Draft): Array<Finding> => {
 
   if (title.length > MAX_TITLE)
     found.push(
-      finding("title-length", `${title.length} characters, over the ${MAX_TITLE} the pattern allows`),
+      finding("title-length", `${title.length} characters, over the ${MAX_TITLE} this tool allows`),
     );
   if (title.endsWith("."))
     found.push(finding("title-period", "the title ends with a period, which the pattern does not carry"));

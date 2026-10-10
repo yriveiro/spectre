@@ -4,11 +4,6 @@ import { update } from "../../commands";
 import { pr } from "../../commands/definitions/pr";
 import { join } from "node:path";
 
-/**
- * The prompt as the definition built it, and the text it would hand the session. One fake
- * `session.prompt` captures the call, so the assertions are on the literal text rather
- * than on anything the definition computes twice.
- */
 const capture = async (typed: string) => {
   const seen: Array<{ text: string; sessionID: string }> = [];
   const ctx = {
@@ -65,8 +60,6 @@ describe("the /pr command", () => {
   test("the prompt drives the tool, and never the forge directly", async () => {
     const text = await Bun.file(body).text();
     expect(text).toContain("tools.spectre.pr");
-    // The command's whole reason to exist is that the model routes through the tool, so
-    // an instruction to shell out to `gh` would undo it.
     expect(text).toContain("never call `gh pr create` yourself");
   });
 

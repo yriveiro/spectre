@@ -2,10 +2,9 @@ import { Schema } from "effect";
 import type { Tool } from "@opencode/schema/tool";
 
 /**
- * The one place the tool's input crosses into it. Everything below this file takes a
- * `Fields` and trusts it, so a check that belongs to the shape lives here and nowhere
- * else. The mechanical half — does the rendered title match the pattern — is
- * `lint.ts`, because that is a judgment about text rather than about the shape.
+ * `Fields` is the type every module below this one takes, so a caller cannot hand them
+ * a shape they do not handle without the schema refusing it first. What the text breaks is
+ * `lint.ts`'s question, not this file's.
  */
 
 export const TYPES = [

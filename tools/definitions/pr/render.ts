@@ -1,11 +1,10 @@
 import type { Fields } from "./fields";
 
 /**
- * The only place a title and a body are spelled. It is pure and total: every field
- * becomes text, no field is consulted twice, and the same fields always produce the
- * same bytes. That is what makes the second run of this tool converge — `updated`
- * compares against these bytes, not against the text the caller happened to send
- * last time.
+ * The only place a title and a body are spelled. Pure and total: every field becomes
+ * text, no field is consulted twice, and the same fields always produce the same bytes.
+ * `read.ts` compares an existing pull request against these bytes rather than against
+ * whatever text a caller sent last time, which is what lets a second run converge.
  */
 
 export type Draft = {

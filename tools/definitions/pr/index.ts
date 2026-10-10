@@ -7,9 +7,9 @@ import { findingsText, openPullRequest, push, read, write } from "./read";
 import { compose } from "./render";
 
 /**
- * Lint, push, reconcile, write, read back. The order is the whole design: nothing is
- * pushed and no pull request exists until the composition clears every rule, so a failed
- * lint leaves the remote exactly as it was.
+ * Lint before anything is written, so a refused composition leaves the remote as it was.
+ * The order of the six calls below is that guarantee: compose, lint, read, push,
+ * reconcile, write.
  */
 const run = async (cwd: string, input: Fields): Promise<Output> => {
   const draft = compose(input);

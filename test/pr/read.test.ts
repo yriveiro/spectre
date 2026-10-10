@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { branchOk, needsPush, type Facts } from "../../tools/definitions/pr/read";
 
-/** The two reads a push decision rests on: does the remote have an upstream, and by how much. */
 const facts = (over: Partial<Extract<Facts, { readonly ok: true }>> = {}) => ({
   ok: true as const,
   branch: "compose-pr",
