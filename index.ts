@@ -1,6 +1,7 @@
 import { Plugin } from "@opencode/plugin/effect";
 import { Effect } from "effect";
 import * as agents from "./agents";
+import * as commands from "./commands";
 import * as skills from "./skills";
 import * as tools from "./tools";
 
@@ -9,8 +10,8 @@ import * as tools from "./tools";
  *
  * OpenCode resolves this module as the package's server entrypoint and calls
  * `effect` once per project instance. Everything Spectre contributes to
- * OpenCode — skills, agents, tools, nested plugins, MCP servers — is registered
- * from inside that effect, through the domains on `ctx`.
+ * OpenCode — skills, agents, tools, commands, nested plugins, MCP servers — is
+ * registered from inside that effect, through the domains on `ctx`.
  *
  * A duplicate id is not fatal: the first registration wins and the later one is
  * marked failed, so two copies load and the installed one silently takes the id.
@@ -33,5 +34,6 @@ export default Plugin.define({
       yield* agents.update(ctx);
       yield* skills.update(ctx);
       yield* tools.update(ctx);
+      yield* commands.update(ctx);
     }),
 });

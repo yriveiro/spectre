@@ -10,11 +10,12 @@
   "files": [
     "index.ts",
     "agents",
+    "commands",
     "skills",
     "tools"
   ],
   "engines": {
-    "opencode": ">=2.0.21"
+    "opencode": ">=2.0.26"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -22,9 +23,9 @@
     "eval": "bun run eval/run.ts"
   },
   "dependencies": {
-    "@opencode/ai": "2.0.21",
-    "@opencode/plugin": "2.0.21",
-    "@opencode/schema": "2.0.21",
+    "@opencode/ai": "2.0.26",
+    "@opencode/plugin": "2.0.26",
+    "@opencode/schema": "2.0.26",
     "effect": "4.0.0-rc.112"
   },
   "devDependencies": {

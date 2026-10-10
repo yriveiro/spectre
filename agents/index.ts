@@ -40,7 +40,7 @@ const dataPermissions = ["external_directory", "read", "edit"].map((action) => (
  * the mechanism is order, not a separate field. The deny is pushed onto every
  * agent and the allow is pushed after it for `mnemonic` alone, because the
  * matcher is `findLast` over the flattened ruleset (`packages/core/src/
- * permission.ts`, `evaluate`, at `v2.0.21`): the last matching rule wins, so a
+ * permission.ts`, `evaluate`, at `v2.0.26`): the last matching rule wins, so a
  * deny written after the allow would silence the one writer the brain has.
  *
  * The resource is the relative glob `.spectre/brain/*`, for the same reason a

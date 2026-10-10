@@ -168,7 +168,7 @@ export const recall = (input: {
 // would touch history's callers.
 // `directory` is explicit because cwd is not the project directory: a serving
 // process chdirs to the home directory (`packages/cli/src/server-process.ts` at
-// v2.0.21), so a seam that trusted cwd would report git's opinion of the wrong
+// v2.0.26), so a seam that trusted cwd would report git's opinion of the wrong
 // repository — the one fabrication it exists to prevent.
 export const evidence = (
   directory: string,
@@ -231,7 +231,7 @@ receives the value `recall` already computed rather than defining its own.
 
 ## What OpenCode already does
 
-Read at tag `v2.0.21`, not on `dev`.
+Read at tag `v2.0.26`, not on `dev`.
 
 - **`tool.execute.after` fires after every tool call** and its mutated `result` is
   what returns (`packages/core/src/tool.ts:140-155`). `execute.before` is the only
@@ -525,7 +525,7 @@ compared against `ripwire --callers` for the same question. If it does not beat
 it, the format is wrong and no write action gets built.
 
 **Verified at the tag, and one of them changed the design.** Both OpenCode
-questions are settled by reading `v2.0.21`, and the permission one contradicted
+questions are settled by reading `v2.0.26`, and the permission one contradicted
 what this document first claimed: an absolute-path rule matches nothing for a
 project-local write, because the resource is project-relative. See "What OpenCode
 already does".
@@ -572,5 +572,5 @@ already does".
   always-on index, just-in-time reads.
 - OpenHands persistent memory — the `<UNTRUSTED_CONTENT>` envelope.
 - Aider repo map — tree-sitter plus PageRank, which this repo has as `ripwire`.
-- OpenCode at `v2.0.21`: `packages/core/src/tool.ts`,
+- OpenCode at `v2.0.26`: `packages/core/src/tool.ts`,
   `packages/core/src/plugin/plan.ts`, `packages/plugin/src/effect/tool.ts`.

@@ -19,7 +19,7 @@ otherwise advances the trunk. The feature reports the distance and says so.
 
 ## Mechanism
 
-Four properties of OpenCode 2.0.21 decide the shape. All read at the tag.
+Four properties of OpenCode 2.0.26 decide the shape. All read at the tag.
 sources in the appendix.
 
 1. **A plugin cannot enumerate sessions.** `ctx.session` is a `Pick` over
@@ -164,7 +164,7 @@ deletion that had already succeeded.
 
 `action: "remove"` now reads the calling session's directory and moves it to
 `main` before asking the host to delete anything. The host's removal reclaims a
-path and its row and nothing else (`packages/core/src/worktree.ts` at v2.0.21),
+path and its row and nothing else (`packages/core/src/worktree.ts` at v2.0.26),
 so the ordering has to live here. The hook still owns what `remove` does not: a
 directory deleted behind the tool's back, or one removed while no session was in
 it, still lands the session on the next prompt.
@@ -228,7 +228,7 @@ read as a fact about the repository.
 
 ## Appendix: sources
 
-Read at tag `v2.0.21`. A path that does not exist at that tag is not evidence
+Read at tag `v2.0.26`. A path that does not exist at that tag is not evidence
 for anything in this file. The rule for reading the source is in `AGENTS.md`.
 
 | Claim | Where, at the tag |

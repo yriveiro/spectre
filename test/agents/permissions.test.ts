@@ -10,7 +10,7 @@ const HOME = Bun.env.HOME ?? Bun.env.USERPROFILE ?? "";
 const ROOT = `${HOME}/.local/share/spectre`;
 const BRAIN = ".spectre/brain/*";
 
-/** Mirrors `Agent.State`'s editor at v2.0.21: `get(id) ?? fresh`, then the mutation runs. */
+/** Mirrors `Agent.State`'s editor at v2.0.26: `get(id) ?? fresh`, then the mutation runs. */
 const register = async (): Promise<Map<string, Agent>> => {
   const agents = new Map<string, Agent>();
   const ctx = {

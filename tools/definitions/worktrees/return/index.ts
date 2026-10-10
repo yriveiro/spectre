@@ -17,7 +17,7 @@ const rescue = (ctx: Plugin.Context, asked: Standing, sessionID: Session.ID) =>
     if (verdict.kind !== "held" && asked.main.kind === "found") {
       // `SessionMove` validates the destination and, when the session's own directory
       // is gone, publishes `SessionEvent.Moved` directly rather than through the inbox
-      // — `packages/core/src/session/move.ts` at v2.0.21. A failure here is not fatal:
+      // — `packages/core/src/session/move.ts` at v2.0.26. A failure here is not fatal:
       // the caller still tells the session what happened.
       yield* Effect.result(ctx.session.move({ sessionID, directory: asked.main.directory }));
     }
@@ -37,7 +37,7 @@ export const update = (ctx: Plugin.Context) =>
         if (line !== undefined) event.prompt.text = `${line}\n\n${event.prompt.text}`;
       }).pipe(
         // Session hooks are declared `NoFailures` (`packages/core/src/plugin/hooks.ts`
-        // at v2.0.21), so this callback has to be total: a prompt must not fail
+        // at v2.0.26), so this callback has to be total: a prompt must not fail
         // because a rescue could not be measured.
         Effect.catchCause((cause) =>
           Effect.logWarning("session return could not be measured", { sessionID: event.sessionID, cause }).pipe(
