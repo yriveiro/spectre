@@ -18,8 +18,8 @@ The two motivating cases:
 
 ## Mechanism
 
-Three properties of OpenCode 2.0.23 make this possible without intercepting
-anything. All three verified at tag `v2.0.23`. Sources in the appendix.
+Three properties of OpenCode 2.0.26 make this possible without intercepting
+anything. All three verified at tag `v2.0.26`. Sources in the appendix.
 
 1. **The subagent tool takes a model per call.** `agent`, `description`, `prompt`,
    `model`, `sessionID`, `background`. `model` is optional and written as
@@ -355,7 +355,7 @@ paragraph in a prompt.
 
 ## Appendix: sources
 
-Read at tag `v2.0.23`. A path that does not exist at that tag is not evidence for
+Read at tag `v2.0.26`. A path that does not exist at that tag is not evidence for
 anything in this file. The rule for reading the source is in `AGENTS.md`.
 
 | Claim | Where, at the tag |

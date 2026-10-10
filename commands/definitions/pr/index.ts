@@ -9,7 +9,7 @@ import { Effect } from "effect";
 /**
  * One command, registered from the plugin rather than shipped as markdown a user has to
  * install. The host resolves markdown commands from `{command,commands}/**\/*.md` under a
- * config entry (`packages/core/src/config/plugin/command.ts` at `v2.0.23`), and that
+ * config entry (`packages/core/src/config/plugin/command.ts` at `v2.0.26`), and that
  * loader is not reachable from a plugin. `ctx.command.transform` is, and the host's own
  * `init` and `review` commands register through exactly this path
  * (`packages/core/src/plugin/command.ts` at the same tag). So this is the native
