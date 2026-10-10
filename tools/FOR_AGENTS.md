@@ -18,8 +18,7 @@ registration succeeded, and on the input and the output side alike.
 ## What the boundary accepts
 
 Measured at 2.0.26: one tool per construct, each called once with a value valid
-for it. The boundary walks the schema, so what this table lists is what a
-declaration can say and have honoured.
+for it.
 
 | Declared | Call |
 | --------- | ---- |
@@ -30,22 +29,72 @@ declaration can say and have honoured.
 | `Schema.Int`, `Schema.Finite`, `Schema.Natural` | ok |
 | `Schema.NonEmptyString` | ok |
 | `Schema.String.pipe(Schema.refine(...))` | ok |
-| `Schema.Trim` | ok |
+| `Schema.Trim` | ok, and it trims |
 | `Schema.URL` | rejected: `Expected URL` |
-
-`Schema.URL` is the only rejection measured, and it is not a JSON Schema problem:
-`Schema.toJsonSchemaDocument(Schema.URL)` emits a plain `{"type":"string"}`
-alongside every other row here, so the refusal comes from somewhere else in the
-call path. It emits a string schema and is still refused, which is the one row
-in this table whose cause is not established.
 
 `Int`, `Finite`, `Natural` and `NonEmptyString` were **rejected outright** at
 2.0.18, and the host honours them now. A second session called each one with a
 value it must reject — `1.5`, `NaN`, `-3`, `""` — and every one refused, so the
 boundary validates them rather than ignoring them and passing the value through.
 
-**The cause is in `packages/core/src/tool/runtime.ts:172` at 2.0.26**, and it is
-the reason this table changed. The boundary used to walk the Effect schema AST
+## The JSON Schema is not what is enforced
+
+This is the part that costs an afternoon, so it goes before the table's cause.
+
+`packages/core/src/tool/runtime.ts:76` at 2.0.26 validates a call with
+`Schema.decodeUnknownEffect(codec)(value, { errors: "all" })` — Effect's own
+decoder, on the Effect schema the tool declared. A separate function builds the JSON
+Schema at `runtime.ts:155`, and it only describes the tool to the model.
+
+Two schemas, so a declaration can be wrong in a way nothing at the call reports:
+
+| Declared | Model is shown | `"https://example.com"` |
+| --------- | -------------- | ----------------------- |
+| `Schema.URL` | `{"type":"string"}` | **refused** |
+| `Schema.String` | `{"type":"string"}` | accepted |
+| `Schema.Int` | `{"type":"integer"}` | refused |
+| `Schema.Trim` | `{"type":"string"}` | accepted, as `"https://example.com"` |
+
+`Schema.URL` is that trap. Its Type is a `URL` **object**, not a string: a string
+refuses, a string with `href` or `path` refuses, and a `URL` instance decodes. The
+JSON Schema says `{"type":"string"}`, which is the one thing it cannot accept, so
+the model sees a contract the host refuses it for meeting.
+
+Do not reach for a schema whose Type is an instance for a JSON tool. Measured on
+`effect@4.0.0-rc.112`, each of these refuses the JSON value its own JSON Schema
+advertises, and accepts only an instance:
+
+| Declared | Model is shown | JSON value | Instance |
+| --------- | -------------- | ---------- | -------- |
+| `Schema.URL` | `{"type":"string"}` | refused | accepted |
+| `Schema.Date` | `{"type":"string"}` | refused | accepted |
+| `Schema.BigInt` | `{"type":"string","pattern":"^-?\\d+$"}` | refused | — |
+| `Schema.URLSearchParams` | `{"type":"string"}` | refused | — |
+| `Schema.Uint8Array` | `{"type":"string","format":"byte","contentEncoding":"base64"}` | refused | refused |
+| `Schema.FormData` | a two-item array schema | refused | — |
+
+`Schema.BigInt` is the worst of them: it emits a pattern that matches the very
+string it refuses. The rule is not a list, it is one question — **can a JSON
+payload carry this Type?** If the Type is an instance, it cannot, whatever the
+JSON Schema says. `Schema.String`, or `Schema.Literals([...])` when the set is
+small, crosses the boundary and does what you meant.
+
+`Schema.Trim` crosses too, and it returns the trimmed string rather than the one
+sent, so `execute` receives `"x"` for a call that arrived as `"  x  "`. That is the
+one transform measured, and it is why a schema is worth reading before you trust
+what arrived.
+
+You can check a declaration in this repository's own process, because that decoder
+runs on the same `effect@4.0.0-rc.112` the plugin pins:
+
+```js
+import { Schema } from "effect";
+Schema.toJsonSchemaDocument(Schema.URL).schema;              // {"type":"string"}
+Schema.decodeUnknownOption(Schema.URL)("https://x.com")._tag; // "None" — refused
+```
+
+**The cause of this file's history is in `runtime.ts:172` at 2.0.26**, and it is
+why the table changed. The boundary used to walk the Effect schema AST
 itself, and on `effect@4.0.0-rc.112` that AST carries no `_tag` on the nodes a
 schema is built from, so everything past the primitives failed. It now calls
 `Schema.toJsonSchemaDocument`, which is Effect's own emission. That is why six
@@ -167,10 +216,18 @@ console.log(JSON.stringify(Schema.toJsonSchemaDocument(Schema.Int).schema));
 // {"type":"integer"}
 ```
 
-What it cannot settle is the last step. The boundary still validates the caller's
-JSON against that document somewhere the conversion does not reach, which is why
-`Schema.URL` emits `{"type":"string"}` and the host refuses it. Use it to see what
-a declaration says, and let the real call prove what the host does with it.
+That answers what the model sees. For what the host does with a value, run the
+same decoder the host runs, because it is the same `effect@4.0.0-rc.112`:
+
+```js
+Schema.decodeUnknownOption(Schema.Int)(1)._tag;     // "Some"
+Schema.decodeUnknownOption(Schema.Int)(1.5)._tag;   // "None"
+Schema.decodeUnknownOption(Schema.URL)("https://x.com")._tag; // "None"
+```
+
+Both run in this repository's process and neither needs a session, so the
+expensive proof in the section above is for the thing only a session settles:
+whether the tool is reachable at all.
 
 ## The dictionary export
 
