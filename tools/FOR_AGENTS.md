@@ -17,7 +17,9 @@ registration succeeded, and on the input and the output side alike.
 
 ## What the boundary accepts
 
-Measured at 2.0.18, one schema per tool, each called with a value valid for it.
+Measured at 2.0.26: one tool per construct, each called once with a value valid
+for it. The boundary walks the schema, so what this table lists is what a
+declaration can say and have honoured.
 
 | Declared | Call |
 | --------- | ---- |
@@ -25,17 +27,29 @@ Measured at 2.0.18, one schema per tool, each called with a value valid for it.
 | `Schema.Literals([...])` | ok |
 | `Schema.Struct`, `Schema.Array`, `Schema.Union`, `Schema.Json` | ok |
 | `Schema.optional`, `Schema.optionalKey` | ok |
-| `Schema.Int` | rejected: `Invalid arguments for tool` |
-| `Schema.Finite` | rejected: `Invalid arguments for tool` |
-| `Schema.NonEmptyString` | rejected: `Invalid arguments for tool` |
-| `Schema.String.pipe(Schema.refine(...))` | rejected: `Expected <filter>` |
+| `Schema.Int`, `Schema.Finite`, `Schema.Natural` | ok |
+| `Schema.NonEmptyString` | ok |
+| `Schema.String.pipe(Schema.refine(...))` | ok |
+| `Schema.Trim` | ok |
 | `Schema.URL` | rejected: `Expected URL` |
-| `Schema.Natural` | rejected: `Cannot convert a symbol to a number` |
-| `Schema.Trim` | rejected: `self.trim is not a function` |
 
-`Int`, `Finite`, and `NonEmptyString` are the traps: they read as plain schemas
-and they are not. The last two are worse. The boundary **crashes** on them with
-its own internal error, so the failure names neither the field nor the schema.
+`Schema.URL` is the only rejection measured, and it is not a JSON Schema problem:
+`Schema.toJsonSchemaDocument(Schema.URL)` emits a plain `{"type":"string"}`
+alongside every other row here, so the refusal comes from somewhere else in the
+call path. It emits a string schema and is still refused, which is the one row
+in this table whose cause is not established.
+
+`Int`, `Finite`, `Natural` and `NonEmptyString` were **rejected outright** at
+2.0.18, and the host honours them now. A second session called each one with a
+value it must reject — `1.5`, `NaN`, `-3`, `""` — and every one refused, so the
+boundary validates them rather than ignoring them and passing the value through.
+
+**The cause is in `packages/core/src/tool/runtime.ts:172` at 2.0.26**, and it is
+the reason this table changed. The boundary used to walk the Effect schema AST
+itself, and on `effect@4.0.0-rc.112` that AST carries no `_tag` on the nodes a
+schema is built from, so everything past the primitives failed. It now calls
+`Schema.toJsonSchemaDocument`, which is Effect's own emission. That is why six
+rows turned from rejected to ok across two bumps with no change here.
 
 A branded *type* is fine while it stays a TypeScript type.
 `comments(directory: AbsolutePath)` brands nothing at runtime and never reaches a
@@ -135,15 +149,28 @@ const result = await tools.spectre.comments({ targets: ["<file>"] })
 `OPENCODE_CONFIG_DIR` isolation it needs. Re-run the measurement when the
 supported OpenCode version moves. Do not trust this table across a bump.
 
-There is no cheap pre-check for this table, and it is worth saying why rather than
-leaving the gap. The accepted set is decided by a walk of the Schema AST inside
-the host, and on Effect `4.0.0-rc.112` that AST carries no `_tag` on the nodes a
-schema is built from — `Schema.Struct({a: Schema.String})` exposes
-`fields`, `mapFields`, `ast`, `rebuild`, and friends, and `ast._tag` is the
-description `"Objects"` rather than a type name. A script that walks for tags
-therefore finds nothing and reports success, which is worse than having no check:
-it is a check that cannot fail. Read the table, keep to the primitives, and let
-the real call be the proof.
+There is no cheap pre-check for this table, and the reason changed with it. Until
+2.0.26 the host decided the accepted set with a walk of the Schema AST, and on
+Effect `4.0.0-rc.112` that AST carries no `_tag` on the nodes a schema is built
+from — `Schema.Struct({a: Schema.String})` exposes `fields`, `mapFields`,
+`ast`, `rebuild`, and friends, and `ast._tag` is the description `"Objects"`
+rather than a type name. A script that walked for tags found nothing and reported
+success, which is worse than having no check: a check that cannot fail.
+
+That walk is gone. `Schema.toJsonSchemaDocument` is what converts a schema now,
+and it runs in this repository's own process, on the same `effect@4.0.0-rc.112`.
+So the pre-check that could not be written can be written:
+
+```js
+import { Schema } from "effect";
+console.log(JSON.stringify(Schema.toJsonSchemaDocument(Schema.Int).schema));
+// {"type":"integer"}
+```
+
+What it cannot settle is the last step. The boundary still validates the caller's
+JSON against that document somewhere the conversion does not reach, which is why
+`Schema.URL` emits `{"type":"string"}` and the host refuses it. Use it to see what
+a declaration says, and let the real call prove what the host does with it.
 
 ## The dictionary export
 
