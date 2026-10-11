@@ -1,7 +1,10 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { join } from "node:path";
-import { attach } from "../../tools/definitions/brain/inject";
+import { DESCRIPTION } from "../../tools/definitions/brain";
+import { attach, COLD } from "../../tools/definitions/brain/inject";
+
+const ACTIONS: ReadonlyArray<string> = ["recall", "assert", "relate", "supersede", "demote"];
 
 const TMP = Bun.env.TMPDIR ?? "/tmp";
 const roots: Array<string> = [];
@@ -92,6 +95,25 @@ describe("brain injection", () => {
     const again = event("build");
     await Effect.runPromise(handler(again as never));
     expect(again.messages.length).toBe(0);
+  });
+
+  // The cold line is the one piece of text the first session in a fresh project
+  // ever reads, and it shipped naming `action=seed`, which is not one of the five.
+  // A test asserting the line says "cold" cannot catch that, so this one reads
+  // every action the tool names out of its own text and checks it against the
+  // schema. Both the cold line and the description are covered.
+  test("every action this tool names in its own text is an action it has", async () => {
+    const named = new Set<string>();
+    for (const source of [COLD, DESCRIPTION])
+      for (const found of source.matchAll(/action=([a-z-]+)/g)) named.add(found[1]!);
+
+    expect(named.size).toBeGreaterThan(0);
+    for (const action of named) expect(ACTIONS).toContain(action);
+  });
+
+  test("the cold line names recall, which is the action that answers nothing yet", () => {
+    expect(COLD).toContain("action=recall");
+    expect(COLD).not.toContain("action=seed");
   });
 
   test("an unchanged ledger costs nothing the second time", async () => {

@@ -7,7 +7,9 @@ import { ledger } from "./ledger";
 import type { Claim } from "./neuron";
 
 const CAP = 600;
-const COLD = "brain is cold: 0 claims; tools.spectre.brain action=seed is run by mnemonic";
+const COLD = "brain is cold: 0 claims. tools.spectre.brain action=recall answers nothing until it has claims; mnemonic seeds it";
+
+export { COLD };
 
 // Tokens are characters / 4, the rough estimate features/brain.md allows.
 const tokens = (text: string): number => Math.ceil(text.length / 4);
