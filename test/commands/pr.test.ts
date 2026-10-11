@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import { Effect } from "effect";
 import { update } from "../../commands";
 import { pr } from "../../commands/definitions/pr";
-import { join } from "node:path";
 
 const capture = async (typed: string) => {
   const seen: Array<{ text: string; sessionID: string }> = [];
@@ -81,6 +81,6 @@ describe("registration", () => {
     };
 
     await Effect.runPromise(Effect.scoped(update(ctx as never)));
-    expect(added.map((one) => one.name)).toEqual(["pr"]);
+    expect(added.map((one) => one.name).toSorted()).toEqual(["anatomy", "pr"]);
   });
 });

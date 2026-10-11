@@ -1,55 +1,22 @@
 import { Effect } from "effect";
+import { anatomy } from "./anatomy";
+import { architect } from "./architect";
 import { arena } from "./arena";
+import { automateMe } from "./automate-me";
+import { blastRadius } from "./blast-radius";
 import { bro } from "./bro";
 import { canvas } from "./canvas";
 import { codeHygiene } from "./code-hygiene";
 import { communication } from "./communication";
-import { type Definition } from "./definition";
-import { grammar } from "./grammar";
-import { modelRouter } from "./model-router";
-import { principleBoundaryDiscipline } from "./principle-boundary-discipline";
-import { principleEvidence } from "./principle-evidence";
-import { principleHygiene } from "./principle-hygiene";
-import { principleAttackThePremise } from "./principle-attack-the-premise";
-import { principleBuildTheLever } from "./principle-build-the-lever";
-import { principleEncodeLessonsInStructure } from "./principle-encode-lessons-in-structure";
-import { principleExhaustTheDesignSpace } from "./principle-exhaust-the-design-space";
-import { principleExperienceFirst } from "./principle-experience-first";
-import { principleFixRootCauses } from "./principle-fix-root-causes";
-import { principleFoundationalThinking } from "./principle-foundational-thinking";
-import { principleMinimizeReaderLoad } from "./principle-minimize-reader-load";
-import { principleModelTheDomain } from "./principle-model-the-domain";
-import { principleNeverBlockOnTheHuman } from "./principle-never-block-on-the-human";
-import { principleProveItWorks } from "./principle-prove-it-works";
-import { principleRedesignFromFirstPrinciples } from "./principle-redesign-from-first-principles";
-import { principleSeparateBeforeSerializingSharedState } from "./principle-separate-before-serializing-shared-state";
-import { principleSequenceVerifiableUnits } from "./principle-sequence-verifiable-units";
-import { principleSubtractBeforeYouAdd } from "./principle-subtract-before-you-add";
-import { principleTypeSystemDiscipline } from "./principle-type-system-discipline";
-import { principleMakeOperationsIdempotent } from "./principle-make-operations-idempotent";
-import { principleMigrateCallersThenDeleteLegacyApis } from "./principle-migrate-callers-then-delete-legacy-apis";
-import { principleOutcomeOrientedExecution } from "./principle-outcome-oriented-execution";
-import { principleTestBehaviorNotImplementation } from "./principle-test-behavior-not-implementation";
-import { principleVerification } from "./principle-verification";
-import { spectreMode } from "./spectre-mode";
-import { principleGuardTheContextWindow } from "./principle-guard-the-context-window";
-import { principleLazinessProtocol } from "./principle-laziness-protocol";
-import { principleMakeStatesUnrepresentable } from "./principle-make-states-unrepresentable";
-import { architect } from "./architect";
-import { automateMe } from "./automate-me";
-import { blastRadius } from "./blast-radius";
 import { createVerificationSkill } from "./create-verification-skill";
+import { type Definition } from "./definition";
 import { figureItOut } from "./figure-it-out";
+import { grammar } from "./grammar";
 import { how } from "./how";
 import { interrogate } from "./interrogate";
 import { maintainVerificationSkill } from "./maintain-verification-skill";
-import { showMeYourWork } from "./show-me-your-work";
-import { tdd } from "./tdd";
-import { teach } from "./teach";
-import { technicalWriting } from "./technical-writing";
-import { typescriptBestPractices } from "./typescript-best-practices";
+import { modelRouter } from "./model-router";
 import { playbook } from "./playbook";
-import { prCanvas } from "./pr-canvas";
 import { playbookAuthoringASkill } from "./playbook-authoring-a-skill";
 import { playbookAutonomousRun } from "./playbook-autonomous-run";
 import { playbookAutopilotFull } from "./playbook-autopilot-full";
@@ -73,8 +40,42 @@ import { playbookSessionPickup } from "./playbook-session-pickup";
 import { playbookShipping } from "./playbook-shipping";
 import { playbookTraceForensics } from "./playbook-trace-forensics";
 import { playbookVisualParity } from "./playbook-visual-parity";
+import { prCanvas } from "./pr-canvas";
+import { principleAttackThePremise } from "./principle-attack-the-premise";
+import { principleBoundaryDiscipline } from "./principle-boundary-discipline";
+import { principleBuildTheLever } from "./principle-build-the-lever";
+import { principleEncodeLessonsInStructure } from "./principle-encode-lessons-in-structure";
+import { principleEvidence } from "./principle-evidence";
+import { principleExhaustTheDesignSpace } from "./principle-exhaust-the-design-space";
+import { principleExperienceFirst } from "./principle-experience-first";
+import { principleFixRootCauses } from "./principle-fix-root-causes";
+import { principleFoundationalThinking } from "./principle-foundational-thinking";
+import { principleGuardTheContextWindow } from "./principle-guard-the-context-window";
+import { principleHygiene } from "./principle-hygiene";
+import { principleLazinessProtocol } from "./principle-laziness-protocol";
+import { principleMakeOperationsIdempotent } from "./principle-make-operations-idempotent";
+import { principleMakeStatesUnrepresentable } from "./principle-make-states-unrepresentable";
+import { principleMigrateCallersThenDeleteLegacyApis } from "./principle-migrate-callers-then-delete-legacy-apis";
+import { principleMinimizeReaderLoad } from "./principle-minimize-reader-load";
+import { principleModelTheDomain } from "./principle-model-the-domain";
+import { principleNeverBlockOnTheHuman } from "./principle-never-block-on-the-human";
+import { principleOutcomeOrientedExecution } from "./principle-outcome-oriented-execution";
+import { principleProveItWorks } from "./principle-prove-it-works";
+import { principleRedesignFromFirstPrinciples } from "./principle-redesign-from-first-principles";
+import { principleSeparateBeforeSerializingSharedState } from "./principle-separate-before-serializing-shared-state";
+import { principleSequenceVerifiableUnits } from "./principle-sequence-verifiable-units";
+import { principleSubtractBeforeYouAdd } from "./principle-subtract-before-you-add";
+import { principleTestBehaviorNotImplementation } from "./principle-test-behavior-not-implementation";
+import { principleTypeSystemDiscipline } from "./principle-type-system-discipline";
+import { principleVerification } from "./principle-verification";
 import { ripwire } from "./ripwire";
+import { showMeYourWork } from "./show-me-your-work";
+import { spectreMode } from "./spectre-mode";
 import { swarm } from "./swarm";
+import { tdd } from "./tdd";
+import { teach } from "./teach";
+import { technicalWriting } from "./technical-writing";
+import { typescriptBestPractices } from "./typescript-best-practices";
 import { why } from "./why";
 import { worktreeCleanup } from "./worktree-cleanup";
 
@@ -119,6 +120,7 @@ const definitions: ReadonlyArray<Definition> = [
   playbookTraceForensics,
   playbookVisualParity,
   prCanvas,
+  anatomy,
   arena,
   bro,
   canvas,
@@ -165,6 +167,7 @@ const definitions: ReadonlyArray<Definition> = [
  * the hub and the map itself.
  */
 export const notALeaf: ReadonlySet<string> = new Set([
+  "anatomy",
   "architect",
   "arena",
   "automate-me",

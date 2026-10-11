@@ -1,13 +1,15 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Effect } from "effect";
-import { canvases } from "./definitions/canvas";
+import { anatomy } from "./definitions/anatomy";
+import { guardFigure } from "./definitions/anatomy/guard";
 import { attach, brain } from "./definitions/brain";
+import { canvases } from "./definitions/canvas";
 import { comments } from "./definitions/comments";
 import { historyTool } from "./definitions/history";
-import { prose } from "./definitions/prose";
-import { load } from "./definitions/routing/load";
 import { pr } from "./definitions/pr";
+import { prose } from "./definitions/prose";
 import { routing } from "./definitions/routing";
+import { load } from "./definitions/routing/load";
 import { stack } from "./definitions/stack";
 import { sessionReturn, worktrees } from "./definitions/worktrees";
 
@@ -25,6 +27,7 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
     const opening = pr(ctx);
     const why = historyTool(ctx.location.directory);
     const pages = canvases(ctx);
+    const figures = anatomy(ctx.location.directory);
     const memory = brain(ctx);
 
     // Not looped: `add` is generic, so a union of the two schemas instantiates to
@@ -39,13 +42,19 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
       editor.add(why);
       editor.add(pages);
       editor.add(memory);
+      editor.add(figures);
     });
 
     yield* Effect.logInfo("Registered tools", {
-tools: [listed, said, route, trees, prs, opening, why, pages, memory].map(
+      tools: [listed, said, route, trees, prs, opening, why, pages, memory, figures].map(
         (tool) => `${tool.options?.namespace}_${tool.name}`,
       ),
     });
+
+    // A figure is held back from the reader until its geometry has been proved.
+    // `tool.execute.before` is the only hook that can reject a call, so it is
+    // the only place this can be enforced.
+    yield* ctx.tool.hook("execute.before", guardFigure());
 
     yield* sessionReturn(ctx);
     yield* attach(ctx);

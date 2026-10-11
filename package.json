@@ -20,7 +20,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "eval": "bun run eval/run.ts"
+    "eval": "bun run eval/run.ts",
+    "anatomy-kit.sync": "sh scripts/sync-anatomy-kit.sh"
   },
   "dependencies": {
     "@opencode/ai": "2.0.26",
