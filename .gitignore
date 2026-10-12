@@ -3,3 +3,7 @@ node_modules/
 .DS_Store
 eval/last-run.json
 eval/baseline.json
+
+# The brain ledger is read and written per checkout, so it is working state
+# rather than source. The tool recreates it on first use.
+.spectre/
