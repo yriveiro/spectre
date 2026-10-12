@@ -2,7 +2,6 @@ import type { Plugin } from "@opencode/plugin/effect";
 import { AbsolutePath } from "@opencode/schema/schema";
 import { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
-import { join } from "node:path";
 import { evidence } from "./evidence";
 import { type Edge, ledger, live } from "./ledger";
 import type { Claim } from "./neuron";
@@ -184,8 +183,8 @@ export const Answered = Schema.Union([Recalled, Asserted, Related, Superseded, D
 
 const DEFAULT_BUDGET = 400;
 
-const root = (ctx: Plugin.Context): AbsolutePath =>
-  AbsolutePath.make(join(ctx.location.project.directory, ".spectre", "brain"));
+const project = (ctx: Plugin.Context): AbsolutePath =>
+  AbsolutePath.make(ctx.location.project.directory);
 
 const rejected = (action: typeof Rejected.Type["action"], problems: string): typeof Rejected.Type => ({
   status: "rejected",
@@ -224,7 +223,7 @@ const runAssert = (ctx: Plugin.Context) =>
         `${seen.missing.join(", ")}: not a path in ${directory}. A claim about a file that is not there describes nothing. Nothing was written.`,
       );
 
-    const claim = yield* ledger(root(ctx)).mint({
+    const claim = yield* ledger(project(ctx)).mint({
       kind: input.kind,
       claim: input.claim,
       subject: input.subject,
@@ -243,7 +242,7 @@ const runRelate = (ctx: Plugin.Context) =>
     const why = input.why.trim();
     if (why.length === 0) return rejected("relate", NO_WHY);
 
-    const wrote = yield* ledger(root(ctx)).append({
+    const wrote = yield* ledger(project(ctx)).append({
       kind: input.kind,
       from: input.from,
       to: input.to,
@@ -267,7 +266,7 @@ const runSupersede = (ctx: Plugin.Context) =>
     const why = input.why.trim();
     if (why.length === 0) return rejected("supersede", NO_WHY);
 
-    const wrote = yield* ledger(root(ctx)).append({
+    const wrote = yield* ledger(project(ctx)).append({
       kind: "supersedes",
       from: input.from,
       to: input.to,
@@ -284,7 +283,7 @@ const runDemote = (ctx: Plugin.Context) =>
     const why = input.why.trim();
     if (why.length === 0) return rejected("demote", NO_WHY);
 
-    const wrote = yield* ledger(root(ctx)).append({
+    const wrote = yield* ledger(project(ctx)).append({
       kind: "demoted",
       from: input.id,
       to: null,
@@ -304,7 +303,7 @@ const runDemote = (ctx: Plugin.Context) =>
 
 const runRecall = (ctx: Plugin.Context) =>
   Effect.fn("spectre.brain.recall")(function* (input: typeof Recall.Type) {
-    const held = yield* ledger(root(ctx)).read();
+    const held = yield* ledger(project(ctx)).read();
     const answer = yield* recall({
       claims: held.claims,
       edges: live(held.edges),
