@@ -7,7 +7,7 @@ import { Schema } from "effect";
  * `Schema.decodeUnknownEffect` on the declared schema; `runtime.ts:155` builds the JSON
  * Schema separately and only describes the tool.
  *
- * So these assert the two disagree, on the same `effect@4.0.0-rc.112` the plugin pins.
+ * So these assert the two disagree, on the same `effect@4.0.1` the plugin pins.
  * A bump that changes either side fails here rather than in a session.
  */
 

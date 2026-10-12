@@ -85,7 +85,7 @@ one transform measured, and it is why a schema is worth reading before you trust
 what arrived.
 
 You can check a declaration in this repository's own process, because that decoder
-runs on the same `effect@4.0.0-rc.112` the plugin pins:
+runs on the same `effect@4.0.1` the plugin pins:
 
 ```js
 import { Schema } from "effect";
@@ -207,7 +207,7 @@ rather than a type name. A script that walked for tags found nothing and reporte
 success, which is worse than having no check: a check that cannot fail.
 
 That walk is gone. `Schema.toJsonSchemaDocument` is what converts a schema now,
-and it runs in this repository's own process, on the same `effect@4.0.0-rc.112`.
+and it runs in this repository's own process, on the same `effect@4.0.1`.
 So the pre-check that could not be written can be written:
 
 ```js
@@ -217,7 +217,7 @@ console.log(JSON.stringify(Schema.toJsonSchemaDocument(Schema.Int).schema));
 ```
 
 That answers what the model sees. For what the host does with a value, run the
-same decoder the host runs, because it is the same `effect@4.0.0-rc.112`:
+same decoder the host runs, because it is the same `effect@4.0.1`:
 
 ```js
 Schema.decodeUnknownOption(Schema.Int)(1)._tag;     // "Some"
