@@ -12,12 +12,11 @@ nothing about why. The brain is the third thing: **what the code cannot show**.
 
 It holds the feature map of whatever project spectre runs in — which surfaces are
 one feature, why a decision was made, what bit someone last month — as plain
-files under `.spectre/brain/`, which `.gitignore` excludes as per-checkout
-working state. The ledger is therefore not part of a diff, is not reviewed with
-the rest of the tree, and does not revert with it. Nothing creates that
-directory either: `tools/definitions/brain/` imports no `mkdir`, and
-`ledger.ts` writes through a temporary file and a `rename`, so a fresh clone has
-no ledger to read. One agent, `mnemonic`, owns it.
+files under `.spectre/brain/`, which git tracks. The ledger is source: a reviewer
+reads it in a diff and reverts it with the rest of the tree. Nothing needs to
+create that directory either, because `Bun.write` creates its parents, so the
+first `assert` in a project that has never had a brain writes the whole tree.
+One agent, `mnemonic`, owns it.
 
 The neuro vocabulary is load-bearing and exact, because it is what makes the
 shape falsifiable: **a neuron is a claim, a synapse is a dated relation between
