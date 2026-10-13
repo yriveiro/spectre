@@ -241,6 +241,23 @@ describe("start against a bare repository", () => {
     expect(fake.moved).toEqual([outcome.directory]);
   });
 
+  test("a supplied base that does not resolve is refused naming it, not the defaults", async () => {
+    const { resolved, bare, main } = await bareLayout();
+    const fake = host(bare, resolved);
+
+    const outcome = await start(fake, main, "fix-login", "no-such-base-xyz");
+
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status !== "rejected") throw new Error("expected rejected");
+    // The lie this fixes: the old message claimed the four defaults were tried
+    // and told the caller to pass `base` explicitly, after it just did.
+    expect(outcome.problems).toContain('"no-such-base-xyz"');
+    expect(outcome.problems).not.toContain("origin/HEAD");
+    expect(outcome.problems).not.toContain("pass `base` explicitly");
+    // Nothing was created for a refusal.
+    expect(fake.asked.length).toBe(0);
+  });
+
   test("it refuses the same call when the project row is the bare repository and no source is named", async () => {
     const { resolved, bare, main } = await bareLayout();
     const named = await start(host(bare, resolved), main, "with-from");

@@ -204,6 +204,7 @@ const runStart = (ctx: Plugin.Context) =>
       rows,
       branchExists: branchTaken,
       base,
+      requestedBase: input.base,
       sessionDirectory,
     });
     if (blocked !== undefined) return rejected(blocked.why);

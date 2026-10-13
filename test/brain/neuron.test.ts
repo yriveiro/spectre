@@ -46,12 +46,19 @@ describe("render", () => {
     expect(render(CLAIM)).toBe(render({ ...CLAIM }));
   });
 
-  test("a claim with no subjects still declares the field", () => {
-    // Flow style, and that is not a choice: YAML only uses block style for a non-empty
-    // collection, so `Bun.YAML.stringify` emits an empty array as `[]` whatever indent it is
-    // given. `features/brain.md` shows the same for a populated `subject`. This asserted the
-    // block form, which the renderer cannot produce, so it was red on main.
-    expect(render({ ...CLAIM, subject: [] })).toContain("\nsubject: []\n");
+  test("a claim with no subjects still declares the field", async () => {
+    const note = render({ ...CLAIM, subject: [] });
+    // The key is on disk, and the assertion is about that rather than about
+    // the serialiser's mood. YAML only uses block style for a non-empty
+    // collection, so an empty list lands as `subject: []` whatever indent it is
+    // given, and the regex accepts either form: pinning one of them is what
+    // made this test red in the first place. `parse` turns a MISSING subject
+    // into [] anyway (neuron.ts:70), so a round trip alone cannot tell
+    // "declared empty" from "omitted", which is what this test is for.
+    expect(note).toMatch(/^subject:(?: .+)?$/m);
+    // And the note reads back as the claim it was written from: an empty list,
+    // not a defaulted, inherited or invented one.
+    expect(await run(parse(note, NOTE))).toEqual({ ...CLAIM, subject: [] });
   });
 
   test("every kind renders and reads back", () => {

@@ -144,6 +144,14 @@ export type Start = {
   /** Where the worktree would go, so a taken name is an exact path match. */
   readonly root: string;
   readonly base: string | undefined;
+  /**
+   * The caller's `base` input before resolution, or `undefined` when the caller
+   * passed none. A supplied-but-unresolvable base resolves to `base: undefined`,
+   * which is why both fields travel together: without this one that case is
+   * indistinguishable from "no base was supplied and none of the defaults
+   * resolved", and the refusal below would describe refs it never tried.
+   */
+  readonly requestedBase: string | undefined;
   readonly branchExists: boolean;
   /** The calling session's directory, or undefined when the call has no session. */
   readonly sessionDirectory: string | undefined;
@@ -205,11 +213,20 @@ export const refusal = (start: Start): Refusal | undefined => {
       why: `branch ${start.branch} already exists; the worktree would be created detached and then fail to attach to it. Pick another name, or delete that branch first`,
     };
 
-  if (start.base === undefined)
+  if (start.base === undefined) {
+    // Same kind either way: there is no base to cut from, so there is no
+    // different handling path, only a different explanation. A sibling kind
+    // would promise a distinction no caller reads (`start` only reports `why`).
+    if (start.requestedBase !== undefined)
+      return {
+        kind: "no-base",
+        why: `base "${start.requestedBase}" does not resolve; check the ref name, fetch, or pass a base that resolves.`,
+      };
     return {
       kind: "no-base",
       why: `no base ref resolved; tried ${BASES.join(", ")}. Fetch, or pass \`base\` explicitly.`,
     };
+  }
 
   return undefined;
 };
