@@ -29,6 +29,7 @@ const clean: Start = {
   branch: "fix-login",
   root: "/dev/spectre-worktrees",
   base: "origin/main",
+  requestedBase: undefined,
   branchExists: false,
   sessionDirectory: "/dev/spectre-worktrees/main",
   rows: BARE_LAYOUT,
@@ -154,9 +155,17 @@ describe("the rest of the refusals", () => {
   });
 
   test("an unresolved base is refused and names what it tried", () => {
-    const blocked = refusal({ ...clean, base: undefined });
+    const blocked = refusal({ ...clean, base: undefined, requestedBase: undefined });
     expect(blocked?.kind).toBe("no-base");
     expect(blocked?.why).toContain("origin/HEAD, origin/main, main, HEAD");
+  });
+
+  test("a supplied base that does not resolve is refused naming it, not the defaults", () => {
+    const blocked = refusal({ ...clean, base: undefined, requestedBase: "no-such-branch" });
+    expect(blocked?.kind).toBe("no-base");
+    expect(blocked?.why).toContain('"no-such-branch"');
+    expect(blocked?.why).not.toContain("origin/HEAD");
+    expect(blocked?.why).not.toContain("pass `base` explicitly");
   });
 
   test("an invalid name is refused before anything about the repository", () => {

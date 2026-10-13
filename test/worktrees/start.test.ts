@@ -166,10 +166,15 @@ type Outcome =
       readonly problems: string;
     };
 
-const start = async (fake: ReturnType<typeof host>, sessionDirectory: string, name: string) => {
+const start = async (
+  fake: ReturnType<typeof host>,
+  sessionDirectory: string,
+  name: string,
+  base?: string,
+) => {
   const result = await Effect.runPromise(
     worktrees(fake.context(sessionDirectory)).execute(
-      { action: "start", name },
+      { action: "start", name, ...(base === undefined ? {} : { base }) },
       { ...context, sessionID: "test" as never },
     ),
   );
@@ -181,6 +186,22 @@ afterAll(async () => {
 });
 
 describe("start against a bare repository", () => {
+  test("a base one commit behind the checkout still opens", async () => {
+    const { resolved, bare, main } = await bareLayout();
+    // Move the checkout on, so `main` and the checkout's HEAD are different
+    // commits. A worktree cut one behind is correct, and reading the checkout's
+    // HEAD as the expectation called that a mismatch and left it `unverified`.
+    await Bun.write(`${main}/a.txt`, "two\n");
+    await git(main, ["add", "."]);
+    await git(main, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "second"]);
+    await git(main, ["push", "-q", bare, "HEAD:refs/heads/main"]);
+
+    const fake = host(bare, resolved);
+    const outcome = await start(fake, main, "fix-login", "main~1");
+
+    expect(outcome.status).toBe("opened");
+  });
+
   test("it hands the host a source the host can find a repository in", async () => {
     const { resolved, bare, main } = await bareLayout();
     const fake = host(bare, resolved);
@@ -218,6 +239,23 @@ describe("start against a bare repository", () => {
     const branch = await git(outcome.directory, ["rev-parse", "--abbrev-ref", "HEAD"]);
     expect(branch.out).toBe("fix-login");
     expect(fake.moved).toEqual([outcome.directory]);
+  });
+
+  test("a supplied base that does not resolve is refused naming it, not the defaults", async () => {
+    const { resolved, bare, main } = await bareLayout();
+    const fake = host(bare, resolved);
+
+    const outcome = await start(fake, main, "fix-login", "no-such-base-xyz");
+
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status !== "rejected") throw new Error("expected rejected");
+    // The lie this fixes: the old message claimed the four defaults were tried
+    // and told the caller to pass `base` explicitly, after it just did.
+    expect(outcome.problems).toContain('"no-such-base-xyz"');
+    expect(outcome.problems).not.toContain("origin/HEAD");
+    expect(outcome.problems).not.toContain("pass `base` explicitly");
+    // Nothing was created for a refusal.
+    expect(fake.asked.length).toBe(0);
   });
 
   test("it refuses the same call when the project row is the bare repository and no source is named", async () => {

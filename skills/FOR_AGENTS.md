@@ -117,6 +117,14 @@ is written", and the row stopped routing. Put the literal nouns back.
   with nothing: most of those rows still name a partial instrument in the prose,
   which is why the row is what the hub quotes. If you add a leaf, add its row and
   update the hub count in the same change.
+- **Flags the binary still has.** The same test reads `ripwire --help` and fails on
+  any `--flag` the map names that the installed ripwire does not list, so a row
+  cannot outlive the verb it points at. A line that says `deprecat` is exempt:
+  naming a deprecated alias is how the file records that it is going away, and an
+  alias can leave the help and still answer, which is exactly how `--readability`
+  survived. The test skips when `ripwire` is missing, for the reason the routing
+  arm does. It also reads the closing sentence's three counts and fails when they
+  differ from the rows, so the test checks that claim rather than trusting it.
 - **A description.** `test/skills/routing.test.ts` fails on a blank one, and on
   `bm25-desc` or `bm25-full` stopping beating chance. The routing arm is skipped
   when `ripwire` is missing. The blank check always runs.

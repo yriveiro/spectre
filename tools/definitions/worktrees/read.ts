@@ -135,6 +135,13 @@ const rev = async (cwd: string, args: ReadonlyArray<string>): Promise<Rev> => {
 
 export const head = (cwd: string): Promise<Rev> => rev(cwd, ["rev-parse", "HEAD"]);
 
+/**
+ * The commit a ref names. A worktree is cut from `base`, so `base` is what its
+ * head has to equal. Reading the calling checkout's HEAD instead reports a
+ * mismatch for every worktree cut anywhere but HEAD.
+ */
+export const commitOf = (cwd: string, ref: string): Promise<Rev> => rev(cwd, ["rev-parse", ref]);
+
 export const currentBranch = (cwd: string): Promise<Rev> =>
   rev(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
 

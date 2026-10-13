@@ -1,0 +1,5 @@
+#!/bin/sh
+# A `gh` that always fails, so a test can prove the stack tool refuses to answer
+# instead of reporting a clear stack. Committed with its exec bit set.
+echo "gh: could not authenticate" >&2
+exit 1

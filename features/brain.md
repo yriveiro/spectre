@@ -1,7 +1,8 @@
 # The brain (`.spectre/brain`)
 
-Status: designed, not built. Every signature below is a sketch with
-`not implemented` bodies; the shapes are the contract and the bodies are Phase D.
+Status: built. `tools/definitions/brain/` holds the implementation and
+`test/brain/` holds its tests. The signatures below are the contract those files
+answer to.
 
 ## Goal
 
@@ -11,8 +12,11 @@ nothing about why. The brain is the third thing: **what the code cannot show**.
 
 It holds the feature map of whatever project spectre runs in — which surfaces are
 one feature, why a decision was made, what bit someone last month — as plain
-files inside the project, so it is diffed, reviewed and reverted with everything
-else. One agent, `mnemonic`, owns it.
+files under `.spectre/brain/`, which git tracks. The ledger is source: a reviewer
+reads it in a diff and reverts it with the rest of the tree. Nothing needs to
+create that directory either, because `Bun.write` creates its parents, so the
+first `assert` in a project that has never had a brain writes the whole tree.
+One agent, `mnemonic`, owns it.
 
 The neuro vocabulary is load-bearing and exact, because it is what makes the
 shape falsifiable: **a neuron is a claim, a synapse is a dated relation between
@@ -92,8 +96,8 @@ recall (arXiv:2501.13956) arriving through the front door.
 
 ## Shapes and signatures
 
-Bodies are `not implemented` on purpose. Tricky logic is marked where it is
-tricky, not written.
+Bodies are elided. Each block names the file that holds them, and the
+implementation is there. Tricky logic is marked where it is tricky.
 
 ```ts
 // tools/definitions/brain/neuron.ts — a claim. Owns NoteFrontmatter (private).

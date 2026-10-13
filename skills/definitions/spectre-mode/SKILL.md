@@ -286,7 +286,7 @@ procedure is what would break it.
   and keep its summary in the main thread, never the raw payload.
 - `ripwire`. The map from a principle to the command that can falsify its test.
   Load it when a principle applies and you have not measured the code, so the
-  claim gets a run instead of an assertion. It also names the ten leaves with no
+  claim gets a run instead of an assertion. It also names the nine leaves with no
   instrument, and the ways ripwire is wrong, which is the half that keeps the map
   from becoming deference to a tool. The principles stay generic about tools.
   this is the one file allowed to name one.

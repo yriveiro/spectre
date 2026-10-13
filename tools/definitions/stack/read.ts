@@ -49,7 +49,17 @@ const run = async (cwd: string, args: ReadonlyArray<string>) => {
   return { out: out.trim(), err: err.trim(), code };
 };
 
-const repo = async (cwd: string) => {
+/**
+ * The repository's `owner/name`, or undefined when `gh` could not say.
+ *
+ * The caller resolves this ONCE per listing and passes it to every `readPr`, so
+ * a listing of N rows costs one slug rather than N. It is resolved per run
+ * rather than cached, because the plugin is one long-lived process: a cache
+ * would outlive both the auth lapse that produced an `undefined` and a rename
+ * that made a cached slug name the wrong repository, and neither failure looks
+ * like itself from the inside.
+ */
+export const repo = async (cwd: string): Promise<string | undefined> => {
   const found = await run(cwd, ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]);
   return found.code === 0 ? found.out : undefined;
 };
@@ -118,7 +128,11 @@ const unreadable = (number: number, reason: string): Read => ({
   problems: [`#${number}: ${reason}`],
 });
 
-export const readPr = async (cwd: string, number: number): Promise<Read> => {
+export const readPr = async (
+  cwd: string,
+  number: number,
+  slug: string | undefined,
+): Promise<Read> => {
   const problems: Array<string> = [];
 
   if (Bun.which("gh") === null)
@@ -129,7 +143,6 @@ export const readPr = async (cwd: string, number: number): Promise<Read> => {
     return unreadable(number, found.err.split("\n")[0] ?? `gh exited ${found.code}`);
 
   const facts = JSON.parse(found.out) as Facts;
-  const slug = await repo(cwd);
   let threads = -1;
 
   if (slug === undefined) {
@@ -167,24 +180,43 @@ export const readPr = async (cwd: string, number: number): Promise<Read> => {
   };
 };
 
+/**
+ * What `gh pr list` gave back. An empty list and a failed command are different
+ * answers, so the type says so: a caller cannot read one as the other.
+ */
+export type Listing =
+  | { readonly numbers: ReadonlyArray<number> }
+  | { readonly problem: string };
+
 /** Lowest number first: a stacked branch set lands bottom-up, so that is the order. */
-export const openPullRequests = async (cwd: string): Promise<ReadonlyArray<number>> => {
-  const found = await run(cwd, [
-    "pr",
-    "list",
-    "--state",
-    "open",
-    "--limit",
-    "200",
-    "--json",
-    "number",
-  ]);
-  if (found.code !== 0) return [];
+export const listingOf = (found: {
+  readonly out: string;
+  readonly err: string;
+  readonly code: number;
+}): Listing => {
+  if (found.code !== 0)
+    return { problem: found.err.split("\n")[0] ?? `gh exited ${found.code}` };
 
   const parsed: unknown = JSON.parse(found.out === "" ? "[]" : found.out);
-  if (!Array.isArray(parsed)) return [];
+  if (!Array.isArray(parsed)) return { problem: "gh pr list did not return a list of numbers" };
 
-  return (parsed as ReadonlyArray<{ number: number }>)
-    .map((one) => one.number)
-    .toSorted((a, b) => a - b);
+  return {
+    numbers: (parsed as ReadonlyArray<{ number: number }>)
+      .map((one) => one.number)
+      .toSorted((a, b) => a - b),
+  };
 };
+
+export const openPullRequests = async (cwd: string): Promise<Listing> => {
+  if (Bun.which("gh") === null) return { problem: "`gh` is not on PATH, so this listing decides nothing" };
+
+  return listingOf(
+    await run(cwd, ["pr", "list", "--state", "open", "--limit", "200", "--json", "number"]),
+  );
+};
+
+/** The caller's own list when it named the pull requests, `gh` otherwise. */
+export const listingFor = async (
+  cwd: string,
+  asked: ReadonlyArray<number> | undefined,
+): Promise<Listing> => (asked === undefined ? openPullRequests(cwd) : { numbers: asked });
