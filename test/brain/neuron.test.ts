@@ -47,7 +47,11 @@ describe("render", () => {
   });
 
   test("a claim with no subjects still declares the field", () => {
-    expect(render({ ...CLAIM, subject: [] })).toContain("\nsubject:\n  []\n");
+    // Flow style, and that is not a choice: YAML only uses block style for a non-empty
+    // collection, so `Bun.YAML.stringify` emits an empty array as `[]` whatever indent it is
+    // given. `features/brain.md` shows the same for a populated `subject`. This asserted the
+    // block form, which the renderer cannot produce, so it was red on main.
+    expect(render({ ...CLAIM, subject: [] })).toContain("\nsubject: []\n");
   });
 
   test("every kind renders and reads back", () => {

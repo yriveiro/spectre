@@ -1,11 +1,10 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { Cause, Effect, Exit } from "effect";
 import { AbsolutePath } from "@opencode/schema/schema";
+import { useTempDirs } from "../fixture";
 import { ledger, live, type Edge } from "../../tools/definitions/brain/ledger";
 
-const TMP = (Bun.env.TMPDIR ?? "/tmp").replace(/\/+$/, "");
-const roots: Array<string> = [];
-let seq = 0;
+const temp = useTempDirs("brain");
 
 const run = <A>(effect: Effect.Effect<A, Error>): Promise<A> => Effect.runPromise(effect);
 
@@ -20,8 +19,7 @@ const git = async (root: string, args: ReadonlyArray<string>): Promise<string> =
 };
 
 const scratch = async (repository = false): Promise<AbsolutePath> => {
-  const root = `${TMP}/spectre-brain-${process.pid}-${seq++}`;
-  roots.push(root);
+  const root = temp();
   await Bun.write(`${root}/.gitignore`, "");
   if (repository) await git(root, ["init", "-q"]);
   return AbsolutePath.make(root);
@@ -44,10 +42,6 @@ const DRAFT = {
   claim: "A canvas is never overwritten: save allocates the directory",
   subject: ["tools/definitions/canvas/store.ts"],
 };
-
-afterAll(async () => {
-  for (const root of roots) await Bun.$`rm -rf ${root}`.quiet();
-});
 
 describe("a second identical run", () => {
   test("a second identical append writes nothing", async () => {

@@ -294,6 +294,37 @@ Before changing any of them, check what the target OpenCode tag actually pins
 (`packages/*/package.json` → `workspaces.catalog` at that tag). The `effect` pin
 is the one that moves least, so read it rather than assuming it tracks the release.
 
+### The `effect` pin has a body that describes it
+
+`skills/definitions/effect-best-practices/` teaches the API of one `effect`
+build, so it cannot be right for two at once. Four files hold it to the pin, and
+all four move in the same change as a bump:
+
+| File | What it holds |
+| ---- | ------------- |
+| `verified.ts` | the version the body was checked against, as one literal |
+| `probe.ts` | every symbol the body names, compiled by `bun run typecheck` |
+| `test/skills/effect-version.test.ts` | the stamp against the pin and the install |
+| `watch.ts` | a session nudge when the pin moves without the stamp |
+
+The forcing is two checks that fail for different reasons. `probe.ts` fails
+when a bump moved an export, because the compiler names the symbol. The test
+fails when a bump moved only the number. Neither covers the other, so neither is
+optional.
+
+Bumping the pin is therefore three steps, in this order: move the pin, run
+`bun run typecheck` and fix what the compiler names, then move the stamp last.
+`/effect-align` is the prompt that walks the same order.
+
+Two house rules make the body readable, and both are load-bearing:
+
+- **The body names only the version installed.** It carries no history of what
+  an API used to be called. A near-miss a reader will meet is a
+  `principle-evidence` lookup, not a paragraph in a skill.
+- **`probe.ts` stays on disk and inside `tsconfig.json`'s `include`.** A probe
+  that nothing compiles is a check that cannot fail, which is the one thing this
+  arrangement is for.
+
 ## Checks
 
 ```sh
