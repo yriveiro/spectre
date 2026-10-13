@@ -1,7 +1,7 @@
-import type { Tool } from "@opencode/schema/tool";
+import { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
 import { type Blocker, decide, decideStack, type Snapshot } from "./classify";
-import { openPullRequests, readPr } from "./read";
+import { listingFor, readPr, repo } from "./read";
 
 const Input = Schema.Struct({
   prs: Schema.optional(Schema.Array(Schema.Number)).annotate({
@@ -119,22 +119,39 @@ export const stack = (directory: string): Tool.Info<typeof Input, typeof Output>
   output: Output,
   options: { namespace: "spectre", codemode: true, pinned: true, permission: "read" },
   execute: (input) =>
-    Effect.promise(async () => {
+    Effect.gen(function* () {
       const allowDraft = input.allowDraft ?? false;
       const problems: Array<string> = [];
 
-      const numbers = input.prs ?? (await openPullRequests(directory));
-      if (numbers.length === 0)
-        return {
-          output: {
-            stack: "clear" as const,
-            ready: [],
-            rows: [],
-            ...(problems.length > 0 ? { problems: problems.join("\n") } : {}),
-          },
-        };
+      const listed =
+        yield* Effect.tryPromise(() => listingFor(directory, input.prs)).pipe(
+          Effect.mapError(
+            (cause) =>
+              new Tool.Error({
+                message: `gh could not list the open pull requests, so this stack decides nothing: ${
+                  cause instanceof Error ? cause.message : String(cause)
+                }`,
+              }),
+          ),
+        );
 
-      const reads = await Promise.all(numbers.map((one) => readPr(directory, one)));
+      // A listing that failed is not an empty stack. `Output` has no state for
+      // "could not tell", so the tool fails rather than report a clear one.
+      if ("problem" in listed)
+        return yield* Effect.fail(
+          new Tool.Error({
+            message: `gh could not list the open pull requests, so this stack decides nothing: ${listed.problem}`,
+          }),
+        );
+
+      const numbers = listed.numbers;
+      if (numbers.length === 0) return { output: { stack: "clear" as const, ready: [], rows: [] } };
+
+      // One slug for the whole listing, resolved here rather than per row.
+      const slug = yield* Effect.promise(() => repo(directory));
+      const reads = yield* Effect.promise(() =>
+        Promise.all(numbers.map((one) => readPr(directory, one, slug))),
+      );
       for (const read of reads) problems.push(...read.problems);
 
       const rows = reads.map((read) => ({

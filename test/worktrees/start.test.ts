@@ -166,10 +166,15 @@ type Outcome =
       readonly problems: string;
     };
 
-const start = async (fake: ReturnType<typeof host>, sessionDirectory: string, name: string) => {
+const start = async (
+  fake: ReturnType<typeof host>,
+  sessionDirectory: string,
+  name: string,
+  base?: string,
+) => {
   const result = await Effect.runPromise(
     worktrees(fake.context(sessionDirectory)).execute(
-      { action: "start", name },
+      { action: "start", name, ...(base === undefined ? {} : { base }) },
       { ...context, sessionID: "test" as never },
     ),
   );
@@ -181,6 +186,22 @@ afterAll(async () => {
 });
 
 describe("start against a bare repository", () => {
+  test("a base one commit behind the checkout still opens", async () => {
+    const { resolved, bare, main } = await bareLayout();
+    // Move the checkout on, so `main` and the checkout's HEAD are different
+    // commits. A worktree cut one behind is correct, and reading the checkout's
+    // HEAD as the expectation called that a mismatch and left it `unverified`.
+    await Bun.write(`${main}/a.txt`, "two\n");
+    await git(main, ["add", "."]);
+    await git(main, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "second"]);
+    await git(main, ["push", "-q", bare, "HEAD:refs/heads/main"]);
+
+    const fake = host(bare, resolved);
+    const outcome = await start(fake, main, "fix-login", "main~1");
+
+    expect(outcome.status).toBe("opened");
+  });
+
   test("it hands the host a source the host can find a repository in", async () => {
     const { resolved, bare, main } = await bareLayout();
     const fake = host(bare, resolved);

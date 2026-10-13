@@ -16,6 +16,7 @@ import {
   attachBranch,
   bareOf,
   branchExists,
+  commitOf,
   currentBranch,
   firstResolving,
   head,
@@ -207,9 +208,13 @@ const runStart = (ctx: Plugin.Context) =>
     });
     if (blocked !== undefined) return rejected(blocked.why);
 
-    const gotExpected = yield* Effect.promise(() => head(projectDirectory));
+    // The worktree is cut from `base`, so `base` is what its head has to equal.
+    // Reading the calling checkout's HEAD instead reports a mismatch for every
+    // worktree cut anywhere but HEAD, so a base one commit behind came back
+    // `unverified` with the worktree perfectly correct.
+    const gotExpected = yield* Effect.promise(() => commitOf(projectDirectory, base!));
     if (gotExpected.kind !== "read")
-      return rejected(`${projectDirectory} is not a git repository, or has no commit yet`);
+      return rejected(`${base} does not resolve to a commit in ${projectDirectory}`);
 
     const made = yield* Effect.result(
       ctx.worktree.create({
