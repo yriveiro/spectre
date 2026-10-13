@@ -10,6 +10,7 @@ import { codeHygiene } from "./code-hygiene";
 import { communication } from "./communication";
 import { createVerificationSkill } from "./create-verification-skill";
 import { type Definition } from "./definition";
+import { effectBestPractices } from "./effect-best-practices";
 import { figureItOut } from "./figure-it-out";
 import { grammar } from "./grammar";
 import { how } from "./how";
@@ -95,6 +96,7 @@ const definitions: ReadonlyArray<Definition> = [
   teach,
   technicalWriting,
   typescriptBestPractices,
+  effectBestPractices,
   playbook,
   playbookAuthoringASkill,
   playbookAutonomousRun,
@@ -176,6 +178,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "canvas",
   "communication",
   "create-verification-skill",
+  "effect-best-practices",
   "figure-it-out",
   "how",
   "interrogate",

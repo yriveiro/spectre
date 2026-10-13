@@ -1,16 +1,9 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
+import { useTempDirs } from "../fixture";
 import { type EvidenceReport, evidence, WINDOW } from "../../tools/definitions/brain/evidence";
 
-const TMP = Bun.env.TMPDIR ?? "/tmp";
-const roots: Array<string> = [];
-let seq = 0;
-
-const fresh = (name: string): string => {
-  const root = `${TMP}/spectre-evidence-${name}-${process.pid}-${seq++}`;
-  roots.push(root);
-  return root;
-};
+const fresh = useTempDirs("evidence");
 
 const git = async (
   cwd: string,
@@ -109,10 +102,6 @@ let bulk: string;
 beforeAll(async () => {
   history = await historyRepo();
   bulk = await bulkRepo();
-});
-
-afterAll(async () => {
-  for (const root of roots) await Bun.$`rm -rf ${root}`.quiet();
 });
 
 describe("a repository with history", () => {
