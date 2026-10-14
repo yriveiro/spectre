@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Fields } from "../../tools/definitions/pr/fields";
-import { compose } from "../../tools/definitions/pr/render";
 import { lint } from "../../tools/definitions/pr/lint";
+import { compose } from "../../tools/definitions/pr/render";
 
 const fields = (over: Partial<Fields> = {}): Fields => ({
   type: "feat",
@@ -17,11 +17,15 @@ const fields = (over: Partial<Fields> = {}): Fields => ({
 
 describe("the composition is the literal bytes", () => {
   test("the title is type, scope and subject with no trailing period", () => {
-    expect(compose(fields()).title).toBe("feat(spectre): compose the pull request title from fields");
+    expect(compose(fields()).title).toBe(
+      "feat(spectre): compose the pull request title from fields",
+    );
   });
 
   test("a breaking field puts `!` before the colon", () => {
-    const draft = compose(fields({ breaking: "The input field `body` is gone. Pass `fields` instead." }));
+    const draft = compose(
+      fields({ breaking: "The input field `body` is gone. Pass `fields` instead." }),
+    );
     expect(draft.title).toBe("feat(spectre)!: compose the pull request title from fields");
     expect(draft.body).toContain(
       "## Breaking Changes\n\nThe input field `body` is gone. Pass `fields` instead.",
@@ -30,8 +34,13 @@ describe("the composition is the literal bytes", () => {
 
   test("an absent optional leaves its heading out rather than filling it", () => {
     expect(compose(fields()).body).not.toContain("## Tradeoffs");
-    expect(compose(fields({ tradeoffs: "A field beats a free-text body, because the shape is then the tool's." }))
-      .body).toContain("## Tradeoffs");
+    expect(
+      compose(
+        fields({
+          tradeoffs: "A field beats a free-text body, because the shape is then the tool's.",
+        }),
+      ).body,
+    ).toContain("## Tradeoffs");
   });
 
   test("the merge gate is unticked, so no run can report an approval it did not read", () => {
@@ -41,7 +50,9 @@ describe("the composition is the literal bytes", () => {
   });
 
   test("a validation entry renders as a check and what it returned", () => {
-    expect(compose(fields()).body).toContain("## Validation\n\n- bun test test/pr → 38 pass, 0 fail");
+    expect(compose(fields()).body).toContain(
+      "## Validation\n\n- bun test test/pr → 38 pass, 0 fail",
+    );
   });
 
   test("the same fields compose to the same bytes twice", () => {
@@ -49,7 +60,8 @@ describe("the composition is the literal bytes", () => {
   });
 });
 
-const rules = (over: Partial<Fields> = {}) => lint(fields(over), compose(fields(over))).map((one) => one.rule);
+const rules = (over: Partial<Fields> = {}) =>
+  lint(fields(over), compose(fields(over))).map((one) => one.rule);
 
 describe("the lint is fail-closed and each rule is reachable", () => {
   test("well-formed fields clear every rule", () => {
@@ -57,8 +69,9 @@ describe("the lint is fail-closed and each rule is reachable", () => {
   });
 
   test("a title over 72 characters is refused", () => {
-    expect(rules({ subject: "compose the pull request title and the body and the merge gate together" }))
-      .toContain("title-length");
+    expect(
+      rules({ subject: "compose the pull request title and the body and the merge gate together" }),
+    ).toContain("title-length");
   });
 
   test("a subject with a final period is refused", () => {
@@ -67,8 +80,12 @@ describe("the lint is fail-closed and each rule is reachable", () => {
 
   test("two clauses in one subject are a split that failed", () => {
     expect(rules({ subject: "compose the title and the body" })).toContain("title-one-clause");
-    expect(rules({ subject: "compose the title; drop the old body" })).toContain("title-one-clause");
-    expect(rules({ subject: "compose the title, drop the old body" })).toContain("title-one-clause");
+    expect(rules({ subject: "compose the title; drop the old body" })).toContain(
+      "title-one-clause",
+    );
+    expect(rules({ subject: "compose the title, drop the old body" })).toContain(
+      "title-one-clause",
+    );
   });
 
   test("a scope that is not a lowercase noun is refused", () => {
@@ -91,10 +108,22 @@ describe("the lint is fail-closed and each rule is reachable", () => {
     expect(rules({ risk: "1. first commit\n2. second commit" })).toContain("body-no-commit-list");
   });
 
-  test("a summary that runs to two paragraphs is refused", () => {
-    expect(rules({ summary: "First paragraph.\n\nSecond paragraph." })).toContain(
-      "summary-one-paragraph",
+  test("a summary that runs to several paragraphs is allowed, because readable prose needs them", () => {
+    expect(rules({ summary: "First paragraph.\n\nSecond paragraph.\n\nThird." })).not.toContain(
+      "summary-carries-a-heading",
     );
+  });
+
+  test("a summary that brings its own heading is refused", () => {
+    expect(rules({ summary: "## Summary\n\nFirst paragraph." })).toContain(
+      "summary-carries-a-heading",
+    );
+  });
+
+  test("the body writes the Summary heading, so a reader can stop at the first one", () => {
+    const body = compose(fields()).body;
+    expect(body.startsWith("## Summary\n\n")).toBe(true);
+    expect(body).toContain("## Review");
   });
 
   test("an optional filled with `None.` is refused, and the rule is about that word", () => {

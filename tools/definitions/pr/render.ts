@@ -34,6 +34,7 @@ export const compose = (fields: Fields): Draft => {
   const title = `${fields.type}(${fields.scope})${fields.breaking === undefined ? "" : "!"}: ${fields.subject}`;
 
   const sections = [
+    heading("Summary"),
     fields.summary,
     heading("Review"),
     fields.review,

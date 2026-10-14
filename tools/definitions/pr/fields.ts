@@ -1,5 +1,5 @@
-import { Schema } from "effect";
 import type { Tool } from "@opencode/schema/tool";
+import { Schema } from "effect";
 
 /**
  * `Fields` is the type every module below this one takes, so a caller cannot hand them
@@ -47,7 +47,7 @@ const Fields = Schema.Struct({
   }),
   summary: Schema.String.annotate({
     description:
-      "One paragraph, no heading above it. Why the change exists, in plain words. The body describes the change, not the commits: no SHA, no numbered commit list.",
+      "Why the change exists, in plain words. It goes under the `## Summary` heading the body writes, so bring no heading of your own. One paragraph or several short ones. The body describes the change, not the commits: no SHA, no numbered commit list.",
   }),
   review: Schema.String.annotate({
     description: "The one piece of feedback you want, in one line.",
@@ -180,7 +180,8 @@ const Failed = Schema.Struct({
   problems: Schema.String,
   pushed: Schema.Boolean,
   draft: Schema.Boolean.annotate({
-    description: "True when a pull request exists and GitHub made it a draft despite no draft flag. It is never created as one.",
+    description:
+      "True when a pull request exists and GitHub made it a draft despite no draft flag. It is never created as one.",
   }),
   directory: Schema.optional(Schema.String),
 });
