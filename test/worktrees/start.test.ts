@@ -272,6 +272,53 @@ describe("start against a bare repository", () => {
     expect(fake.moved).toEqual([outcome.directory]);
   });
 
+  test("the reflog it leaves names a branch, not HEAD", async () => {
+    const { resolved, bare, main } = await bareLayout();
+    // `origin/HEAD` is the first ref the base resolver tries, so it is what a
+    // worktree opened without a named base is cut from. OpenCode reads a new
+    // branch's reflog to recover the review base and refuses a hint of `HEAD`
+    // or anything ending in `/HEAD`
+    // (`packages/core/src/plugin/vcs/git.ts` at v2.0.26). Switching off the
+    // detached HEAD the host leaves behind records exactly `HEAD`, so every
+    // worktree this tool opened had an unrecoverable base until one was chosen
+    // by hand.
+    await git(main, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+    const fake = host(bare, resolved);
+
+    const outcome = await start(fake, main, "fix-login");
+
+    if (outcome.status !== "opened") throw new Error(`expected opened, got ${outcome.problems}`);
+    expect(outcome.cut).toBe("origin/HEAD");
+    const reflog = await git(outcome.directory, [
+      "reflog",
+      "show",
+      "--format=%gs",
+      `refs/heads/${outcome.branch}`,
+    ]);
+    expect(reflog.code).toBe(0);
+    expect(reflog.out.split("\n")[0]).toBe("branch: Created from refs/remotes/origin/main");
+  });
+
+  test("a base that names no branch still opens the worktree", async () => {
+    const { resolved, bare, main } = await bareLayout();
+    // `main~1` needs a parent commit to name, and it is a revision expression
+    // rather than a branch, so it cannot become a reflog hint either way.
+    await Bun.write(`${main}/a.txt`, "two\n");
+    await git(main, ["add", "."]);
+    await git(main, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "second"]);
+    await git(main, ["push", "-q", bare, "HEAD:refs/heads/main"]);
+    const fake = host(bare, resolved);
+
+    // The worktree is still the thing that matters: refusing here would cost a
+    // directory to save one reflog line, and the reflog is only ever a
+    // convenience for the diff viewer.
+    const outcome = await start(fake, main, "fix-login", { base: "main~1" });
+
+    if (outcome.status !== "opened") throw new Error(`expected opened, got ${outcome.problems}`);
+    const branch = await git(outcome.directory, ["rev-parse", "--abbrev-ref", "HEAD"]);
+    expect(branch.out).toBe("fix-login");
+  });
+
   test("a supplied base that does not resolve is refused naming it, not the defaults", async () => {
     const { resolved, bare, main } = await bareLayout();
     const fake = host(bare, resolved);
