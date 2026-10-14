@@ -145,11 +145,45 @@ export const currentBranch = (cwd: string): Promise<Rev> =>
   rev(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
 
 /**
+ * The branch a ref names, in the one spelling a consumer will accept.
+ *
+ * `rev-parse --symbolic-full-name` follows a symbolic ref to the branch behind
+ * it, so `origin/HEAD` answers `refs/remotes/origin/main`. That indirection is
+ * the point: OpenCode's review-base lookup refuses a creation hint naming
+ * `HEAD` or anything ending in `/HEAD`, and a worktree cut from `origin/HEAD`
+ * is exactly the case that produces the spelling it refuses.
+ *
+ * A ref that does not resolve exits 128 with empty stdout, the same shape as a
+ * clean answer, so this answers nothing rather than forwarding it.
+ */
+export const concreteRef = async (cwd: string, ref: string) => {
+  const got = await git(cwd, ["rev-parse", "--symbolic-full-name", "--verify", "--end-of-options", ref]);
+  if (!answered(got)) return undefined;
+  const name = got.out.trim();
+  return /^refs\/(heads|remotes)\/.+/.test(name) ? name : undefined;
+};
+
+/**
  * The one mutating git command the host does not provide: its create runs
  * `git worktree add --detach` (`packages/core/src/git.ts` at v2.0.26) and carries no
  * branch, so a worktree on a branch is two steps and this is the second.
+ *
+ * `from` is the base the worktree was cut from, and it becomes the start point
+ * so the new branch's reflog names it. Switching off the detached HEAD with no
+ * start point records `branch: Created from HEAD`, and `HEAD` names no branch:
+ * the review-base lookup rejects that hint, falls through to the default
+ * branch, and only answers there when the worktree is itself on the default
+ * branch. Every worktree this tool opens is on its own branch, so the base is
+ * unrecoverable and the diff viewer asks for one on every open.
+ *
+ * A base that does not resolve to a branch is not worth failing over, so this
+ * falls back to switching off HEAD and the worktree is created exactly as
+ * before. What is lost is the reflog provenance, not the worktree.
  */
-export const attachBranch = (cwd: string, branch: string) => git(cwd, ["switch", "-c", branch]);
+export const attachBranch = async (cwd: string, branch: string, from?: string) => {
+  const start = from === undefined ? undefined : await concreteRef(cwd, from);
+  return git(cwd, start === undefined ? ["switch", "-c", branch] : ["switch", "-c", branch, start]);
+};
 
 /**
  * The second step when the branch is already there. `-c` would fail with "branch
