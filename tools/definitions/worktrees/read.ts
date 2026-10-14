@@ -165,7 +165,7 @@ export const concreteRef = async (cwd: string, ref: string) => {
 
 /**
  * The one mutating git command the host does not provide: its create runs
- * `git worktree add --detach` (`packages/core/src/git.ts` at v2.0.26) and carries no
+ * `git worktree add --detach` (`packages/core/src/git.ts` at v2.0.29) and carries no
  * branch, so a worktree on a branch is two steps and this is the second.
  *
  * `from` is the base the worktree was cut from, and it becomes the start point
@@ -257,7 +257,7 @@ export const pullRequests = async (cwd: string): Promise<PullRequests> => {
 
 /**
  * `Worktree.OperationError` carries `forceRequired`, which the host computes by
- * matching git's own refusal text (`packages/core/src/git.ts` at v2.0.26). A boolean
+ * matching git's own refusal text (`packages/core/src/git.ts` at v2.0.29). A boolean
  * that names the guard is worth more than a stringified unknown.
  */
 export const hostRefusal = (cause: unknown): { message: string; forceRequired: boolean } => {

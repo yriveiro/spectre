@@ -17,7 +17,7 @@ registration succeeded, and on the input and the output side alike.
 
 ## What the boundary accepts
 
-Measured at 2.0.26: one tool per construct, each called once with a value valid
+Measured at 2.0.29: one tool per construct, each called once with a value valid
 for it.
 
 | Declared | Call |
@@ -33,18 +33,21 @@ for it.
 | `Schema.URL` | rejected: `Expected URL` |
 
 `Int`, `Finite`, `Natural` and `NonEmptyString` were **rejected outright** at
-2.0.18, and the host honours them now. A second session called each one with a
-value it must reject — `1.5`, `NaN`, `-3`, `""` — and every one refused, so the
-boundary validates them rather than ignoring them and passing the value through.
+2.0.18, and the host honours them now (re-verified at v2.0.29 on the pinned
+`effect@4.0.1`: `decodeUnknownOption(Schema.Int)(1)` is `Some`, `(1.5)` is
+`None`, `Finite(NaN)` is `None`, `NonEmptyString("")` is `None`). A second session
+called each one with a value it must reject — `1.5`, `NaN`, `-3`, `""` — and every
+one refused, so the boundary validates them rather than ignoring them and passing
+the value through.
 
 ## The JSON Schema is not what is enforced
 
 This is the part that costs an afternoon, so it goes before the table's cause.
 
-`packages/core/src/tool/runtime.ts:76` at 2.0.26 validates a call with
+`packages/core/src/tool/runtime.ts:79` at v2.0.29 validates a call with
 `Schema.decodeUnknownEffect(codec)(value, { errors: "all" })` — Effect's own
 decoder, on the Effect schema the tool declared. A separate function builds the JSON
-Schema at `runtime.ts:155`, and it only describes the tool to the model.
+Schema at `runtime.ts:156` (`inputJsonSchema`), and it only describes the tool to the model.
 
 Two schemas, so a declaration can be wrong in a way nothing at the call reports:
 
@@ -93,7 +96,8 @@ Schema.toJsonSchemaDocument(Schema.URL).schema;              // {"type":"string"
 Schema.decodeUnknownOption(Schema.URL)("https://x.com")._tag; // "None" — refused
 ```
 
-**The cause of this file's history is in `runtime.ts:172` at 2.0.26**, and it is
+**The cause of this file's history is in `runtime.ts:175` (`toJsonSchema`) at
+v2.0.29**, and it is
 why the table changed. The boundary used to walk the Effect schema AST
 itself, and on `effect@4.0.0-rc.112` that AST carries no `_tag` on the nodes a
 schema is built from, so everything past the primitives failed. It now calls
@@ -121,7 +125,7 @@ away with it.
 
 ## How `options` becomes a call path
 
-Read at tag `v2.0.26`, not inferred. A tool added through
+Read at tag `v2.0.29`, not inferred. A tool added through
 `ctx.tool.transform` lands in the **same** registry as the builtins. There is no
 separate plugin path, and the three fields in `Tool.Options` decide where it
 surfaces:
@@ -146,15 +150,18 @@ Two filters, and both are about the **caller**, not the tool:
 Wholly disabled means one shape and no other. `whollyDisabled` at
 `packages/core/src/tool.ts` is three lines: take the last rule matching the
 action, and drop the tool only when that rule is `{resource: "*", effect:
-"deny"}`. Re-read at tag `v2.0.26`, so this paragraph and the filter definition
+"deny"}`. Re-read at tag `v2.0.29`, so this paragraph and the filter definition
 above are current. The schema table further up is still measured at 2.0.18 and
-has not been re-run.
+has not been fully re-run (the `Int`/`Finite`/`NonEmptyString`/`URL`/`Trim`
+rows were spot re-verified at v2.0.29).
 
 **`options.permission` is a label, not a boundary.** It decides whether the tool
 is *offered*. It is not consulted again when the tool runs — the call path at
 `tool.ts` goes `beforeExecute` straight to `executeTool` with no permission
-argument — and a plugin has no way to ask. `PermissionDomain` is `list`, `get`,
-`reply` and a hook; there is no `assert`. So:
+argument. Since 2.0.29 a plugin *can* ask: `ctx.permission.assert` evaluates the
+session's rules and prompts the user when a rule demands approval
+(`packages/plugin/src/effect/permission.ts:32`), so a check that matters can
+live in `execute` as well as in the caller. So:
 
 - Do not split one tool into a read half and a write half to give them different
   permission strings. The string controls visibility, so the split buys two
@@ -199,7 +206,7 @@ const result = await tools.spectre.comments({ targets: ["<file>"] })
 supported OpenCode version moves. Do not trust this table across a bump.
 
 There is no cheap pre-check for this table, and the reason changed with it. Until
-2.0.26 the host decided the accepted set with a walk of the Schema AST, and on
+2.0.29 the host decided the accepted set with a walk of the Schema AST, and on
 Effect `4.0.0-rc.112` that AST carries no `_tag` on the nodes a schema is built
 from — `Schema.Struct({a: Schema.String})` exposes `fields`, `mapFields`,
 `ast`, `rebuild`, and friends, and `ast._tag` is the description `"Objects"`
