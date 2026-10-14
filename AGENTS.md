@@ -10,7 +10,7 @@ once per project instance. Everything Spectre adds to OpenCode (skills, agents,
 tools, nested plugins, MCP servers) is registered from inside that `effect`,
 through the domains on the plugin context.
 
-Minimum supported OpenCode version: **2.0.27**. The installed CLI is the only
+Minimum supported OpenCode version: **2.0.29**. The installed CLI is the only
 runtime. There is no build step, and TypeScript source is shipped as-is.
 
 ## Runtime: Bun first
@@ -131,11 +131,12 @@ The version floor is not a guess. It is the npm dist-tag:
 curl -s https://registry.npmjs.org/@opencode/cli | grep -o '"latest":"[^"]*"'
 ```
 
-At the time of writing that is `2.0.27`, published 2026-10-12. Three places in
+At the time of writing that is `2.0.29`, published 2026-10-14. Four fields in
 this repo carry that number and they mean different things: `engines.opencode` is
-the **floor** (`>=2.0.27`), while `@opencode/plugin` and `@opencode/schema` are
-**exact** pins. The exact pins are what source-reading must match, because they
+the **floor** (`>=2.0.29`), while `@opencode/ai`, `@opencode/plugin` and
+`@opencode/schema` are **exact** pins. The exact pins are what source-reading must match, because they
 are what resolves into `node_modules` and what the plugin is handed at runtime.
+A fifth copy, the `opencode` field in `verified.ts`, is what a reader has to remember.
 Re-run the registry check before any bump.
 
 ### The `dev` checkout is not the version we ship
@@ -275,7 +276,7 @@ package that cannot load.
 These are exact pins, not ranges, and they are not incidental:
 
 - `effect` is pinned to the exact build OpenCode ships (`4.0.1` at
-  2.0.27). The plugin's `effect` values are handed straight to OpenCode's Effect
+  2.0.29). The plugin's `effect` values are handed straight to OpenCode's Effect
   runtime, so a different major/minor is a real hazard, not a style choice.
 - `@opencode/plugin` tracks the OpenCode version whose plugin contract we target.
 - `@opencode/schema` is pinned to the same version, because `skills/definitions/`
@@ -311,6 +312,10 @@ The forcing is two checks that fail for different reasons. `probe.ts` fails
 when a bump moved an export, because the compiler names the symbol. The test
 fails when a bump moved only the number. Neither covers the other, so neither is
 optional.
+
+Both checks read `VERIFIED.effect` only. Nothing compares `VERIFIED.opencode` to
+`engines.opencode`, so that field drifts silently and the stamp can name a build
+this plugin no longer targets. Reading it is a step a human has to remember.
 
 Bumping the pin is therefore three steps, in this order: move the pin, run
 `bun run typecheck` and fix what the compiler names, then move the stamp last.
