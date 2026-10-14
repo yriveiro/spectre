@@ -18,25 +18,33 @@ Open a `todolist` with one entry per phase before the first push.
 
 ## Phase A: Worktree
 
-Never edit the main checkout. `tools.spectre.worktrees({ action: "start", name })`
-opens one, branches it off trunk, reads the result back, and moves this session
-into it. One call does it, and only `status: "opened"` means it happened.
+Never edit the main checkout, and never cut a branch to get there. The branch
+comes with the worktree:
 
-The call moves a session, so it refuses when no session is open in a worktree.
-This repository's trunk is a bare clone, so a session started at its root gets
-`status: "rejected"` and nothing on disk. Add the worktree by hand, then move the
-session into the new directory:
-
-```sh
-git worktree add -b <name> <path> <trunk>
+```ts
+await tools.spectre.worktrees({ action: "start", name: "fix-login" })
 ```
 
-It also refuses a branch that already exists. To pick one up, add it by hand and
-move the session yourself:
+That is the only way to open one. `git worktree add` is not the fallback for a
+refusal, and the reason is what it leaves behind: it creates the directory and
+**leaves this session standing in main**, so the work goes on where you were and
+the new directory sits beside it unused. A refused call has cost you nothing, so
+read it and call again.
 
-```sh
-git worktree add <path> <branch>
-```
+The call moves this session, so it refuses rather than guess. `problems` names
+the rule and the answer:
+
+| `problems` says | Do this |
+| --------------- | ------- |
+| this session is not in the main worktree | Move this session to the `main` worktree it names, and call again. One worktree per session: a session already in one works where it is. |
+| this call has no session | The call has nothing to move. Open a session in the main worktree and call again. |
+| the branch already exists | If a worktree holds it, work in that directory. If none does, pass it as `branch`: the worktree is cut from that branch and this session moves in. |
+| the name is taken | A worktree by that name exists and the host would silently create `<name>-2`. Pick another name. |
+| no base ref resolved | `git fetch`, or pass `base` explicitly. A `branch` that already exists does not need one. |
+
+Only `status: "opened"` means a worktree is ready, and it means this session is
+in it. `unverified` left the directory on disk and did **not** move you: read
+`problems`, remove that directory, and call again.
 
 Subagents inherit the worktree, so brief them with the path. Several runs on the
 same branch each get their own worktree, or you reset between them:

@@ -2,8 +2,8 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Plugin } from "@opencode/plugin/effect";
-import type { Tool } from "@opencode/schema/tool";
 import { AbsolutePath } from "@opencode/schema/schema";
+import type { Tool } from "@opencode/schema/tool";
 import { Effect } from "effect";
 import { worktrees } from "../../tools/definitions/worktrees";
 
@@ -39,7 +39,16 @@ const bareLayout = async () => {
   await git(base, ["clone", "-q", bare, `${base}/seed`]);
   await Bun.write(`${base}/seed/a.txt`, "one\n");
   await git(`${base}/seed`, ["add", "."]);
-  await git(`${base}/seed`, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "first"]);
+  await git(`${base}/seed`, [
+    "-c",
+    "user.email=t@t",
+    "-c",
+    "user.name=t",
+    "commit",
+    "-q",
+    "-m",
+    "first",
+  ]);
   await git(`${base}/seed`, ["push", "-q", bare, "HEAD:refs/heads/main"]);
   await git(bare, ["worktree", "add", "-q", main, "main"]);
   await git(main, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
@@ -160,7 +169,13 @@ const host = (projectRow: string, inside: string, options: { blind?: boolean } =
 };
 
 type Outcome =
-  | { readonly status: "opened"; readonly directory: string; readonly branch: string; readonly head: string }
+  | {
+      readonly status: "opened";
+      readonly directory: string;
+      readonly branch: string;
+      readonly cut: string;
+      readonly head: string;
+    }
   | {
       readonly status: "unverified" | "rejected" | "failed" | "removed" | "already-gone";
       readonly problems: string;
@@ -170,11 +185,17 @@ const start = async (
   fake: ReturnType<typeof host>,
   sessionDirectory: string,
   name: string,
-  base?: string,
+  options: { base?: string; branch?: string } = {},
 ) => {
+  const { base, branch } = options;
   const result = await Effect.runPromise(
     worktrees(fake.context(sessionDirectory)).execute(
-      { action: "start", name, ...(base === undefined ? {} : { base }) },
+      {
+        action: "start",
+        name,
+        ...(base === undefined ? {} : { base }),
+        ...(branch === undefined ? {} : { branch }),
+      },
       { ...context, sessionID: "test" as never },
     ),
   );
@@ -197,7 +218,7 @@ describe("start against a bare repository", () => {
     await git(main, ["push", "-q", bare, "HEAD:refs/heads/main"]);
 
     const fake = host(bare, resolved);
-    const outcome = await start(fake, main, "fix-login", "main~1");
+    const outcome = await start(fake, main, "fix-login", { base: "main~1" });
 
     expect(outcome.status).toBe("opened");
   });
@@ -212,7 +233,12 @@ describe("start against a bare repository", () => {
     // The oracle is the host's own command, not a spelling of the path: this is the
     // `rev-parse` `discover` runs once it has walked up to a `.git`.
     const asked = fake.asked[0]!;
-    const probe = await git(asked.from!, ["rev-parse", "--git-dir", "--git-common-dir", "--show-toplevel"]);
+    const probe = await git(asked.from!, [
+      "rev-parse",
+      "--git-dir",
+      "--git-common-dir",
+      "--show-toplevel",
+    ]);
     expect(probe.code).toBe(0);
     expect(outcome.status).toBe("opened");
   });
@@ -225,7 +251,12 @@ describe("start against a bare repository", () => {
     // Without this, the first test would also pass against a tool that handed over
     // something useless, because the fixture's own discovery is never consulted.
     expect(discover(bare)).toBeUndefined();
-    const fromBare = await git(bare, ["rev-parse", "--git-dir", "--git-common-dir", "--show-toplevel"]);
+    const fromBare = await git(bare, [
+      "rev-parse",
+      "--git-dir",
+      "--git-common-dir",
+      "--show-toplevel",
+    ]);
     expect(fromBare.code).not.toBe(0);
   });
 
@@ -245,7 +276,7 @@ describe("start against a bare repository", () => {
     const { resolved, bare, main } = await bareLayout();
     const fake = host(bare, resolved);
 
-    const outcome = await start(fake, main, "fix-login", "no-such-base-xyz");
+    const outcome = await start(fake, main, "fix-login", { base: "no-such-base-xyz" });
 
     expect(outcome.status).toBe("rejected");
     if (outcome.status !== "rejected") throw new Error("expected rejected");
@@ -267,5 +298,84 @@ describe("start against a bare repository", () => {
     // row and no `from` cannot find a repository, so the start cannot be opened.
     const blind = await start(host(bare, resolved, { blind: true }), main, "without-from");
     expect(blind.status).toBe("failed");
+  });
+});
+
+/**
+ * A branch that exists and that no worktree holds is work waiting to be picked up.
+ * This used to be a refusal, and the refusal is why `playbook-opening-a-pr` taught a
+ * raw `git worktree add` as the way round it — a command that makes the directory and
+ * leaves the session in main, which is the mess this whole rule exists to prevent.
+ */
+describe("start picking up a branch that already exists", () => {
+  /**
+   * A branch that is one commit ahead of main and that nothing has checked out.
+   * Detached, because a commit on a detached HEAD is on no branch, so the branch ref
+   * can be moved to it without any worktree ever holding the branch.
+   */
+  const orphaned = async () => {
+    const layout = await bareLayout();
+    await git(layout.main, ["checkout", "-q", "--detach"]);
+    await Bun.write(`${layout.main}/a.txt`, "three\n");
+    await git(layout.main, ["add", "."]);
+    await git(layout.main, [
+      "-c",
+      "user.email=t@t",
+      "-c",
+      "user.name=t",
+      "commit",
+      "-q",
+      "-m",
+      "third",
+    ]);
+    const tip = (await git(layout.main, ["rev-parse", "HEAD"])).out;
+    await git(layout.bare, ["branch", "-f", "pick-up", tip]);
+    await git(layout.main, ["checkout", "-q", "main"]);
+    return { ...layout, tip, mainTip: (await git(layout.main, ["rev-parse", "HEAD"])).out };
+  };
+
+  test("it opens a worktree on the branch and moves this session into it", async () => {
+    const { resolved, bare, main, tip, mainTip } = await orphaned();
+    // The two tips differ, so a tool that cut the worktree from main instead of from
+    // the branch reads a head that is not the expected one and cannot call it opened.
+    expect(tip).not.toBe(mainTip);
+    const fake = host(bare, resolved);
+
+    const outcome = await start(fake, main, "pick-up", { branch: "pick-up" });
+
+    expect(outcome.status).toBe("opened");
+    if (outcome.status !== "opened") throw new Error(`expected opened, got ${outcome.problems}`);
+    expect(outcome.cut).toBe("pick-up");
+    expect(outcome.head).toBe(tip);
+    expect(fake.moved).toEqual([outcome.directory]);
+    const on = await git(outcome.directory, ["rev-parse", "--abbrev-ref", "HEAD"]);
+    expect(on.out).toBe("pick-up");
+  });
+
+  test("it needs no base, because a migration is cut from the branch", async () => {
+    const { resolved, bare, main } = await orphaned();
+    const fake = host(bare, resolved);
+
+    const outcome = await start(fake, main, "pick-up", {
+      branch: "pick-up",
+      base: "no-such-base-xyz",
+    });
+
+    expect(outcome.status).toBe("opened");
+  });
+
+  test("a branch a worktree already holds is refused, and the message says where it is", async () => {
+    const { resolved, bare, main } = await orphaned();
+    const holding = `${resolved}/spectre-worktrees/other`;
+    await git(bare, ["worktree", "add", "-q", holding, "pick-up"]);
+    const fake = host(bare, resolved);
+
+    const outcome = await start(fake, main, "pick-up", { branch: "pick-up" });
+
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status !== "rejected") throw new Error("expected rejected");
+    expect(outcome.problems).toContain("already checked out");
+    expect(outcome.problems).toContain(holding);
+    expect(fake.asked.length).toBe(0);
   });
 });

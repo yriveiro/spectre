@@ -2,14 +2,21 @@ import { afterAll, describe, expect, test } from "bun:test";
 import {
   BASES,
   branchProblem,
+  branchState,
   escort,
   mismatch,
   nameProblem,
   refusal,
-  startProblem,
   type Start,
+  startProblem,
 } from "../../tools/definitions/worktrees/classify";
-import { bareOf, listed, mainOf, toplevel, type ListedWorktree } from "../../tools/definitions/worktrees/read";
+import {
+  bareOf,
+  type ListedWorktree,
+  listed,
+  mainOf,
+  toplevel,
+} from "../../tools/definitions/worktrees/read";
 
 const row = (directory: string, branch?: string, bare?: boolean): ListedWorktree => ({
   directory,
@@ -30,7 +37,7 @@ const clean: Start = {
   root: "/dev/spectre-worktrees",
   base: "origin/main",
   requestedBase: undefined,
-  branchExists: false,
+  branchState: { kind: "new" },
   sessionDirectory: "/dev/spectre-worktrees/main",
   rows: BARE_LAYOUT,
 };
@@ -131,10 +138,51 @@ describe("one worktree per session", () => {
     const blocked = refusal({
       ...clean,
       sessionDirectory: "/dev/spectre-worktrees/spectre-agent",
-      branchExists: true,
+      branchState: { kind: "existing" },
       base: undefined,
     });
     expect(blocked?.kind).toBe("wrong-session");
+  });
+});
+
+describe("a branch that already exists", () => {
+  const holding = [...BARE_LAYOUT, row("/dev/spectre-worktrees/pick-up", "pick-up")];
+
+  test("one no worktree holds is work to pick up, so it is not refused", () => {
+    expect(
+      refusal({ ...clean, branch: "pick-up", branchState: branchState("pick-up", true, []) }),
+    ).toBeUndefined();
+  });
+
+  test("and it does not need a base, because it is cut from the branch", () => {
+    const blocked = refusal({
+      ...clean,
+      branch: "pick-up",
+      branchState: branchState("pick-up", true, []),
+      base: undefined,
+      requestedBase: undefined,
+    });
+    expect(blocked).toBeUndefined();
+  });
+
+  test("one a worktree holds is refused, and the message says where it is", () => {
+    const blocked = refusal({
+      ...clean,
+      branch: "pick-up",
+      branchState: branchState("pick-up", true, holding),
+    });
+    expect(blocked?.kind).toBe("already-taken");
+    expect(blocked?.why).toContain("/dev/spectre-worktrees/pick-up");
+    expect(blocked?.why).toContain("already checked out");
+  });
+
+  test("the three states are read off one listing, not a pair that can disagree", () => {
+    expect(branchState("pick-up", false, holding)).toEqual({ kind: "new" });
+    expect(branchState("pick-up", true, [])).toEqual({ kind: "existing" });
+    expect(branchState("pick-up", true, holding)).toEqual({
+      kind: "checked-out",
+      directory: "/dev/spectre-worktrees/pick-up",
+    });
   });
 });
 
@@ -148,10 +196,6 @@ describe("the rest of the refusals", () => {
     expect(blocked?.why).toBe(
       "a worktree named fix-login already exists at /dev/spectre-worktrees/fix-login, and the host would silently create fix-login-2 instead",
     );
-  });
-
-  test("a branch that exists under a different directory is still refused", () => {
-    expect(refusal({ ...clean, branchExists: true })?.kind).toBe("already-taken");
   });
 
   test("an unresolved base is refused and names what it tried", () => {
@@ -174,7 +218,13 @@ describe("the rest of the refusals", () => {
 });
 
 describe("the read-back that certifies a worktree", () => {
-  const good = { listed: true, head: "abc", expected: "abc", branch: "fix-login", wanted: "fix-login" };
+  const good = {
+    listed: true,
+    head: "abc",
+    expected: "abc",
+    branch: "fix-login",
+    wanted: "fix-login",
+  };
 
   test("three agreeing reads certify it", () => {
     expect(mismatch(good)).toBeUndefined();
@@ -215,19 +265,27 @@ describe("getting the caller out of the removed directory", () => {
   test("a caller in another worktree is left alone, because it is not in the way", () => {
     // The over-reach: dragging the caller home on every removal costs it the directory
     // it was working in, for nothing.
-    expect(escort({ sessionDirectory: "/dev/spectre-worktrees/main", target, rows: BARE_LAYOUT })).toEqual({
+    expect(
+      escort({ sessionDirectory: "/dev/spectre-worktrees/main", target, rows: BARE_LAYOUT }),
+    ).toEqual({
       kind: "stay",
     });
   });
 
   test("a call with no session is left alone, and there is nobody to send anywhere", () => {
-    expect(escort({ sessionDirectory: undefined, target, rows: BARE_LAYOUT })).toEqual({ kind: "stay" });
+    expect(escort({ sessionDirectory: undefined, target, rows: BARE_LAYOUT })).toEqual({
+      kind: "stay",
+    });
   });
 
   test("no main worktree is a refusal that names both sides, not a removal nobody is told about", () => {
     // The bare repository is not a worktree a session can sit in, so this layout has
     // nowhere to send the caller.
-    const blocked = escort({ sessionDirectory: target, target, rows: [row("/dev/spectre", undefined, true)] });
+    const blocked = escort({
+      sessionDirectory: target,
+      target,
+      rows: [row("/dev/spectre", undefined, true)],
+    });
     expect(blocked.kind).toBe("nowhere");
     expect(blocked.kind === "nowhere" && blocked.why).toContain(target);
   });
@@ -261,12 +319,35 @@ describe("parsing real git output", () => {
     await Bun.write(`${base}/seed/a.txt`, "one\n");
     await git(["-C", `${base}/seed`, "add", "."]);
     await git([
-      "-C", `${base}/seed`, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init",
+      "-C",
+      `${base}/seed`,
+      "-c",
+      "user.email=t@t",
+      "-c",
+      "user.name=t",
+      "commit",
+      "-q",
+      "-m",
+      "init",
     ]);
     await git(["-C", `${base}/seed`, "push", "-q", `${base}/spectre`, "HEAD:refs/heads/main"]);
-    await git(["-C", `${base}/spectre`, "worktree", "add", "-q", `${base}/spectre-worktrees/main`, "main"]);
     await git([
-      "-C", `${base}/spectre-worktrees/main`, "worktree", "add", "-q", "-b", "fix-login",
+      "-C",
+      `${base}/spectre`,
+      "worktree",
+      "add",
+      "-q",
+      `${base}/spectre-worktrees/main`,
+      "main",
+    ]);
+    await git([
+      "-C",
+      `${base}/spectre-worktrees/main`,
+      "worktree",
+      "add",
+      "-q",
+      "-b",
+      "fix-login",
       `${base}/spectre-worktrees/fix-login`,
     ]);
     await Bun.$`rm -rf ${`${base}/seed`}`.quiet();
@@ -300,7 +381,16 @@ describe("parsing real git output", () => {
     await Bun.write(`${base}/app/a.txt`, "one\n");
     await git(["-C", `${base}/app`, "add", "."]);
     await git([
-      "-C", `${base}/app`, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init",
+      "-C",
+      `${base}/app`,
+      "-c",
+      "user.email=t@t",
+      "-c",
+      "user.name=t",
+      "commit",
+      "-q",
+      "-m",
+      "init",
     ]);
 
     const listing = await listed(`${base}/app`);
@@ -330,7 +420,16 @@ describe("parsing real git output", () => {
     await Bun.write(`${base}/real/a.txt`, "one\n");
     await git(["-C", `${base}/real`, "add", "."]);
     await git([
-      "-C", `${base}/real`, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init",
+      "-C",
+      `${base}/real`,
+      "-c",
+      "user.email=t@t",
+      "-c",
+      "user.name=t",
+      "commit",
+      "-q",
+      "-m",
+      "init",
     ]);
     await Bun.$`ln -s ${`${base}/real`} ${`${base}/link`}`.quiet();
 

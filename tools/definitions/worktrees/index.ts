@@ -1,16 +1,17 @@
 import type { Plugin } from "@opencode/plugin/effect";
-import type { Tool } from "@opencode/schema/tool";
 import { AbsolutePath } from "@opencode/schema/schema";
 import type { Session } from "@opencode/schema/session";
+import type { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
 import {
   BASES,
   BUCKETS,
+  branchState as branchStateOf,
   escort,
-  type Reads,
-  type Start as StartFacts,
   mismatch,
   refusal as policyRefusal,
+  type Reads,
+  type Start as StartFacts,
 } from "./classify";
 import {
   attachBranch,
@@ -25,8 +26,9 @@ import {
   type ListedWorktree,
   listed,
   mainOf,
-  rootFor,
   resolves,
+  rootFor,
+  takeBranch,
   toplevel,
 } from "./read";
 import { audit, count } from "./survey";
@@ -65,20 +67,21 @@ const Counts = Schema.Struct({
   review: Schema.Number,
 });
 
-
-
 export const Start = Schema.Struct({
   action: Schema.Literals(["start"]).annotate({
     description: "Open a worktree for this change and move this session into it.",
   }),
   name: Schema.String.annotate({
-    description: "Directory name and, unless `branch` says otherwise, the new branch name. Lowercase kebab-case, at most 40 characters.",
+    description:
+      "Directory name and, unless `branch` says otherwise, the new branch name. Lowercase kebab-case, at most 40 characters.",
   }),
   branch: Schema.optional(Schema.String).annotate({
-    description: "New branch name. Defaults to `name`.",
+    description:
+      "Branch to put the worktree on. Defaults to `name`. A branch that already exists and that no worktree holds is picked up rather than refused, and the worktree is cut from it instead of from `base`.",
   }),
   base: Schema.optional(Schema.String).annotate({
-    description: "Ref to branch from. Defaults to the first of origin/HEAD, origin/main, main, HEAD that resolves.",
+    description:
+      "Ref to branch from. Defaults to the first of origin/HEAD, origin/main, main, HEAD that resolves.",
   }),
 });
 
@@ -99,7 +102,10 @@ export const Opened = Schema.Struct({
   }),
   directory: Schema.String,
   branch: Schema.String,
-  base: Schema.String,
+  cut: Schema.String.annotate({
+    description:
+      "The ref the worktree was cut from. That is `base` for a new branch, and the branch itself when it was picked up.",
+  }),
   head: Schema.String,
 });
 
@@ -149,8 +155,6 @@ export const AlreadyGone = Schema.Struct({
   problems: Schema.optional(Schema.String),
 });
 
-
-
 const rejected = (problems: string) => ({ status: "rejected" as const, problems });
 
 /**
@@ -197,32 +201,40 @@ const runStart = (ctx: Plugin.Context) =>
       return [exists, resolved, where] as const;
     });
 
+    const state = branchStateOf(branch, branchTaken, rows);
+
     const blocked = policyRefusal({
       name: input.name,
       branch,
       root,
       rows,
-      branchExists: branchTaken,
+      branchState: state,
       base,
       requestedBase: input.base,
       sessionDirectory,
     });
     if (blocked !== undefined) return rejected(blocked.why);
 
-    // The worktree is cut from `base`, so `base` is what its head has to equal.
+    // A worktree is cut from the ref it is going to sit on, and that ref is the branch
+    // when the branch is already there. Cutting a migration from `base` and switching to
+    // the branch afterwards would work, and every read below would then be comparing the
+    // branch's head against a commit that has nothing to do with it.
+    const cut = state.kind === "existing" ? branch : base!;
+
+    // The worktree is cut from `cut`, so `cut` is what its head has to equal.
     // Reading the calling checkout's HEAD instead reports a mismatch for every
     // worktree cut anywhere but HEAD, so a base one commit behind came back
     // `unverified` with the worktree perfectly correct.
-    const gotExpected = yield* Effect.promise(() => commitOf(projectDirectory, base!));
+    const gotExpected = yield* Effect.promise(() => commitOf(projectDirectory, cut));
     if (gotExpected.kind !== "read")
-      return rejected(`${base} does not resolve to a commit in ${projectDirectory}`);
+      return rejected(`${cut} does not resolve to a commit in ${projectDirectory}`);
 
     const made = yield* Effect.result(
       ctx.worktree.create({
         projectID: ctx.location.project.id,
         directory: root,
         name: input.name,
-        branch: base!,
+        branch: cut,
         // `from` is the only field that names the repository to cut from, and the host
         // falls back to the project row when it is absent. That row is the bare
         // repository in this layout, and the host finds a repository by walking up for
@@ -251,12 +263,14 @@ const runStart = (ctx: Plugin.Context) =>
     }
 
     const directory = made.success.directory;
-    const attached = yield* Effect.promise(() => attachBranch(directory, branch));
+    const attached = yield* Effect.promise(() =>
+      state.kind === "existing" ? takeBranch(directory, branch) : attachBranch(directory, branch),
+    );
     if (!attached.ran || attached.code !== 0)
       return {
         status: "unverified" as const,
         directory,
-        problems: `created on a detached HEAD and could not branch to ${branch}: ${attached.err || (attached.ran ? attached.out : "")}. Left intact, and this session has not moved.`,
+        problems: `created on a detached HEAD and could not get onto ${branch}: ${attached.err || (attached.ran ? attached.out : "")}. Left intact, and this session has not moved.`,
       };
 
     const [after, gotHead, gotBranch] = yield* Effect.promise(async () =>
@@ -293,7 +307,7 @@ const runStart = (ctx: Plugin.Context) =>
       status: "opened" as const,
       directory,
       branch,
-      base: base!,
+      cut,
       head: gotHead.kind === "read" ? gotHead.value : gotHead.why,
     };
   });
@@ -338,10 +352,7 @@ const runEscort = (ctx: Plugin.Context) =>
 const runStanding = (directory: string, rows: ReadonlyArray<ListedWorktree>) =>
   Effect.gen(function* () {
     const [onDisk, named] = yield* Effect.all(
-      [
-        Effect.promise(() => isWorktree(directory)),
-        Effect.promise(() => currentBranch(directory)),
-      ],
+      [Effect.promise(() => isWorktree(directory)), Effect.promise(() => currentBranch(directory))],
       { concurrency: "unbounded" },
     );
     return {
@@ -497,6 +508,20 @@ against the worktree on \`main\` in the same reading. One worktree per session. 
 fanning-out parent therefore stays on main and each worker starts its own; see
 \`playbook-hillclimb\` and \`playbook-shipping\`.
 
+## Picking up a branch that already exists
+
+Pass \`branch\` naming a branch that is already there and no worktree holds, and
+\`start\` migrates it: the new worktree is cut from that branch rather than from
+\`base\`, \`base\` is not consulted, and the session moves in. \`cut\` in the result
+says which ref it came from — \`base\` for a new branch, the branch itself for a
+migration. That is how a branch left behind by an earlier run gets a worktree
+again, and it is the reason no \`git worktree add\` is needed anywhere: the raw
+command makes the directory and leaves this session in main, so the work goes on
+where you were.
+
+A branch a worktree already holds is \`rejected\`, and \`problems\` names the
+directory holding it. That is work in progress, and the answer is to go there.
+
 ## And remove is the trip back
 
 Deleting a directory does not move the session standing in it, so \`remove\` reads this
@@ -523,7 +548,8 @@ Only \`start\` and \`remove\` return a status; a survey returns rows and counts.
 reads agreed: git lists the directory, its HEAD is the commit the base resolved
 to, and it is on the branch you asked for.
 
-- \`opened\` — created, branched, read back, and the session moved in.
+- \`opened\` — created, cut, read back, and the session moved in. \`cut\` is the ref it
+  came from, which is the branch itself when that branch already existed.
 - \`unverified\` — it exists, and a read disagreed. Left intact on purpose: the
   directory is the evidence. Read \`problems\`, then remove it and try again.
   **The session was not moved.**
@@ -558,8 +584,10 @@ export const worktrees = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof O
   options: { namespace: "spectre", codemode: true, pinned: true, permission: "worktree" },
   execute: (input, context) =>
     Effect.gen(function* () {
-      if (input.action === "start") return { output: yield* runStart(ctx)(input, context?.sessionID) };
-      if (input.action === "remove") return { output: yield* runRemove(ctx)(input, context?.sessionID) };
+      if (input.action === "start")
+        return { output: yield* runStart(ctx)(input, context?.sessionID) };
+      if (input.action === "remove")
+        return { output: yield* runRemove(ctx)(input, context?.sessionID) };
 
       const report = yield* Effect.promise(() => audit(input.repo ?? ctx.location.directory));
       return {
