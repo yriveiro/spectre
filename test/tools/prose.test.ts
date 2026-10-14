@@ -319,6 +319,10 @@ describe("the set's own prose", () => {
     // `playbook-brain`, which state what the format does rather than who does it:
     // "the frontmatter is the index", "a claim is minted once". Naming the actor
     // there would say less, so the house style applies and the number moved.
+    //
+    // The rule counts per line, so rewrapping a paragraph without changing a word can
+    // move this number. Splitting "must match" across a line break cost one finding
+    // in `AGENTS.md` on its own. Read this number as a count of lines, not of sentences.
     const out = await call(["."]);
     const byRule: Record<string, number> = {};
     for (const f of out.findings) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;

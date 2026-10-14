@@ -60,7 +60,7 @@ reproducible and are not quoted here. Re-measure before quoting any diff count.
 
 ## Mechanism
 
-Four properties of spectre decide the shape. All read at `v2.0.26`. Sources in
+Four properties of spectre decide the shape. All read at `v2.0.29`. Sources in
 the appendix.
 
 1. **A spectre agent can load a second skill.** `packages/core/src/tool/plugin/skill.ts`
@@ -75,10 +75,10 @@ the appendix.
    installed plugin's `SKILL.md` lives in the install cache, outside the project,
    and the grant in `agents/index.ts` covers `${dataRoot}/*` only. A
    `references/pr-canvas-template.md` would need a `read` grant for the install
-   cache. **The template is merged into the `pr-canvas` body.** Independently: all
-   76 definition folders under `skills/definitions/` are exactly `index.ts` +
-   `SKILL.md`, `definition.ts` aside, so a third file would be the first of its
-   kind.
+   cache. **The template is merged into the `pr-canvas` body.** Independently: 78 of
+   the 79 definition folders under `skills/definitions/` are exactly `index.ts` +
+   `SKILL.md`, `definition.ts` and `effect-best-practices/` aside, so a third file
+   outside that exception would still be a new shape.
 3. **One tool for a read and a write.** `options.permission` decides only whether
    a tool is *offered*. The call path goes `beforeExecute` straight to
    `executeTool`. A read/write split buys two catalog entries and no safety.
@@ -440,7 +440,7 @@ than a coincidence of two wrong counts.
 
 ## Appendix: sources
 
-Read at tag `v2.0.26`. A path that does not resolve at the tag is not evidence for
+Read at tag `v2.0.29`. A path that does not resolve at the tag is not evidence for
 anything here; `AGENTS.md` holds the rule.
 
 | Claim | Where, at the tag |

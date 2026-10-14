@@ -19,9 +19,11 @@ import { VERIFIED } from "./verified";
  * the stream records the drift and the hook delivers it, which means the reminder costs
  * nothing on a session that never opens.
  *
- * `installation.updated` carries a version and looks like the better trigger, but nothing in
- * the OpenCode source at `v2.0.27` publishes it under any package in `src`, so a subscription
- * to it would be a check that cannot fire. `filesystem.changed` carries the path that changed and
+ * `installation.updated` carries a version and looks like the better trigger, and it is
+ * subscribable: `InstallationEvent.Updated` is in the event manifest. But the function that
+ * publishes it — `updated` on the server process, read at `v2.0.29` — has no caller in `src`,
+ * and the only call to its sibling `updateAvailable` is a test. So the event never fires, and a
+ * subscription to it is a check that cannot run. `filesystem.changed` carries the path that changed and
  * is what this uses.
  */
 

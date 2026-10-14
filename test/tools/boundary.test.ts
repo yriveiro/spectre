@@ -3,9 +3,10 @@ import { Schema } from "effect";
 
 /**
  * `tools/FOR_AGENTS.md` documents the boundary the host applies to a declared schema,
- * and the JSON Schema the model is shown is not it. `runtime.ts:76` at v2.0.26 calls
- * `Schema.decodeUnknownEffect` on the declared schema; `runtime.ts:155` builds the JSON
- * Schema separately and only describes the tool.
+ * and the JSON Schema the model is shown is not it. `packages/core/src/tool/runtime.ts:79`
+ * at v2.0.29 calls `Schema.decodeUnknownEffect` on the declared schema;
+ * `packages/core/src/tool/runtime.ts:156` builds the JSON Schema separately and only
+ * describes the tool.
  *
  * So these assert the two disagree, on the same `effect@4.0.1` the plugin pins.
  * A bump that changes either side fails here rather than in a session.
