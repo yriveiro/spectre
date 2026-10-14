@@ -95,6 +95,17 @@ These rules apply to every response for the rest of the session, not only this
 one. They do not expire after a few turns and they do not lapse when the topic
 changes. If you are unsure whether they still apply, they do.
 
+**Never create a branch in the checkout you are standing in. Isolate the work in
+a worktree.** `tools.spectre.worktrees({ action: "start", name })` branches off
+trunk and moves this session into the new directory, so the branch is never cut
+where you were. One call does it, and only `status: "opened"` means it happened.
+
+This is not only about main. A second unit of work is a second worktree, never a
+second branch inside the one you are in, so the rule holds in a worktree too.
+When the work has to fan out, each subagent opens its own worktree as its first
+act: the call moves the caller in, and a caller owns one worktree. A session
+parked on main while its subagents work is the correct shape, not a workaround.
+
 Turn them off only when the reader says "stop spectre mode" or "normal mode".
 Confirm in one line, then return to your default style.
 
@@ -146,6 +157,7 @@ skipped and why.
 | An assertion restates a constant, a prompt string, or a value from the code under test | `principle-test-behavior-not-implementation` |
 | Nobody has measured a claim about the code and you are about to report it | `ripwire` |
 | You are about to type a `//` or a `/**` | the comment disposition, above |
+| You are about to create a branch, or to change files in a worktree you did not open | the worktree rule, above |
 | What you wrote has comments or lint suppressions | `code-hygiene` |
 | The reader asks for a page that shows something, a visual artifact, or an idea presented as a UI they can open | `canvas` |
 | The reader asks to review a pull request visually, or to see a diff as a page they can open | `pr-canvas` |

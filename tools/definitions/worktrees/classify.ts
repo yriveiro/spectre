@@ -29,7 +29,8 @@ export const branchProblem = (branch: string): string | undefined => {
   if (branch.length > 100) return "branch is longer than 100 characters";
   if (!REF.test(branch)) return "branch has a character git does not allow in a ref name";
   if (branch.startsWith("-")) return "branch may not start with a hyphen";
-  if (branch.startsWith("/") || branch.endsWith("/")) return "branch may not start or end with a slash";
+  if (branch.startsWith("/") || branch.endsWith("/"))
+    return "branch may not start or end with a slash";
   if (branch.includes("//")) return "branch may not contain //";
   if (branch.includes("..")) return "branch may not contain ..";
   if (branch.endsWith(".lock")) return "branch may not end in .lock";
@@ -129,7 +130,11 @@ export const prFor = (branch: string, pulled: ReadonlyArray<PullRequest>): strin
   return found === undefined ? "-" : `#${found.number}/${found.state}`;
 };
 
-export type PullRequest = { readonly number: number; readonly state: string; readonly headRefName: string };
+export type PullRequest = {
+  readonly number: number;
+  readonly state: string;
+  readonly headRefName: string;
+};
 
 /**
  * Everything a start needs to know, gathered by one read of `git worktree list
@@ -152,10 +157,36 @@ export type Start = {
    * resolved", and the refusal below would describe refs it never tried.
    */
   readonly requestedBase: string | undefined;
-  readonly branchExists: boolean;
+  readonly branchState: BranchState;
   /** The calling session's directory, or undefined when the call has no session. */
   readonly sessionDirectory: string | undefined;
   readonly rows: ReadonlyArray<ListedWorktree>;
+};
+
+/**
+ * "The branch exists" is two different facts, and a boolean cannot tell them apart.
+ *
+ * A branch no worktree holds is work waiting to be picked up, and `start` migrates it
+ * onto a new worktree. A branch a worktree already holds is work in progress, and the
+ * only correct answer is to go where it is. A branch that does not exist is cut from a
+ * base. Collapsing the first and the third refuses the exact case a resume exists for,
+ * which is how picking one up ended up as a raw `git worktree add`.
+ */
+export type BranchState =
+  | { readonly kind: "new" }
+  | { readonly kind: "existing" }
+  | { readonly kind: "checked-out"; readonly directory: string };
+
+export const branchState = (
+  branch: string,
+  exists: boolean,
+  rows: ReadonlyArray<ListedWorktree>,
+): BranchState => {
+  if (!exists) return { kind: "new" };
+  const held = rows.find((one) => one.branch === branch);
+  return held === undefined
+    ? { kind: "existing" }
+    : { kind: "checked-out", directory: held.directory };
 };
 
 export type Refusal =
@@ -207,13 +238,19 @@ export const refusal = (start: Start): Refusal | undefined => {
       kind: "already-taken",
       why: `a worktree named ${start.name} already exists at ${at}, and the host would silently create ${start.name}-2 instead`,
     };
-  if (start.branchExists)
+
+  // A branch a worktree already holds cannot be checked out twice, so this is a
+  // refusal about the worktree rather than about the name. A branch that merely
+  // exists is not refused: that is the work this call is here to pick up.
+  if (start.branchState.kind === "checked-out")
     return {
       kind: "already-taken",
-      why: `branch ${start.branch} already exists; the worktree would be created detached and then fail to attach to it. Pick another name, or delete that branch first`,
+      why: `branch ${start.branch} is already checked out at ${start.branchState.directory}, and git will not check it out twice. Work in that directory, or pick another name.`,
     };
 
-  if (start.base === undefined) {
+  // A migration is cut from the branch, so an unresolvable base is not this call's
+  // problem and refusing it would refuse the one case that needs no base at all.
+  if (start.branchState.kind !== "existing" && start.base === undefined) {
     // Same kind either way: there is no base to cut from, so there is no
     // different handling path, only a different explanation. A sibling kind
     // would promise a distinction no caller reads (`start` only reports `why`).

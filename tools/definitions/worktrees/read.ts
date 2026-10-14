@@ -34,9 +34,8 @@ export const git = async (cwd: string, args: ReadonlyArray<string>): Promise<Res
  * clean tree. Exported because three modules need it and one copy of a safety property
  * is a property.
  */
-export const answered = (
-  result: Result,
-): result is Extract<Result, { readonly ran: true }> => result.ran && result.code === 0;
+export const answered = (result: Result): result is Extract<Result, { readonly ran: true }> =>
+  result.ran && result.code === 0;
 
 const Listed = Schema.Struct({
   directory: Schema.String,
@@ -152,6 +151,13 @@ export const currentBranch = (cwd: string): Promise<Rev> =>
  */
 export const attachBranch = (cwd: string, branch: string) => git(cwd, ["switch", "-c", branch]);
 
+/**
+ * The second step when the branch is already there. `-c` would fail with "branch
+ * already exists", so this drops the flag: the worktree lands detached either way, and
+ * both of these are what put a name on it.
+ */
+export const takeBranch = (cwd: string, branch: string) => git(cwd, ["switch", branch]);
+
 export const isWorktree = async (directory: string): Promise<boolean> =>
   answered(await git(directory, ["rev-parse", "--git-dir"]));
 
@@ -227,4 +233,4 @@ export const hostRefusal = (cause: unknown): { message: string; forceRequired: b
   return { message: decoded.value.message, forceRequired: forced };
 };
 
-export { Worktree, Effect };
+export { Effect, Worktree };
