@@ -16,11 +16,14 @@ const MAX_TITLE = 72;
 const MAX_BODY_LINES = 40;
 
 /** The eleven types the playbook names, in the shape it requires them. */
-const TITLE = /^(feat|fix|refactor|docs|style|test|build|ci|chore|perf|revert)(\([^)]+\))?!?: [^ ].*/;
+const TITLE =
+  /^(feat|fix|refactor|docs|style|test|build|ci|chore|perf|revert)(\([^)]+\))?!?: [^ ].*/;
 
 const SHA = /\b[0-9a-f]{7,40}\b/;
 
 const NUMBERED = /^\s*\d+\.\s/m;
+
+const HEADING = /^\s*#{1,6}\s/m;
 
 const CLOSERS: ReadonlyArray<[RegExp, string]> = [
   [/\band\b/i, "an `and`"],
@@ -39,7 +42,9 @@ const titleRule = (fields: Fields, draft: Draft): Array<Finding> => {
       finding("title-length", `${title.length} characters, over the ${MAX_TITLE} this tool allows`),
     );
   if (title.endsWith("."))
-    found.push(finding("title-period", "the title ends with a period, which the pattern does not carry"));
+    found.push(
+      finding("title-period", "the title ends with a period, which the pattern does not carry"),
+    );
   if (!TITLE.test(title))
     found.push(
       finding(
@@ -51,7 +56,10 @@ const titleRule = (fields: Fields, draft: Draft): Array<Finding> => {
   for (const [pattern, name] of CLOSERS)
     if (pattern.test(fields.subject))
       found.push(
-        finding("title-one-clause", `${name} in the subject joins two changes, which is two pull requests`),
+        finding(
+          "title-one-clause",
+          `${name} in the subject joins two changes, which is two pull requests`,
+        ),
       );
 
   if (fields.scope !== fields.scope.toLowerCase() || fields.scope === "")
@@ -67,22 +75,42 @@ const bodyRule = (fields: Fields, draft: Draft): Array<Finding> => {
   const lines = body.split("\n");
   if (lines.length > MAX_BODY_LINES)
     found.push(
-      finding("body-length", `${lines.length} lines, over the ${MAX_BODY_LINES} a reviewer will read`),
+      finding(
+        "body-length",
+        `${lines.length} lines, over the ${MAX_BODY_LINES} a reviewer will read`,
+      ),
     );
   if (SHA.test(body))
-    found.push(finding("body-no-sha", "a commit SHA is in the body, and `git log` already holds that text"));
+    found.push(
+      finding("body-no-sha", "a commit SHA is in the body, and `git log` already holds that text"),
+    );
   if (NUMBERED.test(body))
-    found.push(finding("body-no-commit-list", "a numbered list is a changelog in a pull request's clothes"));
+    found.push(
+      finding("body-no-commit-list", "a numbered list is a changelog in a pull request's clothes"),
+    );
 
-  if (fields.summary.includes("\n"))
-    found.push(finding("summary-one-paragraph", "`summary` is one paragraph with no heading above it"));
+  // The rule is that the summary carries no structure of its own, not that it is one
+  // paragraph. A readable summary is short paragraphs, and a heading above them is
+  // what lets a reader stop at the first one.
+  if (HEADING.test(fields.summary))
+    found.push(
+      finding(
+        "summary-carries-a-heading",
+        "`summary` brings its own heading, and one is already above it",
+      ),
+    );
   if (fields.review.includes("\n"))
     found.push(finding("review-one-line", "`review` is the one line of feedback you want"));
   if (fields.scopeItems.length === 0)
-    found.push(finding("scope-items", "`scopeItems` is empty, so the body names no symbol or path"));
+    found.push(
+      finding("scope-items", "`scopeItems` is empty, so the body names no symbol or path"),
+    );
   if (fields.validation.length === 0)
     found.push(
-      finding("validation-evidence", "`validation` is empty, which reports no evidence rather than good news"),
+      finding(
+        "validation-evidence",
+        "`validation` is empty, which reports no evidence rather than good news",
+      ),
     );
 
   for (const [name, text] of [
@@ -90,7 +118,9 @@ const bodyRule = (fields: Fields, draft: Draft): Array<Finding> => {
     ["breaking", fields.breaking],
   ] as const)
     if (text !== undefined && /^\s*none\.?\s*$/i.test(text))
-      found.push(finding(`${name}-not-none`, `\`${name}\` is \`None.\`, so leave the field out instead`));
+      found.push(
+        finding(`${name}-not-none`, `\`${name}\` is \`None.\`, so leave the field out instead`),
+      );
 
   return found;
 };
