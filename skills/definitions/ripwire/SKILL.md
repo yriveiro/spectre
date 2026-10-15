@@ -43,6 +43,7 @@ Keyed on the test, not the name. The test is the falsifiable half.
 | `principle-hygiene` | what does nothing reach | `--safe-delete=SYM` answers it in one call: callers, blast radius, uses, test coverage, a `risk=` and a `dead_code_candidate=`, plus the one pasteable follow-up in `next=`. `--dead-code` `--clones` `--lint` name each family separately. |
 | `principle-migrate-callers-then-delete-legacy-apis` | does any caller still reach the old path | `--callers` `--whereis` |
 | `principle-test-behavior-not-implementation` | would this test pass if every import returned undefined | `--test-gate` names the tests; the mutation itself has no verb here. `--seams` gives the complement, which is the test that should exist and does not. |
+| `principle-test-for-truth` | which defect does this test catch, and what does it cost to keep it | `--exercises=FILE` says what one test file reaches, and `--safe-delete=SYM` says what reaches the code when it goes, which is how you price the test that guards it. `--test-gate` names the tests a change has to run and the untested blast radius it leaves. The mutation, the triage order, the floor and the judgement about a low-probability scenario have no verb here. |
 | `principle-outcome-oriented-execution` | is the named end reached, and did a check at the boundary | none. Whether a declared end was reached is a fact about a plan and a diff, not about a graph. The reachability half has an instrument: `--callers` on what the end says should be gone, and `--test-gate` for the check the boundary was supposed to run. Whether the plan still means anything is a person reading it. |
 | `principle-make-operations-idempotent` | does the second run converge to the same end state | none. Convergence is a property of a run, not of a graph. The reachability half has a floor with `--exercises=FILE`; whether the second run agrees with the first has no oracle here. The check is running the thing twice, and crashing it on purpose. |
 | `code-hygiene` | does the comment say what the name does not | `--comment-coherence` |
@@ -225,9 +226,9 @@ arm is better than chance, and the descriptions are visible.
   attached is a fact nobody acted on.
 - **Not a claim that the tools are accurate.** Every row here is a place to
   measure, and the section above is the list of ways the measurement misleads.
-- **Not a reason to run ripwire on everything.** The map has thirty rows. Nine of
-  them answer `none`, and twenty-one name a verb. Running a verb because it
-  exists is the same as asserting a principle because it sounds right.
+- **Not a reason to run ripwire on everything.** The map has thirty-one rows.
+  Nine of them answer `none`, and twenty-two name a verb. Running a verb because
+  it exists is the same as asserting a principle because it sounds right.
 - **Not portable to a machine without ripwire.** This skill names a tool on
   purpose, which the principles themselves are written not to do, because naming
   the instrument is this skill's entire content. If ripwire is not installed,
