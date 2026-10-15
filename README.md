@@ -147,6 +147,7 @@ Spectre declares agents in TypeScript.
 | `tools/FOR_AGENTS.md`              | Read by hand before touching a tool schema. Not auto-loaded.  |
 | `commands/definitions/<id>/`       | One command per directory: `index.ts`, `prompt.md`.           |
 | `commands/index.ts`                | Applies every definition to OpenCode's command registry.      |
+| `scripts/sync-d3.ts`               | Vendors the pinned d3 bundle a diagram canvas loads.           |
 
 ## Tools
 

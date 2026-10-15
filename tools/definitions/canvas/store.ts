@@ -180,8 +180,33 @@ export type Presented =
       readonly status: "opened";
       readonly canvas: string;
       readonly deadLinks: ReadonlyArray<string>;
+      readonly remoteScripts: ReadonlyArray<string>;
     }
   | { readonly status: "not-opened"; readonly canvas: string; readonly why: string };
+
+const SCRIPT_SRC = /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi;
+
+const NOT_RELATIVE = /^(?:[a-z][a-z0-9+.-]*:|\/)/i;
+
+/**
+ * Script sources that are not a plain relative path, which is every form that
+ * reaches past the canvas directory: a scheme, a protocol-relative `//host`, or a
+ * root-absolute `/path`. A page that has one needs a network every time it is
+ * opened, and a canvas is meant to outlive the session that made it.
+ *
+ * The legal form is relative and nothing else, because the vendored library sits
+ * in `vendor/` beside the page and is named `vendor/d3-7.9.0.min.js`. This rule
+ * was prose in three files with nothing behind it, so a page could load a CDN and
+ * pass every test in the repository.
+ */
+export const remoteScripts = (html: string): ReadonlyArray<string> => {
+  const remote = new Set<string>();
+  for (const found of html.matchAll(SCRIPT_SRC)) {
+    const one = found[1]?.trim();
+    if (one !== undefined && NOT_RELATIVE.test(one)) remote.add(one);
+  }
+  return [...remote].toSorted();
+};
 
 /**
  * The OS launcher, and nothing else. There is no browser-tool fallback, so
@@ -211,7 +236,7 @@ export const present = async (canvas: string, platform: string): Promise<Present
   const launched = await run(dirname(canvas), [launcher, canvas]);
   if (!launched.ran) return { status: "not-opened", canvas, why: launched.err };
 
-  return { status: "opened", canvas, deadLinks: deadLinks(html) };
+  return { status: "opened", canvas, deadLinks: deadLinks(html), remoteScripts: remoteScripts(html) };
 };
 
 export type EvidenceRow =

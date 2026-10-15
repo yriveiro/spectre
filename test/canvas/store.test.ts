@@ -6,6 +6,7 @@ import {
   launcherFor,
   list,
   present,
+  remoteScripts,
   save,
   slugProblem,
   treeOf,
@@ -179,6 +180,43 @@ describe("deadLinks is a lexical check that can fail", () => {
 
   test("an empty fragment is not reported, because it is not an anchor", () => {
     expect(deadLinks(`<a href="#"></a>`)).toEqual([]);
+  });
+});
+
+describe("a canvas page may not reach past its own directory", () => {
+  test("a CDN script is named, because it needs a network at view time", () => {
+    const html = `<script src="https://cdn.jsdelivr.net/npm/d3@latest/dist.min.js"></script>`;
+
+    expect(remoteScripts(html)).toEqual(["https://cdn.jsdelivr.net/npm/d3@latest/dist.min.js"]);
+  });
+
+  test("a vendored bundle beside the page is the legal form", () => {
+    const html = `<script src="vendor/d3-7.9.0.min.js"></script><script src="./plot.js"></script>`;
+
+    expect(remoteScripts(html)).toEqual([]);
+  });
+
+  test("a protocol-relative and a root-absolute source both reach outside", () => {
+    expect(remoteScripts(`<script src="//cdn.example.com/d3.js"></script>`)).toEqual([
+      "//cdn.example.com/d3.js",
+    ]);
+    expect(remoteScripts(`<script src="/vendor/d3.js"></script>`)).toEqual(["/vendor/d3.js"]);
+  });
+
+  test("a single-quoted source is read as readily as a double-quoted one", () => {
+    expect(remoteScripts(`<script src='https://example.com/x.js'></script>`)).toEqual([
+      "https://example.com/x.js",
+    ]);
+  });
+
+  test("the same source twice is reported once", () => {
+    const html = `<script src="https://a.example/x.js"></script><script src="https://a.example/x.js"></script>`;
+
+    expect(remoteScripts(html)).toEqual(["https://a.example/x.js"]);
+  });
+
+  test("an inline script with no src is not a remote script", () => {
+    expect(remoteScripts(`<script>const d3 = {};</script>`)).toEqual([]);
   });
 });
 
