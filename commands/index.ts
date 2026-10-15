@@ -3,8 +3,9 @@ import { Effect } from "effect";
 import { anatomy } from "./definitions/anatomy";
 import { effectAlign } from "./definitions/effect-align";
 import { pr } from "./definitions/pr";
+import { wt } from "./definitions/wt";
 
-const definitions = [pr, anatomy, effectAlign];
+const definitions = [pr, anatomy, effectAlign, wt];
 
 export const update = (ctx: Pick<Plugin.Context, "command" | "session">) =>
   Effect.gen(function* () {

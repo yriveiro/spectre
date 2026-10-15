@@ -90,7 +90,11 @@ type CreateInput = {
  * project row for a bare-backed project is the bare repository, so a tool that omits
  * `from` gets the failure this file exists to catch.
  */
-const host = (projectRow: string, inside: string, options: { blind?: boolean } = {}) => {
+const host = (
+  projectRow: string,
+  inside: string,
+  options: { blind?: boolean; refuseMove?: boolean } = {},
+) => {
   const asked: Array<CreateInput> = [];
   const create = (input: CreateInput) =>
     Effect.suspend(() => {
@@ -158,10 +162,12 @@ const host = (projectRow: string, inside: string, options: { blind?: boolean } =
         session: {
           get: () => Effect.succeed({ location: { directory: sessionDirectory } }),
           move: ({ directory }: { directory: string }) =>
-            Effect.sync(() => {
-              moved.push(directory);
-              return {};
-            }),
+            options.refuseMove === true
+              ? Effect.fail(new Error("the host refused the move"))
+              : Effect.sync(() => {
+                  moved.push(directory);
+                  return {};
+                }),
         },
         worktree: { create },
       }) as unknown as Plugin.Context,
@@ -177,7 +183,18 @@ type Outcome =
       readonly head: string;
     }
   | {
-      readonly status: "unverified" | "rejected" | "failed" | "removed" | "already-gone";
+      /**
+       * Its own arm rather than one of the refusals below, because the tool returns the
+       * directory with it. `Unverified` in the tool's schema carries `directory` for the same
+       * reason: the worktree exists and it is the evidence a reader needs, so a test typing
+       * this as a bare refusal cannot ask where it is.
+       */
+      readonly status: "unverified";
+      readonly directory: string;
+      readonly problems: string;
+    }
+  | {
+      readonly status: "rejected" | "failed" | "removed" | "already-gone";
       readonly problems: string;
     };
 
@@ -424,5 +441,61 @@ describe("start picking up a branch that already exists", () => {
     expect(outcome.problems).toContain("already checked out");
     expect(outcome.problems).toContain(holding);
     expect(fake.asked.length).toBe(0);
+  });
+});
+
+/**
+ * A worktree that exists but that this session did not enter is the state nobody plans for,
+ * and it is the only status that says so without lying. `mismatch` is unit-tested in
+ * `lifecycle.test.ts`; what had no test is the tool's reaction to a read that disagreed, which
+ * is the claim the tool description makes in bold: the session was not moved.
+ */
+describe("start when the session cannot follow it in", () => {
+  test("it says unverified, names the refusal, and leaves the directory for a reader", async () => {
+    const { resolved, bare, main } = await bareLayout();
+    const fake = host(bare, resolved, { refuseMove: true });
+
+    const outcome = await start(fake, main, "fix-login");
+
+    expect(outcome.status).toBe("unverified");
+    if (outcome.status !== "unverified")
+      throw new Error(`expected unverified, got ${outcome.status}`);
+    expect(outcome.problems).toContain("could not move into it");
+    expect(outcome.problems).toContain("the host refused the move");
+    // The directory is the evidence, so it stays. A tool that removed it here would destroy
+    // the only thing a reader needs in order to decide what to do.
+    expect(fake.asked).toHaveLength(1);
+  });
+
+  test("the worktree it refused to enter is on the branch and at the base commit", async () => {
+    const { resolved, bare, main } = await bareLayout();
+    const fake = host(bare, resolved, { refuseMove: true });
+
+    const outcome = await start(fake, main, "fix-login");
+
+    // A bare `unverified` would pass against a tool that created a broken directory and then
+    // reported the same status. This is what makes the status honest.
+    if (outcome.status !== "unverified")
+      throw new Error(`expected unverified, got ${outcome.status}`);
+    const listing = await git(bare, ["worktree", "list", "--porcelain"]);
+    const directory = outcome.directory;
+    expect(listing.out).toContain(directory);
+    const branch = await git(directory, ["rev-parse", "--abbrev-ref", "HEAD"]);
+    expect(branch.out).toBe("fix-login");
+    const head = await git(directory, ["rev-parse", "HEAD"]);
+    const base = await git(main, ["rev-parse", "HEAD"]);
+    expect(head.out).toBe(base.out);
+  });
+
+  test("a refusal to move is not an opened, because opened means the session moved", async () => {
+    const { resolved, bare, main } = await bareLayout();
+    const fake = host(bare, resolved, { refuseMove: true });
+
+    const outcome = await start(fake, main, "fix-login");
+
+    // The two statuses a caller branches on. A session that reads `opened` and assumes it is
+    // in the worktree is standing in the old one, writing files nowhere.
+    expect(outcome.status).not.toBe("opened");
+    expect(fake.moved).toEqual([]);
   });
 });
