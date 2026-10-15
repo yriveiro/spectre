@@ -164,6 +164,7 @@ const Output = Schema.Union([
     status: Schema.Literals(["opened"]),
     canvas: Schema.String,
     deadLinks: Schema.Array(Schema.String),
+    remoteScripts: Schema.Array(Schema.String),
   }),
   Schema.Struct({
     status: Schema.Literals(["not-opened"]).annotate({
@@ -213,7 +214,9 @@ It does not write the page, edit one, or delete anything.
 
 \`present\` never falls back to a browser tool. A canvas outlives its session, so delivering it through a session-scoped view ties a persistent artifact to a transient surface, and a page written but never shown reads as a bug in the code under test. \`not-opened\` is a real answer: report it with the path in hand.
 
-\`deadLinks\` lists in-page anchors that resolve to no \`id\`. It is lexical and it is a start, not a link checker.`;
+\`deadLinks\` lists in-page anchors that resolve to no \`id\`. It is lexical and it is a start, not a link checker.
+
+\`remoteScripts\` lists script sources that are not a plain relative path, so a page that needs a network at view time says so instead of looking self-contained. A relative \`src\` is legal and is how a vendored library beside the page is loaded.`;
 
 /**
  * `basename(project directory)`, and `basename(git rev-parse --show-toplevel)`

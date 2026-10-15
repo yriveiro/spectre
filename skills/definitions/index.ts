@@ -10,6 +10,7 @@ import { codeHygiene } from "./code-hygiene";
 import { communication } from "./communication";
 import { createVerificationSkill } from "./create-verification-skill";
 import { type Definition } from "./definition";
+import { diagram } from "./diagram";
 import { effectBestPractices } from "./effect-best-practices";
 import { figureItOut } from "./figure-it-out";
 import { grammar } from "./grammar";
@@ -126,6 +127,7 @@ const definitions: ReadonlyArray<Definition> = [
   arena,
   bro,
   canvas,
+  diagram,
   codeHygiene,
   communication,
   grammar,
@@ -178,6 +180,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "canvas",
   "communication",
   "create-verification-skill",
+  "diagram",
   "effect-best-practices",
   "figure-it-out",
   "how",

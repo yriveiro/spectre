@@ -21,7 +21,8 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "eval": "bun run eval/run.ts",
-    "anatomy-kit.sync": "sh scripts/sync-anatomy-kit.sh"
+    "anatomy-kit.sync": "sh scripts/sync-anatomy-kit.sh",
+    "d3.vendor": "bun run scripts/sync-d3.ts"
   },
   "dependencies": {
     "@opencode/ai": "2.0.29",

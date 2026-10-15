@@ -9,6 +9,10 @@ A request to review a pull request visually is not this. That is `pr-canvas`,
 which owns PR identity, evidence, and the review layout. This skill never names
 a PR number.
 
+A page that binds data to marks is `diagram`, which owns the choice of mark and
+the vendored library a chart loads. A machine drawn as a physical object is
+`anatomy`.
+
 ## Create a canvas
 
 1. Treat a direct request to make a canvas or represent something as a UI as the
@@ -27,7 +31,11 @@ a PR number.
    Do not invent real-world facts or imply mock data is live.
 4. Keep the artifact self-contained: inline CSS and JavaScript, no CDN, no
    build step, no external image dependency, and no project-wide configuration
-   change. Use semantic HTML, accessible labels and contrast, responsive
+   change. A library the page draws with may be **vendored beside the page** and
+   named with a relative `src`, because a page opened from the filesystem loads
+   a classic relative script and nothing else. `present` reports every script
+   source that is not one as `remoteScripts`, so a page that needs a network says
+   so. Use semantic HTML, accessible labels and contrast, responsive
    layouts, and escape inserted content. Do not use `eval` or execute content
    from the canvas data.
 5. Include a meaningful `<title>` and a visible canvas heading. Add a stable

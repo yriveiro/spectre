@@ -127,7 +127,7 @@ const saved = await tools.spectre.canvas({ action: "save", slug: "tool-registrat
 // a second call on the same slug returns `taken` with that same path, and overwrites nothing
 
 await tools.spectre.canvas({ action: "present", id: "tool-registration" })
-// -> { status: "opened", canvas: "…/canvas.html", deadLinks: [] }
+// -> { status: "opened", canvas: "…/canvas.html", deadLinks: [], remoteScripts: [] }
 ```
 
 The model writes `canvas.html` with `write`, not through a tool argument. A page
@@ -247,7 +247,9 @@ change to the hub's `none` count**, which is what
 
 - Treat a direct request as the instruction to build and present rather than to plan.
 - The self-contained rules: inline CSS and JavaScript, no CDN, no build step, escaped
-  content, no `eval`.
+  content, no `eval`. A library vendored beside the page under a relative `src` is
+  the one permitted external script, and `present` reports anything else as
+  `remoteScripts`.
 - State assumptions visibly and never present mock data as live.
 - A meaningful `<title>`, a visible heading, and a stable in-page identifier.
 - Iterate **in place** so identity and path stay stable.
@@ -408,7 +410,15 @@ Three places where the document was a design and the code had to decide.
    implemented, and the shape of this feature emits no such anchors, so validating
    them would be a check that cannot pass.
 5. **How large a self-contained page gets before the browser gives up**, and
-   whether 4.5:1 actually holds on a generated page. Nothing enforces either.
+   whether 4.5:1 actually holds on a generated page. **Partly answered, and not
+   in the direction that was feared.** The two pages on this machine are 12,733
+   and 15,529 bytes, so the rule was written for pages a hundred times lighter
+   than a vendored d3 bundle at 279,706. Chromium 156 parsed and ran a 2,400,159
+   byte inline script from a `file://` page, and a search of MDN, the WHATWG HTML
+   specification and the Chromium documentation found no documented inline-script
+   or HTML-parse size limit at all. So the ceiling is unmeasured rather than
+   known, Firefox and Safari are untested, and nothing enforces a bound. The
+   4.5:1 half is untouched.
 6. **What "make me a canvas of X" does twice.** `save` is idempotent and returns
    `taken`; how a user asks for a genuinely second version of one slug is undecided.
 7. **The hub grows by two rows** into a trigger table already 71% of
