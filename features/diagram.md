@@ -76,9 +76,22 @@ drawing rules, the list of things to cut rather than add, the layout
 coherence rules, and the route to `tools.spectre.prose` for the words on the
 page.
 
-The lexical half of ASD-STE100 is off while `spectre.jsonc` names no dictionary,
-so that gate covers the structural rules only. Uncomment the `dictionary` key
-and point it at an export to turn the word list on. Nothing else changes.
+The skill sends the words through `tools.spectre.prose`, and it sends the
+**strings** rather than the page, for two measured reasons. The tool reads
+Markdown, and a canvas is HTML whose inline CSS and JavaScript are full of
+semicolons it counts as prose: a 6,574-byte chart page came back with 97
+semicolon findings and one passive voice, none of them in its prose. And the
+tool reads only inside the project tree, so a canvas path in the data root comes
+back `empty` with `scanned: 0` and no error, which reads as a clean pass.
+
+The first version of that instruction pointed at the canvas path and was wrong on
+both counts. The section above now points at the strings instead.
+
+The lexical half runs only when a `spectre.jsonc` names a dictionary. Both the
+global `~/.config/opencode/spectre.jsonc` and the project file resolve it, and
+`tools/index.ts` reads the config once, when OpenCode calls the plugin's
+`effect`, so a session started before the file existed keeps reporting the
+structural half alone.
 
 ## Open questions
 

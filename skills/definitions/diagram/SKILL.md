@@ -111,17 +111,22 @@ grid as the text around it.
 
 ## The words obey the standard too
 
-Titles, axis labels, legends, and the caption are prose. Run them before you
-present:
+Titles, axis labels, legends, and the caption are prose, and a canvas is not.
+`tools.spectre.prose` reads Markdown, and a page is HTML whose inline CSS and
+JavaScript are full of semicolons it counts as prose — 97 findings on a page of
+6,574 bytes whose prose has none. The tool also reads only inside the project
+tree, and a canvas lives in the data root, so a canvas path comes back `empty`
+and scans nothing.
+
+So check the words, not the page. Write the reader-visible strings to a Markdown
+file inside the project, run the gate on that, then delete the file:
 
 ```
-tools.spectre.prose({ targets: ["<the canvas path>"] })
+tools.spectre.prose({ targets: ["./chart-words.md"] })
 ```
 
-A finding is a sentence to read, not a defect to clear. The lexical half of the
-standard stays off until `spectre.jsonc` names a dictionary, so this checks the
-structural rules only: semicolons, passive voice, nominalizations, and long
-sentences.
+A finding is a sentence to read, not a defect to clear. The lexical half runs
+only when `spectre.jsonc` names a dictionary, and it is off until one does.
 
 ## Present it
 
