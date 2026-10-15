@@ -125,8 +125,17 @@ file inside the project, run the gate on that, then delete the file:
 tools.spectre.prose({ targets: ["./chart-words.md"] })
 ```
 
-A finding is a sentence to read, not a defect to clear. The lexical half runs
-only when `spectre.jsonc` names a dictionary, and it is off until one does.
+A finding is a sentence to read, not a defect to clear. That is the structural
+half. **The lexical half does not scan files.** It rules on the words you hand it,
+so check vocabulary by passing the page's words:
+
+```
+tools.spectre.prose({ words: ["latency", "initialises"] })
+```
+
+It answers only when `spectre.jsonc` names a dictionary. A word the export does
+not list comes back `unknown`, which is not a violation: the export holds the
+headwords the standard rules on, not the whole lexicon.
 
 ## Present it
 

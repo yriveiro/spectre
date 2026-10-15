@@ -93,6 +93,36 @@ global `~/.config/opencode/spectre.jsonc` and the project file resolve it, and
 `effect`, so a session started before the file existed keeps reporting the
 structural half alone.
 
+### What the lexical half actually is
+
+Not a lint. `scanTarget` takes `(asked, directory, disabled)` and no dictionary
+(`prose/index.ts:273`), and `rulings` returns an empty array unless `words` is
+supplied. So a scan of files **cannot** emit a lexical finding in this version,
+and the repo's zero lexical findings held before any dictionary existed, because
+nothing looked. A caller checks vocabulary by naming the words.
+
+Two further readings, both measured against a 2,198-entry Issue 9 export:
+
+| Word | Verdict |
+| --- | --- |
+| `utilize` | `not-approved (v)`, alternatives `USE(v)` |
+| `run` | `not-approved (v)`, alternatives `OPERATE(v)` |
+| `check` | `approved (n)` |
+| `customize`, `initialize`, `visualize`, `abbreviation` | `unknown` |
+
+`unknown` is the documented reading for a word with no entry, not a violation.
+The export holds the headwords the standard rules on rather than the whole
+lexicon, so a word it does not list is invisible to the gate. Enforcing
+vocabulary on a whole page means extracting its words and passing them as
+`words`; the tool does not do that for you.
+
+### `empty` and `scanned` do not mean what they look like
+
+`scanTarget` increments `scanned` only for a file that produced findings, and
+sets `empty` when the whole target produced none. So `scanned: 0` with
+`empty: [target]` means **the target was read and was clean**, not that it was
+skipped. Both numbers are floors over files with findings, not a file count.
+
 ## Open questions
 
 1. **Whether the mark-selection table is complete.** It answers ten question
