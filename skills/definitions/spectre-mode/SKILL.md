@@ -155,6 +155,8 @@ skipped and why.
 | A value's origin or mutability takes more than one hop to answer | `principle-laziness-protocol` |
 | You are writing, editing, or keeping a test, and about to trust a green suite | `principle-test-behavior-not-implementation` |
 | An assertion restates a constant, a prompt string, or a value from the code under test | `principle-test-behavior-not-implementation` |
+| A suite is green and you cannot say which defect each test catches | `principle-test-for-truth` |
+| A red needs triaging, or a check gets skipped to make the run pass | `principle-test-for-truth` |
 | Nobody has measured a claim about the code and you are about to report it | `ripwire` |
 | You are about to type a `//` or a `/**` | the comment disposition, above |
 | You are about to create a branch, or to change files in a worktree you did not open | the worktree rule, above |
@@ -277,6 +279,13 @@ procedure is what would break it.
   mechanism that reads it. Keep a relation across table rows and a `.test-d.ts`
   check, which fail the mutation for reasons unrelated to test quality. A green
   suite nobody checked is `principle-verification`'s problem to refuse.
+- `principle-test-for-truth`. Which tests a project keeps is a decision about
+  defects and cost, and every failure gets triaged rather than tolerated. Load it
+  when a suite is green and nobody can say what it covers, or when a red has to be
+  triaged. Each test names a defect in the world rather than a branch in the code,
+  and each one has to be seen red. A mutation run and the faults it cannot reach are
+  the proof. The floor is that you never edit a test to reach a green run, and the
+  floor outranks the triage.
 - `principle-make-states-unrepresentable`. A shape that cannot hold the wrong
   value beats a shape plus a check. Load it when you design a type or a signature,
   when you are about to add a boolean, an optional field, or a phase flag that a

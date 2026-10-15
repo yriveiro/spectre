@@ -352,7 +352,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 344,
+      passiveVoice: 343,
       otherRules: [],
     });
   }, 120_000);

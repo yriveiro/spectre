@@ -68,6 +68,7 @@ import { principleSeparateBeforeSerializingSharedState } from "./principle-separ
 import { principleSequenceVerifiableUnits } from "./principle-sequence-verifiable-units";
 import { principleSubtractBeforeYouAdd } from "./principle-subtract-before-you-add";
 import { principleTestBehaviorNotImplementation } from "./principle-test-behavior-not-implementation";
+import { principleTestForTruth } from "./principle-test-for-truth";
 import { principleTypeSystemDiscipline } from "./principle-type-system-discipline";
 import { principleVerification } from "./principle-verification";
 import { ripwire } from "./ripwire";
@@ -157,6 +158,7 @@ const definitions: ReadonlyArray<Definition> = [
   principleMigrateCallersThenDeleteLegacyApis,
   principleOutcomeOrientedExecution,
   principleTestBehaviorNotImplementation,
+  principleTestForTruth,
   principleVerification,
   spectreMode,
   principleGuardTheContextWindow,

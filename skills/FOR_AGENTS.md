@@ -3,11 +3,11 @@
 Read this before writing a leaf: which of three shapes you are writing, the
 template, the measurements behind it, and what a leaf owes the map and the hub.
 
-A **leaf** is a skill this set routes to: 31 of the 76 definitions. 27 are
-`principle-*`, and the other 4 are `grammar`, `communication`, `code-hygiene` and
-`model-router`. The remaining 46 ids are in the `notALeaf` set in
-`skills/definitions/index.ts` — the hub, the map, 23 `playbook-*`, and 18 more
-procedures — and they are registered and read on demand, carrying no row.
+A **leaf** is a skill this set routes to: 31 of the 80 definitions. 28 are
+`principle-*`, and the other 3 are `code-hygiene`, `grammar` and `model-router`.
+The remaining 49 ids are in the `notALeaf` set in `skills/definitions/index.ts` —
+the hub, the map, 24 `playbook-*`, and 23 more procedures — and they are
+registered and read on demand, carrying no row.
 
 ## What you are writing
 
@@ -62,8 +62,8 @@ A claim another leaf owns does not get restated: name the owner in one clause an
 move on. `principle-subtract-before-you-add` opens by handing
 deletion-first-as-reader-load to `principle-laziness-protocol`.
 
-**The template is a target, not a description of the set.** 26 of the 74 bodies
-still carry a what-not section and 22 carry `## The moves`. Four principles still
+**The template is a target, not a description of the set.** 27 of the 80 bodies
+still carry a what-not section and 23 carry `## The moves`. Four principles still
 carry the five-section shape it replaced — `principle-boundary-discipline`,
 `principle-evidence`, `principle-hygiene`, `principle-make-operations-idempotent`,
 each with `Core values`, `Strategies` and `Tactics` where a new leaf writes one
@@ -133,7 +133,7 @@ is written", and the row stopped routing. Put the literal nouns back.
 Indexing is what the hub pays, and it is why the hub is the binding constraint: it
 is the file that says "read this index, then load the one leaf you need", and one
 that outgrows the message is one nobody reads. On this checkout the `## Triggers`
-table and the `## Principles index` between them are 71% of the hub, over 14
+table and the `## Principles index` between them are 71% of the hub, over 15
 bullets, and 16 of the 31 leaves appear nowhere in it (`TODO.md` tracks them). The
 index entry has to become one line and the triggers table has to stop growing
 before the set grows much more.
@@ -153,14 +153,14 @@ one means four things, and skipping any of them is how a port rots.
 3. **Do not import a mode or a workflow as a principle.** `architect`, `teach`,
    `swarm`, `why`, `how`, `automate-me` and their neighbours are procedures for a
    different harness: a leaf states a test and a moment you load it on, and a
-   procedure has neither. Forty-three ids are registered and never indexed, which
+   procedure has neither. Fifty-eight ids are registered and never indexed, which
    is the shape to reach for when a port is worth having and is not a principle,
    and it costs the set nothing: the map and the index are what the leaf count
    and the routing surface are made of.
 
    Two facts they need, kept here so they are not copied into the definition
    files. They are registered only because `load()` dies on a body it does not
-   list. And nothing in this set is auto-invoked — all 74 definitions carry
+   list. And nothing in this set is auto-invoked — all 80 definitions carry
    `autoinvoke: false` — so the hub's trigger table is the only router there is,
    and a skill in neither the table nor the index is reached only by a reader who
    asks for it by name, which is why its description is written for that reader.
