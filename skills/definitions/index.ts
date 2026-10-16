@@ -12,6 +12,7 @@ import { createVerificationSkill } from "./create-verification-skill";
 import { type Definition } from "./definition";
 import { diagram } from "./diagram";
 import { effectBestPractices } from "./effect-best-practices";
+import { elysia } from "./elysia";
 import { figureItOut } from "./figure-it-out";
 import { grammar } from "./grammar";
 import { how } from "./how";
@@ -99,6 +100,7 @@ const definitions: ReadonlyArray<Definition> = [
   technicalWriting,
   typescriptBestPractices,
   effectBestPractices,
+  elysia,
   playbook,
   playbookAuthoringASkill,
   playbookAutonomousRun,
@@ -184,6 +186,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "create-verification-skill",
   "diagram",
   "effect-best-practices",
+  "elysia",
   "figure-it-out",
   "how",
   "interrogate",
