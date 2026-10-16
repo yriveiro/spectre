@@ -24,7 +24,7 @@ To inspect, open browser developer tools > Network > [Request made through Elysi
 Now you can audit the performance bottleneck of your server.
 
 ## Config
-Below is a config which is accepted by the plugin
+The plugin accepts the config below.
 
 ### enabled
 @default `NODE_ENV !== 'production'`
@@ -39,9 +39,9 @@ A condition whether server timing should be log
 ### trace
 @default `undefined`
 
-Allow Server Timing to log specified life-cycle events:
+Let Server Timing log the specified life-cycle events:
 
-Trace accepts objects of the following:
+Trace accepts these objects:
 - request: capture duration from request
 - parse: capture duration from parse
 - transform: capture duration from transform
@@ -54,7 +54,7 @@ Trace accepts objects of the following:
 Below you can find the common patterns to use the plugin.
 
 ## Allow Condition
-You may disable Server Timing on specific routes via `allow` property
+You may disable Server Timing on specific routes through the `allow` property
 
 ```ts twoslash
 import { Elysia } from 'elysia'

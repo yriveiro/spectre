@@ -1,8 +1,8 @@
 # Lifecycle
 
-Instead of a sequential process, Elysia's request handling is divided into multiple stages called lifecycle events.
+Instead of a sequential process, Elysia splits request handling into multiple stages called lifecycle events.
 
-It's designed to separate the process into distinct phases based on their responsibility without interfering with each others.
+It's designed to separate the process into different phases based on their responsibility without interfering with each other.
 
 ### List of events in order
 
@@ -35,8 +35,8 @@ new Elysia().onRequest(({ ip, set }) => {
 
 _Body parsing stage._
 
-- Handles `text/plain`, `application/json`, `multipart/form-data`, `application/x www-form-urlencoded` by default.
-- Use to add **custom parsers** or support extra `Content Type`s.
+- Handles `text/plain`, `application/json`, `multipart/form-data`, `application/x-www-form-urlencoded` by default.
+- Use to add **custom parsers** or support more `Content Type`s.
 
 ```ts
 new Elysia().onParse(({ request, contentType }) => {
@@ -115,8 +115,8 @@ new Elysia().guard(
 
 _Runs after the handler finishes._
 
-- Can **modify response headers**, wrap the result in a `Response`, or transform the payload.
-- Returning a value **replaces** the handlerâ€™s result, but the next `afterHandle` hooks still run.
+- Can **change response headers**, wrap the result in a `Response`, or transform the payload.
+- Returning a value **replaces** the handler's result, but the next `afterHandle` hooks still run.
 
 ```ts
 new Elysia().get('/', () => '<h1>Hello</h1>', {
@@ -192,7 +192,7 @@ new Elysia().onAfterResponse(() =>
 
 | Type                 | Scope                             | How to add                                                |
 | -------------------- | --------------------------------- | --------------------------------------------------------- |
-| **Local Hook**       | Single route                      | Inside route options (`afterHandle`, `beforeHandle`, â€¦) |
+| **Local Hook**       | Single route                      | Inside route options (`afterHandle`, `beforeHandle`, ...) |
 | **Interceptor Hook** | Whole instance (and later routes) | `.onXxx(cb)` or `.use(plugin)`                            |
 
 > **Remember:** Hooks only affect routes **defined after** they are registered, except `onRequest` which is global because it runs before route matching.

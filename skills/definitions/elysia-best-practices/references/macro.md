@@ -46,7 +46,7 @@ Return `status`, don't throw:
 ```
 
 ### Named Macro for Type Inference
-TypeScript limitation workaround:
+TypeScript limit workaround:
 ```typescript
 .macro('user', { resolve: () => ({ user: 'lilith' }) })
 .macro('user2', { user: true, resolve: ({ user }) => {} })
@@ -62,7 +62,7 @@ Auto-validates, infers types, stacks with other schemas:
 })
 ```
 
-Use named single macro for lifecycle type inference within same macro.
+Use a named single macro for lifecycle type inference in the same macro.
 
 ## Extension
 Stack macros:

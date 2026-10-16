@@ -3,7 +3,7 @@
 Elysia + Prisma integration guide
 
 ## What It Is
-Type-safe ORM. Generate Elysia validation models from Prisma schema via `prismabox`.
+Type-safe ORM. Generate Elysia validation models from Prisma schema through `prismabox`.
 
 ## Flow
 ```

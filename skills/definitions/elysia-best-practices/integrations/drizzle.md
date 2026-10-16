@@ -2,7 +2,7 @@
 Elysia + Drizzle integration guide
 
 ## What It Is
-Headless TypeScript ORM. Convert Drizzle schema → Elysia validation models via `drizzle-typebox`.
+Headless TypeScript ORM. Convert Drizzle schema → Elysia validation models through `drizzle-typebox`.
 
 ## Flow
 ```

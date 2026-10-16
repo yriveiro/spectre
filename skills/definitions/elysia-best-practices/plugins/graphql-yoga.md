@@ -40,7 +40,7 @@ bun add graphql graphql-yoga
 
 ## Resolver
 
-Elysia uses Mobius to infer type from **typeDefs** field automatically, allowing you to get full type-safety and auto-complete when typing **resolver** types.
+Elysia uses Mobius to infer type from **typeDefs** field automatically, letting you get full type-safety and auto-complete when typing **resolver** types.
 
 ## Context
 
@@ -78,7 +78,7 @@ const app = new Elysia()
 
 This plugin extends [GraphQL Yoga's createYoga options, please refer to the GraphQL Yoga documentation](https://the-guild.dev/graphql/yoga-server/docs) with inlining `schema` config to root.
 
-Below is a config which is accepted by the plugin
+The plugin accepts the config below.
 
 ### path
 

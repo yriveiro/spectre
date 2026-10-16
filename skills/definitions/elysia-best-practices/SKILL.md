@@ -1,6 +1,6 @@
 # Elysia best practices
 
-Always consult [elysiajs.com/llms.txt](https://elysiajs.com/llms.txt) for code examples and latest API.
+Always refer to [elysiajs.com/llms.txt](https://elysiajs.com/llms.txt) for code examples and latest API.
 
 ## Overview
 
@@ -9,7 +9,7 @@ ElysiaJS is a TypeScript framework for building Bun-first (but not limited to Bu
 ## When to Use This Skill
 
 Trigger this skill when the user asks to:
-- Create or modify ElysiaJS routes, handlers, or servers
+- Create or change ElysiaJS routes, handlers, or servers
 - Setup validation with TypeBox or other schema libraries (Zod, Valibot)
 - Implement authentication (JWT, session-based, macros, guards)
 - Add plugins (CORS, OpenAPI, Static files, JWT)
@@ -243,19 +243,19 @@ public/                   # Static files (if using static plugin)
 test/                     # Unit tests
 ```
 
-Each file has its own responsibility as follows:
+Each file has its own responsibility:
 - **Controller (index.ts)**: Handle HTTP routing, request validation, and cookie.
 - **Service (service.ts)**: Handle business logic, decoupled from Elysia controller if possible.
 - **Model (model.ts)**: Define the data structure and validation for the request and response.
 
 ## Best Practice
-Elysia is unopinionated on design pattern, but if not provided, we can rely on MVC pattern pair with feature based folder structure.
+Elysia does not prescribe a design pattern. If you do not provide one, you can rely on the MVC pattern paired with a feature based folder structure.
 
 - Controller:
 	- Prefers Elysia as a controller for HTTP dependant controller
 	- For non HTTP dependent, prefers service instead unless explicitly asked
 	- Use `onError` to handle local custom errors
-	- Register Model to Elysia instance via `Elysia.models({ ...models })` and prefix model by namespace `Elysia.prefix('model', 'Namespace.')
+	- Register Model to Elysia instance through `Elysia.models({ ...models })` and prefix model by namespace `Elysia.prefix('model', 'Namespace.')
 	- Prefers Reference Model by name provided by Elysia instead of using an actual `Model.name`
 - Service:
 	- Prefers class (or abstract class if possible)
@@ -267,7 +267,7 @@ Elysia is unopinionated on design pattern, but if not provided, we can rely on M
 	- Custom Error should be in contains in Model
 
 ## Elysia Key Concept
-Elysia has a every important concepts/rules to understand before use.
+Elysia has important concepts and rules to understand before use.
 
 ## Encapsulation - Isolates by Default
 
@@ -393,16 +393,16 @@ new Elysia()
 Once `prefix`, model name will be capitalized by default.
 
 ## Technical Terms
-The following are technical terms that are used for Elysia:
+These are the technical terms for Elysia:
 - `OpenAPI Type Gen` - function name `fromTypes` from `@elysiajs/openapi` for generating OpenAPI from types, see `plugins/openapi.md`
 - `Eden`, `Eden Treaty` - e2e type safe RPC client for share type from backend to frontend
 
 ## Resources
-Use the following references as needed.
+Use the references below as needed.
 
 It's recommended to check out `route.md`, as it contains the most important foundation building blocks with examples.
 
-`plugin.md` and `validation.md` is important as well but can be check as needed.
+`plugin.md` and `validation.md` are important as well but can be checked as needed.
 
 ### references/
 Detailed documentation split by topic:
@@ -411,7 +411,7 @@ Detailed documentation split by topic:
 - `deployment.md` - Production deployment guide / Docker
 - `eden.md` - e2e type safe RPC client for share type from backend to frontend
 - `lifecycle.md` - Request handling stages and the order lifecycle events run in
-- `macro.md` - Compose multiple schema/lifecycle as a reusable Elysia via key-value (recommended for complex setup, eg. authentication, authorization, Role-based Access Check)
+- `macro.md` - Compose multiple schema/lifecycle as a reusable Elysia through key-value (recommended for complex setup, eg. authentication, authorization, Role-based Access Check)
 - `plugin.md` - Decouple part of Elysia into a standalone component
 - `route.md` - Elysia foundation building block: Routing, Handler and Context
 - `testing.md` - Unit tests with examples
@@ -452,7 +452,7 @@ Guide to integrate Elysia with external library/runtime:
 
 ### examples/ (optional)
 - `basic.ts` - Basic Elysia example
-- `body-parser.ts` - Custom body parser example via `.onParse`
+- `body-parser.ts` - Custom body parser example through `.onParse`
 - `complex.ts` - Comprehensive usage of Elysia server
 - `cookie.ts` - Setting cookie
 - `error.ts` - Error handling

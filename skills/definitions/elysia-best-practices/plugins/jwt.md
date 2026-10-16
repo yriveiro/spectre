@@ -44,7 +44,7 @@ const app = new Elysia()
 ## Config
 This plugin extends config from [jose](https://github.com/panva/jose).
 
-Below is a config that is accepted by the plugin.
+The plugin accepts the config below.
 
 ### name
 Name to register `jwt` function as.
@@ -103,10 +103,10 @@ TLDR: usually the domain name of the signer.
 ### sub
 The subject claim identifies the principal that is the subject of the JWT.
 
-The claims in a JWT are normally statements about the subject as per [RFC7519](https://www.rfc-editor.org/rfc/rfc7519#section-4.1.2)
+The claims in a JWT are usually statements about the subject as per [RFC7519](https://www.rfc-editor.org/rfc/rfc7519#section-4.1.2)
 
 ### aud
-The audience claim identifies the recipients that the JWT is intended for.
+The audience claim identifies the intended recipients of the JWT.
 
 Each principal intended to process the JWT MUST identify itself with a value in the audience claim as per [RFC7519](https://www.rfc-editor.org/rfc/rfc7519#section-4.1.3)
 
@@ -120,7 +120,7 @@ The "not before" claim identifies the time before which the JWT must not be acce
 The expiration time claim identifies the expiration time on or after which the JWT MUST NOT be accepted for processing as per [RFC7519](https://www.rfc-editor.org/rfc/rfc7519#section-4.1.4)
 
 ### iat
-The "issued at" claim identifies the time at which the JWT was issued.
+The "issued at" claim identifies the time the issuer issued the JWT.
 
 This claim can be used to determine the age of the JWT as per [RFC7519](https://www.rfc-editor.org/rfc/rfc7519#section-4.1.6)
 
@@ -128,7 +128,7 @@ This claim can be used to determine the age of the JWT as per [RFC7519](https://
 This JWS Extension Header Parameter modifies the JWS Payload representation and the JWS Signing input computation as per [RFC7797](https://www.rfc-editor.org/rfc/rfc7797).
 
 ### kid
-A hint indicating which key was used to secure the JWS.
+A hint indicating which key secured the JWS.
 
 This parameter allows originators to explicitly signal a change of key to recipients as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.4)
 
@@ -147,14 +147,14 @@ The "jku" (JWK Set URL) Header Parameter is a URI [RFC3986]. It refers to a reso
 The keys MUST be encoded as a JWK Set [JWK] as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.2)
 
 ### typ
-The `typ` (type) Header Parameter is used by JWS applications to declare the media type [IANA.MediaTypes] of this complete JWS.
+JWS applications use the `typ` (type) Header Parameter to declare the media type [IANA.MediaTypes] of this complete JWS.
 
-This is intended for the application to use when more than one kind of object could be present in an application data structure. Such a structure can contain a JWS, as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.9)
+Use this when more than one kind of object could be present in an application data structure. Such a structure can contain a JWS, as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.9)
 
 ### ctr
-Content-Type parameter is used by JWS applications to declare the media type [IANA.MediaTypes] of the secured content (the payload).
+JWS applications use the Content-Type parameter to declare the media type [IANA.MediaTypes] of the secured content (the payload).
 
-This is intended for use by the application when more than one kind of object could be present in the JWS Payload as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.9)
+Use this when more than one kind of object could be present in the JWS Payload as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.9)
 
 ## Handler
 Below are the value added to the handler.
@@ -183,7 +183,7 @@ verify(payload: string) => Promise<JWTPayloadSpec | false>
 Below you can find the common patterns to use the plugin.
 
 ## Set JWT expiration date
-By default, the config is passed to `setCookie` and inherits its value.
+By default, the plugin passes the config to `setCookie`, and the config inherits its value.
 
 ```typescript
 const app = new Elysia()

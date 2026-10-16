@@ -94,7 +94,7 @@ Elysia reads function names as span names:
 ```
 
 ## getCurrentSpan
-Get current span outside handler (via AsyncLocalStorage):
+Get current span outside handler (through AsyncLocalStorage):
 ```typescript
 import { getCurrentSpan } from '@elysiajs/opentelemetry'
 

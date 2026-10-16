@@ -222,7 +222,7 @@ new Elysia()
   .listen(3000)
 ```
 
-Ensures `query.name` string required for all handlers after guard.
+Makes sure `query.name` is a required string for all handlers after the guard.
 
 ### Behavior
 | Path          | Response |
@@ -414,7 +414,7 @@ t.Numeric()
 
 ### 1. Optional Behavior
 
-In Elysia, `t.Optional` makes **entire route parameter** optional (not object field):
+In Elysia, `t.Optional` makes the **full route parameter** optional (not object field):
 
 ```ts
 .get('/optional', ({ query }) => query, {

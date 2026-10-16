@@ -1,6 +1,6 @@
 # HTML
 
-Allows you to use JSX and HTML with proper headers and support.
+Lets you use JSX and HTML with proper headers and support.
 
 ## Installation
 
@@ -50,7 +50,7 @@ Elysia can use JSX
 - .js -> .jsx
 - .ts -> .tsx
 
-2. Register the TypeScript type by append the following to **tsconfig.json**:
+2. Register the TypeScript type by appending this to **tsconfig.json**:
 ```jsonc
 // tsconfig.json
 {
@@ -89,11 +89,11 @@ If the error `Cannot find name 'Html'. Did you mean 'html'?` occurs, this import
 import { Html } from '@elysiajs/html'
 ```
 
-It is important that it is written in uppercase.
+It is important that you write it in uppercase.
 
 ## XSS
 
-Elysia HTML is based use of the Kita HTML plugin to detect possible XSS attacks in compile time.
+Elysia HTML uses the Kita HTML plugin to detect possible XSS attacks at compile time.
 
 You can use a dedicated `safe` attribute to sanitize user value to prevent XSS vulnerability.
 
@@ -122,7 +122,7 @@ new Elysia()
 	.listen(3000)
 ```
 
-However, when are building a large-scale app, it's best to have a type reminder to detect possible XSS vulnerabilities in your codebase.
+But when you build a large-scale app, it's best to have a type reminder to detect possible XSS vulnerabilities in your codebase.
 
 To add a type-safe reminder, please install:
 
@@ -130,7 +130,7 @@ To add a type-safe reminder, please install:
 bun add @kitajs/ts-html-plugin
 ```
 
-Then appends the following **tsconfig.json**
+Then append this **tsconfig.json**
 
 ```jsonc
 // tsconfig.json
@@ -145,7 +145,7 @@ Then appends the following **tsconfig.json**
 ```
 
 ## Config
-Below is a config which is accepted by the plugin
+The plugin accepts the config below.
 
 ### contentType
 
@@ -183,6 +183,6 @@ app.get('/', ({ html }) => html('<html></html>'))
 - Type: `(value: string) => boolean`
 - Default: `isHtml` (exported function)
 
-The function is used to detect if a string is a html or not. Default implementation if length is greater than 7, starts with `<` and ends with `>`.
+The function detects if a string is html or not. The default implementation treats the string as html if its length is greater than 7, it starts with `<` and it ends with `>`.
 
 Keep in mind there's no real way to validate HTML, so the default implementation is a best guess.

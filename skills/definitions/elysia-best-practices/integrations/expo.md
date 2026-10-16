@@ -33,7 +33,7 @@ export const GET = app.fetch
 export const POST = app.fetch
 ```
 
-Ensures routing works in any location.
+Makes sure routing works in any location.
 
 ## Eden (End-to-End Type Safety)
 1. Export type:

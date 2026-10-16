@@ -273,7 +273,7 @@ new Elysia().get('/', ({ status }) => {
 })
 ```
 
-See the following code:
+See the code below:
 
 ```typescript
 import { Elysia, file } from 'elysia'

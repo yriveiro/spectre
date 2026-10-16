@@ -203,7 +203,7 @@ new Elysia({
 Secures all routes under prefix.
 
 ## Config
-Below is a config which is accepted by the `openapi({})`
+The `openapi({})` call accepts the config below.
 
 ### enabled
 @default true

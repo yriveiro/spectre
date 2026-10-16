@@ -19,7 +19,7 @@ This will set Elysia to accept requests from any origin.
 
 ## Config
 
-Below is a config which is accepted by the plugin
+The plugin accepts the config below.
 
 ### origin
 
@@ -27,7 +27,7 @@ Below is a config which is accepted by the plugin
 
 Indicates whether the response can be shared with the requesting code from the given origins.
 
-Value can be one of the following:
+Value can be one of these:
 
 - **string** - Name of origin which will directly assign to Access-Control-Allow-Origin header.
 - **boolean** - If set to true, Access-Control-Allow-Origin will be set to `*` (any origins)
@@ -47,7 +47,7 @@ Value can be one of the following:
 
 Allowed methods for cross-origin requests by assign `Access-Control-Allow-Methods` header.
 
-Value can be one of the following:
+Value can be one of these:
 - **undefined | null | ''** - Ignore all methods.
 - **\*** - Allows all methods.
 - **string** - Expects either a single method or a comma-delimited string
@@ -63,7 +63,7 @@ Value can be one of the following:
 
 Allowed headers for an incoming request by assign `Access-Control-Allow-Headers` header.
 
-Value can be one of the following:
+Value can be one of these:
 - **string** - Expects either a single header or a comma-delimited string
     - eg: `'Content-Type, Authorization'`.
 - **string[]** - Allow multiple HTTP headers.
@@ -77,7 +77,7 @@ Value can be one of the following:
 
 Response CORS with specified headers by sssign Access-Control-Expose-Headers header.
 
-Value can be one of the following:
+Value can be one of these:
 - **string** - Expects either a single header or a comma-delimited string.
     - eg: `'Content-Type, X-Powered-By'`.
 - **string[]** - Allow multiple HTTP headers.

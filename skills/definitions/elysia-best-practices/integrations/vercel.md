@@ -52,4 +52,4 @@ pnpm add @sinclair/typebox openapi-types
 ```
 
 ## Troubleshooting
-Vercel has zero config for Elysia. For additional config, see [Vercel docs](https://vercel.com/docs/frameworks/backend/elysia).
+Vercel has zero config for Elysia. For more config, see [Vercel docs](https://vercel.com/docs/frameworks/backend/elysia).

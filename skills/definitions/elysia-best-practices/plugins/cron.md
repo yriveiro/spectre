@@ -29,7 +29,7 @@ new Elysia()
 The above code will log `heartbeat` every 10 seconds.
 
 ## Config
-Below is a config which is accepted by the plugin
+The plugin accepts the config below.
 
 ### cron
 

@@ -23,7 +23,7 @@ Auto-encodes/decodes objects. Just works.
 ## Reactivity
 Signal-like approach. Single source of truth. Auto-sets headers, syncs values.
 
-Cookie jar = Proxy object. Extract value always `Cookie<unknown>`, never `undefined`. Access via `.value`.
+Cookie jar = Proxy object. Extract value always `Cookie<unknown>`, never `undefined`. Access through `.value`.
 
 Iterate over cookie jar → only existing cookies.
 
@@ -160,7 +160,7 @@ Date for Expires attribute. Default: none (non-persistent, deleted on browser ex
 If both `expires` and `maxAge` set, `maxAge` takes precedence (spec-compliant clients).
 
 ### httpOnly (false)
-HttpOnly attribute. If true, JS can't access via `document.cookie`.
+HttpOnly attribute. If true, JS cannot access it through `document.cookie`.
 
 ### maxAge (undefined)
 Seconds for Max-Age attribute. Rounded down to integer.

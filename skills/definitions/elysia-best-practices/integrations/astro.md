@@ -1,7 +1,7 @@
 # Astro Integration - SKILLS.md
 
 ## What It Is
-Run Elysia on Astro via Astro Endpoint.
+Run Elysia on Astro through Astro Endpoint.
 
 ## Setup
 1. Set output to server:
@@ -47,7 +47,7 @@ export const GET = handle
 export const POST = handle
 ```
 
-Ensures routing works in any location.
+Makes sure routing works in any location.
 
 ## Benefits
 Co-location of frontend + backend. End-to-end type safety with Eden.

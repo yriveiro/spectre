@@ -1,7 +1,7 @@
 # React Email Integration
 
 ## What It Is
-Use React components to create emails. Direct JSX import via Bun.
+Use React components to create emails. Direct JSX import through Bun.
 
 ## Installation
 ```bash
@@ -75,7 +75,7 @@ bun email
 Opens browser with preview.
 
 ## Send Email
-Render with `react-dom/server`, submit via provider:
+Render with `react-dom/server`, submit through the provider:
 
 ### Nodemailer
 ```typescript

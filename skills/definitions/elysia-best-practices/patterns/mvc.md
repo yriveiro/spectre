@@ -5,7 +5,7 @@ This file contains a guideline for using Elysia with MVC or Model View Controlle
 	- Prefers Elysia as a controller for HTTP dependant
 	- For non HTTP dependent, prefers service instead unless explicitly asked
 	- Use `onError` to handle local custom errors
-	- Register Model to Elysia instance via `Elysia.models({ ...models })` and prefix model by namespace `Elysia.prefix('model', 'Namespace.')
+	- Register Model to Elysia instance through `Elysia.models({ ...models })` and prefix model by namespace `Elysia.prefix('model', 'Namespace.')
 	- Prefers Reference Model by name provided by Elysia instead of using an actual `Model.name`
 - Service:
 	- Prefers class (or abstract class if possible)
@@ -17,13 +17,13 @@ This file contains a guideline for using Elysia with MVC or Model View Controlle
 	- Custom Error should be in contains in Model
 
 ## Controller
-Due to type soundness of Elysia, it's not recommended to use a traditional controller class that is tightly coupled with Elysia's `Context` because:
+Because of type soundness of Elysia, it's not recommended to use a traditional controller class that is tightly coupled with Elysia's `Context` because:
 
 1. **Elysia type is complex** and heavily depends on plugin and multiple level of chaining.
 2. **Hard to type**, Elysia type could change at anytime, especially with decorators, and store
 3. **Loss of type integrity**, and inconsistency between types and runtime code.
 
-We recommended one of the following approach to implement a controller in Elysia.
+We recommend one of these approaches to implement a controller in Elysia.
 1. Use Elysia instance as a controller itself
 2. Create a controller that is not tied with HTTP request or Elysia.
 
@@ -45,7 +45,7 @@ new Elysia()
     })
 ```
 
-This approach allows Elysia to infer the `Context` type automatically, ensuring type integrity and consistency between types and runtime code.
+This approach lets Elysia infer the `Context` type automatically, ensuring type integrity and consistency between types and runtime code.
 
 ```typescript
 // Don't
@@ -61,7 +61,7 @@ new Elysia()
     .get('/', Controller.root)
 ```
 
-This approach makes it hard to type `Context` properly, and may lead to loss of type integrity.
+This approach makes it hard to type `Context` correctly, and may lead to loss of type integrity.
 
 The general rule behind it — extract and pass the values you need instead of the framework
 object, so logic stays free of the transport — is owned by `principle-boundary-discipline`
@@ -72,7 +72,7 @@ type you write; its shape follows plugin chaining, decorators, and store, so a m
 ### 2. Controller without HTTP request
 If you want to create a controller class, we recommend creating a class that is not tied to HTTP request or Elysia at all.
 
-This approach allows you to decouple the controller from Elysia, making it easier to test, reuse, and even swap a framework while still follows the MVC pattern.
+This approach lets you decouple the controller from Elysia, making it easier to test, reuse, and even swap a framework while still follows the MVC pattern.
 
 ```typescript
 import { Elysia } from 'elysia'
@@ -94,10 +94,10 @@ Tying the controller to Elysia Context may lead to:
 
 We recommended to keep the controller decoupled from Elysia as much as possible.
 
-### Don't: Pass entire `Context` to a controller
-**Context is a highly dynamic type** that can be inferred from Elysia instance.
+### Don't: Pass the full `Context` to a controller
+**Context is a very dynamic type** that can be inferred from Elysia instance.
 
-Do not pass an entire `Context` to a controller, instead use object destructuring to extract what you need and pass it to the controller.
+Do not pass the full `Context` to a controller, instead use object destructuring to extract what you need and pass it to the controller.
 
 ```typescript
 import type { Context } from 'elysia'
@@ -112,7 +112,7 @@ abstract class Controller {
 }
 ```
 
-This approach makes it hard to type `Context` properly, and may lead to loss of type integrity.
+This approach makes it hard to type `Context` correctly, and may lead to loss of type integrity.
 
 ### Testing
 If you're using Elysia as a controller, you can test your controller using `handle` to directly call a function (and it's lifecycle)
@@ -226,10 +226,10 @@ new Elysia()
 	})
 ```
 
-### Don't: Pass entire `Context` to a service
-**Context is a highly dynamic type** that can be inferred from Elysia instance.
+### Don't: Pass the full `Context` to a service
+**Context is a very dynamic type** that can be inferred from Elysia instance.
 
-Do not pass an entire `Context` to a service, instead use object destructuring to extract what you need and pass it to the service.
+Do not pass the full `Context` to a service, instead use object destructuring to extract what you need and pass it to the service.
 ```typescript
 import type { Context } from 'elysia'
 
@@ -244,7 +244,7 @@ class AuthService {
 }
 ```
 
-As Elysia type is complex, and heavily depends on plugin and multiple level of chaining, it can be challenging to manually type as it's highly dynamic.
+As Elysia type is complex, and heavily depends on plugin and multiple level of chaining, it can be challenging to manually type as it's very dynamic.
 
 Same ownership as above: `principle-boundary-discipline` / `principle-laziness-protocol` for the
 general rule; the Elysia-specific hazard is the dynamically inferred `Context`.
@@ -386,8 +386,8 @@ const UserController = new Elysia({ prefix: '/auth' })
     })
 ```
 
-This approach provide several benefits:
-1. Allow us to name a model and provide auto-completion.
-2. Modify schema for later usage, or perform a [remap](https://elysiajs.com/essential/handler.html#remap).
+This approach provides several benefits:
+1. Let us name a model and provide auto-completion.
+2. Change the schema for later usage, or perform a [remap](https://elysiajs.com/essential/handler.html#remap).
 3. Show up as "models" in OpenAPI compliance client, eg. OpenAPI.
 4. Improve TypeScript inference speed as model type will be cached during registration.

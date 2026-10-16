@@ -44,7 +44,7 @@ type RequestHandler = (v: { request: Request }) => Response | Promise<Response>
 export const fallback: RequestHandler = ({ request }) => app.handle(request)
 ```
 
-Ensures routing works in any location.
+Makes sure routing works in any location.
 
 ## pnpm
 Manual install:

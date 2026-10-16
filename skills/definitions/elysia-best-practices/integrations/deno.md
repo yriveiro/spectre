@@ -2,7 +2,7 @@
 Run Elysia on Deno
 
 ## What It Is
-Run Elysia on Deno via Web Standard Request/Response.
+Run Elysia on Deno through Web Standard Request/Response.
 
 ## Setup
 Wrap `Elysia.fetch` in `Deno.serve`:

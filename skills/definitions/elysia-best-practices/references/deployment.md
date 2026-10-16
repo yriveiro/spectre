@@ -330,10 +330,10 @@ new Elysia({
 
 4. **Implement graceful shutdown**
    - Handle SIGTERM/SIGINT
-   - Close connections properly
+   - Close connections correctly
 
 5. **Use cluster mode**
-   - Utilize all CPU cores
+   - Use all CPU cores
    - Better performance under load
 
 6. **Monitor your app**

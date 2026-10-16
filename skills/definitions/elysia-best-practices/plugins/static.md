@@ -33,7 +33,7 @@ The available path will become:
 - /public/nested/takodachi.png
 
 ## Config
-Below is a config which is accepted by the plugin
+The plugin accepts the config below.
 
 ### assets
 @default `"public"`
@@ -53,7 +53,7 @@ List of files to ignore from serving as static files
 ### staticLimit
 @default `1024`
 
-By default, the static plugin will register paths to the Router with a static name. If the limits are exceeded, paths will be lazily added to the Router to reduce memory usage.
+By default, the static plugin will register paths to the Router with a static name. If the number of paths exceeds the limits, the plugin will add paths lazily to the Router to reduce memory usage.
 Tradeoff memory with performance.
 
 ### alwaysStatic
