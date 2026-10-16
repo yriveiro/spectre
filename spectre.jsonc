@@ -3,18 +3,18 @@
 // Read by tools.spectre.routing on every call, and by
 // tools.spectre.prose when a dictionary is configured.
 //
-// Every ref below was read out of the live catalogue (`opencode api GET
-// /api/model` at 2.0.26), not written from memory. Variants are the provider's
-// to name and the routing tool rechecks them on every call. Two models on this
-// provider carry no variants at all, so any `#variant` on them is rejected:
-// `mimo-v2.6-flash` and `longcat-2.5-preview-free`.
+// Every ref below was read out of the live catalogue (`tools.opencode.models`
+// on 2.0.30), not written from memory. Variants are the provider's to name and
+// the routing tool rechecks them on every call. `deepseek-v4.1-flash-free`
+// carries three thinking efforts — `low`, `high`, `max` — and `cat-jam-free`
+// carries five — `low`, `medium`, `high`, `xhigh`, `max` — so any other
+// `#variant` on either is rejected.
 //
-// Cost is no longer uniform. `step-low` is free, and every other ref here is
-// paid per token, so the ladder runs cheap-to-dear and the free tier sits at
-// the bottom. Two free models to know about and not use: `longcat-2.5-preview-free`
-// measured 23m56s for 54 rows and exhausted a session twice, and
-// `space-bunny-free` is on `opencode` (Zen), NOT on `opencode-go`, so
-// `opencode-go/space-bunny-free` does not resolve.
+// `deepseek-v4.1-flash-free` sits on `opencode` (Zen), NOT on `opencode-go`,
+// which carries only the paid `deepseek-v4.1-flash`. `cat-jam-free` is free on
+// both providers and sits on `opencode` here to match. All refs are free, so
+// the ladder is thinking effort rather than cost: the shallow profiles run on
+// `flash-*`, the deep ones on `jam-*`.
 //
 // `dictionary` is optional and points at YOUR copy of ASD-STE100 Issue 9,
 // exported to the JSON form documented in tools/FOR_AGENTS.md. It is a path to a
@@ -29,29 +29,33 @@
 //   "dictionary": "/absolute/path/to/asd-ste100-dictionary.json",
 {
   "models": {
-    "step-low": "opencode-go/step-5-preview-free#low",
-    "spark-low": "opencode-go/muse-spark-1.3-contributor#low",
-    "spark-high": "opencode-go/muse-spark-1.3-contributor#high",
-    "spark-xhigh": "opencode-go/muse-spark-1.3-contributor#xhigh",
-    "bunny-max": "opencode-go/space-bunny#max"
+    "flash-low": "opencode/deepseek-v4.1-flash-free#low",
+    "flash-high": "opencode/deepseek-v4.1-flash-free#high",
+    "flash-max": "opencode/deepseek-v4.1-flash-free#max",
+    "jam-low": "opencode/cat-jam-free#low",
+    "jam-medium": "opencode/cat-jam-free#medium",
+    "jam-high": "opencode/cat-jam-free#high",
+    "jam-xhigh": "opencode/cat-jam-free#xhigh",
+    "jam-max": "opencode/cat-jam-free#max",
   },
 
   "profiles": {
     "mechanical": {
-      "model": "step-low",
-      "why": "One command, one log, one named file. Report what it said and decide nothing."
+      "model": "flash-low",
+      "why": "One command, one log, one named file. Report what it said and decide nothing.",
     },
     "reading": {
-      "model": ["spark-low", "spark-high"],
-      "why": "A few files that have to be understood before answering. A diff, a stack trace, a failing test name."
+      "model": ["flash-low", "flash-high"],
+      "why": "A few files that have to be understood before answering. A diff, a stack trace, a failing test name.",
     },
     "judgement": {
-      "model": ["spark-high", "spark-xhigh"],
-      "why": "A decision with consequences: which of several designs to take, or why a subsystem breaks."
+      "model": ["jam-high", "jam-xhigh"],
+      "why": "A decision with consequences: which of several designs to take, or why a subsystem breaks.",
     },
     "deep": {
-      "model": "bunny-max",
-      "why": "A whole subsystem, or the word refactor. The strongest thinking available here, and the most expensive."
-    }
-  }
+      "model": "jam-max",
+      "why": "A whole subsystem, or the word refactor. The strongest thinking available here.",
+    },
+  },
+  "dictionary": "/Users/yriveiro/Dump/asd-ste100-dictionary.json",
 }
