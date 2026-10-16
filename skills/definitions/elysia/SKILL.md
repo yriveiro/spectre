@@ -249,7 +249,7 @@ Each file has its own responsibility as follows:
 - **Model (model.ts)**: Define the data structure and validation for the request and response.
 
 ## Best Practice
-Elysia is unopinionated on design pattern, but if not provided, we can relies on MVC pattern pair with feature based folder structure.
+Elysia is unopinionated on design pattern, but if not provided, we can rely on MVC pattern pair with feature based folder structure.
 
 - Controller:
 	- Prefers Elysia as a controller for HTTP dependant controller
@@ -393,14 +393,14 @@ new Elysia()
 Once `prefix`, model name will be capitalized by default.
 
 ## Technical Terms
-The following are technical terms that is use for Elysia:
+The following are technical terms that are used for Elysia:
 - `OpenAPI Type Gen` - function name `fromTypes` from `@elysiajs/openapi` for generating OpenAPI from types, see `plugins/openapi.md`
 - `Eden`, `Eden Treaty` - e2e type safe RPC client for share type from backend to frontend
 
 ## Resources
 Use the following references as needed.
 
-It's recommended to checkout `route.md` for as it contains the most important foundation building blocks with examples.
+It's recommended to check out `route.md`, as it contains the most important foundation building blocks with examples.
 
 `plugin.md` and `validation.md` is important as well but can be check as needed.
 
@@ -410,6 +410,7 @@ Detailed documentation split by topic:
 - `cookie.md` - Detailed documentation on cookie
 - `deployment.md` - Production deployment guide / Docker
 - `eden.md` - e2e type safe RPC client for share type from backend to frontend
+- `lifecycle.md` - Request handling stages and the order lifecycle events run in
 - `macro.md` - Compose multiple schema/lifecycle as a reusable Elysia via key-value (recommended for complex setup, eg. authentication, authorization, Role-based Access Check)
 - `plugin.md` - Decouple part of Elysia into a standalone component
 - `route.md` - Elysia foundation building block: Routing, Handler and Context
@@ -456,7 +457,7 @@ Guide to integrate Elysia with external library/runtime:
 - `cookie.ts` - Setting cookie
 - `error.ts` - Error handling
 - `file.ts` - Returning local file from server
-- `guard.ts` - Setting mulitple validation schema and lifecycle
+- `guard.ts` - Setting multiple validation schema and lifecycle
 - `map-response.ts` - Custom response mapper
 - `redirect.ts` - Redirect response
 - `rename.ts` - Rename context's property 

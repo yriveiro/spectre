@@ -141,7 +141,7 @@ describe('Controller', () => {
 })
 ```
 
-You may find more information about testing in [Unit Test](/patterns/unit-test.html).
+You may find more information about testing in [Unit Test](https://elysiajs.com/patterns/unit-test.html).
 
 ## Service
 Service is a set of utility/helper functions decoupled as a business logic to use in a module/controller, in our case, an Elysia instance.
@@ -250,7 +250,7 @@ Same ownership as above: `principle-boundary-discipline` / `principle-laziness-p
 general rule; the Elysia-specific hazard is the dynamically inferred `Context`.
 
 ## Model
-Model or [DTO (Data Transfer Object)](https://en.wikipedia.org/wiki/Data_transfer_object) is handle by [Elysia.t (Validation)](/essential/validation.html#elysia-type).
+Model or [DTO (Data Transfer Object)](https://en.wikipedia.org/wiki/Data_transfer_object) is handle by [Elysia.t (Validation)](https://elysiajs.com/essential/validation.html#elysia-type).
 
 Elysia has a validation system built-in which can infers type from your code and validate it at runtime.
 
@@ -388,6 +388,6 @@ const UserController = new Elysia({ prefix: '/auth' })
 
 This approach provide several benefits:
 1. Allow us to name a model and provide auto-completion.
-2. Modify schema for later usage, or perform a [remap](/essential/handler.html#remap).
+2. Modify schema for later usage, or perform a [remap](https://elysiajs.com/essential/handler.html#remap).
 3. Show up as "models" in OpenAPI compliance client, eg. OpenAPI.
 4. Improve TypeScript inference speed as model type will be cached during registration.
