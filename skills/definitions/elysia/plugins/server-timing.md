@@ -21,7 +21,7 @@ Server Timing then will append header 'Server-Timing' with log duration, functio
 
 To inspect, open browser developer tools > Network > [Request made through Elysia server] > Timing.
 
-Now you can effortlessly audit the performance bottleneck of your server.
+Now you can audit the performance bottleneck of your server.
 
 ## Config
 Below is a config which is accepted by the plugin

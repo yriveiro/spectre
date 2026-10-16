@@ -47,7 +47,7 @@ Accessing `/graphql` should show Apollo GraphQL playground work with.
 
 ## Context
 
-Because Elysia is based on Web Standard Request and Response which is different from Node's `HttpRequest` and `HttpResponse` that Express uses, results in `req, res` being undefined in context.
+Elysia is based on Web Standard Request and Response. These differ from the Node `HttpRequest` and `HttpResponse` that Express uses, so `req, res` are undefined in context.
 
 Because of this, Elysia replaces both with `context` like route parameters.
 

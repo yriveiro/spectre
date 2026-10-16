@@ -1,7 +1,7 @@
 # AI SDK Integration
 
 ## What It Is
-Seamless integration with Vercel AI SDK via response streaming.
+Integration with the Vercel AI SDK through response streaming.
 
 ## Response Streaming
 Return `ReadableStream` or `Response` directly:

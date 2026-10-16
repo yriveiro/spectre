@@ -107,7 +107,7 @@ Assign `Access-Control-Max-Age` header.
 
 ### preflight
 
-The preflight request is a request sent to check if the CORS protocol is understood and if a server is aware of using specific methods and headers.
+The preflight request is a request sent to check if the CORS protocol is understood. It also checks if a server is aware of using specific methods and headers.
 
 Response with **OPTIONS** request with 3 HTTP request headers:
 - **Access-Control-Request-Method**

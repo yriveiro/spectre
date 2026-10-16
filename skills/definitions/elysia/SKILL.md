@@ -222,7 +222,7 @@ import { z } from 'zod'
 ```
 
 ### Project Structure (Recommended)
-Elysia takes an unopinionated approach but based on user request. But without any specific preference, we recommend a feature-based and domain driven folder structure where each feature has its own folder containing controllers, services, and models.
+Elysia takes an unopinionated approach but based on user request. But without any specific preference, we recommend a feature-based and domain driven folder structure. Each feature gets its own folder containing controllers, services, and models.
 
 ```
 src/

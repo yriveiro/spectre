@@ -66,7 +66,7 @@ new Elysia()
     })
 ```
 
-Because some might need to use multiple `jwt` with different configs in a single server, explicitly registering the JWT function with a different name is needed.
+Because some might need to use multiple `jwt` with different configs in a single server, register the JWT function with a different name.
 
 ### secret
 The private key to sign JWT payload with.
@@ -98,7 +98,7 @@ EdDSA
 ### iss
 The issuer claim identifies the principal that issued the JWT as per [RFC7519](https://www.rfc-editor.org/rfc/rfc7519#section-4.1.1)
 
-TLDR; is usually (the domain) name of the signer.
+TLDR: usually the domain name of the signer.
 
 ### sub
 The subject claim identifies the principal that is the subject of the JWT.
@@ -133,23 +133,23 @@ A hint indicating which key was used to secure the JWS.
 This parameter allows originators to explicitly signal a change of key to recipients as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.4)
 
 ### x5t
-(X.509 certificate SHA-1 thumbprint) header parameter is a base64url-encoded SHA-1 digest of the DER encoding of the X.509 certificate [RFC5280](https://www.rfc-editor.org/rfc/rfc5280) corresponding to the key used to digitally sign the JWS as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.7)
+(X.509 certificate SHA-1 thumbprint) header parameter is a base64url-encoded SHA-1 digest of the DER encoding of the X.509 certificate [RFC5280](https://www.rfc-editor.org/rfc/rfc5280). The digest corresponds to the key used to digitally sign the JWS, as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.7)
 
 ### x5c
-(X.509 certificate chain) header parameter contains the X.509 public key certificate or certificate chain [RFC5280](https://www.rfc-editor.org/rfc/rfc5280) corresponding to the key used to digitally sign the JWS as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.6)
+(X.509 certificate chain) header parameter contains the X.509 public key certificate or certificate chain [RFC5280](https://www.rfc-editor.org/rfc/rfc5280). The chain corresponds to the key used to digitally sign the JWS, as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.6)
 
 ### x5u
-(X.509 URL) header parameter is a URI [RFC3986](https://www.rfc-editor.org/rfc/rfc3986) that refers to a resource for the X.509 public key certificate or certificate chain [RFC5280] corresponding to the key used to digitally sign the JWS as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.5)
+(X.509 URL) header parameter is a URI [RFC3986](https://www.rfc-editor.org/rfc/rfc3986) that refers to a resource for the X.509 public key certificate or certificate chain [RFC5280]. The certificate corresponds to the key used to digitally sign the JWS, as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.5)
 
 ### jwk
-The "jku" (JWK Set URL) Header Parameter is a URI [RFC3986] that refers to a resource for a set of JSON-encoded public keys, one of which corresponds to the key used to digitally sign the JWS.
+The "jku" (JWK Set URL) Header Parameter is a URI [RFC3986]. It refers to a resource for a set of JSON-encoded public keys. One of them corresponds to the key used to digitally sign the JWS.
 
 The keys MUST be encoded as a JWK Set [JWK] as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.2)
 
 ### typ
 The `typ` (type) Header Parameter is used by JWS applications to declare the media type [IANA.MediaTypes] of this complete JWS.
 
-This is intended for use by the application when more than one kind of object could be present in an application data structure that can contain a JWS as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.9)
+This is intended for the application to use when more than one kind of object could be present in an application data structure. Such a structure can contain a JWS, as per [RFC7515](https://www.rfc-editor.org/rfc/rfc7515#section-4.1.9)
 
 ### ctr
 Content-Type parameter is used by JWS applications to declare the media type [IANA.MediaTypes] of the secured content (the payload).

@@ -320,6 +320,11 @@ describe("the set's own prose", () => {
     // "the frontmatter is the index", "a claim is minted once". Naming the actor
     // there would say less, so the house style applies and the number moved.
     //
+    // The passive count rose again with the elysia port
+    // (`skills/definitions/elysia`): its reference text states what the server
+    // does rather than who does it, and the corpus is quoted upstream
+    // documentation, so the house style applies and the number moved.
+    //
     // The rule counts per line, so rewrapping a paragraph without changing a word can
     // move this number. Splitting "must match" across a line break cost one finding
     // in `AGENTS.md` on its own. Read this number as a count of lines, not of sentences.
@@ -352,7 +357,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 343,
+      passiveVoice: 367,
       otherRules: [],
     });
   }, 120_000);
