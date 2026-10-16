@@ -320,6 +320,11 @@ describe("the set's own prose", () => {
     // "the frontmatter is the index", "a claim is minted once". Naming the actor
     // there would say less, so the house style applies and the number moved.
     //
+    // The elysia port (`skills/definitions/elysia-best-practices`) booked 24 passive
+    // findings. A follow-up pass took every one to the active voice, naming the actor
+    // each sentence already had, so the count fell by 24 to 343. That folder now
+    // reports nothing under the seven rules.
+    //
     // The rule counts per line, so rewrapping a paragraph without changing a word can
     // move this number. Splitting "must match" across a line break cost one finding
     // in `AGENTS.md` on its own. Read this number as a count of lines, not of sentences.
