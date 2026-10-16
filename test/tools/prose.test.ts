@@ -321,8 +321,8 @@ describe("the set's own prose", () => {
     // there would say less, so the house style applies and the number moved.
     //
     // The passive count rose again with the elysia port
-    // (`skills/definitions/elysia`): its reference text states what the server
-    // does rather than who does it, and the corpus is quoted upstream
+    // (`skills/definitions/elysia-best-practices`): its reference text states
+    // what the server does rather than who does it, and the corpus is quoted upstream
     // documentation, so the house style applies and the number moved.
     //
     // The rule counts per line, so rewrapping a paragraph without changing a word can

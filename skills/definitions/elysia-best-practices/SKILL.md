@@ -1,4 +1,4 @@
-# ElysiaJS Development Skill
+# Elysia best practices
 
 Always consult [elysiajs.com/llms.txt](https://elysiajs.com/llms.txt) for code examples and latest API.
 

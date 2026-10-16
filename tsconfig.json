@@ -14,5 +14,5 @@
     "isolatedModules": true
   },
   "include": ["index.ts", "agents", "eval", "scripts", "skills", "test", "tools"],
-  "exclude": ["skills/definitions/elysia/examples"]
+  "exclude": ["skills/definitions/elysia-best-practices/examples"]
 }
