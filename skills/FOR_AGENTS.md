@@ -76,6 +76,11 @@ Measured with `ripwire --eval-skills` over a mirror of the bodies — the call
 a single session are not quotes.** Re-run `eval/` before you cite one, and say
 which corpus and which slice it came from.
 
+The corpus has grown since that experiment: 82 bodies and 102 rows. On the whole
+set at ripwire 0.6.8 the description arm reads 0.861 AUC and 53.6% at rank one,
+and the 31-row held-out slice reads 0.929 and 50.0%. The shape of the finding
+holds: the description arm beats the full-text arm, and both beat chance.
+
 **The description is the routing surface, so it names the moment and not the
 subject.** This costs the most and is the hardest to see, because the body is
 usually already right. Three of the four routing regressions in one session were

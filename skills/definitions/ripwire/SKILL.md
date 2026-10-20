@@ -239,13 +239,16 @@ description-based and full-text routing beat chance. `fixture.ts` holds the
 labelled prompts. Change a description, run `bun test`, and the numbers move.
 
 Routing is mediocre at rank one and good at separation, and the gap is
-vocabulary rather than structure. Measured on eighteen prompts written after the
-descriptions were reworded and never tuned against: description-based routing
-separates the right skill from the wrong one at 0.933 AUC, and puts 7 of 15 at
-rank one. Each of the four reworded skills wins at least one of its own rows. The
-one left at none is `principle-laziness-protocol`, which was not reworded, and
-the prompt that beats it is "where does this value get set", which is the
-question its own test is built around.
+vocabulary rather than structure. Measured with `ripwire --eval-skills` over the
+mirror of the 82 bodies, on the 102 rows of `eval/fixture.ts` at ripwire 0.6.8:
+description-based routing separates the right skill from the wrong one at 0.861
+AUC and puts 53.6% of the rows at rank one, and the held-out slice of 31 rows
+reads 0.929 AUC and 50.0% at rank one. Full text is weaker than the description
+alone (45.2% and 0.698 over the whole set), and the routed task lens sits
+between the two (39.3%, 0.750). One skill with permitted rows wins none of them:
+`principle-outcome-oriented-execution` has three and takes 0, and the verb asks
+"mis-described?". The loudest false fire is `principle-subtract-before-you-add`,
+which fires four times, wins none of them, and has no permitted row.
 
 What survives in the misses is nouns. "can I push this yet" does not match a
 description that says "safe to ship". "bump the pin" does not match one that says
