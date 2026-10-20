@@ -68,12 +68,26 @@ tests beside them. A harness whose scoring is untested is the failure
 | ----- | ---------- | -------------- |
 | `tuned` | the rows the descriptions answered to | in-sample, so a row that wins here proves little |
 | `heldOut` | the rows that predate current work | frozen, and four of its rows have since drifted inside a description |
-| `blind` | fresh rows under a four-word bar | the honest read, and a row here is read once |
+| `blind` | fresh rows, written blind and held once more to the four-word bar | the honest read, and a row here is read once |
 
 A blind row may not share a four-word run with the description of the leaf it
 names, and `eval/tests/fixture.test.ts` fails when one does. When a description
 changes because of a blind row, that row moves into `tuned` and a fresh row
-takes its place.
+takes its place. `eval/writer.ts` wrote the current batch: a model that never
+saw the descriptions, asked for one sentence per id and nothing more. The
+descriptions' author wrote the previous batch, and its 72.7% read was
+author-shaped — the same bar, but the moments came pre-idiomed. Blindness
+at the bar, not the bar, is what makes a batch honest.
+
+## Writing a fresh slice
+
+`bun eval/writer.ts > eval/batch.json 2> writer.log`, coordinates and output on
+stderr, the batch as JSON on stdout. The boot carries no plugin, so the writer
+meets no description. The script checks the four-word bar before it accepts a
+row, and `SPECTRE_WRITER_ONLY` pins ids for a re-ask. The script's guarantee
+ends where review begins: it cannot judge whether a sentence fairly
+instantiates the id, so the assembler keeps the rows whose label holds and
+leaves the rest out rather than scoring a writer's invention.
 
 ## What is measured
 
@@ -129,13 +143,16 @@ assumed:
 
 Scores are not comparable across corpora, and this number moves as the corpus
 grows. The mirror holds our 82 bodies and ripwire's 17 skills, because the
-model arm's catalogue holds both. Measured at ripwire 0.6.8 the description arm
-reads 97.4% at rank one over the 156 judged rows of the `tuned` and `heldOut`
-slices, with 0.946 separation, and 72.7% over the 33 judged rows of the `blind`
-slice, with 0.962 separation. ripwire also reports the judged rows alone, which
-is the honest number because the other rows quote the descriptions. Re-run the
-lexical arm before quoting any of these, and say which corpus and which slice
-the figure came from.
+model arm's catalogue holds both. At ripwire 0.6.8 the description arm reads
+97.4% at rank one over the 156 judged rows of the `tuned` and `heldOut` slices,
+with 0.946 separation — and 18.5%, 0.681, over the 27 judged rows of the
+current `blind` slice, which a writer that never saw the descriptions wrote.
+The previous blind batch read 72.7% at the same bar, and the difference is the
+measurement the fresh batch exists for: author-shaped rows route, blind rows
+do not. The model arms read 2 to 3 of the 32 blind rows at rank one, in line
+with their 3-to-6-of-37 read on the author-written batch. Re-run the lexical
+arm before quoting any of these, and say which corpus and which slice the
+figure came from.
 
 The two arms score over different denominators, and the table prints each one.
 The lexical arms score the judged rows, the ones that name a leaf, because a

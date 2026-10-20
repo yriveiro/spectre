@@ -249,26 +249,37 @@ vocabulary rather than structure. The corpus has three slices and they answer
 different questions, so read the slice before the number. Measured with
 `ripwire --eval-skills` over the mirror of the 82 bodies at ripwire 0.6.8:
 
-| slice | rows | hit@1 | AUC | what it reads |
-| ----- | ---- | ----- | --- | ------------ |
+| slice | rows | hit@1 | sep-auc | what it reads |
+| ----- | ---- | ----- | ------- | ------------- |
 | `tuned` and `heldOut` | 174 | 97.4% | 0.946 | in-sample, because these rows shaped the descriptions |
 | `heldOut` | 31 | 96.4% | 1.000 | frozen and saturated, with four judged rows now inside a description |
-| `blind` | 37 | 72.7% | 0.962 | fresh rows that no description has seen |
+| `blind` | 32 | 18.5% | 0.681 | fresh rows a writer that never saw the descriptions wrote |
 
-The first line is the number the corpus inflates by construction, so quote the
-blind slice instead. It reads 72.7% at rank one with 0.962 AUC: the right leaf
-sits near the top of the ranking and loses first place to a neighbour most of
-the time. Full text is weaker than the description alone (64.7% and 0.790 over
-the whole set), and the routed task lens sits between the two (60.3%, 0.862)
-with ripwire's skills ranked in.
-Every skill with permitted rows wins at least one, and no skill fires on more
-than one row that is not its own.
+The first two lines are the numbers the corpus inflates by construction, so
+quote the blind slice instead. It reads 18.5% at rank one with 0.681
+separation: five of the twenty-seven judged rows put the right leaf first,
+and the misses scatter across the catalogue's own leaves and ripwire's rivals
+instead of one neighbour. The same bar held against the author-written batch
+read 72.7%, and the cost of removing the author is the measurement this
+batch exists for. Full text sits at the same level (14.8%, 0.593), the
+word-overlap arm reads zero hits, and the routed task lens is the strongest
+(14.8%, 0.844) with ripwire's skills ranked in. The model arms read 2 to 3 of
+the 32 rows at rank one, in line with their 3-to-6-of-37 read on the
+author-written batch: meaning survives a register that vocabulary does not.
+What died between the batches is the author idiom. The earlier slice was
+written by the descriptions' author, and the four-word bar removed the
+quoting while keeping the idiom: each row said its moment in the same
+register the description says it in, so bm25 kept its footing. The fresh
+writer carried no idiom and reads at the floor beside the random arm's 1.0%.
+What this says about the descriptions, measured rather than guessed: they
+route moments that share their frame and fall silent on moments that only
+know the work.
 
-What survives in the misses is nouns. "bump effect to the latest rc" does not
-match a description that says "a dependency on an old version". Leading with
-the moment fixed the register and left the everyday words missing, and the
-blind slice is where that gap shows up, because a fresh prompt carries the
-words of the moment and not the words of the description.
+What survives in the closer slices' misses is nouns. "bump effect to the
+latest rc" does not match a description that says "a dependency on an old
+version". Leading with the moment fixed the register and left the everyday
+words missing, and the blind slice is where that gap shows up, because a
+fresh prompt carries the words of the moment and none of the idiom.
 
 Four held-out rows now sit inside a description, so the held slice is a read on
 24 of its 28 judged rows and not 28, and all 24 read right. Before this change
@@ -287,14 +298,16 @@ words "the retry logic" and "timeout" sit in no description.
 The blind slice holds the corpus to a bar the other two slices cannot meet.
 `eval/tests/fixture.test.ts` fails when a row shares a four-word run with the
 description of the leaf it names, so a leaf cannot win a row by quoting itself.
-The 37 rows cover the seven leaves the corpus never covered, twelve boundary
-rows that each have a neighbour the router could pick instead, and four rows
-that name no leaf at all. The read at this commit puts 25 of the 33 judged rows
-at rank one: 14 of the 21 rows for those seven leaves, and 11 of the 12 boundary
-rows. Every leaf with a row here wins at least one of them, so the slice no
-longer separates one leaf from another, and the next read needs rows nobody has
-tuned against. The words those prompts use are absent from the descriptions,
-and that absence is what the corpus phase closes.
+`eval/writer.ts` wrote these 32 rows: it boots OpenCode with the plugin absent
+and asks for one sentence per id in the voice of a person mid-task, and the
+same blind rules produced the five rows that name no leaf — ordinary chores,
+not principle moments. Three passes over the 42 ids the corpus names left 27
+rows whose label was fair enough to keep: the principle ids, which carry their
+own meaning, instantiated fairly most of the time, and the 15 leaves whose ids
+do not carry the moment wait for rows observed in real work. The reviewer
+keeps the row, not the writer: the writer never saw a description, and the
+review is what keeps a writer's invented label out of the denominator instead
+of scoring it as a miss.
 
 A row in the blind slice gets read once. When a description changes because of
 one of those rows, that row stops being blind, so it moves into `tuned` and a

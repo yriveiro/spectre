@@ -29,6 +29,11 @@ export const parseRegistered = (line: string): ReadonlyArray<string> => {
  * reach the prompt. A direct provider call would be faster and would measure our
  * reconstruction of that block instead of the block itself.
  *
+ * The writer of a fresh corpus batch boots without the plugin, because the
+ * writer must not see the descriptions it is writing rows for: an argument-free
+ * variant is the cheapest way to keep that guarantee inside the same boot the
+ * eval measures through.
+ *
  * Two things are load-bearing and both were measured the hard way. The project
  * has to exist and hold its config before the spawn, because the directory
  * becomes the child's cwd and the plugin is loaded from there. And
@@ -36,7 +41,8 @@ export const parseRegistered = (line: string): ReadonlyArray<string> => {
  * directory, which is also where the provider credentials live.
  */
 export const boot = async (options: {
-  plugin: string;
+  /** An entry point directory, resolved relative to the server's cwd. Omit for none. */
+  plugin?: string;
   directory: string;
   port: number;
   timeoutMs?: number;
@@ -44,7 +50,7 @@ export const boot = async (options: {
   // A plugin path that resolves to the wrong directory is silent: OpenCode logs
   // nothing useful and the session simply has none of our skills. Assert the
   // entrypoint is where we said before spawning, so the failure names the path.
-  if (!(await Bun.file(`${options.plugin}index.ts`).exists()))
+  if (options.plugin !== undefined && !(await Bun.file(`${options.plugin}index.ts`).exists()))
     throw new Error(
       `no index.ts at the plugin path "${options.plugin}", so nothing would load. ` +
         `The caller resolved the repository root wrongly.`,
@@ -53,7 +59,14 @@ export const boot = async (options: {
   await Bun.$`mkdir -p ${options.directory}`.quiet();
   await Bun.write(
     `${options.directory}/opencode.json`,
-    `${JSON.stringify({ $schema: "https://opencode.ai/config.json", plugins: [options.plugin] }, null, 2)}\n`,
+    JSON.stringify(
+      {
+        $schema: "https://opencode.ai/config.json",
+        ...(options.plugin === undefined ? {} : { plugins: [options.plugin] }),
+      },
+      null,
+      2,
+    ) + "\n",
   );
 
   // `--log-level info` is load-bearing, not noise. `Registered skills` is an
