@@ -31,7 +31,7 @@ work rather than a person.
 
 | Item | Notes |
 | ---- | ----- |
-| One leaf that wins none of its blind rows | `principle-separate-before-serializing-shared-state` owns a boundary row the router hands to a neighbour. The corpus phase puts the words a prompt uses into its description |
+| A fresh blind batch | every leaf with a row in the current blind slice now wins at least one of them, so the slice no longer separates one leaf from another. Write new rows under the same bar and read them once |
 
 ## Blocked on a human
 

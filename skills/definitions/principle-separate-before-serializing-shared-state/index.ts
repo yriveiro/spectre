@@ -5,7 +5,7 @@ export const principleSeparateBeforeSerializingSharedState: Definition = {
   id: Skill.ID.make("principle-separate-before-serializing-shared-state"),
   name: Skill.Name.make("principle-separate-before-serializing-shared-state"),
   description:
-    "Stop reaching for locks and ordering the moment two writers share one target. Load it when you are about to add a lock, a queue, a retry, or coordination around shared mutable state, and first ask whether two things writing to the same file at once must share it at all: give each writer its own copy, partition, or output, merged later by one reader, and serialize structurally only when a single shared writer is a real invariant you can state and defend. Coordination code that was never written has no races. Once writes are separated or serialized, the order they land in is principle-sequence-verifiable-units.",
+    "Stop reaching for locks and ordering the moment two writers share one target. Load it when you are about to add a lock, a queue, a retry, or coordination around shared mutable state, when two jobs write one record, or when you wonder whether they should take turns, and first ask whether two things writing to the same file at once must share it at all: give each writer its own copy, partition, or output, merged later by one reader, and serialize structurally only when a single shared writer is a real invariant you can state and defend. Coordination code that was never written has no races. Once writes are separated or serialized, the order they land in is principle-sequence-verifiable-units.",
   autoinvoke: false,
   path: anchor(import.meta.dir),
 };

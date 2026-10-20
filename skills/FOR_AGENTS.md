@@ -80,7 +80,7 @@ The corpus has grown since that experiment: 82 bodies and 211 rows in three
 slices. At ripwire 0.6.8 the description arm reads 0.954 AUC and 99.4% at rank
 one over the 174 rows of the `tuned` and `heldOut` slices, the 31-row
 `heldOut` slice reads 1.000 and 100% with four judged rows now sitting inside a
-description, and the 37-row `blind` slice reads 1.000 and 72.7%. The shape of
+description, and the 37-row `blind` slice reads 1.000 and 75.8%. The shape of
 the finding holds: the description arm beats the full-text arm, and both beat
 chance. The blind slice carries the honest number, because the other two have
 now been read against.
