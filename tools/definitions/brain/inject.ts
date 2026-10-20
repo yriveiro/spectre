@@ -79,12 +79,12 @@ export const attach = (ctx: Plugin.Context) =>
         const project = AbsolutePath.make(ctx.location.directory);
         const index = yield* Effect.catch(readIndex(project), () => Effect.succeed(undefined));
         if (index === undefined) return;
-        if (seen.get(project) === index.key) return;
+        if (seen.get(event.sessionID) === index.key) return;
         const text = index.claims.length === 0 ? `<UNTRUSTED_CONTENT>\n${COLD}\n</UNTRUSTED_CONTENT>` : build(index.claims);
         // Before the user's prompt, matching where agent-switch reminders land.
         const at = event.messages.at(-1)?.role === "user" ? event.messages.length - 1 : event.messages.length;
         event.messages.splice(at, 0, Message.user(text));
-        seen.set(project, index.key);
+        seen.set(event.sessionID, index.key);
       }).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("brain injection failed", { cause }).pipe(Effect.asVoid),

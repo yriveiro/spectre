@@ -127,6 +127,19 @@ describe("brain injection", () => {
     expect(second.messages.length).toBe(0);
   });
 
+  test("a second root session in the same project gets the index too", async () => {
+    const { dir, handler } = await setup("second");
+    await seed(dir, 2);
+    const first = { sessionID: "ses_first", agent: "build", messages: [] as never[] };
+    await Effect.runPromise(handler(first as never));
+    expect(first.messages.length).toBe(1);
+    const second = { sessionID: "ses_second", agent: "build", messages: [] as never[] };
+    await Effect.runPromise(handler(second as never));
+    expect(second.messages.length).toBe(1);
+    const text = textOf(second.messages as never as Array<{ content: Array<{ text?: string }> }>);
+    expect(text).toContain("Claim number 0");
+  });
+
   test("more claims than fit stay under 600 tokens and say they were cut", async () => {
     const { dir, handler } = await setup("cap");
     await seed(dir, 60);

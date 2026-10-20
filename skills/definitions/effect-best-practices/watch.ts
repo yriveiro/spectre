@@ -52,7 +52,23 @@ effect-best-practices was verified against. Run /effect-align before relying on 
  * Module state rather than a service: one watcher per plugin instance, and the drift it holds
  * is a fact about this process rather than something a caller supplies.
  */
-const drifted = new Set<string>();
+const drifted = new Map<string, string>();
+const told = new Map<string, string>();
+
+/**
+ * The drift version this session still needs to hear, if any. Pure so the rule is
+ * testable without an event stream: drift with no record of telling, or a drift
+ * newer than what this session was told.
+ */
+export const pendingReminder = (
+  driftedByProject: ReadonlyMap<string, string>,
+  toldBySession: ReadonlyMap<string, string>,
+  project: string,
+  sessionID: string,
+): string | undefined => {
+  const version = driftedByProject.get(project);
+  return version !== undefined && toldBySession.get(sessionID) !== version ? version : undefined;
+};
 
 const isPin = (file: string) => {
   // A dependency's own `package.json` ends in the same three segments, and an install writes
@@ -74,7 +90,7 @@ export const attach = (ctx: Plugin.Context) =>
             const project = AbsolutePath.make(ctx.location.directory);
             const version = yield* Effect.promise(() => pinned(project));
             if (version === undefined || version === VERIFIED.effect) return;
-            drifted.add(project);
+            drifted.set(project, version);
             yield* Effect.logWarning("effect version moved", {
               pinned: version,
               verified: VERIFIED.effect,
@@ -94,7 +110,8 @@ export const attach = (ctx: Plugin.Context) =>
       Effect.gen(function* () {
         if (event.agent === "mnemonic") return;
         const project = AbsolutePath.make(ctx.location.directory);
-        if (!drifted.has(project)) return;
+        const version = pendingReminder(drifted, told, project, event.sessionID);
+        if (version === undefined) return;
         const info = yield* Effect.catch(
           ctx.session.get({ sessionID: event.sessionID }),
           () => Effect.succeed(undefined),
@@ -102,7 +119,7 @@ export const attach = (ctx: Plugin.Context) =>
         if (info === undefined || info.parentID !== undefined) return;
         const at = event.messages.at(-1)?.role === "user" ? event.messages.length - 1 : event.messages.length;
         event.messages.splice(at, 0, Message.user(REMINDER));
-        drifted.delete(project);
+        told.set(event.sessionID, version);
       }).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("effect reminder failed", { cause }).pipe(Effect.asVoid),
