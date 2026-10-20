@@ -6,7 +6,7 @@ import { ref, select } from "./models";
 import { plan } from "./progress";
 import { reporter } from "./reporter";
 import { deltaTable, deltas, flips, snapshot, type Run } from "./record";
-import { score, table, type Prediction, type Report } from "./score";
+import { hitRateOf, NONE, score, table, type Prediction, type Report } from "./score";
 import type { Model, Opencode } from "./opencode";
 import { blind, heldOut, rows, type Row } from "./fixture";
 
@@ -95,6 +95,11 @@ const evaluate = async (
 
 const corpus: ReadonlyArray<Row> = BLIND ? blind : HELD_OUT ? heldOut : ROWS === 0 ? rows : head(rows, ROWS);
 
+// ripwire scores its hit rate over the judged rows, the ones that name a leaf.
+// A negative row asks whether a matcher stays quiet, and a lexical matcher
+// never says none, so counting it would put a floor under every arm.
+const judged = corpus.filter((row) => row.label !== NONE).length;
+
 const scratch = `${Bun.env.TMPDIR ?? "/tmp"}spectre-skill-eval-${process.pid}`;
 const booting = log.bar("starting opencode", 1);
 const { client, registered, stop } = await boot({ plugin: PLUGIN, directory: scratch, port: PORT });
@@ -176,15 +181,13 @@ try {
       });
       const out = `${run.stdout.toString()}${run.stderr.toString()}`;
       for (const arm of ["bm25-desc", "bm25-full", "overlap", "for-routed", "random"]) {
-        const hitRate = Number(
-          out.match(new RegExp(`^ *${arm} +\\S+ +\\S+ +\\S+ +([0-9.]+)`, "m"))?.[1] ?? 0,
-        );
+        const hitRate = hitRateOf(out, arm);
         arms.push({
           name: `lex:${arm}`,
           predictions: [],
           report: {
-            scored: corpus.length,
-            hit: Math.round(hitRate * corpus.length),
+            scored: judged,
+            hit: Math.round(hitRate * judged),
             hitRate,
             unparsable: 0,
             abstained: 0,

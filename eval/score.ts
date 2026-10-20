@@ -103,6 +103,19 @@ export const score = (
 
 export type Arm = { readonly name: string; readonly report: Report };
 
+/**
+ * ripwire prints one row per arm: the arm name, then hit@1, hit@2, mrr, the
+ * separation AUC and the fire/abstain bound. The hit rate is the first column
+ * after the name.
+ *
+ * Reading a later column read the AUC as a hit rate, and the table showed the
+ * random floor at 50%. A random ranking over 82 skills cannot hit half the
+ * rows, so the random arm is the check on this parser: it reads a fraction of
+ * one percent, not a half.
+ */
+export const hitRateOf = (out: string, arm: string): number =>
+  Number(out.match(new RegExp(`^ *${arm} +([0-9.]+)%`, "m"))?.[1] ?? 0) / 100;
+
 /** One table, so a model arm and a lexical arm can be read against each other. */
 export const table = (arms: ReadonlyArray<Arm>) => {
   const width = Math.max(...arms.map((arm) => arm.name.length), 4);
