@@ -523,6 +523,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-separate-before-serializing-shared-state",
     provenance: "judged",
   },
+  {
+    prompt: "how long should it take a new reader to find where a value comes from and what can change it",
+    label: "principle-minimize-reader-load",
+    provenance: "judged",
+  },
+  {
+    prompt: "i removed a layer and the reader load went up, is that a transfer or a loss",
+    label: "principle-minimize-reader-load",
+    provenance: "judged",
+  },
+  {
+    prompt: "this repo gets harder to read every month and no single file changed, what is that",
+    label: "principle-minimize-reader-load",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
