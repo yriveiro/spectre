@@ -41,7 +41,10 @@ it is not, so the line is one file to read.
 <symbol>` or `--whereis`. That list is also the commit plan, so it is worth having
 before the code rather than after. A migration whose caller list is written after
 the new code is a migration that guessed, and the guess shows up as a broken call
-in a branch nobody is watching.
+in a branch nobody is watching. A caller list that fits 16,000 B comes whole in
+one answer, so the list you write down is the whole list and not a first page;
+a cut one names the next page in `next=`, and a page you stop reading is a
+caller you did not migrate.
 
 **Delete the old path in the commit that empties it.** The last caller moves and
 the deletion lands together, because after that commit nothing reaches the old

@@ -19,7 +19,7 @@ because that file's rules put them there, not because they were planned.
 | `ripwire` map row per leaf | 31 rows, and the `none` count synced to the hub |
 | 14 procedures from pstack | registered and not indexed, per rule 3 |
 | `why` | the surviving seventh of pstack's seven evidence categories |
-| 22 playbooks plus a `playbook` index | registered and not indexed; the hub grew by 376 bytes for all 23 |
+| 23 playbooks plus a `playbook` index | registered and not indexed; the hub grew by 376 bytes for the first 23 |
 | Reachability and map-drift tests | both verified to fail before being kept |
 
 ## Next

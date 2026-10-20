@@ -36,7 +36,7 @@ model logic.
 That is the whole surface. Turning a profile name into a real model is work the
 `agents` part already does for every other profile.
 
-If the arena ever has to write `opencode/space-bunny-free#max` directly, something
+If the arena ever has to write `opencode-go/kimi-k3#max` directly, something
 has gone wrong: the two features have quietly merged.
 
 ## Two ways to run several at once

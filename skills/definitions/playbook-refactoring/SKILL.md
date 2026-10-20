@@ -74,6 +74,9 @@ in back-references, so check `ripwire.uses` for the call, read and import sites
 and `ripwire.impact` for what the symbol reaches, and grep the docs and config
 yourself. `ripwire`'s call edges are name-based, so a count of zero is a floor
 and not a proof — a hand-written name in a template string is invisible to it.
+The answer now names the calls it could not bind as `<dc>` rows, so a zero with
+a `<dc>` row above it is a call the resolver declined, not a call that is not
+there.
 
 Delegate the mechanical edits to a `subagent` with the file paths, the names being
 moved, and the behaviour to hold. Choose the model with `tools.spectre.routing({})`.

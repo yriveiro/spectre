@@ -119,7 +119,10 @@ answering site, and the number of files between them is the layer count. Use a
 command that draws it, and do not reason about it from memory, because the memory
 is the thing most likely to be wrong. In this repo `ripwire` names the command
 (`--callers`, `--uses`, `--context-ratio`, `--nonlocal-state`), and the rule stays
-generic so the principle outlives any one tool.
+generic so the principle outlives any one tool. For the reader's own load, one
+call names the set: `--for=TASK` ranks the building blocks a task touches and
+attaches the bodies to read, and `--callees=SYM` lists what a function's own
+closures call, which the file's own list does not show.
 
 **Count the callers before collapsing, and keep the three cases apart.** Zero
 callers means the layer is dead, which is `principle-hygiene`. One caller means

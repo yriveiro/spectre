@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
+import { join } from "node:path";
 import { load, notALeaf } from "../../skills/definitions/index";
 
 /**
@@ -146,5 +147,113 @@ describe("the closing sentence counts the table", () => {
       none,
       verbs: all.length - none,
     });
+  });
+});
+
+/**
+ * Two counts in the map are facts about the INSTALLED ripwire rather than about
+ * this repository: the number of tools the MCP server advertises, and the number
+ * of moment-skills a plain install activates. Both move when ripwire moves, and
+ * a stale count is the reader's first wrong impression of the instrument. These
+ * two tests read the live numbers and fail on a difference.
+ */
+describe("the counts the map states are the counts ripwire has", () => {
+  const RIPWIRE = Bun.which("ripwire");
+  const SKILLS = join(Bun.env.HOME ?? "", ".local", "share", "ripwire", "skills");
+
+  /** "Thirty-three" -> 33, "sixteen" -> 16. The map spells its counts. */
+  const spelled = (word: string): number => {
+    const parts = word.toLowerCase().split("-");
+    const numbers = parts.map((w) => TENS.get(w) ?? WORDS.indexOf(w as (typeof WORDS)[number]));
+    if (numbers.some((n) => n === -1)) return -1;
+    return numbers.reduce((total, n) => total + n!, 0);
+  };
+
+  /**
+   * The advertised tool count, read the way a session reads it: a `tools/list`
+   * over the stdio MCP server. The server answers and then waits for more, so
+   * the process is killed once the answer is in.
+   */
+  const advertisedTools = async (): Promise<number> => {
+    const server = Bun.spawn([RIPWIRE!, ".", "--mcp"], {
+      cwd: join(import.meta.dir, "..", ".."),
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+
+    const send = (message: unknown) => server.stdin.write(`${JSON.stringify(message)}\n`);
+    send({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "spectre-test", version: "1" },
+      },
+    });
+    send({ jsonrpc: "2.0", method: "notifications/initialized" });
+    send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
+    await server.stdin.flush();
+
+    const decoder = new TextDecoder();
+    const reader = server.stdout.getReader();
+    const read = (async (): Promise<number> => {
+      let buffered = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) return -1;
+        buffered += decoder.decode(value, { stream: true });
+        const lines = buffered.split("\n");
+        buffered = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.includes('"id":2')) continue;
+          const answer = JSON.parse(line) as { result: { tools: Array<unknown> } };
+          return answer.result.tools.length;
+        }
+      }
+    })();
+
+    try {
+      return await Promise.race([read, Bun.sleep(60_000).then(() => -1)]);
+    } finally {
+      server.kill();
+    }
+  };
+
+  test.skipIf(!RIPWIRE)("the tool count is the number the MCP server advertises", async () => {
+    const claim = (await body()).match(/([\w-]+) tools:/);
+    expect(claim).not.toBeNull();
+    const said = spelled(claim![1]!);
+
+    expect({ said, advertised: await advertisedTools() }).toEqual({
+      said,
+      advertised: said,
+    });
+  });
+
+  test.skipIf(!RIPWIRE)("the skill count is what a plain install activates", async () => {
+    const claim = (await body()).match(/([\w-]+) skills of its own/);
+    expect(claim).not.toBeNull();
+    const said = spelled(claim![1]!);
+
+    const listing = await Bun.$`ls ${SKILLS}`.nothrow().quiet();
+    if (listing.exitCode !== 0) return;
+    const names = listing.stdout
+      .toString()
+      .split("\n")
+      .filter((name) => name.startsWith("ripwire-"));
+
+    // A skill whose frontmatter says `audience: contributor` is skipped by a
+    // plain install, so it is not one of the skills a session sees.
+    const activated: Array<string> = [];
+    for (const name of names) {
+      const front = await Bun.file(join(SKILLS, name, "SKILL.md")).text();
+      if (/^audience: contributor$/m.test(front)) continue;
+      activated.push(name);
+    }
+
+    expect({ said, activated: activated.length }).toEqual({ said, activated: said });
   });
 });

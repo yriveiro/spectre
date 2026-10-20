@@ -32,7 +32,11 @@ Open a `todolist` with one entry per phase before launching anything.
    `ripwire.edit_check` on each one. Write the results down. Zero callers means
    the index found none, which is a different sentence from "nothing calls it":
    a floor, not a total, and `--skipped` names what the index dropped.
-3. `tools.spectre.history` on the files in the diff is worth one call. A line
+3. Run `ripwire.impact` on every TYPE the diff touches as well. The walk starts
+   from the symbols that name a type, so a shape that changed shape reaches the
+   code that used the shape, and the answer names those users as `type_users=`
+   and marks a file reached only through the type with `via="type"`.
+4. `tools.spectre.history` on the files in the diff is worth one call. A line
    that exists for a reason nobody wrote down gets deleted by somebody who never
    learned it, and the commit body is the only place that reason survives.
    `reverts` above zero means the file has been argued about, and the losing

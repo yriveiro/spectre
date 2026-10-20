@@ -62,7 +62,7 @@ A claim another leaf owns does not get restated: name the owner in one clause an
 move on. `principle-subtract-before-you-add` opens by handing
 deletion-first-as-reader-load to `principle-laziness-protocol`.
 
-**The template is a target, not a description of the set.** 27 of the 80 bodies
+**The template is a target, not a description of the set.** 29 of the 82 bodies
 still carry a what-not section and 23 carry `## The moves`. Four principles still
 carry the five-section shape it replaced — `principle-boundary-discipline`,
 `principle-evidence`, `principle-hygiene`, `principle-make-operations-idempotent`,
@@ -75,6 +75,11 @@ Measured with `ripwire --eval-skills` over a mirror of the bodies — the call
 `test/skills/routing.test.ts` makes — on a 13-leaf, 54-row corpus. **Figures from
 a single session are not quotes.** Re-run `eval/` before you cite one, and say
 which corpus and which slice it came from.
+
+The corpus has grown since that experiment: 82 bodies and 102 rows. On the whole
+set at ripwire 0.6.8 the description arm reads 0.863 AUC and 57.1% at rank one,
+and the 31-row held-out slice reads 0.929 and 60.7%. The shape of the finding
+holds: the description arm beats the full-text arm, and both beat chance.
 
 **The description is the routing surface, so it names the moment and not the
 subject.** This costs the most and is the hardest to see, because the body is
@@ -153,14 +158,14 @@ one means four things, and skipping any of them is how a port rots.
 3. **Do not import a mode or a workflow as a principle.** `architect`, `teach`,
    `swarm`, `why`, `how`, `automate-me` and their neighbours are procedures for a
    different harness: a leaf states a test and a moment you load it on, and a
-   procedure has neither. Fifty-eight ids are registered and never indexed, which
+   procedure has neither. Fifty-one ids are registered and never indexed, which
    is the shape to reach for when a port is worth having and is not a principle,
    and it costs the set nothing: the map and the index are what the leaf count
    and the routing surface are made of.
 
    Two facts they need, kept here so they are not copied into the definition
    files. They are registered only because `load()` dies on a body it does not
-   list. And nothing in this set is auto-invoked — all 80 definitions carry
+   list. And nothing in this set is auto-invoked — all 82 definitions carry
    `autoinvoke: false` — so the hub's trigger table is the only router there is,
    and a skill in neither the table nor the index is reached only by a reader who
    asks for it by name, which is why its description is written for that reader.
@@ -175,7 +180,7 @@ one means four things, and skipping any of them is how a port rots.
    somebody else's is a net loss the whole-set average hides. The rows for a
    command the reader calls are `neg` rows, not judged ones — the claim under
    test is that the model does not reach for it, so a fire is a false-fire. The
-   16 ported principles have no rows at all, so for those this step is not done.
+   17 ported principles have no rows at all, so for those this step is not done.
 
 ## The cost of a leaf, measured
 

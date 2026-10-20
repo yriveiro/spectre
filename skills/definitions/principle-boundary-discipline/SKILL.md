@@ -121,4 +121,8 @@ the split is real.
   the far side of it.
 - **Not a question you answer by reading.** `ripwire --uses` on the value and
   `--callers` on the check say which guards sit below the point it entered, and
-  a guard with no caller is one the edge already made.
+  a guard with no caller is one the edge already made. Two more answer the other
+  half of the question: `--impact=TYPE` names the symbols that use a type in a
+  type position, which is where a shape enters, and a `--grep` hit inside a
+  variable carries `reads=` and `vals=`, which say where that value goes once
+  the code stores it.

@@ -325,6 +325,9 @@ describe("the set's own prose", () => {
     // each sentence already had, so the count fell by 24 to 343. That folder now
     // reports nothing under the seven rules.
     //
+    // The ripwire map's routing paragraph was rewritten with the numbers ripwire
+    // 0.6.8 measured, and the rewrite took two passives with it: 343 to 341.
+    //
     // The rule counts per line, so rewrapping a paragraph without changing a word can
     // move this number. Splitting "must match" across a line break cost one finding
     // in `AGENTS.md` on its own. Read this number as a count of lines, not of sentences.
@@ -357,7 +360,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 343,
+      passiveVoice: 341,
       otherRules: [],
     });
   }, 120_000);
