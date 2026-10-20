@@ -161,6 +161,12 @@ signal and complexity is a size-correlated one, so treat a complexity number as 
 size proxy and a coupling number as a finding. Where a flag publishes its own
 error bar, read it before quoting the number.
 
+**The literature ranks the metrics differently.** A model on relative churn
+reached R² 0.811 against 0.052 for absolute churn, on one Microsoft product.
+The studies that looked for complexity metrics found no set that carried across
+projects. When the question is where the risk sits, rank by churn with
+`--rank-by=churn`. `features/code-hardness.md` holds the sources.
+
 **A quality family can be unavailable, and absence from the report is not health.**
 `--quality-panel` joins six evidence families and names the ones it could not
 measure, with a reason each. Measured here at 0.6.8: it reports
@@ -252,7 +258,7 @@ different questions, so read the slice before the number. Measured with
 The first line is the number the corpus inflates by construction, so quote the
 blind slice instead. It reads 75.8% at rank one with 1.000 AUC: the right leaf
 sits near the top of the ranking and loses first place to a neighbour most of
-the time. Full text is weaker than the description alone (67.9% and 0.820 over
+the time. Full text is weaker than the description alone (67.9% and 0.819 over
 the whole set), and the routed task lens sits between the two (58.3%, 0.868).
 Every skill with permitted rows wins at least one, and no skill fires on more
 than one row that is not its own.

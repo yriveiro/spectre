@@ -23,16 +23,16 @@ because that file's rules put them there, not because they were planned.
 | Reachability and map-drift tests | both verified to fail before being kept |
 | The blind slice | 37 fresh rows, and `eval/tests/fixture.test.ts` holds the bar that keeps a row from quoting the description of the leaf it names |
 | Eval rows for the 7 principles without them | 3 rows each, and the blind slice reads 14 of those 21 at rank one |
+| The map's complexity sentence | the map now says what the defect literature says about churn and complexity, names `--rank-by=churn` as the ranking to use, and points at `features/code-hardness.md` for the sources |
 
 ## Next
 
 Nothing in the port is left unplanned. The rows below are the remainder, and each
-is work rather than a person. The evidence behind the first three sits in
+is work rather than a person. The evidence behind these rows sits in
 `features/code-hardness.md`.
 
 | Item | Notes |
 | ---- | ----- |
-| Correct the map's complexity sentence | `skills/definitions/ripwire/SKILL.md` calls coupling the validated signal and complexity a size proxy. The literature says churn carries the signal and complexity does not predict defects outside one project |
 | A leaf for the moment where you choose where to look first | no leaf owns it, and `ripwire --rank-by=churn` answers it. The ranking is a place to start and not an oracle, and the leaf has to say so |
 | Ownership in the history tool | `tools.spectre.history` already returns the authors of a file's history, and the minor-contributor count is the strongest single predictor in the defect literature |
 | A fresh blind batch, written by a writer that never saw the descriptions | every leaf with a row in the current blind slice now wins at least one of them, so the slice no longer separates one leaf from another. The four-word bar catches a row that quotes a description and not a row that copies its shape |
