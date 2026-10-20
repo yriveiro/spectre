@@ -26,12 +26,16 @@ because that file's rules put them there, not because they were planned.
 
 ## Next
 
-Nothing in the port is left unplanned. The row below is the remainder, and it is
-work rather than a person.
+Nothing in the port is left unplanned. The rows below are the remainder, and each
+is work rather than a person. The evidence behind the first three sits in
+`features/code-hardness.md`.
 
 | Item | Notes |
 | ---- | ----- |
-| A fresh blind batch | every leaf with a row in the current blind slice now wins at least one of them, so the slice no longer separates one leaf from another. Write new rows under the same bar and read them once |
+| Correct the map's complexity sentence | `skills/definitions/ripwire/SKILL.md` calls coupling the validated signal and complexity a size proxy. The literature says churn carries the signal and complexity does not predict defects outside one project |
+| A leaf for the moment where you choose where to look first | no leaf owns it, and `ripwire --rank-by=churn` answers it. The ranking is a place to start and not an oracle, and the leaf has to say so |
+| Ownership in the history tool | `tools.spectre.history` already returns the authors of a file's history, and the minor-contributor count is the strongest single predictor in the defect literature |
+| A fresh blind batch, written by a writer that never saw the descriptions | every leaf with a row in the current blind slice now wins at least one of them, so the slice no longer separates one leaf from another. The four-word bar catches a row that quotes a description and not a row that copies its shape |
 
 ## Blocked on a human
 
