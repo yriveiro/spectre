@@ -332,6 +332,9 @@ describe("the set's own prose", () => {
     // rows got them, and the sentence that named the two took one passive with it:
     // 341 to 340.
     //
+    // The eval's README lost its stale figures with the sentence that carried them:
+    // 340 to 339.
+    //
     // The rule counts per line, so rewrapping a paragraph without changing a word can
     // move this number. Splitting "must match" across a line break cost one finding
     // in `AGENTS.md` on its own. Read this number as a count of lines, not of sentences.
@@ -364,7 +367,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 340,
+      passiveVoice: 339,
       otherRules: [],
     });
   }, 120_000);

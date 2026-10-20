@@ -128,11 +128,19 @@ assumed:
 ## Reading the numbers
 
 Scores are not comparable across corpora, and this number moves as the corpus
-grows. Measured on 2026-09-28 against 16 skills, `bm25-desc` scores 50.0% on the
-held-out slice (22 rows) and 59.4% on all rows (75). ripwire also reports the
-judged rows alone, which is the honest number because the other rows quote the
-descriptions: 11/22 and 38/64. Re-run the lexical arm before quoting any of
-these, and say which corpus and which slice the figure came from.
+grows. Measured at ripwire 0.6.8 over the 82 bodies, the description arm reads
+99.4% at rank one over the 156 judged rows of the `tuned` and `heldOut` slices,
+with 0.954 separation, and 75.8% over the 33 judged rows of the `blind` slice,
+with 1.000 separation. ripwire also reports the judged rows alone, which is the
+honest number because the other rows quote the descriptions. Re-run the lexical
+arm before quoting any of these, and say which corpus and which slice the
+figure came from.
+
+The two arms score over different denominators, and the table prints each one.
+The lexical arms score the judged rows, the ones that name a leaf, because a
+lexical matcher never answers `none` on a negative row. The model arms score
+every row, because a model can answer `none` and a negative row asks for it.
+Compare the two rates, not the two counts.
 
 The held-out slice is the `heldOut` export in `fixture.ts`, not a set derived
 from git. It used to be derived, by comparing prompts against

@@ -1,7 +1,6 @@
 # TODO
 
-Where the pstack port stands. One thing here is blocked on a human, and it says
-so rather than sitting as undone work.
+Where the pstack port stands. Nothing in it is waiting on a person.
 
 Read `skills/FOR_AGENTS.md` before adding a leaf. Three of the rows below exist
 because that file's rules put them there, not because they were planned.
@@ -24,6 +23,8 @@ because that file's rules put them there, not because they were planned.
 | The blind slice | 37 fresh rows, and `eval/tests/fixture.test.ts` holds the bar that keeps a row from quoting the description of the leaf it names |
 | Eval rows for the 7 principles without them | 3 rows each, and the blind slice reads 14 of those 21 at rank one |
 | The map's complexity sentence | the map now says what the defect literature says about churn and complexity, names `--rank-by=churn` as the ranking to use, and points at `features/code-hardness.md` for the sources |
+| The eval's hit-rate column | `eval/run.ts` read ripwire's AUC as hit@1, so the random arm read 50.0% and every lexical arm read high. It now reads the first column and scores over the judged rows: 75.8% (25/33) on the blind slice, and 1.2% for random |
+| The model arm of the eval | five free models against 82 of 82 registered skills, 3 to 6 of the 37 blind rows at rank one, and no spectre skill loaded. The catalogue check that had it blocked reads OpenCode's own log line and refuses to score on a mismatch |
 
 ## Next
 
@@ -36,17 +37,7 @@ is work rather than a person. The evidence behind these rows sits in
 | A leaf for the moment where you choose where to look first | no leaf owns it, and `ripwire --rank-by=churn` answers it. The ranking is a place to start and not an oracle, and the leaf has to say so |
 | Ownership in the history tool | `tools.spectre.history` already returns the authors of a file's history, and the minor-contributor count is the strongest single predictor in the defect literature |
 | A fresh blind batch, written by a writer that never saw the descriptions | every leaf with a row in the current blind slice now wins at least one of them, so the slice no longer separates one leaf from another. The four-word bar catches a row that quotes a description and not a row that copies its shape |
-
-## Blocked on a human
-
-| Item | Unblock |
-| ---- | ------- |
-| `bun run eval -- --held-out` | delete the `"plugins": ["github:yriveiro/spectre"]` line from `~/.config/opencode/opencode.jsonc`. The eval reads OpenCode's own `Registered skills` log line, it reported `20 of our 36` with the 16 missing being exactly the new principles, and it refuses to score rather than grading against a catalogue nobody confirmed |
-
-The precedent for why this matters is in `skills/FOR_AGENTS.md`: going from 10
-leaves to 13 cost 9.3 points of held-out `bm25-full` hit@1, about 3 points per
-leaf, and no description rewrite recovered it. Sixteen principles landed without
-a row to measure them, so the cost is unknown rather than absent.
+| Ripwire's skills in the eval's mirror | the corpus ranks each leaf against the other 30, and a live session picks one of ripwire's 16 skills every time. The mirror has to hold the rivals for the measurement to match the choice |
 
 ## Deliberately not ported
 

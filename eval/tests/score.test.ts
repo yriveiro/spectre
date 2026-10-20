@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { NONE, permitted, score, table, type Prediction } from "../score";
+import { hitRateOf, NONE, permitted, score, table, type Prediction } from "../score";
 import type { Row } from "../fixture";
 
 const p = (prompt: string, got: string, via: Prediction["via"] = "text"): Prediction => ({
@@ -114,6 +114,31 @@ describe("per skill", () => {
   test("none is not a catalogue skill, so it gets no row", () => {
     const r = score(rows, [], catalogue);
     expect(r.perSkill.map((s) => s.id)).toEqual(["one", "two"]);
+  });
+});
+
+describe("hitRateOf", () => {
+  // A slice of the table `ripwire --eval-skills` prints. The columns after the
+  // arm name are hit@1, hit@2, mrr, the separation AUC and the fire/abstain
+  // bound, and the AUC is a fraction where the hit rate is a percentage.
+  const table = `
+  arm           hit@1   hit@2     mrr   sep-auc   fire/abstain@ORACLE-th (upper bound)
+  bm25-desc     75.8%   78.8%   0.810     1.000    78.4% (th=7.628)
+  bm25-full     45.5%   63.6%   0.603     0.871    48.6% (th=6.361)
+  random         1.2%    2.4%   0.061     0.500    <- floor (uniform-random ranking; auc 0.5 by definition)
+`;
+
+  test("the hit rate is the first column, not the AUC behind it", () => {
+    expect(hitRateOf(table, "bm25-desc")).toBeCloseTo(0.758, 5);
+    expect(hitRateOf(table, "bm25-full")).toBeCloseTo(0.455, 5);
+  });
+
+  test("the random arm reads a floor, not a half", () => {
+    expect(hitRateOf(table, "random")).toBeCloseTo(0.012, 5);
+  });
+
+  test("an arm the table does not carry reads zero", () => {
+    expect(hitRateOf(table, "bm25-nothing")).toBe(0);
   });
 });
 
