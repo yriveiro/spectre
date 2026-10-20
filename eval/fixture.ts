@@ -628,6 +628,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-prove-it-works",
     provenance: "judged",
   },
+  {
+    prompt: "this requirement was never thought of when the shape was drawn, what do we do with it",
+    label: "principle-redesign-from-first-principles",
+    provenance: "judged",
+  },
+  {
+    prompt: "the plan adds a flag for the new case, is that the right way to fit it in",
+    label: "principle-redesign-from-first-principles",
+    provenance: "judged",
+  },
+  {
+    prompt: "describing this change as the old design with one more case feels wrong, what should we do",
+    label: "principle-redesign-from-first-principles",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
