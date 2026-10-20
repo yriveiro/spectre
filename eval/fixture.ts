@@ -553,6 +553,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-encode-lessons-in-structure",
     provenance: "judged",
   },
+  {
+    prompt: "we have never built anything like this and a wrong choice would be expensive to undo, should we try two ways",
+    label: "principle-exhaust-the-design-space",
+    provenance: "judged",
+  },
+  {
+    prompt: "nothing in this codebase does this, i am tempted to just write the obvious one",
+    label: "principle-exhaust-the-design-space",
+    provenance: "judged",
+  },
+  {
+    prompt: "i have one idea for this and no second one, is that enough",
+    label: "principle-exhaust-the-design-space",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [

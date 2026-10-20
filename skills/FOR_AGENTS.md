@@ -76,11 +76,11 @@ Measured with `ripwire --eval-skills` over a mirror of the bodies — the call
 a single session are not quotes.** Re-run `eval/` before you cite one, and say
 which corpus and which slice it came from.
 
-The corpus has grown since that experiment: 82 bodies and 190 rows in three
+The corpus has grown since that experiment: 82 bodies and 193 rows in three
 slices. At ripwire 0.6.8 the description arm reads 0.949 AUC and 99.3% at rank
-one over the 153 rows of the `tuned` and `heldOut` slices, the 31-row
-`heldOut` slice reads 0.988 and 100% with four judged rows now sitting inside a
-description, and the 37-row `blind` slice reads 0.977 and 24.2%. The shape of
+one over the 156 rows of the `tuned` and `heldOut` slices, the 31-row
+`heldOut` slice reads 1.000 and 100% with four judged rows now sitting inside a
+description, and the 37-row `blind` slice reads 0.985 and 30.3%. The shape of
 the finding holds: the description arm beats the full-text arm, and both beat
 chance. The blind slice carries the honest number, because the other two have
 now been read against.
