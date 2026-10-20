@@ -14,6 +14,7 @@ because that file's rules put them there, not because they were planned.
 | `tools.spectre.worktrees` | every worktree bucketed from git and `gh` evidence |
 | `tools.spectre.stack` | tier-major verdict over a pull request stack |
 | `tools.spectre.history` | git archaeology: commits, bodies, blame, pickaxe |
+| Ownership in the history tool | `tools.spectre.history` now reports `ownership` over a file's whole history: total commits and distinct authors, the largest share and its holder, and the count of authors under 5% — the defect literature's strongest single predictor. `authors` stays scoped to the returned window and the body says so |
 | 16 principles from pstack | refit to the body template, 1000 to 1500 words each |
 | `ripwire` map row per leaf | 31 rows, and the `none` count synced to the hub |
 | 14 procedures from pstack | registered and not indexed, per rule 3 |
@@ -37,7 +38,6 @@ is work rather than a person. The evidence behind these rows sits in
 | Item | Notes |
 | ---- | ----- |
 | A leaf for the moment where you choose where to look first | no leaf owns it, and `ripwire --rank-by=churn` answers it. The ranking is a place to start and not an oracle, and the leaf has to say so |
-| Ownership in the history tool | `tools.spectre.history` already returns the authors of a file's history, and the minor-contributor count is the strongest single predictor in the defect literature |
 
 ## Deliberately not ported
 
