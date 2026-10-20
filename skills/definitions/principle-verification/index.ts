@@ -5,7 +5,7 @@ export const principleVerification: Definition = {
   id: Skill.ID.make("principle-verification"),
   name: Skill.Name.make("principle-verification"),
   description:
-    "Did you actually run it? Can I push this yet? Did the tests actually run? Is the typecheck passing? Load it before you say done, before you say it is safe to push or ship, before you confirm a check passed or the typecheck is green, and before you write or edit a version, a manifest, a lockfile, a README, a release note, or any other line somebody will trust without re-deriving it. Run the command, then make the claim, and name plainly what you did not check. A claim you did not run is a guess with punctuation. Which claim no longer holds is ripwire's question, and a fact nobody checked at all is principle-evidence's other half.",
+    "Did you actually run it? Can I push this yet? Did the tests actually run? Is the typecheck passing? Load it before you say done, before you say it is safe to push or ship, before you confirm a check passed or the typecheck is green, and before you write or edit a version, a manifest, a lockfile, a README, a release note, or any other line somebody will trust without re-deriving it. Run the command, then make the claim, and name plainly what you did not check. A claim you did not run is a guess with punctuation. You are entitled to claim only what you ran, so ask what you are entitled to say before you claim it works. Which claim no longer holds is ripwire's question, and a fact nobody checked at all is principle-evidence's other half.",
   autoinvoke: false,
   path: anchor(import.meta.dir),
 };
