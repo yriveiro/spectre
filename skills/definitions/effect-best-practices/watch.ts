@@ -21,7 +21,7 @@ import { VERIFIED } from "./verified";
  *
  * `installation.updated` carries a version and looks like the better trigger, and it is
  * subscribable: `InstallationEvent.Updated` is in the event manifest. But the function that
- * publishes it — `updated` on the server process, read at `v2.0.29` — has no caller in `src`,
+ * publishes it — `updated` on the server process, read at `v2.1.1` — has no caller in `src`,
  * and the only call to its sibling `updateAvailable` is a test. So the event never fires, and a
  * subscription to it is a check that cannot run. `filesystem.changed` carries the path that changed and
  * is what this uses.

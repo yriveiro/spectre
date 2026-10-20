@@ -17,7 +17,7 @@ registration succeeded, and on the input and the output side alike.
 
 ## What the boundary accepts
 
-Measured at 2.0.29: one tool per construct, each called once with a value valid
+Measured at 2.1.1: one tool per construct, each called once with a value valid
 for it.
 
 | Declared | Call |
@@ -33,7 +33,7 @@ for it.
 | `Schema.URL` | rejected: `Expected URL` |
 
 `Int`, `Finite`, `Natural` and `NonEmptyString` were **rejected outright** at
-2.0.18, and the host honours them now (re-verified at v2.0.29 on the pinned
+2.0.18, and the host honours them now (re-verified at v2.1.1 on the pinned
 `effect@4.0.1`: `decodeUnknownOption(Schema.Int)(1)` is `Some`, `(1.5)` is
 `None`, `Finite(NaN)` is `None`, `NonEmptyString("")` is `None`). A second session
 called each one with a value it must reject — `1.5`, `NaN`, `-3`, `""` — and every
@@ -44,7 +44,7 @@ the value through.
 
 This is the part that costs an afternoon, so it goes before the table's cause.
 
-`packages/core/src/tool/runtime.ts:79` at v2.0.29 validates a call with
+`packages/core/src/tool/runtime.ts:79` at v2.1.1 validates a call with
 `Schema.decodeUnknownEffect(codec)(value, { errors: "all" })` — Effect's own
 decoder, on the Effect schema the tool declared. A separate function builds the JSON
 Schema at `runtime.ts:156` (`inputJsonSchema`), and it only describes the tool to the model.
@@ -96,8 +96,27 @@ Schema.toJsonSchemaDocument(Schema.URL).schema;              // {"type":"string"
 Schema.decodeUnknownOption(Schema.URL)("https://x.com")._tag; // "None" — refused
 ```
 
+## Which `Tool.Error` the host sees
+
+The host redirects exactly two packages to its own runtime copy —
+`runtimePackages = ["effect", "@opencode/plugin"]` in
+`@opencode/plugin/dist/runtime-modules.js` at 2.1.1. `@opencode/schema` is not
+one of them, so this repo's pinned copy builds the `Tool.Error` a tool throws,
+not the host. The host tests `error instanceof Tool.Error`
+(`packages/core/src/tool/runtime.ts:39`) and, when that is false, re-wraps the
+failure as `new Tool.Error({ message })`: the refusal text survives, `metadata`
+and `error` do not. `_tag` survives the same way (`Tool.Error` is a
+`Schema.TaggedStruct`), so `catchTag("Tool.Error")` still matches.
+
+The consequence is a pinning rule, not a code change: the three `@opencode/*`
+pins move in lockstep with `engines.opencode`, so the copy that builds the
+error never drifts more than this bump from the copy that reads it. Where the
+barrel re-exports a schema (`Agent`, `Skill`, and not `Tool`), prefer the
+barrel and ride the redirect. `Tool` and `AbsolutePath` have no barrel route in
+either version, so `@opencode/schema` stays the only import that works.
+
 **The cause of this file's history is in `runtime.ts:175` (`toJsonSchema`) at
-v2.0.29**, and it is
+v2.1.1**, and it is
 why the table changed. The boundary used to walk the Effect schema AST
 itself, and on `effect@4.0.0-rc.112` that AST carries no `_tag` on the nodes a
 schema is built from, so everything past the primitives failed. It now calls
@@ -125,7 +144,7 @@ away with it.
 
 ## How `options` becomes a call path
 
-Read at tag `v2.0.29`, not inferred. A tool added through
+Read at tag `v2.1.1`, not inferred. A tool added through
 `ctx.tool.transform` lands in the **same** registry as the builtins. There is no
 separate plugin path, and the three fields in `Tool.Options` decide where it
 surfaces:
@@ -150,10 +169,10 @@ Two filters, and both are about the **caller**, not the tool:
 Wholly disabled means one shape and no other. `whollyDisabled` at
 `packages/core/src/tool.ts` is three lines: take the last rule matching the
 action, and drop the tool only when that rule is `{resource: "*", effect:
-"deny"}`. Re-read at tag `v2.0.29`, so this paragraph and the filter definition
+"deny"}`. Re-read at tag `v2.1.1`, so this paragraph and the filter definition
 above are current. The schema table further up is still measured at 2.0.18 and
 has not been fully re-run (the `Int`/`Finite`/`NonEmptyString`/`URL`/`Trim`
-rows were spot re-verified at v2.0.29).
+rows were spot re-verified at v2.1.1).
 
 **`options.permission` is a label, not a boundary.** It decides whether the tool
 is *offered*. It is not consulted again when the tool runs — the call path at
@@ -206,7 +225,7 @@ const result = await tools.spectre.comments({ targets: ["<file>"] })
 supported OpenCode version moves. Do not trust this table across a bump.
 
 There is no cheap pre-check for this table, and the reason changed with it. Until
-2.0.29 the host decided the accepted set with a walk of the Schema AST, and on
+2.1.1 the host decided the accepted set with a walk of the Schema AST, and on
 Effect `4.0.0-rc.112` that AST carries no `_tag` on the nodes a schema is built
 from — `Schema.Struct({a: Schema.String})` exposes `fields`, `mapFields`,
 `ast`, `rebuild`, and friends, and `ast._tag` is the description `"Objects"`

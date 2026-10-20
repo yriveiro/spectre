@@ -15,7 +15,7 @@
     "tools"
   ],
   "engines": {
-    "opencode": ">=2.0.29"
+    "opencode": ">=2.1.1"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -25,9 +25,9 @@
     "d3.vendor": "bun run scripts/sync-d3.ts"
   },
   "dependencies": {
-    "@opencode/ai": "2.0.29",
-    "@opencode/plugin": "2.0.29",
-    "@opencode/schema": "2.0.29",
+    "@opencode/ai": "2.1.1",
+    "@opencode/plugin": "2.1.1",
+    "@opencode/schema": "2.1.1",
     "effect": "4.0.1"
   },
   "devDependencies": {

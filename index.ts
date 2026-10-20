@@ -10,7 +10,7 @@ import * as tools from "./tools";
  *
  * OpenCode resolves this module as the package's server entrypoint and calls
  * `effect` once per project instance. Everything Spectre contributes to
- * OpenCode — skills, agents, tools, commands, nested plugins, MCP servers — is
+ * OpenCode — skills, agents, tools, commands — is
  * registered from inside that effect, through the domains on `ctx`.
  *
  * A duplicate id is not fatal: the first registration wins and the later one is
