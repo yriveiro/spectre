@@ -77,9 +77,10 @@ a single session are not quotes.** Re-run `eval/` before you cite one, and say
 which corpus and which slice it came from.
 
 The corpus has grown since that experiment: 82 bodies and 129 rows. On the whole
-set at ripwire 0.6.8 the description arm reads 0.929 AUC and 90.1% at rank one,
-and the 31-row held-out slice reads 0.964 and 82.1%. The shape of the finding
-holds: the description arm beats the full-text arm, and both beat chance.
+set at ripwire 0.6.8 the description arm reads 0.933 AUC and 91.9% at rank one,
+and the 31-row held-out slice reads 0.976 and 85.7%, one judged row of which
+now sits inside a description. The shape of the finding holds: the description
+arm beats the full-text arm, and both beat chance.
 
 **The description is the routing surface, so it names the moment and not the
 subject.** This costs the most and is the hardest to see, because the body is
