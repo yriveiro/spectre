@@ -373,6 +373,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "diagram",
     provenance: "judged",
   },
+  {
+    prompt: "this task is big, the order of the steps matters, which procedure do we run",
+    label: "playbook",
+    provenance: "judged",
+  },
+  {
+    prompt: "pick the procedure for this job and tell me the order",
+    label: "playbook",
+    provenance: "judged",
+  },
+  {
+    prompt: "this whole task has more than one honest answer, which procedure fits it",
+    label: "playbook",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
