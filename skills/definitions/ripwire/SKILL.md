@@ -238,21 +238,28 @@ mirror is complete, that no skill reads as undescribed, and that both
 description-based and full-text routing beat chance. `fixture.ts` holds the
 labelled prompts. Change a description, run `bun test`, and the numbers move.
 
-Routing is mediocre at rank one and good at separation, and the gap is
+Routing is good at rank one and better at separation, and the gap is
 vocabulary rather than structure. Measured with `ripwire --eval-skills` over the
 mirror of the 82 bodies, on the 129 rows of `eval/fixture.ts` at ripwire 0.6.8:
-description-based routing separates the right skill from the wrong one at 0.929
-AUC and puts 90.1% of the rows at rank one, and the held-out slice of 31 rows
-reads 0.964 AUC and 82.1% at rank one. Full text is weaker than the description
-alone (61.3% and 0.781 over the whole set), and the routed task lens sits
-between the two (52.3%, 0.825). Every skill with permitted rows wins at least
-one. The loudest false fire left is two, in `principle-test-for-truth`, and
-every other skill fires at most once.
+description-based routing separates the right skill from the wrong one at 0.933
+AUC and puts 91.9% of the rows at rank one, and the held-out slice of 31 rows
+reads 0.976 AUC and 85.7% at rank one. Full text is weaker than the description
+alone (62.2% and 0.782 over the whole set), and the routed task lens sits
+between the two (53.2%, 0.831). Every skill with permitted rows wins at least
+one, and no skill fires on more than one row that is not its own.
 
 What survives in the misses is nouns. "bump effect to the latest rc" does not
 match a description that says "a dependency on an old version". Leading with
 the moment fixed the register and left the everyday words missing, and closing
 that gap needs new held-out prompts, because the current set has now been read.
+
+One held-out row now sits inside a description, so the held slice is a read on
+27 of its 28 judged rows and not 28. The row is the `ripwire` one, "prove the
+retry logic is reachable", and it moved because the description now names the
+reachability moment. The word it turns on, "reachable", is the leaf's own body
+vocabulary: `--path=A,B` answers a reachability claim and the answer carries
+`reachable=`. The row's own subject, the retry logic, is not in the
+description, so it reads as a reachability question and not a memorised string.
 
 The test asserts none of this. A per-skill win rate is a number that moves when
 any description is reworded, and a gate on it would be red for a reason nobody
