@@ -613,6 +613,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-build-the-lever",
     provenance: "judged",
   },
+  {
+    prompt: "the binary built without errors but nobody has run it, does that count",
+    label: "principle-prove-it-works",
+    provenance: "judged",
+  },
+  {
+    prompt: "the tool says it wrote the output, how do i check the output itself",
+    label: "principle-prove-it-works",
+    provenance: "judged",
+  },
+  {
+    prompt: "a first time user would not know what to click here, has anyone tried that",
+    label: "principle-prove-it-works",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
