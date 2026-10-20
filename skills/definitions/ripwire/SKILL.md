@@ -265,7 +265,10 @@ batch exists for. Full text sits at the same level (14.8%, 0.593), the
 word-overlap arm reads zero hits, and the routed task lens is the strongest
 (14.8%, 0.844) with ripwire's skills ranked in. The model arms read 2 to 3 of
 the 32 rows at rank one, in line with their 3-to-6-of-37 read on the
-author-written batch: meaning survives a register that vocabulary does not.
+author-written batch and their 0-to-3-of-31 read on the held-out slice: meaning
+survives a register that vocabulary does not. On the held-out rows the arms
+answer in prose and load nothing, and what they name is nearly always a
+ripwire rival.
 What died between the batches is the author idiom. The earlier slice was
 written by the descriptions' author, and the four-word bar removed the
 quoting while keeping the idiom: each row said its moment in the same

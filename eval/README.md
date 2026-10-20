@@ -150,7 +150,10 @@ current `blind` slice, which a writer that never saw the descriptions wrote.
 The previous blind batch read 72.7% at the same bar, and the difference is the
 measurement the fresh batch exists for: author-shaped rows route, blind rows
 do not. The model arms read 2 to 3 of the 32 blind rows at rank one, in line
-with their 3-to-6-of-37 read on the author-written batch. Re-run the lexical
+with their 3-to-6-of-37 read on the author-written batch. The held-out slice
+reads 0 to 3 of 31 in the same band, and the arms answer in prose there without
+loading a skill: no held-out model arm loads one with the tool, and the names
+they say nearly always belong to ripwire's rivals. Re-run the lexical
 arm before quoting any of these, and say which corpus and which slice the
 figure came from.
 
