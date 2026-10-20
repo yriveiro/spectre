@@ -508,6 +508,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-model-the-domain",
     provenance: "judged",
   },
+  {
+    prompt: "two things write to the same file at once, should i add a lock",
+    label: "principle-separate-before-serializing-shared-state",
+    provenance: "judged",
+  },
+  {
+    prompt: "can each worker write its own copy and merge them later",
+    label: "principle-separate-before-serializing-shared-state",
+    provenance: "judged",
+  },
+  {
+    prompt: "we keep adding queues and retries around this shared state, is that the wrong fix",
+    label: "principle-separate-before-serializing-shared-state",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
