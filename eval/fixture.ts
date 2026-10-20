@@ -583,6 +583,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-experience-first",
     provenance: "judged",
   },
+  {
+    prompt: "everything later depends on this first part, what should we settle now while it is still cheap to change",
+    label: "principle-foundational-thinking",
+    provenance: "judged",
+  },
+  {
+    prompt: "the seams between the modules are not decided, we should pick them before any of the code exists",
+    label: "principle-foundational-thinking",
+    provenance: "judged",
+  },
+  {
+    prompt: "this data structure carries every later phase, is now the moment to get it right",
+    label: "principle-foundational-thinking",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
