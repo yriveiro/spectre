@@ -31,7 +31,7 @@ work rather than a person.
 
 | Item | Notes |
 | ---- | ----- |
-| Three leaves that win none of their blind rows | `principle-never-block-on-the-human`, `principle-separate-before-serializing-shared-state` and `principle-subtract-before-you-add` each own a boundary row the router hands to a neighbour. The corpus phase puts the words a prompt uses into each description, one leaf per change |
+| Two leaves that win none of their blind rows | `principle-separate-before-serializing-shared-state` and `principle-subtract-before-you-add` each own a boundary row the router hands to a neighbour. The corpus phase puts the words a prompt uses into each description, one leaf per change |
 
 ## Blocked on a human
 
