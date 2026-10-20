@@ -493,6 +493,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-type-system-discipline",
     provenance: "judged",
   },
+  {
+    prompt: "every new case is another branch on this if chain, how do i stop that",
+    label: "principle-model-the-domain",
+    provenance: "judged",
+  },
+  {
+    prompt: "the same flag is checked in three places and they drift apart",
+    label: "principle-model-the-domain",
+    provenance: "judged",
+  },
+  {
+    prompt: "this state should be impossible but it keeps showing up at runtime",
+    label: "principle-model-the-domain",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
