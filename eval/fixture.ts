@@ -343,6 +343,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "playbook-eval",
     provenance: "judged",
   },
+  {
+    prompt: "this suite is green and nobody can say what each test catches",
+    label: "principle-test-for-truth",
+    provenance: "judged",
+  },
+  {
+    prompt: "which edge cases here are worth a test at all",
+    label: "principle-test-for-truth",
+    provenance: "judged",
+  },
+  {
+    prompt: "the suite takes twenty minutes to run, is that cost worth paying",
+    label: "principle-test-for-truth",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
