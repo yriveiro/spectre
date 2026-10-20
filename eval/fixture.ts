@@ -463,6 +463,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-attack-the-premise",
     provenance: "judged",
   },
+  {
+    prompt: "this is five steps, how do i cut it into pieces i can check one at a time",
+    label: "principle-sequence-verifiable-units",
+    provenance: "judged",
+  },
+  {
+    prompt: "i have three half finished changes and the test fails, which one broke it",
+    label: "principle-sequence-verifiable-units",
+    provenance: "judged",
+  },
+  {
+    prompt: "each piece has to end in a check, how do i write the steps down",
+    label: "principle-sequence-verifiable-units",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
