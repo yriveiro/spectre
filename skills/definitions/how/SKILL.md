@@ -38,7 +38,13 @@ Open a `todolist` with one entry per phase before launching anything.
 
 Call `ripwire.explore` with the question and read the ranked result before you
 open anything. It names the entry point, the symbols that carry the subsystem and
-the neighbourhood.
+the neighbourhood, and it attaches the bodies of the top hits, so read those
+before you open a file.
+
+A question that names a thing gets one more thing from `ripwire.for`: an owner
+body, chosen by structure rather than by score, which is the body to read first.
+It is the owner by rule and not necessarily the subject, so read it as an entry
+point rather than as the answer.
 
 When the answer comes back thin, run `--skipped` before you believe it. A
 subsystem that looks like three files is usually one large unparsed or generated
