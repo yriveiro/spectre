@@ -433,6 +433,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "playbook-brain",
     provenance: "judged",
   },
+  {
+    prompt: "should i add a guard for this case or find the real bug",
+    label: "principle-fix-root-causes",
+    provenance: "judged",
+  },
+  {
+    prompt: "this test only passes on the second run, what is really wrong",
+    label: "principle-fix-root-causes",
+    provenance: "judged",
+  },
+  {
+    prompt: "i could make this error go away with a default value, is that the fix",
+    label: "principle-fix-root-causes",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
