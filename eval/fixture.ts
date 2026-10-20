@@ -568,6 +568,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-exhaust-the-design-space",
     provenance: "judged",
   },
+  {
+    prompt: "every user would carry that choice forever if we add a setting for it, is it worth it",
+    label: "principle-experience-first",
+    provenance: "judged",
+  },
+  {
+    prompt: "one part of the app feels slow and the rest is fine, should we fix the whole surface or only where people actually use it",
+    label: "principle-experience-first",
+    provenance: "judged",
+  },
+  {
+    prompt: "the team wants one more feature this quarter but the people using the app would not notice it, what should we ship",
+    label: "principle-experience-first",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [

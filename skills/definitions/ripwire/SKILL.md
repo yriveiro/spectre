@@ -245,15 +245,15 @@ different questions, so read the slice before the number. Measured with
 
 | slice | rows | hit@1 | AUC | what it reads |
 | ----- | ---- | ----- | --- | ------------ |
-| `tuned` and `heldOut` | 156 | 99.3% | 0.949 | in-sample, because these rows shaped the descriptions |
+| `tuned` and `heldOut` | 159 | 99.3% | 0.950 | in-sample, because these rows shaped the descriptions |
 | `heldOut` | 31 | 100% | 1.000 | frozen and saturated, with four judged rows now inside a description |
-| `blind` | 37 | 30.3% | 0.985 | fresh rows that no description has seen |
+| `blind` | 37 | 39.4% | 0.985 | fresh rows that no description has seen |
 
 The first line is the number the corpus inflates by construction, so quote the
-blind slice instead. It reads 30.3% at rank one with 0.985 AUC: the right leaf
+blind slice instead. It reads 39.4% at rank one with 0.985 AUC: the right leaf
 sits near the top of the ranking and loses first place to a neighbour most of
-the time. Full text is weaker than the description alone (66.7% and 0.801 over
-the whole set), and the routed task lens sits between the two (55.8%, 0.851).
+the time. Full text is weaker than the description alone (67.4% and 0.805 over
+the whole set), and the routed task lens sits between the two (56.7%, 0.854).
 Every skill with permitted rows wins at least one, and no skill fires on more
 than one row that is not its own.
 
@@ -282,12 +282,12 @@ The blind slice holds the corpus to a bar the other two slices cannot meet.
 description of the leaf it names, so a leaf cannot win a row by quoting itself.
 The 37 rows cover the seven leaves the corpus never covered, twelve boundary
 rows that each have a neighbour the router could pick instead, and four rows
-that name no leaf at all. The read at this commit puts 10 of the 33 judged rows
-at rank one: 6 of the 21 rows for those seven leaves, and 4 of the 12 boundary
-rows. Nine of the 18 leaves with a row here win none of it, and two of those
-never had a row before: `principle-experience-first` and
-`principle-foundational-thinking`. The words those prompts use are absent from
-the descriptions, and that absence is what the corpus phase closes.
+that name no leaf at all. The read at this commit puts 13 of the 33 judged rows
+at rank one: 9 of the 21 rows for those seven leaves, and 4 of the 12 boundary
+rows. Eight of the 18 leaves with a row here win none of it, and one of those
+never had a row before: `principle-foundational-thinking`. The words those
+prompts use are absent from the descriptions, and that absence is what the
+corpus phase closes.
 
 A row in the blind slice gets read once. When a description changes because of
 one of those rows, that row stops being blind, so it moves into `tuned` and a
