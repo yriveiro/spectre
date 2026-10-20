@@ -15,6 +15,7 @@ because that file's rules put them there, not because they were planned.
 | `tools.spectre.stack` | tier-major verdict over a pull request stack |
 | `tools.spectre.history` | git archaeology: commits, bodies, blame, pickaxe |
 | Ownership in the history tool | `tools.spectre.history` now reports `ownership` over a file's whole history: total commits and distinct authors, the largest share and its holder, and the count of authors under 5% — the defect literature's strongest single predictor. `authors` stays scoped to the returned window and the body says so |
+| A leaf for the moment where you choose where to look first | `look-first` names `ripwire --rank-by=churn` as the place to start and says the ranking is not an oracle. Registered and routed to, not indexed; the map carries row 32 and its closing counts read thirty-two, nine and twenty-three |
 | 16 principles from pstack | refit to the body template, 1000 to 1500 words each |
 | `ripwire` map row per leaf | 31 rows, and the `none` count synced to the hub |
 | 14 procedures from pstack | registered and not indexed, per rule 3 |
@@ -31,13 +32,7 @@ because that file's rules put them there, not because they were planned.
 
 ## Next
 
-Nothing in the port is left unplanned. The rows below are the remainder, and each
-is work rather than a person. The evidence behind these rows sits in
-`features/code-hardness.md`.
-
-| Item | Notes |
-| ---- | ----- |
-| A leaf for the moment where you choose where to look first | no leaf owns it, and `ripwire --rank-by=churn` answers it. The ranking is a place to start and not an oracle, and the leaf has to say so |
+This list is empty: every row that stood here now sits in Done above.
 
 ## Deliberately not ported
 

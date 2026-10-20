@@ -335,6 +335,10 @@ describe("the set's own prose", () => {
     // The eval's README lost its stale figures with the sentence that carried them:
     // 340 to 339.
     //
+    // The last TODO row landed and the Next section closed with it, and the
+    // closing sentence carries no passive where "nothing is left unplanned" did:
+    // 339 to 338.
+    //
     // The rule counts per line, so rewrapping a paragraph without changing a word can
     // move this number. Splitting "must match" across a line break cost one finding
     // in `AGENTS.md` on its own. Read this number as a count of lines, not of sentences.
@@ -367,7 +371,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 339,
+      passiveVoice: 338,
       otherRules: [],
     });
   }, 120_000);

@@ -66,6 +66,7 @@ Keyed on the test, not the name. The test is the falsifiable half.
 | `principle-sequence-verifiable-units` | does each unit end at a check that actually ran | `--test-gate` names the tests a boundary should have run and `--affected` names which of them this change makes relevant. Whether the unit was small enough to bracket is a person. |
 | `principle-subtract-before-you-add` | what would a deletion have avoided | `--dead-code` and `--clones`, the floor `principle-laziness-protocol` also claims. This leaf is the narrower one: the deletion happens before the addition is designed. |
 | `principle-type-system-discipline` | can I write a comment saying when this combination of fields is valid | the typecheck is the oracle and `--seams` names the untested shapes. Which flag to turn on, or whether a sum should have been a union, is a person reading the config. `principle-make-states-unrepresentable` owns the language-agnostic claim. |
+| `look-first` | which file do I open first in code I have not read | `--rank-by=churn` names the files by how much they move, and the top of the ranking is the first file to open. `--rank-by=churn-decay` weights recent changes more, for the question of what is moving now. A hot file can be rename churn and a cold file can hold the invariant, so the ranking is a place to start and not an oracle: open the file and read it before asserting anything. |
 
 Two rows worth reading twice, because they are the strongest instruments in the
 set and neither is obvious from its name:
@@ -329,8 +330,8 @@ visible.
   attached is a fact nobody acted on.
 - **Not a claim that the tools are accurate.** Every row here is a place to
   measure, and the section above is the list of ways the measurement misleads.
-- **Not a reason to run ripwire on everything.** The map has thirty-one rows.
-  Nine of them answer `none`, and twenty-two name a verb. Running a verb because
+- **Not a reason to run ripwire on everything.** The map has thirty-two rows.
+  Nine of them answer `none`, and twenty-three name a verb. Running a verb because
   it exists is the same as asserting a principle because it sounds right.
 - **Not portable to a machine without ripwire.** This skill names a tool on
   purpose, which the principles themselves are written not to do, because naming

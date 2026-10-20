@@ -142,7 +142,7 @@ assumed:
 ## Reading the numbers
 
 Scores are not comparable across corpora, and this number moves as the corpus
-grows. The mirror holds our 82 bodies and ripwire's 17 skills, because the
+grows. The mirror holds our 83 bodies and ripwire's 17 skills, because the
 model arm's catalogue holds both. At ripwire 0.6.8 the description arm reads
 97.4% at rank one over the 156 judged rows of the `tuned` and `heldOut` slices,
 with 0.946 separation — and 18.5%, 0.681, over the 27 judged rows of the
