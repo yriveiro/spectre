@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { AbsolutePath } from "@opencode/schema/schema";
 import { useTempDirs } from "../fixture";
-import { isPin, pinned } from "../../skills/definitions/effect-best-practices/watch";
+import { isPin, pendingReminder, pinned } from "../../skills/definitions/effect-best-practices/watch";
 
 /**
  * The watcher cannot be tested end to end without an OpenCode event stream, so these cover the
@@ -68,5 +68,34 @@ describe("the effect watcher reads the pin", () => {
 
   test("a directory with no package.json is undefined rather than an error", async () => {
     expect(await pinned(AbsolutePath.make(temp()))).toBeUndefined();
+  });
+});
+
+describe("the reminder reaches every session once per drift", () => {
+  const drifted = (version: string) => new Map([["/proj", version]]);
+  const told = (session: string, version: string) => new Map([[session, version]]);
+
+  test("no drift tells nothing", () => {
+    expect(pendingReminder(new Map(), new Map(), "/proj", "ses_a")).toBeUndefined();
+  });
+
+  test("drift tells a session that never heard it", () => {
+    expect(pendingReminder(drifted("4.0.1"), new Map(), "/proj", "ses_a")).toBe("4.0.1");
+  });
+
+  test("a told session is not told the same drift again", () => {
+    expect(pendingReminder(drifted("4.0.1"), told("ses_a", "4.0.1"), "/proj", "ses_a")).toBeUndefined();
+  });
+
+  test("a second session is told what the first already heard", () => {
+    expect(pendingReminder(drifted("4.0.1"), told("ses_a", "4.0.1"), "/proj", "ses_b")).toBe("4.0.1");
+  });
+
+  test("a newer drift re-tells a session told the older one", () => {
+    expect(pendingReminder(drifted("4.0.2"), told("ses_a", "4.0.1"), "/proj", "ses_a")).toBe("4.0.2");
+  });
+
+  test("drift in another project tells nothing here", () => {
+    expect(pendingReminder(drifted("4.0.1"), new Map(), "/other", "ses_a")).toBeUndefined();
   });
 });
