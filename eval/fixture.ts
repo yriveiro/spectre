@@ -643,6 +643,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-redesign-from-first-principles",
     provenance: "judged",
   },
+  {
+    prompt: "the work takes five commits and nobody can say what the end state looks like, what should we write down",
+    label: "principle-outcome-oriented-execution",
+    provenance: "judged",
+  },
+  {
+    prompt: "we are halfway through a staged migration on a branch, can this branch land yet",
+    label: "principle-outcome-oriented-execution",
+    provenance: "judged",
+  },
+  {
+    prompt: "the last commit went in but the plan never said what finished looks like, how do we check",
+    label: "principle-outcome-oriented-execution",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
