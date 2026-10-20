@@ -240,16 +240,15 @@ labelled prompts. Change a description, run `bun test`, and the numbers move.
 
 Routing is mediocre at rank one and good at separation, and the gap is
 vocabulary rather than structure. Measured with `ripwire --eval-skills` over the
-mirror of the 82 bodies, on the 120 rows of `eval/fixture.ts` at ripwire 0.6.8:
-description-based routing separates the right skill from the wrong one at 0.877
-AUC and puts 66.7% of the rows at rank one, and the held-out slice of 31 rows
+mirror of the 82 bodies, on the 123 rows of `eval/fixture.ts` at ripwire 0.6.8:
+description-based routing separates the right skill from the wrong one at 0.878
+AUC and puts 67.6% of the rows at rank one, and the held-out slice of 31 rows
 reads 0.917 AUC and 60.7% at rank one. Full text is weaker than the description
-alone (51.0% and 0.737 over the whole set), and the routed task lens sits
-between the two (46.1%, 0.789). Every skill with permitted rows wins at least
-one, and none fires three times now. The loudest false fires left are two each,
-in `canvas`, `model-router`, `playbook-brain`, `playbook-hillclimb`,
-`playbook-refactoring`, `principle-minimize-reader-load`, and
-`principle-test-for-truth`.
+alone (52.4% and 0.743 over the whole set), and the routed task lens sits
+between the two (47.6%, 0.795). Every skill with permitted rows wins at least
+one. The loudest false fire left is `principle-test-for-truth`, which fires
+three times, and five skills fire twice each: `canvas`, `model-router`,
+`playbook-brain`, `playbook-hillclimb`, and `principle-minimize-reader-load`.
 
 What survives in the misses is nouns. "can I push this yet" does not match a
 description that says "safe to ship". "bump the pin" does not match one that says
