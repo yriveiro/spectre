@@ -313,6 +313,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-subtract-before-you-add",
     provenance: "judged",
   },
+  {
+    prompt: "should i ask you before i rewrite this file, it is easy to revert",
+    label: "principle-never-block-on-the-human",
+    provenance: "judged",
+  },
+  {
+    prompt: "this change is reversible, do i just make it and show you the diff",
+    label: "principle-never-block-on-the-human",
+    provenance: "judged",
+  },
+  {
+    prompt: "this is reversible, do i need your approval or can i just do it",
+    label: "principle-never-block-on-the-human",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [

@@ -76,8 +76,8 @@ Measured with `ripwire --eval-skills` over a mirror of the bodies — the call
 a single session are not quotes.** Re-run `eval/` before you cite one, and say
 which corpus and which slice it came from.
 
-The corpus has grown since that experiment: 82 bodies and 105 rows. On the whole
-set at ripwire 0.6.8 the description arm reads 0.869 AUC and 60.9% at rank one,
+The corpus has grown since that experiment: 82 bodies and 108 rows. On the whole
+set at ripwire 0.6.8 the description arm reads 0.872 AUC and 62.2% at rank one,
 and the 31-row held-out slice reads 0.917 and 60.7%. The shape of the finding
 holds: the description arm beats the full-text arm, and both beat chance.
 
@@ -180,7 +180,7 @@ one means four things, and skipping any of them is how a port rots.
    somebody else's is a net loss the whole-set average hides. The rows for a
    command the reader calls are `neg` rows, not judged ones — the claim under
    test is that the model does not reach for it, so a fire is a false-fire. The
-   16 ported principles have no rows at all, so for those this step is not done.
+   15 ported principles have no rows at all, so for those this step is not done.
 
 ## The cost of a leaf, measured
 

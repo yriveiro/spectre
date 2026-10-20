@@ -31,7 +31,7 @@ both are blocked on a person rather than on work.
 
 | Item | Unblock |
 | ---- | ------- |
-| Eval rows for the 16 principles without them | step 4 of the porting checklist. `eval/fixture.ts` has 105 rows covering 12 of 28 principles; the other 16 have none, so "these are an improvement" is currently an assertion rather than a measurement |
+| Eval rows for the 15 principles without them | step 4 of the porting checklist. `eval/fixture.ts` has 108 rows covering 13 of 28 principles; the other 15 have none, so "these are an improvement" is currently an assertion rather than a measurement |
 | `bun run eval -- --held-out` | delete the `"plugins": ["github:yriveiro/spectre"]` line from `~/.config/opencode/opencode.jsonc`. The eval reads OpenCode's own `Registered skills` log line, it reported `20 of our 36` with the 16 missing being exactly the new principles, and it refuses to score rather than grading against a catalogue nobody confirmed |
 
 The precedent for why this matters is in `skills/FOR_AGENTS.md`: going from 10
