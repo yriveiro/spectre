@@ -239,19 +239,29 @@ description-based and full-text routing beat chance. `fixture.ts` holds the
 labelled prompts. Change a description, run `bun test`, and the numbers move.
 
 Routing is good at rank one and better at separation, and the gap is
-vocabulary rather than structure. Measured with `ripwire --eval-skills` over the
-mirror of the 82 bodies, on the 150 rows of `eval/fixture.ts` at ripwire 0.6.8:
-description-based routing separates the right skill from the wrong one at 0.948
-AUC and puts 99.2% of the rows at rank one, and the held-out slice of 31 rows
-reads 0.988 AUC and 100% at rank one. Full text is weaker than the description
-alone (66.7% and 0.801 over the whole set), and the routed task lens sits
-between the two (57.6%, 0.852). Every skill with permitted rows wins at least
-one, and no skill fires on more than one row that is not its own.
+vocabulary rather than structure. The corpus has three slices and they answer
+different questions, so read the slice before the number. Measured with
+`ripwire --eval-skills` over the mirror of the 82 bodies at ripwire 0.6.8:
+
+| slice | rows | hit@1 | AUC | what it reads |
+| ----- | ---- | ----- | --- | ------------ |
+| `tuned` and `heldOut` | 150 | 99.2% | 0.948 | in-sample, because these rows shaped the descriptions |
+| `heldOut` | 31 | 100% | 0.988 | frozen and saturated, with four judged rows now inside a description |
+| `blind` | 37 | 21.2% | 0.977 | fresh rows that no description has seen |
+
+The first line is the number the corpus inflates by construction, so quote the
+blind slice instead. It reads 21.2% at rank one with 0.977 AUC: the right leaf
+sits near the top of the ranking and loses first place to a neighbour most of
+the time. Full text is weaker than the description alone (66.7% and 0.801 over
+the whole set), and the routed task lens sits between the two (55.3%, 0.848).
+Every skill with permitted rows wins at least one, and no skill fires on more
+than one row that is not its own.
 
 What survives in the misses is nouns. "bump effect to the latest rc" does not
 match a description that says "a dependency on an old version". Leading with
-the moment fixed the register and left the everyday words missing, and closing
-that gap needs new held-out prompts, because the current set has now been read.
+the moment fixed the register and left the everyday words missing, and the
+blind slice is where that gap shows up, because a fresh prompt carries the
+words of the moment and not the words of the description.
 
 Four held-out rows now sit inside a description, so the held slice is a read on
 24 of its 28 judged rows and not 28, and all 24 read right. Before this change
@@ -267,10 +277,28 @@ and lists "a config default", it says a green suite that cannot fail for a
 defect is evidence about nothing, and it lists "a helper kept just in case". The
 words "the retry logic" and "timeout" sit in no description.
 
-The test asserts none of this. A per-skill win rate is a number that moves when
-any description is reworded, and a gate on it would be red for a reason nobody
-can act on in the moment they see it. The AUC floors are the stable claim: the
-arm is better than chance, and the descriptions are visible.
+The blind slice holds the corpus to a bar the other two slices cannot meet.
+`eval/tests/fixture.test.ts` fails when a row shares a four-word run with the
+description of the leaf it names, so a leaf cannot win a row by quoting itself.
+The 37 rows cover the seven leaves the corpus never covered, twelve boundary
+rows that each have a neighbour the router could pick instead, and four rows
+that name no leaf at all. The first read puts 7 of the 33 judged rows at rank
+one: 3 of the 22 rows for those seven leaves, and 4 of the 12 boundary rows.
+Eleven of the 18 leaves with a row here win none of it, and four of those
+never had a row before: `principle-encode-lessons-in-structure`,
+`principle-exhaust-the-design-space`, `principle-experience-first` and
+`principle-foundational-thinking`. The words those prompts use are absent from
+the descriptions, and that absence is what the corpus phase closes.
+
+A row in the blind slice gets read once. When a description changes because of
+one of those rows, that row stops being blind, so it moves into `tuned` and a
+fresh row takes its place.
+
+The routing test asserts none of the per-skill numbers. A per-skill win rate
+is a number that moves when any description is reworded, and a gate on it would
+be red for a reason nobody can act on in the moment they see it. The AUC floors
+are the stable claim: the arm is better than chance, and the descriptions are
+visible.
 
 ## What this skill is not
 

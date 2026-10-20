@@ -76,11 +76,14 @@ Measured with `ripwire --eval-skills` over a mirror of the bodies — the call
 a single session are not quotes.** Re-run `eval/` before you cite one, and say
 which corpus and which slice it came from.
 
-The corpus has grown since that experiment: 82 bodies and 150 rows. On the whole
-set at ripwire 0.6.8 the description arm reads 0.948 AUC and 99.2% at rank one,
-and the 31-row held-out slice reads 0.988 and 100%, four judged rows of which
-now sit inside a description. The shape of the finding holds: the description
-arm beats the full-text arm, and both beat chance.
+The corpus has grown since that experiment: 82 bodies and 187 rows in three
+slices. At ripwire 0.6.8 the description arm reads 0.948 AUC and 99.2% at rank
+one over the 150 rows of the `tuned` and `heldOut` slices, the 31-row
+`heldOut` slice reads 0.988 and 100% with four judged rows now sitting inside a
+description, and the 37-row `blind` slice reads 0.977 and 21.2%. The shape of
+the finding holds: the description arm beats the full-text arm, and both beat
+chance. The blind slice carries the honest number, because the other two have
+now been read against.
 
 **The description is the routing surface, so it names the moment and not the
 subject.** This costs the most and is the hardest to see, because the body is
@@ -176,12 +179,13 @@ one means four things, and skipping any of them is how a port rots.
    `features/arena.md` reserves `arena` for an unbuilt feature, and which of the
    two gives way is recorded in this file, rule 3. **If that feature is built, the
    skill is what gives way.**
-4. **Then measure.** Add judged rows to `eval/fixture.ts` and read the held-out
-   slice rather than the whole set: a leaf that wins its own rows and costs
-   somebody else's is a net loss the whole-set average hides. The rows for a
-   command the reader calls are `neg` rows, not judged ones — the claim under
-   test is that the model does not reach for it, so a fire is a false-fire. The
-   14 ported principles have no rows at all, so for those this step is not done.
+4. **Then measure.** Add judged rows to `eval/fixture.ts` and read the blind
+   slice and the per-skill table rather than the whole-set average: a leaf that
+   wins its own rows and costs somebody else's is a net loss the average hides.
+   The rows for a command the reader calls are `neg` rows, not judged ones —
+   the claim under test is that the model does not reach for it, so a fire is a
+   false-fire. A blind row may not quote the description of the leaf it names,
+   or it proves nothing, and `eval/tests/fixture.test.ts` holds that line.
 
 ## The cost of a leaf, measured
 

@@ -2,7 +2,7 @@ import type { Prediction, Report } from "./score";
 
 export type Run = {
   readonly at: string;
-  readonly slice: "all" | "held-out";
+  readonly slice: "all" | "held-out" | "blind";
   readonly catalogue: ReadonlyArray<string>;
   readonly arms: ReadonlyArray<{
     readonly name: string;
