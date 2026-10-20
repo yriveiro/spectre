@@ -242,10 +242,10 @@ Routing is good at rank one and better at separation, and the gap is
 vocabulary rather than structure. Measured with `ripwire --eval-skills` over the
 mirror of the 82 bodies, on the 129 rows of `eval/fixture.ts` at ripwire 0.6.8:
 description-based routing separates the right skill from the wrong one at 0.934
-AUC and puts 93.7% of the rows at rank one, and the held-out slice of 31 rows
-reads 0.976 AUC and 92.9% at rank one. Full text is weaker than the description
-alone (63.1% and 0.782 over the whole set), and the routed task lens sits
-between the two (54.1%, 0.832). Every skill with permitted rows wins at least
+AUC and puts 95.5% of the rows at rank one, and the held-out slice of 31 rows
+reads 0.976 AUC and 100% at rank one. Full text is weaker than the description
+alone (63.1% and 0.784 over the whole set), and the routed task lens sits
+between the two (54.1%, 0.826). Every skill with permitted rows wins at least
 one, and no skill fires on more than one row that is not its own.
 
 What survives in the misses is nouns. "bump effect to the latest rc" does not
@@ -253,19 +253,19 @@ match a description that says "a dependency on an old version". Leading with
 the moment fixed the register and left the everyday words missing, and closing
 that gap needs new held-out prompts, because the current set has now been read.
 
-Three held-out rows now sit inside a description, so the held slice is a read on
-25 of its 28 judged rows and not 28. Those 25 read 23 of 25 before this change
-and 23 of 25 after it, which is the claim that matters: naming a moment in the
-prompt's words on the tuned slice did not inflate the rows that no description
-names. The three rows are the `ripwire` one, "prove the retry logic is
-reachable", and the two `principle-test-behavior-not-implementation` ones, "i
-want to pin the default timeout in a test so it does not change" and the green
-suite row that asks whether the new code has coverage. Each moved on the leaf's
-own body vocabulary and not on the row's: the body says `--path=A,B` answers a
+Four held-out rows now sit inside a description, so the held slice is a read on
+24 of its 28 judged rows and not 28, and all 24 read right. Before this change
+the set outside the descriptions held a 25th row, the migrate row, and it read
+wrong: the hygiene description borrowed its words in a hand-off clause. Dropping
+the borrowed words fixed a row no description names, and that is the kind of move
+an honest read can trust. The four rows inside a description are the `ripwire`
+reachability row, the two `principle-test-behavior-not-implementation` rows, and
+the hygiene row about an unused helper. Each moved on the leaf's own body
+vocabulary and not on the row's: the body says `--path=A,B` answers a
 reachability claim and carries `reachable=`, it names the shape "Constant pin"
-and lists "a config default", and it says a green suite that cannot fail for a
-defect is evidence about nothing. The words "the retry logic" and "timeout" sit
-in no description.
+and lists "a config default", it says a green suite that cannot fail for a
+defect is evidence about nothing, and it lists "a helper kept just in case". The
+words "the retry logic" and "timeout" sit in no description.
 
 The test asserts none of this. A per-skill win rate is a number that moves when
 any description is reworded, and a gate on it would be red for a reason nobody
