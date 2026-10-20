@@ -245,12 +245,12 @@ different questions, so read the slice before the number. Measured with
 
 | slice | rows | hit@1 | AUC | what it reads |
 | ----- | ---- | ----- | --- | ------------ |
-| `tuned` and `heldOut` | 174 | 99.4% | 0.953 | in-sample, because these rows shaped the descriptions |
+| `tuned` and `heldOut` | 174 | 99.4% | 0.954 | in-sample, because these rows shaped the descriptions |
 | `heldOut` | 31 | 100% | 1.000 | frozen and saturated, with four judged rows now inside a description |
-| `blind` | 37 | 69.7% | 1.000 | fresh rows that no description has seen |
+| `blind` | 37 | 72.7% | 1.000 | fresh rows that no description has seen |
 
 The first line is the number the corpus inflates by construction, so quote the
-blind slice instead. It reads 69.7% at rank one with 1.000 AUC: the right leaf
+blind slice instead. It reads 72.7% at rank one with 1.000 AUC: the right leaf
 sits near the top of the ranking and loses first place to a neighbour most of
 the time. Full text is weaker than the description alone (67.3% and 0.820 over
 the whole set), and the routed task lens sits between the two (58.3%, 0.868).
@@ -282,12 +282,11 @@ The blind slice holds the corpus to a bar the other two slices cannot meet.
 description of the leaf it names, so a leaf cannot win a row by quoting itself.
 The 37 rows cover the seven leaves the corpus never covered, twelve boundary
 rows that each have a neighbour the router could pick instead, and four rows
-that name no leaf at all. The read at this commit puts 23 of the 33 judged rows
-at rank one: 14 of the 21 rows for those seven leaves, and 9 of the 12 boundary
-rows. Two of the 18 leaves with a row here win none of it, and every one of
-them had tuned rows before the blind slice existed. The words those prompts use
-are absent from the descriptions, and that absence is what the corpus phase
-closes.
+that name no leaf at all. The read at this commit puts 24 of the 33 judged rows
+at rank one: 14 of the 21 rows for those seven leaves, and 10 of the 12 boundary
+rows. One of the 18 leaves with a row here wins none of it, and it had tuned rows
+before the blind slice existed. The words those prompts use are absent from the
+descriptions, and that absence is what the corpus phase closes.
 
 A row in the blind slice gets read once. When a description changes because of
 one of those rows, that row stops being blind, so it moves into `tuned` and a
