@@ -1,11 +1,51 @@
 import { type Blame, type Commit, FORMAT, parse, parsePorcelain } from "./parse";
 
+export type Ownership = {
+  readonly commits: number;
+  readonly authors: number;
+  readonly major: {
+    readonly author: string;
+    readonly commits: number;
+    readonly share: number;
+  };
+  readonly minor: number;
+};
+
+/**
+ * Ownership over every commit in the file's history, not over the window the
+ * caller asked to see. An author whose share is under 5% counts as a minor
+ * contributor, and how many of those a file carries is the strongest single
+ * predictor in the defect literature: many small hands mean the file's meaning
+ * sits in no one's head.
+ */
+export const ownershipOf = (
+  commits: ReadonlyArray<Commit>,
+): Ownership | null => {
+  if (commits.length === 0) return null;
+  const byAuthor = new Map<string, number>();
+  for (const commit of commits)
+    byAuthor.set(commit.author, (byAuthor.get(commit.author) ?? 0) + 1);
+  const ranked = [...byAuthor].toSorted(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  );
+  const total = commits.length;
+  const share = (count: number) => count / total;
+  const top = ranked[0]!;
+  return {
+    commits: total,
+    authors: ranked.length,
+    major: { author: top[0], commits: top[1], share: share(top[1]) },
+    minor: ranked.filter(([, count]) => share(count) < 0.05).length,
+  };
+};
+
 export type Report = {
   readonly path: string;
   readonly found: boolean;
   readonly introducedBy: Commit | null;
   readonly commits: ReadonlyArray<Commit>;
   readonly blame: Blame | null;
+  readonly ownership: Ownership | null;
   readonly reverts: number;
   readonly authors: ReadonlyArray<string>;
   readonly first: string | null;
@@ -63,6 +103,7 @@ export const history = async (
       introducedBy: null,
       commits: [],
       blame: null,
+      ownership: null,
       reverts: 0,
       authors: [],
       first: null,
@@ -124,6 +165,7 @@ export const history = async (
     introducedBy,
     commits,
     blame,
+    ownership: ownershipOf(total),
     reverts: commits.filter((one) => one.reverts).length,
     authors: [...new Set(commits.map((one) => one.author))],
     first: total.at(-1)?.date ?? null,

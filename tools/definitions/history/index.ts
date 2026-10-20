@@ -46,6 +46,18 @@ const Output = Schema.Struct({
       summary: Schema.String,
     }),
   ),
+  ownership: Schema.optional(
+    Schema.Struct({
+      commits: Schema.Number,
+      authors: Schema.Number,
+      major: Schema.Struct({
+        author: Schema.String,
+        commits: Schema.Number,
+        share: Schema.Number,
+      }),
+      minor: Schema.Number,
+    }),
+  ),
   reverts: Schema.Number,
   authors: Schema.Array(Schema.String),
   first: Schema.optional(Schema.String),
@@ -64,6 +76,7 @@ rationale lives in commit messages, so this reads them.
   h.bodies         // 0 means git holds no rationale for this file
   h.commits        // the reason that line is shaped like that
   h.blame          // who last touched this exact line, and when
+  h.ownership      // who owns this file, and how many minor hands shape it
 
   // The commit that introduced a line, found in the diff rather than a message,
   // which is the only place the answer lives when nobody wrote one.
@@ -86,7 +99,14 @@ rationale lives in commit messages, so this reads them.
   subjects and no bodies cannot answer why**, and this is the number that says so
   before you read a row. Zero means the rationale is not in git for this file, and
   the honest answer is that the reason is unrecoverable here.
-- \`authors\` and \`first\` / \`last\`, for "who knows this" and "how old is this".
+- \`authors\`, the distinct names among the commits returned. That is the window,
+  not the history: \`ownership\` below counts the file's whole life.
+- \`ownership\`, the whole-history authorship the window cannot see: the file's
+  total commits and distinct authors, who holds the largest share and the share,
+  and how many authors carry under 5% each. That minor-contributor count is the
+  strongest single predictor in the defect literature, so a file with many minor
+  hands is a file whose meaning sits in nobody's head.
+- \`first\` / \`last\`, for "how old is this".
 
 ## Two ways to narrow, and they ask different questions
 
@@ -130,15 +150,14 @@ export const historyTool = (directory: string): Tool.Info<typeof Input, typeof O
   options: { namespace: "spectre", codemode: true, pinned: true, permission: "read" },
   execute: (input) =>
     Effect.promise(async () => {
-      const { problems, introducedBy, blame, first, last, ...rest } = await history(
-        directory,
-        input,
-      );
+      const { problems, introducedBy, blame, first, last, ownership, ...rest } =
+        await history(directory, input);
       return {
         output: {
           ...rest,
           ...(introducedBy === null ? {} : { introducedBy }),
           ...(blame === null ? {} : { blame }),
+          ...(ownership === null ? {} : { ownership }),
           ...(first === null ? {} : { first }),
           ...(last === null ? {} : { last }),
           ...(problems.length > 0 ? { problems: problems.join("\n") } : {}),
