@@ -448,6 +448,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-fix-root-causes",
     provenance: "judged",
   },
+  {
+    prompt: "i have tried three fixes for this and they all fail the same check",
+    label: "principle-attack-the-premise",
+    provenance: "judged",
+  },
+  {
+    prompt: "should i write another patch or is the whole idea wrong",
+    label: "principle-attack-the-premise",
+    provenance: "judged",
+  },
+  {
+    prompt: "two of our fixes for this broke for the same reason, what are we believing",
+    label: "principle-attack-the-premise",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
