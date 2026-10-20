@@ -5,7 +5,7 @@ export const principleEncodeLessonsInStructure: Definition = {
   id: Skill.ID.make("principle-encode-lessons-in-structure"),
   name: Skill.Name.make("principle-encode-lessons-in-structure"),
   description:
-    "Say it in structure so you never say it again. Load it the second time you write the same instruction, the second time the same mistake returns, or the second time a review comment repeats one you already gave. Turn the prose into a lint rule, metadata, a runtime check, or a script, because prose is read once and structure is read every time. Only a moment: the recurrence is the signal. Checking one claim once is principle-verification, and building the rerunnable tool for a batch of work is principle-build-the-lever.",
+    "Load it the second time you write the same instruction, the second time the same mistake comes back, or the second time a review comment repeats one you already gave. The same warning for the third time, the same defect every week, the same guidance for every new hire, the same review comment on every one of my changes: put the rule where a tool can enforce it, a lint rule, a check, a metadata field, or a script, so nobody has to say it again. Prose is read once and forgotten, structure is read every time. Checking one claim once is principle-verification, and building the tool for a batch of work is principle-build-the-lever.",
   autoinvoke: false,
   path: anchor(import.meta.dir),
 };

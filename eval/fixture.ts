@@ -538,6 +538,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-minimize-reader-load",
     provenance: "judged",
   },
+  {
+    prompt: "every new hire needs the same guidance from me about the setup, there has to be a better way",
+    label: "principle-encode-lessons-in-structure",
+    provenance: "judged",
+  },
+  {
+    prompt: "the same defect keeps reappearing every week, can a tool catch it instead of me",
+    label: "principle-encode-lessons-in-structure",
+    provenance: "judged",
+  },
+  {
+    prompt: "i wrote the same review comment on three different changes, it should not depend on me noticing",
+    label: "principle-encode-lessons-in-structure",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
