@@ -17,6 +17,7 @@ import { figureItOut } from "./figure-it-out";
 import { grammar } from "./grammar";
 import { how } from "./how";
 import { interrogate } from "./interrogate";
+import { lookFirst } from "./look-first";
 import { maintainVerificationSkill } from "./maintain-verification-skill";
 import { modelRouter } from "./model-router";
 import { playbook } from "./playbook";
@@ -134,6 +135,7 @@ const definitions: ReadonlyArray<Definition> = [
   codeHygiene,
   communication,
   grammar,
+  lookFirst,
   modelRouter,
   principleBoundaryDiscipline,
   principleEvidence,

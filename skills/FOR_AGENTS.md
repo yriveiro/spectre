@@ -3,10 +3,11 @@
 Read this before writing a leaf: which of three shapes you are writing, the
 template, the measurements behind it, and what a leaf owes the map and the hub.
 
-A **leaf** is a skill this set routes to: 31 of the 80 definitions. 28 are
-`principle-*`, and the other 3 are `code-hygiene`, `grammar` and `model-router`.
-The remaining 49 ids are in the `notALeaf` set in `skills/definitions/index.ts` —
-the hub, the map, 24 `playbook-*`, and 23 more procedures — and they are
+A **leaf** is a skill this set routes to: 32 of the 83 definitions. 28 are
+`principle-*`, and the other 4 are `code-hygiene`, `grammar`, `model-router`
+and `look-first`.
+The remaining 51 ids are in the `notALeaf` set in `skills/definitions/index.ts` —
+the hub, the map, 24 `playbook-*`, and 25 more procedures — and they are
 registered and read on demand, carrying no row.
 
 ## What you are writing
@@ -62,7 +63,7 @@ A claim another leaf owns does not get restated: name the owner in one clause an
 move on. `principle-subtract-before-you-add` opens by handing
 deletion-first-as-reader-load to `principle-laziness-protocol`.
 
-**The template is a target, not a description of the set.** 29 of the 82 bodies
+**The template is a target, not a description of the set.** 29 of the 83 bodies
 still carry a what-not section and 23 carry `## The moves`. Four principles still
 carry the five-section shape it replaced — `principle-boundary-discipline`,
 `principle-evidence`, `principle-hygiene`, `principle-make-operations-idempotent`,
@@ -77,7 +78,7 @@ rivals a live session sees. **Figures from a single session are not quotes.**
 Re-run `eval/` before you cite one, and say which corpus and which slice it came
 from.
 
-The corpus has grown since that experiment: 82 bodies and 206 rows in three
+The corpus has grown since that experiment: 83 bodies and 206 rows in three
 slices. At ripwire 0.6.8, with ripwire's 17 skills in the mirror, the
 description arm reads 0.946 separation and 97.4% at rank one over the 174 rows
 of the `tuned` and `heldOut` slices, the 31-row `heldOut` slice reads 1.000
@@ -149,7 +150,7 @@ Indexing is what the hub pays, and it is why the hub is the binding constraint: 
 is the file that says "read this index, then load the one leaf you need", and one
 that outgrows the message is one nobody reads. On this checkout the `## Triggers`
 table and the `## Principles index` between them are 71% of the hub, over 15
-bullets, and 16 of the 31 leaves appear nowhere in it (`TODO.md` tracks them). The
+bullets, and 17 of the 32 leaves appear nowhere in it (`TODO.md` tracks them). The
 index entry has to become one line and the triggers table has to stop growing
 before the set grows much more.
 
