@@ -403,6 +403,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "playbook-refactoring",
     provenance: "judged",
   },
+  {
+    prompt: "this endpoint takes 400ms and we want it under 100, drive it down in steps",
+    label: "playbook-hillclimb",
+    provenance: "judged",
+  },
+  {
+    prompt: "the cold start regressed after the last release, measure the number and drive it back",
+    label: "playbook-hillclimb",
+    provenance: "judged",
+  },
+  {
+    prompt: "one import dominates the bundle, make the bundle smaller against a target",
+    label: "playbook-hillclimb",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
