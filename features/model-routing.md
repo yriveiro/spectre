@@ -45,8 +45,8 @@ does not happen, and it is unresolved.
 
 ```text
 agent: "spectre",  model: "opencode/mimo-v2.6-flash-free"
-agent: "spectre",  model: "opencode/space-bunny-free#max"
-agent: "spectre",  model: "opencode/muse-spark-1.3-contributor-free#high"
+agent: "spectre",  model: "opencode-go/kimi-k3#max"
+agent: "spectre",  model: "opencode-go/muse-spark-1.3-contributor#high"
 ```
 
 ## What OpenCode already does
@@ -84,8 +84,8 @@ OpenCode's: `opencode.jsonc` only loads the plugin.
 {
   "models": {
     "mechanical": "opencode/mimo-v2.6-flash-free",
-    "standard":   "opencode/muse-spark-1.3-contributor-free#high",
-    "deep":       "opencode/space-bunny-free#max"
+    "standard":   "opencode-go/muse-spark-1.3-contributor#high",
+    "deep":       "opencode-go/kimi-k3#max"
   },
 
   "profiles": {

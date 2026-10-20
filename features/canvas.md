@@ -316,7 +316,9 @@ stable across revisions.
 
 Three candidates, three families, from `tools.spectre.routing`: seat 1
 `muse-spark-1.3-contributor-free#xhigh`, seat 2 `space-bunny-free#max`, seat 3
-`mimo-v2.6-flash-free`. Judge `muse-spark-1.3-contributor-free#high`.
+`mimo-v2.6-flash-free`. Judge `muse-spark-1.3-contributor-free#high`. The
+catalogue has since dropped the first two ids, so the record cannot be re-run as
+written.
 
 **Base: seat 2.** It is the only candidate that moved the measured failure — line
 numbers, count verification, pair alignment — into code, and it chose correctly on
