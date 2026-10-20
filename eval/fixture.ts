@@ -418,6 +418,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "playbook-hillclimb",
     provenance: "judged",
   },
+  {
+    prompt: "what do we already know about this project, is there a decision about the retry policy",
+    label: "playbook-brain",
+    provenance: "judged",
+  },
+  {
+    prompt: "record this gotcha, the billing webhook timed out last friday",
+    label: "playbook-brain",
+    provenance: "judged",
+  },
+  {
+    prompt: "what bit us last month with the auth module, is there a lesson about it",
+    label: "playbook-brain",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
