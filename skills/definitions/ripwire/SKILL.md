@@ -241,19 +241,18 @@ labelled prompts. Change a description, run `bun test`, and the numbers move.
 Routing is mediocre at rank one and good at separation, and the gap is
 vocabulary rather than structure. Measured with `ripwire --eval-skills` over the
 mirror of the 82 bodies, on the 129 rows of `eval/fixture.ts` at ripwire 0.6.8:
-description-based routing separates the right skill from the wrong one at 0.900
-AUC and puts 81.1% of the rows at rank one, and the held-out slice of 31 rows
-reads 0.940 AUC and 78.6% at rank one. Full text is weaker than the description
-alone (58.6% and 0.767 over the whole set), and the routed task lens sits
-between the two (51.4%, 0.812). Every skill with permitted rows wins at least
-one. The loudest false fires left are three in `principle-test-for-truth` and
-two in `model-router`, and every other skill fires at most once.
+description-based routing separates the right skill from the wrong one at 0.907
+AUC and puts 82.9% of the rows at rank one, and the held-out slice of 31 rows
+reads 0.964 AUC and 82.1% at rank one. Full text is weaker than the description
+alone (59.5% and 0.768 over the whole set), and the routed task lens sits
+between the two (52.3%, 0.816). Every skill with permitted rows wins at least
+one. The loudest false fires left are two each, in `model-router` and
+`principle-test-for-truth`, and every other skill fires at most once.
 
-What survives in the misses is nouns. "can I push this yet" does not match a
-description that says "safe to ship". "bump the pin" does not match one that says
-"a dependency sitting on an old version". Leading with the moment fixed the
-register and left the everyday words missing, and closing that gap needs a fresh
-set of held-out prompts, because the current set has now been read.
+What survives in the misses is nouns. "bump the pin" does not match a
+description that says "a dependency sitting on an old version". Leading with the
+moment fixed the register and left the everyday words missing, and closing that
+gap needs new held-out prompts, because the current set has now been read.
 
 The test asserts none of this. A per-skill win rate is a number that moves when
 any description is reworded, and a gate on it would be red for a reason nobody
