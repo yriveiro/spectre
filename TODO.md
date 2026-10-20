@@ -32,7 +32,7 @@ both are blocked on a person rather than on work.
 
 | Item | Unblock |
 | ---- | ------- |
-| Eval rows for the 7 principles without them | step 4 of the porting checklist. `eval/fixture.ts` has 190 rows in three slices. The `tuned` slice covers 21 of 28 principles and the `blind` slice holds 3 rows for each of the other 7, and the blind read puts 4 of those 21 rows at rank one, so those leaves have a measurement now and it says their descriptions miss the words people use |
+| Eval rows for the 7 principles without them | step 4 of the porting checklist. `eval/fixture.ts` has 193 rows in three slices. The `tuned` slice covers 23 of 28 principles and the `blind` slice holds 3 rows for each of the other 5, and the blind read puts 6 of those 21 rows at rank one, so those leaves have a measurement now and it says their descriptions miss the words people use |
 | `bun run eval -- --held-out` | delete the `"plugins": ["github:yriveiro/spectre"]` line from `~/.config/opencode/opencode.jsonc`. The eval reads OpenCode's own `Registered skills` log line, it reported `20 of our 36` with the 16 missing being exactly the new principles, and it refuses to score rather than grading against a catalogue nobody confirmed |
 
 The precedent for why this matters is in `skills/FOR_AGENTS.md`: going from 10
