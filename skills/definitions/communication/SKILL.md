@@ -89,7 +89,7 @@ Good: "Here's the fix. Separately: there is also a stale dependency. Want me to 
 
 **Test: can the reader say which step of how many without scrolling back?**
 
-They cannot hold "we are on step 3 of 5" between messages. Put the state in `todowrite`, one item per step, one in progress at a time. Do not also narrate the plan as a paragraph. The host tool is experimental: it exists only with `experimental.todo: true` in `opencode.jsonc` (new in OpenCode 2.1.1). Without the flag there is no list to put the state in, so name the step and the count inline instead.
+They cannot hold "we are on step 3 of 5" between messages. Put the state in `todowrite`, one item per step, one in progress at a time. Do not also narrate the plan as a paragraph.
 
 Good: "Step 3 of 5 done: schema updated. Next: backfill the new column. Run the script?"
 

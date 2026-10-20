@@ -32,10 +32,7 @@ because that file's rules put them there, not because they were planned.
 
 ## Next
 
-| Item | Where it stands |
-| ---- | --------------- |
-| Adopt `ctx.session.list` (new in OpenCode 2.1.1) | `features/session-return.md` records it and keeps the rescue pull-based. Open: which surface, if any, earns a proactive scan — none has a trigger today |
-| Leverage the host `todowrite` tool (new in OpenCode 2.1.1, behind `experimental.todo`) | skills order `todolist` use in 20+ places. Open: state the flag where `communication` mandates it |
+This list is empty: every row that stood here now sits in Done above.
 
 ## Deliberately not ported
 
