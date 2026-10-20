@@ -14,6 +14,7 @@ package: `package.json`'s `files` allowlist excludes it, which `npm pack
 ```sh
 bun run eval                     # every free model, all rows
 bun run eval -- --held-out       # only the rows that predate current work
+bun run eval -- --blind          # the fresh rows no description has seen
 bun run eval -- --model=opencode/mimo-v2.6-flash-free
 bun run eval -- --no-ripwire     # skip the lexical arms
 ```
@@ -40,7 +41,7 @@ the pinned model, pin one variant, or drop one by name.
 
 | File | Holds |
 | --- | --- |
-| `fixture.ts` | The corpus: prompt, permitted labels, provenance, and the held-out slice |
+| `fixture.ts` | The corpus: prompt, permitted labels, provenance, and the three slices |
 | `mirror.ts` | Writes descriptions to a directory ripwire can index |
 | `opencode.ts` | The only file that knows the HTTP API |
 | `boot.ts` | Starts `opencode serve`, reads the registration line |
@@ -58,6 +59,21 @@ the pinned model, pin one variant, or drop one by name.
 `reporter.ts`, `boot.ts`, and `catalogue.ts` are pure or near-pure and have unit
 tests beside them. A harness whose scoring is untested is the failure
 `principle-evidence` names, so the scoring is the part covered first.
+
+## The three slices
+
+`fixture.ts` holds three slices and they answer different questions.
+
+| slice | what it is | how to read it |
+| ----- | ---------- | -------------- |
+| `tuned` | the rows the descriptions answered to | in-sample, so a row that wins here proves little |
+| `heldOut` | the rows that predate current work | frozen, and four of its rows have since drifted inside a description |
+| `blind` | fresh rows under a four-word bar | the honest read, and a row here is read once |
+
+A blind row may not share a four-word run with the description of the leaf it
+names, and `eval/tests/fixture.test.ts` fails when one does. When a description
+changes because of a blind row, that row moves into `tuned` and a fresh row
+takes its place.
 
 ## What is measured
 

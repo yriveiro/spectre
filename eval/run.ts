@@ -8,7 +8,7 @@ import { reporter } from "./reporter";
 import { deltaTable, deltas, flips, snapshot, type Run } from "./record";
 import { score, table, type Prediction, type Report } from "./score";
 import type { Model, Opencode } from "./opencode";
-import { heldOut, rows, type Row } from "./fixture";
+import { blind, heldOut, rows, type Row } from "./fixture";
 
 // One level up from this file, which lives in `eval/`. When the harness lived in
 // `test/skills/eval/` this needed three, and leaving it at three pointed the
@@ -28,6 +28,7 @@ const DELAY = Number(Bun.env.SPECTRE_EVAL_DELAY ?? (FAST ? 1500 : 0));
 const ABORT_AFTER = Number(Bun.env.SPECTRE_EVAL_ABORT_AFTER ?? 3);
 const BASELINE = Bun.env.SPECTRE_EVAL_BASELINE;
 const HELD_OUT = Bun.argv.includes("--held-out");
+const BLIND = Bun.argv.includes("--blind");
 const ONLY = Bun.argv.find((a) => a.startsWith("--model="))?.slice("--model=".length);
 const SKIP_LEXICAL = Bun.argv.includes("--no-ripwire");
 
@@ -92,7 +93,7 @@ const evaluate = async (
   return out;
 };
 
-const corpus: ReadonlyArray<Row> = HELD_OUT ? heldOut : ROWS === 0 ? rows : head(rows, ROWS);
+const corpus: ReadonlyArray<Row> = BLIND ? blind : HELD_OUT ? heldOut : ROWS === 0 ? rows : head(rows, ROWS);
 
 const scratch = `${Bun.env.TMPDIR ?? "/tmp"}spectre-skill-eval-${process.pid}`;
 const booting = log.bar("starting opencode", 1);
@@ -241,7 +242,7 @@ try {
     }
   }
 
-  const current = snapshot(HELD_OUT ? "held-out" : "all", ours, arms);
+  const current = snapshot(BLIND ? "blind" : HELD_OUT ? "held-out" : "all", ours, arms);
   if (BASELINE !== undefined) {
     const previous = (await Bun.file(BASELINE).exists())
       ? ((await Bun.file(BASELINE).json()) as Run)

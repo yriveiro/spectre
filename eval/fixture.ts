@@ -658,6 +658,71 @@ export const heldOut: ReadonlyArray<Row> = [
   { prompt: "change the port to 4000", label: "none", provenance: "neg" },
 ];
 
+/**
+ * The blind slice. It is the honest read, and it is here because the other two
+ * slices stopped being one: `tuned` is the set the descriptions were written
+ * against, so a row that wins there proves nothing, and `heldOut` reached 28 of
+ * 28 while four of its judged rows drifted inside a description.
+ *
+ * A row here is written from the leaf's body, in the words a person would use,
+ * and it is read once. `eval/tests/fixture.test.ts` holds the bar: a row may not
+ * share a four-word run with the description of the leaf it names, so a leaf
+ * cannot win a row by quoting itself.
+ *
+ * When a description changes because of a row in this slice, that row stops
+ * being blind. Move it into `tuned` in the same change, and write its
+ * replacement here from the body again.
+ */
+export const blind: ReadonlyArray<Row> = [
+  // The seven leaves the corpus never covered. Each row is the moment, said
+  // the way a person says it, and none of them is the description's phrasing.
+  { prompt: "i am editing the same call in twenty files by hand, one after another", label: "principle-build-the-lever", provenance: "judged" },
+  { prompt: "this rename has to land in every service, and we will do it again next quarter", label: "principle-build-the-lever", provenance: "judged" },
+  { prompt: "we keep pasting the same fix into every module, there has to be a way to run it once", label: "principle-build-the-lever", provenance: "judged" },
+  { prompt: "i have written this same warning three times now, where should it live instead", label: "principle-encode-lessons-in-structure", provenance: "judged" },
+  { prompt: "this keeps coming back in review and every time it costs the same argument", label: "principle-encode-lessons-in-structure", provenance: "judged" },
+  { prompt: "i told the last two people joining this team the same thing about this file", label: "principle-encode-lessons-in-structure", provenance: "judged" },
+  { prompt: "nobody here has done this before and picking wrong costs us a whole quarter", label: "principle-exhaust-the-design-space", provenance: "judged" },
+  { prompt: "there is nothing in this repo like it, should i write two versions and see which survives", label: "principle-exhaust-the-design-space", provenance: "judged" },
+  { prompt: "the first idea that came to mind is probably a guess, how do i choose properly", label: "principle-exhaust-the-design-space", provenance: "judged" },
+  { prompt: "this screen works but feels slow, should we make every screen feel this good or only this one", label: "principle-experience-first", provenance: "judged" },
+  { prompt: "we could add a knob so people pick their own, is that worth what it costs them", label: "principle-experience-first", provenance: "judged" },
+  { prompt: "the team wants this feature but the people using it would be fine without it, what do we do", label: "principle-experience-first", provenance: "judged" },
+  { prompt: "this job runs over four stages and stage one decides what the other three can even do", label: "principle-foundational-thinking", provenance: "judged" },
+  { prompt: "we have not decided where the pieces meet yet, should we settle that before writing any of it", label: "principle-foundational-thinking", provenance: "judged" },
+  { prompt: "the shape of the data will carry every later part of this, is now the cheap moment to pick it", label: "principle-foundational-thinking", provenance: "judged" },
+  { prompt: "everything compiles, does that mean it actually works for someone using it", label: "principle-prove-it-works", provenance: "judged" },
+  { prompt: "the script said it wrote the file, how do i know the file is right", label: "principle-prove-it-works", provenance: "judged" },
+  { prompt: "nobody has opened the thing in a browser, the checks all pass though", label: "principle-prove-it-works", provenance: "judged" },
+  { prompt: "this feature never fit the way the thing works, do we bolt it on or change the thing", label: "principle-redesign-from-first-principles", provenance: "judged" },
+  { prompt: "the plan is an extra branch beside the old path, that feels like the wrong shape", label: "principle-redesign-from-first-principles", provenance: "judged" },
+  { prompt: "if we started today knowing about this, we would build it differently, should we move there", label: "principle-redesign-from-first-principles", provenance: "judged" },
+
+  // Boundary rows. Each one has a neighbour it could go to, and the neighbour
+  // is the point: a router that cannot separate two leaves that say almost the
+  // same thing has not learned either of them.
+  { prompt: "this retry hides the error instead of removing it, is there a deeper cause", label: "principle-fix-root-causes", provenance: "judged" },
+  { prompt: "if the process dies halfway and the command runs again, what state do we end up in", label: "principle-make-operations-idempotent", provenance: "judged" },
+  { prompt: "the suite is green, am i entitled to say it works", label: "principle-verification", provenance: "judged" },
+  { prompt: "the migration applied cleanly to an empty database, does that mean real data survives", label: "principle-prove-it-works", provenance: "judged" },
+  { prompt: "the plan has six steps, each one has to end with something i can see", label: "principle-sequence-verifiable-units", provenance: "judged" },
+  { prompt: "this spans four commits and i cannot say what finished state it converges on", label: "principle-outcome-oriented-execution", provenance: "judged" },
+  { prompt: "there are two readings of this request and i could pick one or ask", label: "principle-never-block-on-the-human", provenance: "judged" },
+  { prompt: "before i put this new option in, can the old ones go", label: "principle-subtract-before-you-add", provenance: "judged" },
+  { prompt: "these two jobs both change the same record, should they take turns", label: "principle-separate-before-serializing-shared-state", provenance: "judged" },
+  { prompt: "this repo has four thousand files, i cannot read them all today", label: "principle-guard-the-context-window", provenance: "judged" },
+  { prompt: "the billing code has no idea what a subscription is, it only knows amounts and dates", label: "principle-model-the-domain", provenance: "judged" },
+  { prompt: "this test would still pass if the function returned nothing, is it real", label: "principle-test-behavior-not-implementation", provenance: "judged" },
+
+  // The other direction: work that is not a principle moment and must not pull
+  // a leaf. A router that fires on everything is as wrong as one that fires on
+  // nothing.
+  { prompt: "write the release notes for this version", label: "none", provenance: "neg" },
+  { prompt: "format this file with prettier", label: "none", provenance: "neg" },
+  { prompt: "add a github action that runs the suite on every push", label: "none", provenance: "neg" },
+  { prompt: "bump the copyright year in the license file", label: "none", provenance: "neg" },
+];
+
 export const rows: ReadonlyArray<Row> = [...tuned, ...heldOut];
 
 export const tsv = (input: ReadonlyArray<Row>) =>

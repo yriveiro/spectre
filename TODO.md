@@ -21,6 +21,7 @@ because that file's rules put them there, not because they were planned.
 | `why` | the surviving seventh of pstack's seven evidence categories |
 | 23 playbooks plus a `playbook` index | registered and not indexed; the hub grew by 376 bytes for the first 23 |
 | Reachability and map-drift tests | both verified to fail before being kept |
+| The blind slice | 37 fresh rows, and `eval/tests/fixture.test.ts` holds the bar that keeps a row from quoting the description of the leaf it names |
 
 ## Next
 
@@ -31,7 +32,7 @@ both are blocked on a person rather than on work.
 
 | Item | Unblock |
 | ---- | ------- |
-| Eval rows for the 7 principles without them | step 4 of the porting checklist. `eval/fixture.ts` has 150 rows covering 21 of 28 principles; the other 7 have none, so "these are an improvement" is currently an assertion rather than a measurement |
+| Eval rows for the 7 principles without them | step 4 of the porting checklist. `eval/fixture.ts` has 187 rows in three slices. The `tuned` slice covers 21 of 28 principles and the `blind` slice holds 3 rows for each of the other 7, and the first blind read puts 3 of those 22 rows at rank one, so those leaves have a measurement now and it says their descriptions miss the words people use |
 | `bun run eval -- --held-out` | delete the `"plugins": ["github:yriveiro/spectre"]` line from `~/.config/opencode/opencode.jsonc`. The eval reads OpenCode's own `Registered skills` log line, it reported `20 of our 36` with the 16 missing being exactly the new principles, and it refuses to score rather than grading against a catalogue nobody confirmed |
 
 The precedent for why this matters is in `skills/FOR_AGENTS.md`: going from 10
