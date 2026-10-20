@@ -358,6 +358,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-test-for-truth",
     provenance: "judged",
   },
+  {
+    prompt: "plot the signups over time so i can see the trend",
+    label: "diagram",
+    provenance: "judged",
+  },
+  {
+    prompt: "make me a chart that shows how the regions compare",
+    label: "diagram",
+    provenance: "judged",
+  },
+  {
+    prompt: "show me the distribution of the response sizes",
+    label: "diagram",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
