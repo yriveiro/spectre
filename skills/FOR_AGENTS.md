@@ -76,8 +76,8 @@ Measured with `ripwire --eval-skills` over a mirror of the bodies — the call
 a single session are not quotes.** Re-run `eval/` before you cite one, and say
 which corpus and which slice it came from.
 
-The corpus has grown since that experiment: 82 bodies and 120 rows. On the whole
-set at ripwire 0.6.8 the description arm reads 0.877 AUC and 66.7% at rank one,
+The corpus has grown since that experiment: 82 bodies and 123 rows. On the whole
+set at ripwire 0.6.8 the description arm reads 0.878 AUC and 67.6% at rank one,
 and the 31-row held-out slice reads 0.917 and 60.7%. The shape of the finding
 holds: the description arm beats the full-text arm, and both beat chance.
 

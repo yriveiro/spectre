@@ -388,6 +388,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "playbook",
     provenance: "judged",
   },
+  {
+    prompt: "this code is hard to read, reshape it and hold the behaviour",
+    label: "playbook-refactoring",
+    provenance: "judged",
+  },
+  {
+    prompt: "restructure this module, the behaviour has to come out identical",
+    label: "playbook-refactoring",
+    provenance: "judged",
+  },
+  {
+    prompt: "the shape here is nearly the shape the domain wants, what is left to move",
+    label: "playbook-refactoring",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
