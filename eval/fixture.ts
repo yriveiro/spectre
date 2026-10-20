@@ -598,6 +598,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-foundational-thinking",
     provenance: "judged",
   },
+  {
+    prompt: "i have to change this call in thirty places, is there a way to do it once",
+    label: "principle-build-the-lever",
+    provenance: "judged",
+  },
+  {
+    prompt: "next month another team will need this same change, how do we not do it by hand again",
+    label: "principle-build-the-lever",
+    provenance: "judged",
+  },
+  {
+    prompt: "there are twelve modules with the same bug, what do we do instead of editing each one",
+    label: "principle-build-the-lever",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
