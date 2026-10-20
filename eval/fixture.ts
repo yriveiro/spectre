@@ -298,6 +298,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-make-operations-idempotent",
     provenance: "judged",
   },
+  {
+    prompt: "i am about to add a new mode to this parser, there is dead code around it, do i clear it first",
+    label: "principle-subtract-before-you-add",
+    provenance: "judged",
+  },
+  {
+    prompt: "i am extending this module, there is an unused flag and a wrapper that only forwards, do i remove them first",
+    label: "principle-subtract-before-you-add",
+    provenance: "judged",
+  },
+  {
+    prompt: "this class has options nobody passes and i am about to add one more, do i clear the old ones first",
+    label: "principle-subtract-before-you-add",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
