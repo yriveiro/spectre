@@ -241,9 +241,9 @@ labelled prompts. Change a description, run `bun test`, and the numbers move.
 Routing is good at rank one and better at separation, and the gap is
 vocabulary rather than structure. Measured with `ripwire --eval-skills` over the
 mirror of the 82 bodies, on the 129 rows of `eval/fixture.ts` at ripwire 0.6.8:
-description-based routing separates the right skill from the wrong one at 0.939
-AUC and puts 97.3% of the rows at rank one, and the held-out slice of 31 rows
-reads 0.976 AUC and 100% at rank one. Full text is weaker than the description
+description-based routing separates the right skill from the wrong one at 0.944
+AUC and puts 98.2% of the rows at rank one, and the held-out slice of 31 rows
+reads 0.988 AUC and 100% at rank one. Full text is weaker than the description
 alone (64.9% and 0.790 over the whole set), and the routed task lens sits
 between the two (55.9%, 0.832). Every skill with permitted rows wins at least
 one, and no skill fires on more than one row that is not its own.
