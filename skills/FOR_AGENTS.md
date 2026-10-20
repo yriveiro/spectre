@@ -77,15 +77,19 @@ rivals a live session sees. **Figures from a single session are not quotes.**
 Re-run `eval/` before you cite one, and say which corpus and which slice it came
 from.
 
-The corpus has grown since that experiment: 82 bodies and 211 rows in three
+The corpus has grown since that experiment: 82 bodies and 206 rows in three
 slices. At ripwire 0.6.8, with ripwire's 17 skills in the mirror, the
-description arm reads 0.946 AUC and 97.4% at rank one over the 174 rows of the
-`tuned` and `heldOut` slices, the 31-row `heldOut` slice reads 1.000 and 96.4%
-with four judged rows now sitting inside a description, and the 37-row `blind`
-slice reads 0.962 and 72.7%. The shape of
-the finding holds: the description arm beats the full-text arm, and both beat
-chance. The blind slice carries the honest number, because the other two have
-now been read against.
+description arm reads 0.946 separation and 97.4% at rank one over the 174 rows
+of the `tuned` and `heldOut` slices, the 31-row `heldOut` slice reads 1.000
+and 96.4% with four judged rows now sitting inside a description, and the
+32-row `blind` slice reads 0.681 and 18.5% — written by a model that never saw
+the descriptions, where the author-written batch at the same bar read 0.962
+and 72.7%. The description arm still reads above the full-text arm on both
+reads (18.5% to 14.8% blind, 97.4% to 64.7% in-sample), and the blind slice
+carries the honest number, because the other two have now been read against.
+What the honest number measures, when a blind batch reads 18.5%: the
+descriptions route moments that share their frame and fall silent where the
+row only knows the work.
 
 **The description is the routing surface, so it names the moment and not the
 subject.** This costs the most and is the hardest to see, because the body is

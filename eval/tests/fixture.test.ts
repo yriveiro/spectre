@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { load } from "../../skills/definitions";
+import { offences, permitted } from "../bar";
 import { blind, heldOut, tuned } from "../fixture";
 
 /**
@@ -9,29 +10,11 @@ import { blind, heldOut, tuned } from "../fixture";
  * not by routing the moment. Four rows of the legacy held-out slice drifted
  * inside a description that way, which is why the number it reads is no longer
  * the honest one.
+ *
+ * The bar itself lives in `eval/bar.ts`, because the writer of a fresh batch
+ * runs the same check before a row can land in the corpus.
  */
-const MAX_SHARED_RUN = 3;
 
-const words = (text: string) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((word) => word.length > 0);
-
-/** The longest run of consecutive words two texts share. */
-const longestRun = (a: ReadonlyArray<string>, b: ReadonlyArray<string>) => {
-  let longest = 0;
-  for (let i = 0; i < a.length; i++)
-    for (let j = 0; j < b.length; j++) {
-      let run = 0;
-      while (i + run < a.length && j + run < b.length && a[i + run] === b[j + run]) run++;
-      if (run > longest) longest = run;
-    }
-  return longest;
-};
-
-const permitted = (label: string) => (label === "none" ? ["none"] : label.split(",").map((one) => one.trim()));
 
 describe("the blind slice", () => {
   test("no row quotes the description of the leaf it names", async () => {
@@ -40,16 +23,9 @@ describe("the blind slice", () => {
       definitions.map((one) => [one.id as string, one.description ?? ""]),
     );
 
-    const offenders = blind
-      .filter((row) => row.label !== "none")
-      .flatMap((row) => {
-        const prompt = words(row.prompt);
-        return permitted(row.label).flatMap((id) => {
-          const description = words(descriptions.get(id) ?? "");
-          const shared = longestRun(prompt, description);
-          return shared > MAX_SHARED_RUN ? [`${row.prompt} -> ${id} (${shared} words)`] : [];
-        });
-      });
+    const offenders = offences(blind, descriptions).map(
+      (offence) => `${offence.prompt} -> ${offence.id} (${offence.shared} words)`,
+    );
 
     expect(offenders).toEqual([]);
   });
