@@ -1,7 +1,7 @@
 # TODO
 
-Where the pstack port stands. Two things here are blocked on a human and one is
-blocked on a measurement, and both say so rather than sitting as undone work.
+Where the pstack port stands. One thing here is blocked on a human, and it says
+so rather than sitting as undone work.
 
 Read `skills/FOR_AGENTS.md` before adding a leaf. Three of the rows below exist
 because that file's rules put them there, not because they were planned.
@@ -22,17 +22,21 @@ because that file's rules put them there, not because they were planned.
 | 23 playbooks plus a `playbook` index | registered and not indexed; the hub grew by 376 bytes for the first 23 |
 | Reachability and map-drift tests | both verified to fail before being kept |
 | The blind slice | 37 fresh rows, and `eval/tests/fixture.test.ts` holds the bar that keeps a row from quoting the description of the leaf it names |
+| Eval rows for the 7 principles without them | 3 rows each, and the blind slice reads 14 of those 21 at rank one |
 
 ## Next
 
-Nothing in the port is left unplanned. The two rows below are the remainder, and
-both are blocked on a person rather than on work.
+Nothing in the port is left unplanned. The row below is the remainder, and it is
+work rather than a person.
+
+| Item | Notes |
+| ---- | ----- |
+| Seven leaves that win none of their blind rows | `principle-model-the-domain`, `principle-never-block-on-the-human`, `principle-outcome-oriented-execution`, `principle-separate-before-serializing-shared-state`, `principle-sequence-verifiable-units`, `principle-subtract-before-you-add` and `principle-verification` each own a boundary row the router hands to a neighbour. The corpus phase puts the words a prompt uses into each description, one leaf per change |
 
 ## Blocked on a human
 
 | Item | Unblock |
 | ---- | ------- |
-| Eval rows for the 7 principles without them | step 4 of the porting checklist. `eval/fixture.ts` has 205 rows in three slices. The `tuned` slice now covers 27 of 28 principles, the `blind` slice holds 3 rows for each of the 7 it was written for, and the blind read puts 12 of those 21 rows at rank one, so the leaves that are left have a measurement and it says their descriptions miss the words people use |
 | `bun run eval -- --held-out` | delete the `"plugins": ["github:yriveiro/spectre"]` line from `~/.config/opencode/opencode.jsonc`. The eval reads OpenCode's own `Registered skills` log line, it reported `20 of our 36` with the 16 missing being exactly the new principles, and it refuses to score rather than grading against a catalogue nobody confirmed |
 
 The precedent for why this matters is in `skills/FOR_AGENTS.md`: going from 10
