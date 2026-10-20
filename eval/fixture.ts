@@ -478,6 +478,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-sequence-verifiable-units",
     provenance: "judged",
   },
+  {
+    prompt: "a string is sometimes an id and sometimes a name here, how do i stop that",
+    label: "principle-type-system-discipline",
+    provenance: "judged",
+  },
+  {
+    prompt: "this config object only holds together by convention, the types do not say so",
+    label: "principle-type-system-discipline",
+    provenance: "judged",
+  },
+  {
+    prompt: "adding a new variant compiles and the match just ignores it",
+    label: "principle-type-system-discipline",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
