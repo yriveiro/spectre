@@ -31,7 +31,7 @@ work rather than a person.
 
 | Item | Notes |
 | ---- | ----- |
-| Seven leaves that win none of their blind rows | `principle-model-the-domain`, `principle-never-block-on-the-human`, `principle-outcome-oriented-execution`, `principle-separate-before-serializing-shared-state`, `principle-sequence-verifiable-units`, `principle-subtract-before-you-add` and `principle-verification` each own a boundary row the router hands to a neighbour. The corpus phase puts the words a prompt uses into each description, one leaf per change |
+| Five leaves that win none of their blind rows | `principle-model-the-domain`, `principle-never-block-on-the-human`, `principle-separate-before-serializing-shared-state`, `principle-subtract-before-you-add` and `principle-verification` each own a boundary row the router hands to a neighbour. The corpus phase puts the words a prompt uses into each description, one leaf per change |
 
 ## Blocked on a human
 
