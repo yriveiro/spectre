@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { load } from "../../skills/definitions";
-import { writeMirror } from "../../eval/mirror";
+import { rivalIds, writeMirror } from "../../eval/mirror";
 import { rows, tsv } from "../../eval/fixture";
 
 const RIPWIRE = Bun.which("ripwire");
@@ -21,18 +21,18 @@ afterAll(async () => {
   for (const root of roots) await Bun.$`rm -rf ${root}`.quiet();
 });
 
-let result: { ids: Array<string>; output: string } | undefined;
+let result: { mirrored: Awaited<ReturnType<typeof writeMirror>>; output: string } | undefined;
 
 const once = async () => {
   if (result) return result;
   const { mirror, file } = scratch();
-  const ids = await writeMirror(mirror);
+  const mirrored = await writeMirror(mirror);
   await Bun.write(file, tsv(rows));
   const proc = Bun.spawnSync([RIPWIRE!, mirror, `--eval-skills=${file}`], {
     stdout: "pipe",
     stderr: "pipe",
   });
-  return (result = { ids, output: `${proc.stdout.toString()}${proc.stderr.toString()}` });
+  return (result = { mirrored, output: `${proc.stdout.toString()}${proc.stderr.toString()}` });
 };
 
 const auc = (output: string, arm: string) => {
@@ -55,9 +55,14 @@ describe.skipIf(!RIPWIRE)("skill routing", () => {
   beforeAll(once);
 
   test("the mirror carries every definition", async () => {
-    const { ids } = await once();
+    const { mirrored } = await once();
     const skills = await Effect.runPromise(load());
-    expect(ids).toEqual(skills.map((skill) => skill.id).toSorted());
+    expect(mirrored.ours).toEqual(skills.map((skill) => skill.id).toSorted());
+  });
+
+  test("the mirror carries ripwire's skills as rivals", async () => {
+    const { mirrored } = await once();
+    for (const id of await rivalIds()) expect(mirrored.rivals).toContain(id);
   });
 
   test("a frontmatter reader sees every description", async () => {

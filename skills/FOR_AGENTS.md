@@ -72,15 +72,17 @@ moves list. Do not copy them.
 ## The three rules the measurements put here
 
 Measured with `ripwire --eval-skills` over a mirror of the bodies — the call
-`test/skills/routing.test.ts` makes — on a 13-leaf, 54-row corpus. **Figures from
-a single session are not quotes.** Re-run `eval/` before you cite one, and say
-which corpus and which slice it came from.
+`eval/mirror.ts` makes, which holds our bodies and ripwire's own skills, the
+rivals a live session sees. **Figures from a single session are not quotes.**
+Re-run `eval/` before you cite one, and say which corpus and which slice it came
+from.
 
 The corpus has grown since that experiment: 82 bodies and 211 rows in three
-slices. At ripwire 0.6.8 the description arm reads 0.954 AUC and 99.4% at rank
-one over the 174 rows of the `tuned` and `heldOut` slices, the 31-row
-`heldOut` slice reads 1.000 and 100% with four judged rows now sitting inside a
-description, and the 37-row `blind` slice reads 1.000 and 75.8%. The shape of
+slices. At ripwire 0.6.8, with ripwire's 17 skills in the mirror, the
+description arm reads 0.946 AUC and 97.4% at rank one over the 174 rows of the
+`tuned` and `heldOut` slices, the 31-row `heldOut` slice reads 1.000 and 96.4%
+with four judged rows now sitting inside a description, and the 37-row `blind`
+slice reads 0.962 and 72.7%. The shape of
 the finding holds: the description arm beats the full-text arm, and both beat
 chance. The blind slice carries the honest number, because the other two have
 now been read against.
