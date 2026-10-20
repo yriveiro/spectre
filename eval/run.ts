@@ -170,7 +170,10 @@ try {
       const { writeMirror } = await import("./mirror");
       const mirror = `${scratch}/mirror`;
       const bar = log.bar("lexical arms (ripwire)", 1);
-      await writeMirror(mirror);
+      const mirrored = await writeMirror(mirror);
+      log.say(
+        `  mirror: ${mirrored.ours.length} ours + ${mirrored.rivals.length} ripwire rivals\n`,
+      );
       await Bun.write(
         `${scratch}/eval.tsv`,
         `${corpus.map((r) => `${r.prompt}\t${r.label}\t${r.provenance}`).join("\n")}\n`,

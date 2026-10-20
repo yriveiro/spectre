@@ -128,13 +128,14 @@ assumed:
 ## Reading the numbers
 
 Scores are not comparable across corpora, and this number moves as the corpus
-grows. Measured at ripwire 0.6.8 over the 82 bodies, the description arm reads
-99.4% at rank one over the 156 judged rows of the `tuned` and `heldOut` slices,
-with 0.954 separation, and 75.8% over the 33 judged rows of the `blind` slice,
-with 1.000 separation. ripwire also reports the judged rows alone, which is the
-honest number because the other rows quote the descriptions. Re-run the lexical
-arm before quoting any of these, and say which corpus and which slice the
-figure came from.
+grows. The mirror holds our 82 bodies and ripwire's 17 skills, because the
+model arm's catalogue holds both. Measured at ripwire 0.6.8 the description arm
+reads 97.4% at rank one over the 156 judged rows of the `tuned` and `heldOut`
+slices, with 0.946 separation, and 72.7% over the 33 judged rows of the `blind`
+slice, with 0.962 separation. ripwire also reports the judged rows alone, which
+is the honest number because the other rows quote the descriptions. Re-run the
+lexical arm before quoting any of these, and say which corpus and which slice
+the figure came from.
 
 The two arms score over different denominators, and the table prints each one.
 The lexical arms score the judged rows, the ones that name a leaf, because a

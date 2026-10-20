@@ -251,15 +251,16 @@ different questions, so read the slice before the number. Measured with
 
 | slice | rows | hit@1 | AUC | what it reads |
 | ----- | ---- | ----- | --- | ------------ |
-| `tuned` and `heldOut` | 174 | 99.4% | 0.954 | in-sample, because these rows shaped the descriptions |
-| `heldOut` | 31 | 100% | 1.000 | frozen and saturated, with four judged rows now inside a description |
-| `blind` | 37 | 75.8% | 1.000 | fresh rows that no description has seen |
+| `tuned` and `heldOut` | 174 | 97.4% | 0.946 | in-sample, because these rows shaped the descriptions |
+| `heldOut` | 31 | 96.4% | 1.000 | frozen and saturated, with four judged rows now inside a description |
+| `blind` | 37 | 72.7% | 0.962 | fresh rows that no description has seen |
 
 The first line is the number the corpus inflates by construction, so quote the
-blind slice instead. It reads 75.8% at rank one with 1.000 AUC: the right leaf
+blind slice instead. It reads 72.7% at rank one with 0.962 AUC: the right leaf
 sits near the top of the ranking and loses first place to a neighbour most of
-the time. Full text is weaker than the description alone (67.9% and 0.819 over
-the whole set), and the routed task lens sits between the two (58.3%, 0.868).
+the time. Full text is weaker than the description alone (64.7% and 0.790 over
+the whole set), and the routed task lens sits between the two (60.3%, 0.862)
+with ripwire's skills ranked in.
 Every skill with permitted rows wins at least one, and no skill fires on more
 than one row that is not its own.
 
