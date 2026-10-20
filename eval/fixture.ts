@@ -328,6 +328,21 @@ export const tuned: ReadonlyArray<Row> = [
     label: "principle-never-block-on-the-human",
     provenance: "judged",
   },
+  {
+    prompt: "i rewrote this skill description, which version should i keep",
+    label: "playbook-eval",
+    provenance: "judged",
+  },
+  {
+    prompt: "i cannot tell from reading it which of these two descriptions routes better",
+    label: "playbook-eval",
+    provenance: "judged",
+  },
+  {
+    prompt: "which of these two skill descriptions sends the prompt to the right skill",
+    label: "playbook-eval",
+    provenance: "judged",
+  },
 ];
 
 export const heldOut: ReadonlyArray<Row> = [
