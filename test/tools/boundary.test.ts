@@ -4,7 +4,7 @@ import { Schema } from "effect";
 /**
  * `tools/FOR_AGENTS.md` documents the boundary the host applies to a declared schema,
  * and the JSON Schema the model is shown is not it. `packages/core/src/tool/runtime.ts:79`
- * at v2.0.29 calls `Schema.decodeUnknownEffect` on the declared schema;
+ * at v2.1.1 calls `Schema.decodeUnknownEffect` on the declared schema;
  * `packages/core/src/tool/runtime.ts:156` builds the JSON Schema separately and only
  * describes the tool.
  *

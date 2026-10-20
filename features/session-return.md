@@ -19,14 +19,15 @@ otherwise advances the trunk. The feature reports the distance and says so.
 
 ## Mechanism
 
-Four properties of OpenCode 2.0.29 decide the shape. All read at the tag.
+Four properties of OpenCode 2.1.1 decide the shape. All read at the tag.
 sources in the appendix.
 
-1. **A plugin cannot enumerate sessions.** `ctx.session` is a `Pick` over
-   fifteen members of `SessionApi` and `list` is not one of them. So nothing
-   here can name a stranded session, and any design that tries is not hard, it is
-   impossible. The only session identities available are the ones a hook is
-   handed and the ones already held.
+1. **Enumeration cannot catch the moment.** `ctx.session` is a `Pick` over
+   sixteen members of `SessionApi`, and `list` is one of them (cursor-paginated,
+   new in 2.1.1). Listing names every session, but nothing announces a worktree
+   removal, so a scan still cannot observe the deletion it is looking for. The only
+   session identities available at the moment they can be hurt are the ones a hook
+   is handed and the ones already held, which is why the rescue stays pull-based.
 2. **A hook is handed the session it fires for.** Both `session.hook("prompt")`
    and `tool.hook("execute.before")` carry `sessionID`, so a session can be found
    at the moment it acts on itself.
@@ -147,8 +148,10 @@ repo's own layout, and `mainOf` finds the row whose branch is `main` instead.
 - **No fetch, no fast-forward, no merge.** `behind` and `dirty` are reported.
 - **No branch deletion, no directory deletion, no worktree removal.** That is
   `action: "remove"`, and it keeps its own guards.
-- **No enumeration, and no register.** A session nobody talks to and that makes
-  no tool call stays where it is. Nothing can observe that it is doing nothing.
+- **No proactive scan, and no register.** `ctx.session.list` can name sessions,
+  but a list cannot observe a deletion behind the tool's back. A session nobody
+  talks to and that makes no tool call stays where it is until its next turn.
+  Nothing can observe that it is doing nothing.
 - **No tool, and no input.** The `worktrees` catalogue is unchanged: `remove`
   takes no new input, and every existing status means what it meant. `removed`
   and `failed` can now also carry `moved`, naming where the calling session went
@@ -164,7 +167,7 @@ deletion that had already succeeded.
 
 `action: "remove"` now reads the calling session's directory and moves it to
 `main` before asking the host to delete anything. The host's removal reclaims a
-path and its row and nothing else (`packages/core/src/worktree.ts` at v2.0.29),
+path and its row and nothing else (`packages/core/src/worktree.ts` at v2.1.1),
 so the ordering has to live here. The hook still owns what `remove` does not: a
 directory deleted behind the tool's back, or one removed while no session was in
 it, still lands the session on the next prompt.
@@ -228,12 +231,12 @@ read as a fact about the repository.
 
 ## Appendix: sources
 
-Read at tag `v2.0.29`. A path that does not exist at that tag is not evidence
+Read at tag `v2.1.1`. A path that does not exist at that tag is not evidence
 for anything in this file. The rule for reading the source is in `AGENTS.md`.
 
 | Claim | Where, at the tag |
 | ----- | ----------------- |
-| `ctx.session` has no `list` | `packages/plugin/src/effect/session.ts:153` |
+| `ctx.session` lists with cursor pagination | `packages/plugin/src/effect/session.ts:156` |
 | `SessionPrompt.prompt` is mutable | `packages/plugin/src/effect/session.ts:17` |
 | the prompt hook fires | `packages/core/src/session/prompt.ts:40` |
 | session hooks cannot fail | `packages/core/src/plugin/hooks.ts:26` |
@@ -241,7 +244,7 @@ for anything in this file. The rule for reading the source is in `AGENTS.md`.
 | a vanished source is a supported path | `packages/core/src/session/move.ts:103-105`, `:138` |
 | `execute.before` carries `sessionID`, for every tool | `packages/core/src/tool.ts:103-107`, `:241`, `:271` |
 | only `Tool.Error` may fail that hook | `packages/plugin/src/effect/tool.ts:48-50` |
-| position 0 is classed as main by the host | `packages/core/src/git.ts:691` |
+| position 0 is classed as main by the host | `packages/core/src/git.ts:1288` |
 | `canonical` is derived from that position | `packages/core/src/project.ts:350-356` |
 | `worktree.updated` names no directory | `packages/schema/src/worktree.ts:56-59` |
 

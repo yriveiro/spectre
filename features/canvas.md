@@ -60,7 +60,7 @@ reproducible and are not quoted here. Re-measure before quoting any diff count.
 
 ## Mechanism
 
-Four properties of spectre decide the shape. All read at `v2.0.29`. Sources in
+Four properties of spectre decide the shape. All read at `v2.1.1`. Sources in
 the appendix.
 
 1. **A spectre agent can load a second skill.** `packages/core/src/tool/plugin/skill.ts`
@@ -452,7 +452,7 @@ than a coincidence of two wrong counts.
 
 ## Appendix: sources
 
-Read at tag `v2.0.29`. A path that does not resolve at the tag is not evidence for
+Read at tag `v2.1.1`. A path that does not resolve at the tag is not evidence for
 anything here; `AGENTS.md` holds the rule.
 
 | Claim | Where, at the tag |

@@ -5,7 +5,7 @@ as an OpenCode plugin.
 
 ## Requirements
 
-- OpenCode `>= 2.0.29`
+- OpenCode `>= 2.1.1`
 
 ## Install
 
@@ -55,7 +55,7 @@ build:
 
 OpenCode resolves `index.ts` through the package's `.` export and calls the
 plugin's `effect` once per project instance. Everything Spectre contributes
-(skills, agents, tools, nested plugins, MCP servers) is registered from inside that
+(skills, agents, tools, commands) is registered from inside that
 `effect`, through the domains on `ctx`.
 
 The entrypoint follows the official

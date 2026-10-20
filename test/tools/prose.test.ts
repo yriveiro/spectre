@@ -342,6 +342,11 @@ describe("the set's own prose", () => {
     // The rule counts per line, so rewrapping a paragraph without changing a word can
     // move this number. Splitting "must match" across a line break cost one finding
     // in `AGENTS.md` on its own. Read this number as a count of lines, not of sentences.
+    //
+    // The 2.1.1 bump added the `Tool.Error` identity note to `tools/FOR_AGENTS.md`
+    // and rewrote the enumeration claim in `features/session-return.md`: 338 to 340
+    // with a semicolon, then 339 once the semicolon was split and the note's own
+    // passives were rewritten.
     const out = await call(["."]);
     const byRule: Record<string, number> = {};
     for (const f of out.findings) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
@@ -371,7 +376,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 338,
+      passiveVoice: 339,
       otherRules: [],
     });
   }, 120_000);

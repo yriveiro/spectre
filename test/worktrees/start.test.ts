@@ -61,7 +61,7 @@ const bareLayout = async () => {
 };
 
 /**
- * The host's discovery step at v2.0.29 (`packages/core/src/git.ts`): walk up from the
+ * The host's discovery step at v2.1.1 (`packages/core/src/git.ts`): walk up from the
  * source directory for a `.git` entry, then `rev-parse` in its parent. A bare
  * repository has no `.git`, so the walk leaves the repository and the parse fails.
  * Reproduced here rather than stubbed, because the whole point is which directory the
@@ -86,7 +86,7 @@ type CreateInput = {
 
 /**
  * The host's create, with the fallback it applies when `from` is absent
- * (`packages/core/src/worktree.ts` at v2.0.29: `input.from ?? row.worktree`). The
+ * (`packages/core/src/worktree.ts` at v2.1.1: `input.from ?? row.worktree`). The
  * project row for a bare-backed project is the bare repository, so a tool that omits
  * `from` gets the failure this file exists to catch.
  */
@@ -295,7 +295,7 @@ describe("start against a bare repository", () => {
     // worktree opened without a named base is cut from. OpenCode reads a new
     // branch's reflog to recover the review base and refuses a hint of `HEAD`
     // or anything ending in `/HEAD`
-    // (`packages/core/src/plugin/vcs/git.ts` at v2.0.29). Switching off the
+    // (`packages/core/src/plugin/vcs/git.ts` at v2.1.1). Switching off the
     // detached HEAD the host leaves behind records exactly `HEAD`, so every
     // worktree this tool opened had an unrecoverable base until one was chosen
     // by hand.
