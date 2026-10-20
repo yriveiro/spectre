@@ -11,10 +11,13 @@ import type { Model, ModelInfo } from "./opencode";
  *   zero.
  *
  * One model with five variants is worth more than nine models with one arm each:
- * `minimal` through `xhigh` differ only in reasoning effort, so the spread between
+ * `low` through `max` differ only in reasoning effort, so the spread between
  * them is the part of the measurement that is actually about our descriptions.
+ *
+ * The provider is part of the ref on purpose. The catalogue carries the same
+ * model id on two providers, and a pin without one reaches both.
  */
-export const PINNED = "opencode/muse-spark-1.3-contributor-free";
+export const PINNED = "opencode-go/minimax-m3.1-flash-free";
 
 export type Selection = {
   readonly models: ReadonlyArray<Model>;

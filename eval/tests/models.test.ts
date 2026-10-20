@@ -8,28 +8,35 @@ const info = (providerID: string, id: string, variants?: ReadonlyArray<string>):
   variants: variants?.map((v) => ({ id: v })),
 });
 
-const spark = info("opencode", "muse-spark-1.3-contributor-free", [
-  "minimal",
+const free = info("opencode-go", "minimax-m3.1-flash-free", [
   "low",
   "medium",
   "high",
   "xhigh",
+  "max",
 ]);
 const catalogue: ReadonlyArray<ModelInfo> = [
-  spark,
-  info("opencode", "mimo-v2.6-flash-free"),
+  free,
+  info("opencode", "minimax-m3.1-flash-free"),
+  info("opencode-go", "muse-spark-1.3-contributor", [
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+  ]),
   info("opencode-go", "longcat-2.5-preview-free"),
-  info("opencode", "muse-spark-1.3-contributor"),
+  info("opencode", "mimo-v2.6-flash-free"),
 ];
 
 describe("select", () => {
   test("the pinned model is the default and nothing else runs", () => {
     expect(select(catalogue).models.map(ref)).toEqual([
-      "opencode/muse-spark-1.3-contributor-free#high",
-      "opencode/muse-spark-1.3-contributor-free#low",
-      "opencode/muse-spark-1.3-contributor-free#medium",
-      "opencode/muse-spark-1.3-contributor-free#minimal",
-      "opencode/muse-spark-1.3-contributor-free#xhigh",
+      "opencode-go/minimax-m3.1-flash-free#high",
+      "opencode-go/minimax-m3.1-flash-free#low",
+      "opencode-go/minimax-m3.1-flash-free#max",
+      "opencode-go/minimax-m3.1-flash-free#medium",
+      "opencode-go/minimax-m3.1-flash-free#xhigh",
     ]);
   });
 
@@ -37,20 +44,20 @@ describe("select", () => {
     expect(select(catalogue).models.some((m) => ref(m).includes("longcat"))).toBe(false);
   });
 
-  test("the paid same-name model is not the free one", () => {
+  test("the same model on the other provider is not the one that runs", () => {
     const picked = select(catalogue).models.map(ref);
     expect(picked.every((r) => r.startsWith(PINNED))).toBe(true);
-    expect(picked.some((r) => r === "opencode/muse-spark-1.3-contributor#high")).toBe(false);
+    expect(picked.some((r) => r === "opencode/minimax-m3.1-flash-free")).toBe(false);
   });
 
   test("a variant can be pinned to a single arm", () => {
     expect(select(catalogue, { variant: "high" }).models.map(ref)).toEqual([
-      "opencode/muse-spark-1.3-contributor-free#high",
+      "opencode-go/minimax-m3.1-flash-free#high",
     ]);
   });
 
   test("a variant that does not exist is refused with the list of the ones that do", () => {
-    expect(() => select(catalogue, { variant: "turbo" })).toThrow(/minimal/);
+    expect(() => select(catalogue, { variant: "turbo" })).toThrow(/low, medium, high, xhigh, max/);
   });
 
   test("a skip drops one variant and keeps the rest", () => {
