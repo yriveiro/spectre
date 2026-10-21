@@ -89,6 +89,34 @@ const refused = (model: Model | undefined): string | undefined => {
 /** One line of the composer: the profile, the spend, or the problem. */
 type Line = { readonly body: string; readonly problem: boolean };
 
+/**
+ * The command that opens the page.
+ *
+ * The layer is global because the palette is itself a mode. A command in the
+ * base mode is not reachable while the palette dialog is open, and a command
+ * nobody can reach is a command the palette does not list. This page opens
+ * from the palette, from the slash command, and from nowhere else, so it has
+ * to be reachable in every mode. Measured in a terminal: without this line the
+ * palette answered "No results found".
+ *
+ * It is a value rather than a closure over the setup, so a test can read it
+ * without a host.
+ */
+export const opener = (open: () => void) => ({
+  mode: "global" as const,
+  commands: [
+    {
+      id: "spectre.routing.open",
+      title: "Routing",
+      description: "Open the page that configures model routing",
+      group: "Spectre",
+      palette: true as const,
+      slash: { name: "routing" } as const,
+      run: open,
+    },
+  ],
+});
+
 export default Plugin.define({
   id: "spectre.routing",
   setup: async (context) => {
@@ -224,21 +252,9 @@ export default Plugin.define({
       },
     });
 
-    context.keymap.layer(() => ({
-      commands: [
-        {
-          id: "spectre.routing.open",
-          title: "Routing",
-          description: "Open the page that configures model routing",
-          group: "Spectre",
-          palette: true,
-          slash: { name: "routing" },
-          run: () => {
-            context.ui.router.navigate({ type: "plugin", name: PAGE });
-          },
-        },
-      ],
-    }));
+    context.keymap.layer(() =>
+      opener(() => context.ui.router.navigate({ type: "plugin", name: PAGE })),
+    );
 
     /** The profile this session would use: the first one under its agent. */
     const chosen = (sessionID: string) => {
