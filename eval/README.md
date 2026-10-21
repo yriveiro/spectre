@@ -60,6 +60,35 @@ the pinned model, pin one variant, or drop one by name.
 tests beside them. A harness whose scoring is untested is the failure
 `principle-evidence` names, so the scoring is the part covered first.
 
+## The routing harness
+
+`eval/routing/` measures the other decision: which **profile** a task belongs
+to, where the skill harness measures which **skill** answers. The corpus is
+fifty blind rows, six for each of the seven profiles and eight negative rows
+that fit none of them, written by two writers on two model families from the
+taxonomy alone. None of the rows shares a four-word run with a `match` line,
+which `eval/routing/tests/` holds them to.
+
+```sh
+bun run eval:routing -- --blind          # the blind slice only
+bun run eval:routing -- --tuned          # the in-sample slice
+bun run eval:routing -- --rows=12        # a head of the corpus
+bun run eval:routing -- --no-model       # the lexical arm only
+```
+
+Two arms, and the table prints the price of being wrong beside the hit rate,
+because a hit rate without it hides the point of the measurement:
+
+| Arm | What it is |
+| --- | --- |
+| `lex:match` | BM25 over the profiles' `match` lines |
+| `model:*` | a model asked to name a profile, which is what a session does today |
+
+A wrong profile is a task done on the wrong model, so it costs the price of the
+profile that should have run. The unit is the catalogue's rate per million
+tokens, and the prices come from the product's own resolver, so the corpus is
+measured against the routing the tool actually does.
+
 ## The three slices
 
 `fixture.ts` holds three slices and they answer different questions.
