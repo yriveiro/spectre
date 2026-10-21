@@ -18,13 +18,7 @@ const free = info("opencode-go", "minimax-m3.1-flash-free", [
 const catalogue: ReadonlyArray<ModelInfo> = [
   free,
   info("opencode", "minimax-m3.1-flash-free"),
-  info("opencode-go", "muse-spark-1.3-contributor", [
-    "minimal",
-    "low",
-    "medium",
-    "high",
-    "xhigh",
-  ]),
+  info("opencode-go", "muse-spark-1.3-contributor", ["minimal", "low", "medium", "high", "xhigh"]),
   info("opencode-go", "longcat-2.5-preview-free"),
   info("opencode", "mimo-v2.6-flash-free"),
 ];

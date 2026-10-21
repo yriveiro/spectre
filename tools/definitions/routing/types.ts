@@ -43,6 +43,27 @@ export type ProfileEntry = typeof Profile.Type;
  * repository carries the word list. A `null` removes a path an earlier config
  * file set, which is why it is a union with null rather than a bare string.
  */
+/**
+ * The judge: the model that answers which profile a task belongs to.
+ *
+ * Every field is optional, because a judge that names no endpoint has nowhere
+ * to ask, and that is the same as no judge at all. The key is the name of an
+ * environment variable, never the key itself, so the file holds no secret.
+ */
+const Judge = Schema.Struct({
+  /** Which arm answers. The lexical one reads the surface; the System One one asks a model. */
+  kind: Schema.optional(Schema.Literals(["lexical", "jev"])),
+  /** The model to ask, such as `jev-1.13-free`. */
+  model: Schema.optional(Schema.String),
+  /** The endpoint to ask. The System One route answers at its own path. */
+  endpoint: Schema.optional(Schema.String),
+  /** The environment variable that holds the key. */
+  key: Schema.optional(Schema.String),
+  /** The budget for one question, in milliseconds. */
+  timeout: Schema.optional(Schema.Int),
+});
+export type JudgeConfig = typeof Judge.Type;
+
 const Dictionary = Schema.Union([Schema.String, Schema.Null]);
 
 /**
@@ -61,6 +82,11 @@ export const Config = Schema.Struct({
   provider: Schema.optional(Schema.String),
   models: Schema.optional(Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Null]))),
   profiles: Schema.optional(Schema.Record(Schema.String, Schema.Union([Profile, Schema.Null]))),
+  /**
+   * The judge, when the file asks for one. `null` says no, and it removes a
+   * judge's setting that an earlier file made.
+   */
+  judge: Schema.optional(Schema.Union([Judge, Schema.Null])),
   dictionary: Schema.optional(Dictionary),
 });
 
@@ -85,6 +111,8 @@ export type Profile = {
 export type Tables = {
   /** The configured default provider, or absent. */
   readonly provider: string | undefined;
+  /** The judge the config asks for, or absent. */
+  readonly judge: JudgeConfig | undefined;
   /**
    * The stored answer to the setup question, and the file that carries it. A
    * later file with no answer clears an earlier one, so a project config

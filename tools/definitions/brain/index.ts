@@ -56,7 +56,9 @@ export const Relate = Schema.Struct({
   action: Schema.Literals(["relate"]).annotate({
     description: "Say two claims are joined, contradict each other, or one came out of the other.",
   }),
-  from: Schema.String.annotate({ description: "Id of the first claim, as a previous call returned it." }),
+  from: Schema.String.annotate({
+    description: "Id of the first claim, as a previous call returned it.",
+  }),
   to: Schema.String.annotate({ description: "Id of the second claim." }),
   kind: Schema.Literals(["relates", "contradicts", "derived-from"]).annotate({
     description:
@@ -87,8 +89,7 @@ export const Demote = Schema.Struct({
     description: "What made it untrustworthy. An empty one is refused.",
   }),
   until: Schema.optional(Schema.String).annotate({
-    description:
-      "When to start trusting it again, as a date. Omit it to demote with no end.",
+    description: "When to start trusting it again, as a date. Omit it to demote with no end.",
   }),
 });
 
@@ -129,7 +130,8 @@ export const Recalled = Schema.Struct({
 
 export const Asserted = Schema.Struct({
   status: Schema.Literals(["asserted"]).annotate({
-    description: "The claim is on disk and cannot be rewritten. Read the evidence before trusting the grouping.",
+    description:
+      "The claim is on disk and cannot be rewritten. Read the evidence before trusting the grouping.",
   }),
   id: Schema.String,
   kind: ClaimKind,
@@ -151,7 +153,8 @@ export const Related = Schema.Struct({
   to: Schema.String,
   why: Schema.String,
   wrote: Schema.Boolean.annotate({
-    description: "`false` means this exact edge was already there, so the ledger did not change and `git diff` is empty.",
+    description:
+      "`false` means this exact edge was already there, so the ledger did not change and `git diff` is empty.",
   }),
 });
 
@@ -186,7 +189,10 @@ const DEFAULT_BUDGET = 400;
 const project = (ctx: Plugin.Context): AbsolutePath =>
   AbsolutePath.make(ctx.location.project.directory);
 
-const rejected = (action: typeof Rejected.Type["action"], problems: string): typeof Rejected.Type => ({
+const rejected = (
+  action: (typeof Rejected.Type)["action"],
+  problems: string,
+): typeof Rejected.Type => ({
   status: "rejected",
   action,
   problems,

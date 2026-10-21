@@ -1,14 +1,23 @@
 import type { Plugin } from "@opencode/plugin/effect";
+import { Integration } from "@opencode/plugin/effect";
 import type { Model } from "@opencode/schema/model";
 import type { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
 import { agentIds } from "../../../agents";
 import { candidates } from "./catalogue";
 import { check } from "./check";
+import { jevJudge, SYSTEMONE_KEY_ENV } from "./jev";
+import { type Judge, lexicalJudge, surface, type Verdict } from "./judge";
 import { decode, load } from "./load";
 import { FILE_NAME } from "./locate";
 import { resolve } from "./resolve";
-import { DEFAULT_AGENT, type Excluded as ExcludedRow, type File, type Pick } from "./types";
+import {
+  DEFAULT_AGENT,
+  type Excluded as ExcludedRow,
+  type File,
+  type Pick,
+  type Tables,
+} from "./types";
 import { writeConfig } from "./write";
 
 /**
@@ -22,12 +31,21 @@ import { writeConfig } from "./write";
  * The config is read on every call, so an edit made mid-session routes on the
  * edit. The policy is `resolve.ts`, and the validation is `check.ts`.
  *
+ * The judge is optional, and a `resolved` answer says which path chose the
+ * profile. The judge names a profile and never a model, so it cannot change
+ * what the resolver spent. A judge that is absent, quiet or broken is a
+ * `skipped` answer and not a failed call.
+ *
  * @see features/routing.md
  */
 
 const Input = Schema.Struct({
   profile: Schema.optional(Schema.String).annotate({
     description: "One profile name, to get just that row. Omit it for the whole table.",
+  }),
+  task: Schema.optional(Schema.String).annotate({
+    description:
+      "The task statement, when the caller wants the judge to choose the profile. Omit it and choose the profile yourself against the `match` lines.",
   }),
   setup: Schema.optional(Schema.Literals(["accepted", "declined"])).annotate({
     description:
@@ -71,6 +89,26 @@ const Profile = Schema.Struct({
   excluded: Schema.Array(NotThis),
 });
 
+/**
+ * Which path chose the profile: the judge, or the caller reading the `match`
+ * lines. A `skipped` answer carries the reason in words the session can say out
+ * loud, because the session then chooses the profile itself.
+ */
+const Judged = Schema.Union([
+  Schema.Struct({
+    status: Schema.Literals(["used"]),
+    /** The profile the judge chose. It names no model. */
+    profile: Schema.String,
+    /** The probability the judge reported, when its arm reports one. */
+    confidence: Schema.optional(Schema.Number),
+  }),
+  Schema.Struct({
+    status: Schema.Literals(["skipped"]),
+    /** Why the judge gave no profile. */
+    reason: Schema.String,
+  }),
+]);
+
 const Resolved = Schema.Struct({
   status: Schema.Literals(["resolved"]),
   profiles: Schema.Array(Profile),
@@ -79,6 +117,8 @@ const Resolved = Schema.Struct({
   sources: Schema.Array(Schema.String),
   /** The names the caller asked for. Empty on a whole-table call. */
   asked: Schema.Array(Schema.String),
+  /** The judge's answer, or why it was not asked. Present on every answer. */
+  judge: Judged,
 });
 
 const StarterProfile = Schema.Struct({
@@ -114,14 +154,16 @@ export type Page = typeof Output.Type;
 
 const DESCRIPTION = `Route a task to a model: resolve each profile's requirement against the models this project allows, and return the ref to spend.
 
-Call it with no argument for every profile. Each row carries the profile's \`match\` line, which says when that profile fits, and one \`model\`: the ref the resolver chose, the rung it asked for, and the cost. Take the profile whose \`match\` fits the task, and pass \`model.ref\` to the subagent tool unchanged, variant included.
+Call it with no \`profile\` to get every profile. Each row carries the profile's \`match\` line, which says when that profile fits, and one \`model\`: the ref the resolver chose, the rung it asked for, and the cost. Take the profile whose \`match\` fits the task, and pass \`model.ref\` to the subagent tool unchanged, variant included.
 
   const t = await tools.spectre.routing({})
   subagent({ agent: t.profiles[0].agent, prompt: "<the task>", model: t.profiles[0].model.ref })
 
+Pass \`task\` when you want the judge to choose the profile: \`routing({ task: "<the task>" })\`. The judge names a profile and never a model, so take \`model.ref\` from that profile's row unchanged. When \`judge.status\` is \`used\`, spend the row named \`judge.profile\`. When it is \`skipped\`, choose the profile yourself against the \`match\` lines. A skipped judge is a complete answer, and the routing is no less correct for it.
+
 What comes back, by \`status\`:
 
-- \`resolved\`: \`profiles\` has one row per profile. \`model\` is the model to spend: \`ref\` is the full string to pass, rung included, and \`rung\` is the level it names. \`pinned\` says the allowlist named the variant, \`steppedUp\` says the ladder had no rung at the requirement and stepped up, \`below\` is the rung under it, and \`family\`, \`rungs\` and \`cost\` describe the model. \`crosscheck\` is the second opinion when the profile asks for one, and \`crosscheckProblem\` says why a declared second opinion found none. \`excluded\` lists the candidates that did not qualify, each with the highest rung it reaches. \`models\` is the allowlist, \`sources\` the config files that were read, and \`asked\` the profile names you asked for.
+- \`resolved\`: \`profiles\` has one row per profile. \`model\` is the model to spend: \`ref\` is the full string to pass, rung included, and \`rung\` is the level it names. \`pinned\` says the allowlist named the variant, \`steppedUp\` says the ladder had no rung at the requirement and stepped up, \`below\` is the rung under it, and \`family\`, \`rungs\` and \`cost\` describe the model. \`crosscheck\` is the second opinion when the profile asks for one, and \`crosscheckProblem\` says why a declared second opinion found none. \`excluded\` lists the candidates that did not qualify, each with the highest rung it reaches. \`models\` is the allowlist, \`sources\` the config files that were read, and \`asked\` the profile names you asked for. \`judge\` says which path chose the profile: \`used\` carries the \`profile\` it chose and the \`confidence\` when its arm reports one, and \`skipped\` carries the \`reason\` it gave none.
 - \`setup\`: the repository has no config. \`provider\`, \`models\` and \`profiles\` are the starter set on the table. Ask the user once, then call this tool again with \`setup: "accepted"\` or \`setup: "declined"\`. Do not write a config by hand.
 - \`declined\`: the user already said no. Do not ask again. Spawn without \`model\`, and the agent's own model runs the work.
 - \`problems\`: the config is wrong. Every mistake is on its own line and names the key. Quote it, say routing is misconfigured, and ask whether to continue on the current model. Do not substitute a model you remember.
@@ -186,6 +228,117 @@ const notThis = (one: ExcludedRow): typeof NotThis.Type => ({
   rungs: [...one.rungs],
   reaches: one.reaches,
 });
+
+/** A judge that gave no profile, and why. */
+const skipped = (reason: string): typeof Judged.Type => ({ status: "skipped", reason });
+
+/** The words a thrown failure is reported in. */
+const text = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+
+/** The judge's verdict as the output carries it. */
+const judged = (verdict: Verdict): typeof Judged.Type =>
+  verdict.kind === "quiet"
+    ? skipped(verdict.why)
+    : { status: "used", profile: verdict.profile, confidence: verdict.confidence };
+
+/** The profiles an arm can pick, as the criteria a System One question carries. */
+const criteria = (profiles: Tables["profiles"]): Record<string, string> =>
+  Object.fromEntries(surface(profiles).map((one) => [one.profile, one.text]));
+
+/**
+ * The judge the config asks for, or `undefined` when it asks for none.
+ *
+ * `kind` names the arm. An absent `kind` is the System One arm, which is the one
+ * the feature's own config example writes: it names an endpoint and a model and
+ * no `kind`. The lexical arm is asked for by name, because it reads no settings,
+ * and a config that names a setting expects the arm that uses it.
+ */
+const judgeFor = (ctx: Plugin.Context, tables: Tables): Effect.Effect<Judge | undefined> =>
+  Effect.gen(function* () {
+    const settings = tables.judge;
+    if (settings === undefined) return undefined;
+    if (settings.kind === "lexical") return lexicalJudge(tables.profiles);
+    // The key the arm carries. The config's `key` names a variable, and that
+    // variable wins. When it names none, the arm asks for the Console key,
+    // because the Console key is the one that authenticates the Console's own
+    // inference host, and a person who has connected the Console already has
+    // it. The credential comes from the host's integration API and not from a
+    // file, so the plugin does not depend on where the host keeps it.
+    const keyEnv = settings.key ?? SYSTEMONE_KEY_ENV;
+    const named = yield* Effect.sync(() => Bun.env[keyEnv]);
+    const held = named ?? (yield* consoleKey(ctx));
+    return jevJudge(
+      {
+        endpoint: settings.endpoint,
+        model: settings.model,
+        keyEnv,
+        timeout: settings.timeout,
+      },
+      criteria(tables.profiles),
+      { env: (name: string) => (name === keyEnv ? held : Bun.env[name]) },
+    );
+  });
+
+/**
+ * The Console's own credential, when the host holds one.
+ *
+ * A provider without its own integration id uses its provider id as the
+ * integration id, which is how the host resolves every provider's credential
+ * (`packages/core/src/model-resolver.ts:373-376` at `v2.1.1`). The Console
+ * provider is the integration `opencode`.
+ */
+const consoleKey = (ctx: Plugin.Context): Effect.Effect<string | undefined> =>
+  Effect.gen(function* () {
+    // A context without the integration domain cannot answer, and a host that
+    // does not have one is not a failure: the arm asks the environment
+    // instead.
+    const integration = (ctx as { readonly integration?: Plugin.Context["integration"] })
+      .integration;
+    if (integration === undefined) return undefined;
+    const connection = yield* integration.connection
+      .active(Integration.ID.make("opencode"))
+      .pipe(Effect.catchCause(() => Effect.succeed(undefined)));
+    if (connection === undefined) return undefined;
+    const value = yield* integration.connection
+      .resolve(connection)
+      .pipe(Effect.catchCause(() => Effect.succeed(undefined)));
+    if (value === null || typeof value !== "object") return undefined;
+    const key = (value as { readonly key?: unknown }).key;
+    return typeof key === "string" ? key : undefined;
+  });
+
+/**
+ * The judge's answer, or the reason there is none.
+ *
+ * A judge never blocks the answer. A config with no judge, a call with no task,
+ * a profile the caller already named and a judge that throws all arrive as
+ * `skipped`, so the table still comes back whole and the session chooses the
+ * profile itself.
+ */
+const ask = (
+  judge: Judge | undefined,
+  task: string | undefined,
+  profile: string | undefined,
+): Effect.Effect<typeof Judged.Type> =>
+  Effect.gen(function* () {
+    if (judge === undefined)
+      return skipped("The config names no judge, so the profile choice is yours.");
+    if (task === undefined) return skipped("The call names no task, so the judge was not asked.");
+    if (profile !== undefined)
+      return skipped("The call names a profile, so the choice is already made.");
+
+    const verdict = yield* Effect.match(
+      Effect.tryPromise({ try: () => judge.judge(task), catch: (cause) => cause }),
+      {
+        onFailure: (cause): Verdict => ({
+          kind: "quiet",
+          why: `The judge stopped with an error: ${text(cause)}`,
+        }),
+        onSuccess: (one) => one,
+      },
+    );
+    return judged(verdict);
+  });
 
 const failed = (lines: ReadonlyArray<string>): { output: Page } => ({
   output: { status: "problems", problems: lines.join("\n") },
@@ -330,6 +483,11 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
       }
       if (lines.length > 0) return failed(lines);
 
+      // The judge is asked last, so a config with a problem never spends a
+      // request. It names a profile, and every row above already carries that
+      // profile's model, so nothing it says can change what is spent.
+      const judgement = yield* ask(yield* judgeFor(ctx, found.tables), input.task, input.profile);
+
       return {
         output: {
           status: "resolved",
@@ -338,6 +496,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
           models: kept.kept.map((one) => ({ name: one.alias, model: one.ref })),
           sources: [...found.sources],
           asked: input.profile === undefined ? [] : [input.profile],
+          judge: judgement,
         },
       };
     }),
@@ -348,18 +507,21 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
  *
  * The tool is the first consumer. The terminal page is the second, and it
  * needs the same reader, the same resolver and the same writer, so a page
- * cannot show something the router will not do. Nothing above
- * `definitions/` imports a sibling of this folder: a second consumer of the
- * internals is the signal that the boundary is wrong, and the answer is the
- * declaration deciding what is public.
+ * cannot show something the router will not do. The judge is exported for the
+ * eval harness, so the measurement reads the arm the tool runs and not a copy
+ * of it. Nothing above `definitions/` imports a sibling of this folder: a
+ * second consumer of the internals is the signal that the boundary is wrong,
+ * and the answer is the declaration deciding what is public.
  */
+export { candidates, isFree, known, ladder } from "./catalogue";
+export { effortOf, fit, KNOWN_ORDER, ladderOf, rungs } from "./effort";
+export type { JevDeps, JevSettings } from "./jev";
+export { DEFAULT_TIMEOUT_MS, jevJudge, SYSTEMONE_ENDPOINT, SYSTEMONE_KEY_ENV } from "./jev";
+export type { Description, Judge, Verdict } from "./judge";
+export { lexicalJudge, rank, surface } from "./judge";
 export { load, loadProject } from "./load";
 export { FILE_NAME, LEGACY_NAME, projectPath } from "./locate";
-export { candidates, isFree, known, ladder } from "./catalogue";
 export { resolve as resolveProfile } from "./resolve";
-export { proposeAlias, serialise, writeConfig } from "./write";
-export { effortOf, fit, KNOWN_ORDER, ladderOf, rungs } from "./effort";
-export { formatRef, DEFAULT_AGENT } from "./types";
 export type {
   Allowed,
   Candidate,
@@ -372,3 +534,5 @@ export type {
   Resolution,
   Tables,
 } from "./types";
+export { DEFAULT_AGENT, formatRef } from "./types";
+export { proposeAlias, serialise, writeConfig } from "./write";

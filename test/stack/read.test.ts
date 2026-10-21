@@ -11,9 +11,11 @@ import { listingOf } from "../../tools/definitions/stack/read";
 
 describe("a listing that failed is not an empty listing", () => {
   test("a non-zero exit is a problem, carrying gh's own first line", () => {
-    expect(listingOf({ out: "", err: "gh: could not authenticate\nstack trace", code: 1 })).toEqual({
-      problem: "gh: could not authenticate",
-    });
+    expect(listingOf({ out: "", err: "gh: could not authenticate\nstack trace", code: 1 })).toEqual(
+      {
+        problem: "gh: could not authenticate",
+      },
+    );
   });
 
   test("an empty output is an empty listing", () => {
@@ -25,7 +27,9 @@ describe("a listing that failed is not an empty listing", () => {
   });
 
   test("numbers come back lowest first, because a stack lands bottom-up", () => {
-    expect(listingOf({ out: '[{"number":31},{"number":4},{"number":12}]', err: "", code: 0 })).toEqual({
+    expect(
+      listingOf({ out: '[{"number":31},{"number":4},{"number":12}]', err: "", code: 0 }),
+    ).toEqual({
       numbers: [4, 12, 31],
     });
   });
@@ -154,7 +158,7 @@ describe("the repository slug resolves once per listing, not once per PR", () =>
 
     expect(said).toContain("REPO_VIEW=1");
     expect(said).toContain("TOTAL=7");
-    expect(said).toContain('THREADS=[0,0,0]');
+    expect(said).toContain("THREADS=[0,0,0]");
   }, 30_000);
 
   test("a failing `repo view` still leaves threads unread with the same problems line", async () => {

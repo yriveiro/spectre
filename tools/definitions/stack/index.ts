@@ -123,17 +123,16 @@ export const stack = (directory: string): Tool.Info<typeof Input, typeof Output>
       const allowDraft = input.allowDraft ?? false;
       const problems: Array<string> = [];
 
-      const listed =
-        yield* Effect.tryPromise(() => listingFor(directory, input.prs)).pipe(
-          Effect.mapError(
-            (cause) =>
-              new Tool.Error({
-                message: `gh could not list the open pull requests, so this stack decides nothing: ${
-                  cause instanceof Error ? cause.message : String(cause)
-                }`,
-              }),
-          ),
-        );
+      const listed = yield* Effect.tryPromise(() => listingFor(directory, input.prs)).pipe(
+        Effect.mapError(
+          (cause) =>
+            new Tool.Error({
+              message: `gh could not list the open pull requests, so this stack decides nothing: ${
+                cause instanceof Error ? cause.message : String(cause)
+              }`,
+            }),
+        ),
+      );
 
       // A listing that failed is not an empty stack. `Output` has no state for
       // "could not tell", so the tool fails rather than report a clear one.

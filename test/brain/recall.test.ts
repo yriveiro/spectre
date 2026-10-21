@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { recall } from "../../tools/definitions/brain/recall";
-import type { Claim } from "../../tools/definitions/brain/neuron";
 import type { Edge } from "../../tools/definitions/brain/ledger";
+import type { Claim } from "../../tools/definitions/brain/neuron";
+import { recall } from "../../tools/definitions/brain/recall";
 
 const run = (input: {
   readonly claims: ReadonlyArray<Claim>;

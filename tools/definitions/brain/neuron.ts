@@ -1,6 +1,6 @@
 import { basename } from "node:path";
-import { Effect } from "effect";
 import type { AbsolutePath } from "@opencode/schema/schema";
+import { Effect } from "effect";
 
 export type Claim = {
   readonly id: string;
@@ -32,8 +32,7 @@ const KINDS: ReadonlySet<string> = new Set([
 
 const BLOCK = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
-const refuse = (note: AbsolutePath, why: string): Error =>
-  new Error(`${basename(note)}: ${why}`);
+const refuse = (note: AbsolutePath, why: string): Error => new Error(`${basename(note)}: ${why}`);
 
 const words = (value: unknown): string | undefined =>
   typeof value === "string" ? value : undefined;

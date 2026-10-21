@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import type { Plugin } from "@opencode/plugin/effect";
-import type { Tool } from "@opencode/schema/tool";
 import { AbsolutePath } from "@opencode/schema/schema";
+import type { Tool } from "@opencode/schema/tool";
 import { Effect } from "effect";
 import { worktrees } from "../../tools/definitions/worktrees";
 import { isDirectory } from "../../tools/definitions/worktrees/return/standing";
@@ -39,7 +39,16 @@ const layout = async () => {
   await git(base, ["clone", "-q", bare, `${base}/seed`]);
   await Bun.write(`${base}/seed/a.txt`, "one\n");
   await git(`${base}/seed`, ["add", "."]);
-  await git(`${base}/seed`, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "first"]);
+  await git(`${base}/seed`, [
+    "-c",
+    "user.email=t@t",
+    "-c",
+    "user.name=t",
+    "commit",
+    "-q",
+    "-m",
+    "first",
+  ]);
   await git(`${base}/seed`, ["push", "-q", bare, "HEAD:refs/heads/main"]);
   await git(bare, ["worktree", "add", "-q", main, "main"]);
   await git(bare, ["worktree", "add", "-q", "-b", "fix-login", other]);
@@ -107,11 +116,17 @@ const host = (projectRow: string, sessionDirectory: string) => {
 
 type Outcome =
   | { readonly status: "removed"; readonly directory: string; readonly branch?: string }
-  | { readonly status: "already-gone" | "rejected" | "failed" | "unverified" | "opened"; readonly problems: string };
+  | {
+      readonly status: "already-gone" | "rejected" | "failed" | "unverified" | "opened";
+      readonly problems: string;
+    };
 
 const remove = async (fake: ReturnType<typeof host>, directory: string) => {
   const result = await Effect.runPromise(
-    worktrees(fake.context()).execute({ action: "remove", directory }, { ...context, sessionID: "test" as never }),
+    worktrees(fake.context()).execute(
+      { action: "remove", directory },
+      { ...context, sessionID: "test" as never },
+    ),
   );
   return result.output as Outcome;
 };

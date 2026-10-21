@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { PluginContextProvider } from "@opencode/plugin/tui";
 import { RGBA } from "@opentui/core";
 import { createComponent, testRender } from "@opentui/solid";
-import { PluginContextProvider } from "@opencode/plugin/tui";
-import { type Draft, type Model, type Resolution } from "../../tui/data";
+import type { Draft, Model, Resolution } from "../../tui/data";
 import { page } from "../../tui/page";
 
 /**
@@ -89,10 +89,13 @@ const spent: Resolution = {
   problem: undefined,
 };
 
+const [first, second] = draft.profiles;
+if (first === undefined || second === undefined) throw new Error("the draft holds two profiles");
+
 const rows = [
-  { profile: draft.profiles[0]!, resolution: spent },
+  { profile: first, resolution: spent },
   {
-    profile: draft.profiles[1]!,
+    profile: second,
     resolution: {
       profile: "pinned",
       ref: undefined,
@@ -201,7 +204,9 @@ describe("the page changes the draft and writes it only when asked", () => {
     const lines = setup.captureCharFrame().split("\n");
     const row = lines.findIndex((one) => one.includes("worker"));
     expect(row).toBeGreaterThan(-1);
-    await setup.mockMouse.click(lines[row]!.indexOf("worker"), row);
+    const line = lines[row];
+    if (line === undefined) throw new Error("the frame has no worker row");
+    await setup.mockMouse.click(line.indexOf("worker"), row);
     await setup.flush();
     expect(asked.join(" ")).toContain("effort");
     await setup.dispose();
@@ -213,7 +218,9 @@ describe("the page changes the draft and writes it only when asked", () => {
     const drawn = setup.captureCharFrame();
     const line = drawn.split("\n").findIndex((one) => one.includes("write it"));
     expect(line).toBeGreaterThan(-1);
-    await setup.mockMouse.click(drawn.split("\n")[line]!.indexOf("write it"), line);
+    const target = drawn.split("\n")[line];
+    if (target === undefined) throw new Error("the frame has no write line");
+    await setup.mockMouse.click(target.indexOf("write it"), line);
     await setup.flush();
     expect(saved).toBe(1);
     await setup.dispose();

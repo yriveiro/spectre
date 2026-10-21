@@ -29,7 +29,10 @@ export type Resolver = (
  * number this harness must not invent. The caller holds the corpus, so it
  * refuses the run when a row the corpus judges names a profile with no price.
  */
-export const prices = (profiles: ReadonlyArray<ProfileRow>, resolve: Resolver): ReadonlyArray<Price> =>
+export const prices = (
+  profiles: ReadonlyArray<ProfileRow>,
+  resolve: Resolver,
+): ReadonlyArray<Price> =>
   profiles.flatMap((one) => {
     const priced = resolve(one.name);
     if (priced === undefined) return [];

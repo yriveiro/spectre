@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import type { Tool } from "@opencode/schema/tool";
 import { Effect } from "effect";
-import { Tool } from "@opencode/schema/tool";
 import { comments } from "../../tools/definitions/comments";
 
 type Hit = { file: string; line: number; kind: string; text: string };

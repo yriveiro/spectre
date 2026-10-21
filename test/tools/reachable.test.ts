@@ -53,9 +53,7 @@ describe("every registered tool is reachable from some skill", () => {
 
     // Length is checked against TOOLS, not spelled out as literals, so adding a
     // tool cannot pass by leaving this array the length it was.
-    expect(registered.map((tool) => tool.options?.namespace)).toEqual(
-      TOOLS.map(() => "spectre"),
-    );
+    expect(registered.map((tool) => tool.options?.namespace)).toEqual(TOOLS.map(() => "spectre"));
     expect(registered).toHaveLength(TOOLS.length);
     expect(registered.every((tool) => tool.options?.codemode === true)).toBe(true);
   });

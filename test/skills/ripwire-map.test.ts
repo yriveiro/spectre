@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
 import { join } from "node:path";
+import { Effect } from "effect";
 import { load, notALeaf } from "../../skills/definitions/index";
 
 /**

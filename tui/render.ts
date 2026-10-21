@@ -1,6 +1,5 @@
 import type { ResolvedTheme } from "@opencode/theme/tui";
 import {
-  createComponent,
   createElement,
   createTextNode,
   effect,

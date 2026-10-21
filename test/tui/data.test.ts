@@ -41,7 +41,13 @@ const models = [
     rungs: ["low", "high", "max"],
     cost: [0.15, 0.6],
   }),
-  row({ id: "glm-5.3-flash", family: "glm-flash", name: "GLM", rungs: ["low", "high", "max"], cost: [0.15, 0.5] }),
+  row({
+    id: "glm-5.3-flash",
+    family: "glm-flash",
+    name: "GLM",
+    rungs: ["low", "high", "max"],
+    cost: [0.15, 0.5],
+  }),
   row({
     id: "minimax-m3.1-flash-free",
     family: "minimax",
@@ -50,9 +56,30 @@ const models = [
     cost: [0, 0],
   }),
   row({ id: "muse-spark", family: "muse", name: "Muse", rungs: [], cost: [0.1, 0.2] }),
-  row({ id: "kimi-k3", family: "kimi-k3", name: "Kimi", rungs: ["max"], cost: [3, 15], enabled: false }),
-  row({ id: "old", family: "old", name: "Old", rungs: ["high"], cost: [1, 2], status: "deprecated" }),
-  row({ id: "no-tools", family: "no-tools", name: "No Tools", rungs: ["high"], cost: [1, 1], tools: false }),
+  row({
+    id: "kimi-k3",
+    family: "kimi-k3",
+    name: "Kimi",
+    rungs: ["max"],
+    cost: [3, 15],
+    enabled: false,
+  }),
+  row({
+    id: "old",
+    family: "old",
+    name: "Old",
+    rungs: ["high"],
+    cost: [1, 2],
+    status: "deprecated",
+  }),
+  row({
+    id: "no-tools",
+    family: "no-tools",
+    name: "No Tools",
+    rungs: ["high"],
+    cost: [1, 1],
+    tools: false,
+  }),
 ] as unknown as Parameters<typeof catalogue>[0];
 
 const config = {
@@ -183,11 +210,11 @@ describe("the page writes through the writer", () => {
       ),
     });
     const written = (await Bun.file(`${at}/spectre.json`).json()) as Record<string, unknown>;
-    expect(written["$schema"]).toBe("./schema.json");
-    expect(written["dictionary"]).toBe("relative/dictionary.json");
-    expect(written["setup"]).toBeUndefined();
-    const profiles = written["profiles"] as Record<string, { effort?: string }>;
-    expect(profiles["mechanical"]?.effort).toBe("high");
+    expect(written.$schema).toBe("./schema.json");
+    expect(written.dictionary).toBe("relative/dictionary.json");
+    expect(written.setup).toBeUndefined();
+    const profiles = written.profiles as Record<string, { effort?: string }>;
+    expect(profiles.mechanical?.effort).toBe("high");
   });
 
   test("a file that does not decode is refused and left alone", async () => {

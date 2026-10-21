@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { load } from "../../skills/definitions";
-import { rivalIds, writeMirror } from "../../eval/mirror";
 import { rows, tsv } from "../../eval/fixture";
+import { rivalIds, writeMirror } from "../../eval/mirror";
+import { load } from "../../skills/definitions";
 
 const RIPWIRE = Bun.which("ripwire");
 const TMP = Bun.env.TMPDIR ?? "/tmp";

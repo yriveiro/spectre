@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { useTempDirs } from "../fixture";
 import { type EvidenceReport, evidence, WINDOW } from "../../tools/definitions/brain/evidence";
+import { useTempDirs } from "../fixture";
 
 const fresh = useTempDirs("evidence");
 

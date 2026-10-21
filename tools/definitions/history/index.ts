@@ -150,8 +150,10 @@ export const historyTool = (directory: string): Tool.Info<typeof Input, typeof O
   options: { namespace: "spectre", codemode: true, pinned: true, permission: "read" },
   execute: (input) =>
     Effect.promise(async () => {
-      const { problems, introducedBy, blame, first, last, ownership, ...rest } =
-        await history(directory, input);
+      const { problems, introducedBy, blame, first, last, ownership, ...rest } = await history(
+        directory,
+        input,
+      );
       return {
         output: {
           ...rest,

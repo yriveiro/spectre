@@ -35,6 +35,7 @@ const tables = (
   > = {},
 ): Tables => ({
   provider: undefined,
+  judge: undefined,
   models,
   profiles: Object.fromEntries(
     Object.entries(profiles).map(([name, entry]) => [

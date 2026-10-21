@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ask, ASK, lexical, type Description } from "../arms";
+import { ASK, ask, type Description, lexical } from "../arms";
 
 const mechanical: Description = {
   profile: "mechanical",

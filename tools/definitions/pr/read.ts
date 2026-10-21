@@ -138,7 +138,10 @@ export const read = async (cwd: string, base?: string): Promise<Facts> => {
   if (named.kind !== "named") return { ok: false, problems: named.why };
 
   if (base !== undefined && !branchOk(base))
-    return { ok: false, problems: `\`base\` is not a branch name this tool will pass to git: ${base}` };
+    return {
+      ok: false,
+      problems: `\`base\` is not a branch name this tool will pass to git: ${base}`,
+    };
 
   const [upstream, ahead, target] = await Promise.all([
     remoteOf(cwd, named.branch),
@@ -186,7 +189,12 @@ export const push = async (
 };
 
 export type Existing =
-  | { readonly kind: "open"; readonly number: number; readonly title: string; readonly body: string }
+  | {
+      readonly kind: "open";
+      readonly number: number;
+      readonly title: string;
+      readonly body: string;
+    }
   | { readonly kind: "none" }
   | { readonly kind: "unreadable"; readonly problems: string };
 
@@ -256,7 +264,8 @@ type Confirmed = {
   readonly isDraft: boolean;
 };
 
-const carries = (row: Confirmed, draft: Draft) => row.title === draft.title && row.body === draft.body;
+const carries = (row: Confirmed, draft: Draft) =>
+  row.title === draft.title && row.body === draft.body;
 
 /**
  * The read-back is the check. A `gh` that exited zero has still not been believed, because
@@ -274,7 +283,12 @@ const confirm = async (cwd: string, selector: string): Promise<Confirmed | strin
     return "`gh pr view` returned output that is not JSON";
   }
   const row = parsed as Record<string, unknown> | null;
-  if (row === null || typeof row !== "object" || typeof row.number !== "number" || typeof row.url !== "string")
+  if (
+    row === null ||
+    typeof row !== "object" ||
+    typeof row.number !== "number" ||
+    typeof row.url !== "string"
+  )
     return "`gh pr view` returned a pull request this tool does not accept";
 
   return {
@@ -316,7 +330,14 @@ const create = async (cwd: string, draft: Draft, base: string): Promise<Written>
   if (typeof read === "string")
     return { ok: false, problems: `the pull request was created but ${read}` };
 
-  return { ok: true, number: read.number, url: read.url, draft: read.isDraft, changed: true, problems: "" };
+  return {
+    ok: true,
+    number: read.number,
+    url: read.url,
+    draft: read.isDraft,
+    changed: true,
+    problems: "",
+  };
 };
 
 /**
@@ -327,7 +348,10 @@ const create = async (cwd: string, draft: Draft, base: string): Promise<Written>
 const edit = async (cwd: string, number: number, draft: Draft, base: string): Promise<Written> => {
   const before = await confirm(cwd, String(number));
   if (typeof before === "string")
-    return { ok: false, problems: `#${number} could not be read, so nothing was edited: ${before}` };
+    return {
+      ok: false,
+      problems: `#${number} could not be read, so nothing was edited: ${before}`,
+    };
 
   const held = carries(before, draft);
 

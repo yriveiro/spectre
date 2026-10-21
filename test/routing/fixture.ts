@@ -1,6 +1,6 @@
+import { afterEach, beforeEach } from "bun:test";
 import type { Plugin } from "@opencode/plugin/effect";
 import { Effect } from "effect";
-import { afterEach, beforeEach } from "bun:test";
 
 export const CATALOGUE = [
   {
@@ -39,7 +39,8 @@ export const useScratch = () => {
     globalDir,
     projectDir,
     writeGlobal: (body: string, name = "spectre.json") => Bun.write(`${globalDir()}/${name}`, body),
-    writeProject: (body: string, name = "spectre.json") => Bun.write(`${projectDir()}/${name}`, body),
+    writeProject: (body: string, name = "spectre.json") =>
+      Bun.write(`${projectDir()}/${name}`, body),
   };
 };
 

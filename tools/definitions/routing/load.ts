@@ -63,7 +63,12 @@ const settle = <T, R>(
 };
 
 /** The tables of a repository with no config. */
-const emptyTables = (): Tables => ({ provider: undefined, models: {}, profiles: {} });
+const emptyTables = (): Tables => ({
+  provider: undefined,
+  judge: undefined,
+  models: {},
+  profiles: {},
+});
 
 export type Loaded = {
   readonly tables: Tables;
@@ -92,6 +97,7 @@ export const loadProject = (directory: string): Effect.Effect<Loaded> =>
     return {
       tables: {
         provider: decoded.file.provider,
+        judge: decoded.file.judge === null ? undefined : decoded.file.judge,
         setup: decoded.file.setup === undefined ? undefined : { from: found.path },
         models: settle(decoded.file.models, (value) => value),
         profiles: settle(decoded.file.profiles, one),
@@ -119,6 +125,10 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
     let models: Record<string, string | null> = {};
     let profiles: Record<string, ProfileEntry | null> = {};
     let provider: string | undefined;
+    // A judge is asked for or not asked for. A file that says nothing leaves an
+    // earlier file's answer standing, and a file that says `null` removes it,
+    // which is how a repository turns a judge off.
+    let judge: Tables["judge"];
     let setup: { from: string } | undefined;
     // A string here is the path as written, and the file it was written in, so a
     // relative path resolves against the config that named it rather than against
@@ -139,6 +149,8 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
       models = { ...models, ...read.file.models };
       profiles = { ...profiles, ...read.file.profiles };
       if (read.file.provider !== undefined) provider = read.file.provider;
+      if (read.file.judge !== undefined)
+        judge = read.file.judge === null ? undefined : read.file.judge;
       // Each file answers the setup question for itself. A later file with no
       // answer clears an earlier one, so a project config over a global decline
       // routes rather than staying silent.
@@ -157,6 +169,7 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
     return {
       tables: {
         provider,
+        judge,
         setup,
         models: settle(models, (value) => value),
         profiles: settle(profiles, one),

@@ -14,9 +14,7 @@ const scratch = async (): Promise<string> => {
   const dir = `${base}/history-test-${Math.random().toString(36).slice(2)}`;
   await Bun.$`mkdir -p ${dir}`.quiet();
   await Bun.$`git init -q -b main`.cwd(dir);
-  await Bun.$`git config user.email test@example.com`
-    .cwd(dir)
-    .quiet();
+  await Bun.$`git config user.email test@example.com`.cwd(dir).quiet();
   await Bun.$`git config user.name Test`.cwd(dir).quiet();
   return dir;
 };

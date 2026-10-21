@@ -1,7 +1,7 @@
 import { relative, resolve } from "node:path";
+import type { AbsolutePath } from "@opencode/schema/schema";
+import type { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
-import { AbsolutePath } from "@opencode/schema/schema";
-import { Tool } from "@opencode/schema/tool";
 
 const SKIP = new Set(["node_modules", ".git", "dist", "build", "coverage", ".next", ".turbo"]);
 

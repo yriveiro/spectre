@@ -481,6 +481,99 @@ still runs and still routes on a model the user allowed. It just pays for the
 judgement in the parent's context instead of in a call.
 
 
+## Phase D: the judge, built
+
+The judge is one interface with two arms, and the config decides which one
+answers.
+
+```ts
+export type Verdict =
+  | { readonly kind: "profile"; readonly profile: string; readonly confidence: number | undefined }
+  | { readonly kind: "quiet"; readonly why: string };
+```
+
+The confidence is `number | undefined` on purpose. The lexical arm has a
+score and not a probability, and a score dressed as a probability is a number
+a policy would threshold on wrongly. Only the System One arm can report a
+probability, because it is the only one that has one.
+
+### The config
+
+```jsonc
+{
+  "judge": {
+    "kind": "jev",
+    "model": "jev-1.13-free",
+    "endpoint": "https://opencode.ai/inference/systemone/v1/systemone",
+    "key": "OPENCODE_API_KEY",
+    "timeout": 2000
+  }
+}
+```
+
+`kind` is `lexical` or `jev`. The `key` is the **name of an environment
+variable**, never the key itself, so the file holds no secret. A file with no
+`judge` key has no judge, and `"judge": null` in a repository's file turns a
+judge off that a global file asked for, through the same merge rule the other
+keys use.
+
+### The tool's contract
+
+The tool's input grows one optional field, `task`, and the `resolved` outcome
+grows one field, `judge`: `used`, with the profile and the confidence, or
+`skipped`, with the reason.
+
+**The judge never names a model.** It names a profile, and the resolver
+resolves that profile exactly as it resolves any other, and the allowlist
+order still decides which model is spent. The confidence changes neither the
+model, nor the rung, nor the price: a confidence is something a *policy* may
+read later, and the policy is not built yet.
+
+### The arms, measured
+
+The lexical arm moved out of the eval harness and into the product, because
+`eval/` is not published and the harness must measure the arm the router would
+use rather than a copy of it. The move proved itself by parity: the old ranking
+and the new one, over the real corpus and the real config, disagree on **none
+of the fifty rows**, and the product's arm reproduces the measured 18 of 42 and
+the seven fires on the negative rows.
+
+| arm | hit | rate | regret | fired on negatives |
+| --- | --- | --- | --- | --- |
+| lexical over the `match` lines | 18/42 | 42.9% | 18.000 | 7 of 8 |
+| a model asked to name a profile | 39/42 | 92.9% | 2.250 | 0 of 8 |
+| the System One arm | not measured | — | — | — |
+
+The third row is empty because the arm needs a key, and the machine this was
+built on does not have one that works.
+
+The credential OpenCode holds for the Console integration is in its own store,
+and the plugin can reach it through the host's integration API
+(`packages/core/src/model-resolver.ts:373-376` at `v2.1.1` resolves every
+provider's credential that way, and a provider without its own integration id
+uses its provider id as the integration id). So the tool asks for the Console
+credential when the config names no key variable, and the arm carries it.
+
+**And that credential is rejected by the Console.** Tried against the live
+host: the chat-completions route answers **403**, the models list **401**, and
+the System One route **401** with `Invalid credential`. The key in the store is
+not a key the inference host accepts, so the System One arm needs a Console
+API key from the dashboard, and the config's `key` names the environment
+variable that holds it.
+
+The failure is legible rather than silent: the arm turns a status that is not
+a success into a quiet verdict whose reason names the status, the tool reports
+that as `skipped`, and the session picks the profile itself. The workflow
+without a judge is the workflow with a broken judge.
+
+The measurement settles what the judge is for. **It is not accuracy**: a chat
+model reading the same seven lines already takes 92.9%, and a lexical arm
+cannot hold the boundaries at all. What the System One arm has that nothing
+else has is a **probability**, and a probability is what lets a policy raise
+the effort where the judgement is unsure. That policy is the next thing to
+build, and it is not built.
+
+
 ## The open questions, restated
 
 1. **What does `none` mean** — the floor of a model, or an exact request for

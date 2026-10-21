@@ -13,17 +13,23 @@
  */
 import type { Model } from "@opencode/schema/model";
 import { Effect } from "effect";
+import {
+  candidates,
+  DEFAULT_AGENT,
+  DEFAULT_TIMEOUT_MS,
+  jevJudge,
+  load,
+  resolveProfile,
+  SYSTEMONE_ENDPOINT,
+  SYSTEMONE_KEY_ENV,
+} from "../../tools/definitions/routing";
 import { boot } from "../boot";
 import { head, systemic } from "../guard";
 import { progress } from "../progress";
-import { ask, lexical, type Description } from "./arms";
+import { ask, type Description, jev, lexical } from "./arms";
 import { blind, tuned } from "./fixture";
 import { prices } from "./prices";
-import { score, type Report } from "./score";
-import { candidates } from "../../tools/definitions/routing/catalogue";
-import { load } from "../../tools/definitions/routing/load";
-import { resolve as resolveProfile } from "../../tools/definitions/routing/resolve";
-import { DEFAULT_AGENT } from "../../tools/definitions/routing/types";
+import { type Report, score } from "./score";
 
 // The root sits two levels up from here, one more than `eval/run.ts` reports
 // for its own home. `boot` joins `index.ts` onto the path it is given, so the
@@ -119,11 +125,20 @@ const corpus = BLIND ? blind : TUNED ? tuned : ROWS === 0 ? all : head(all, ROWS
 const found = await Effect.runPromise(load(PROJECT));
 if (found.problems.length > 0) refuse(found.problems.join("\n            "));
 if (found.sources.length === 0)
-  refuse(`no routing config anywhere the tool reads, so there is nothing to price. Write ${PROJECT}spectre.json.`);
+  refuse(
+    `no routing config anywhere the tool reads, so there is nothing to price. Write ${PROJECT}spectre.json.`,
+  );
 const tables = found.tables;
 
-const allowed = Object.entries(tables.models).map(([alias, ref]) => ({ alias, ref, pinned: undefined }));
+const allowed = Object.entries(tables.models).map(([alias, ref]) => ({
+  alias,
+  ref,
+  pinned: undefined,
+}));
 if (allowed.length === 0) refuse(`${PROJECT}spectre.json: models is empty, so no model routes`);
+
+// The judge's settings, from the same config the tool reads.
+const judgeSettings = tables.judge;
 
 const slice = BLIND ? "blind" : TUNED ? "tuned" : "all";
 say(
@@ -145,7 +160,11 @@ try {
   const listed = (await client.models()) as ReadonlyArray<Model.Info>;
   const kept = candidates(allowed, listed);
   if (kept.missing.length > 0)
-    refuse(kept.missing.map((one) => `models.${one.alias}: ${one.ref} — ${one.reason}`).join("\n            "));
+    refuse(
+      kept.missing
+        .map((one) => `models.${one.alias}: ${one.ref} — ${one.reason}`)
+        .join("\n            "),
+    );
 
   // The number `prices` returns is the resolver's. Two facts of a resolver
   // answer do not fit a price: the ref that was spent, and the reason a
@@ -169,7 +188,9 @@ try {
     // a ref the allowlist pinned carries its variant, and a rung is added only to a bare one.
     spentRefs.set(
       name,
-      primary.rung === undefined || primary.ref.includes("#") ? primary.ref : `${primary.ref}#${primary.rung}`,
+      primary.rung === undefined || primary.ref.includes("#")
+        ? primary.ref
+        : `${primary.ref}#${primary.rung}`,
     );
     return { rate: primary.costInput + primary.costOutput, effort: entry.effort };
   };
@@ -216,12 +237,39 @@ try {
     }
     described.push({ profile: name, text: entry.match });
   }
-  if (described.length === 0) refuse("no profile carries a match line, so there is no surface to rank");
+  if (described.length === 0)
+    refuse("no profile carries a match line, so there is no surface to rank");
 
   const prompts = corpus.map((row) => row.prompt);
   const arms: Array<{ name: string; report: Report }> = [
     { name: "lex:match", report: score(corpus, lexical(described, prompts), priceList) },
   ];
+
+  // The System One arm, when the config asks for a judge and the key is
+  // there. It is the third arm the feature file names, and it is the one that
+  // carries a probability.
+  if (judgeSettings !== undefined) {
+    const key = judgeSettings.key ?? SYSTEMONE_KEY_ENV;
+    if (Bun.env[key] === undefined) say(`\n  jev arm: skipped, ${key} is not in the environment\n`);
+    else {
+      say(`\n  jev arm: ${judgeSettings.model ?? "the configured model"}`);
+      // The arm reads the key from the environment itself, so the settings
+      // carry the variable's name and not its value. The second argument is
+      // the surface: the profile names and their match lines.
+      const judge = jevJudge(
+        {
+          model: judgeSettings.model ?? "jev-1.13-free",
+          endpoint: judgeSettings.endpoint ?? SYSTEMONE_ENDPOINT,
+          keyEnv: key,
+          timeout: judgeSettings.timeout ?? DEFAULT_TIMEOUT_MS,
+        },
+        Object.fromEntries(
+          Object.entries(tables.profiles).map(([name, entry]) => [name, entry.match]),
+        ),
+      );
+      arms.push({ name: "jev", report: score(corpus, await jev(judge, prompts), priceList) });
+    }
+  }
 
   if (!NO_MODEL) {
     say(`\n  model arm: ${ARM_MODEL}, ${CONCURRENCY} at a time`);

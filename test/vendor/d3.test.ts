@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { dataRoot } from "../../tools/definitions/canvas/store";
 import { bundleName, destinationOf, vendor } from "../../scripts/sync-d3";
+import { dataRoot } from "../../tools/definitions/canvas/store";
 
 /**
  * The vendor step is the one part of a diagram canvas that cannot be written by

@@ -8,10 +8,10 @@ import { context, useScratch } from "./fixture";
  * The tool, not the pipeline: what a model actually receives.
  *
  * The output is a union, so a test names the status it expects and reads only
- * the fields that status carries. Four things matter here and nowhere else: a
+ * the fields that status carries. Five things matter here and nowhere else: a
  * bad config is an answer rather than a failed call, the table is withheld when
- * any check fails, the setup question is answered once, and the ref that came
- * back is the ref a session spends.
+ * any check fails, the setup question is answered once, the ref that came back
+ * is the ref a session spends, and the judge is optional.
  *
  * The sandbox boundary cannot be proven from here. Per `tools/FOR_AGENTS.md` a
  * registration which logs is not a tool that runs; only a real call in a live
@@ -32,7 +32,7 @@ const listOf = (models: ReadonlyArray<Thin>) => () =>
 
 const call = async (
   directory: string,
-  input: { profile?: string; setup?: "accepted" | "declined" } = {},
+  input: { profile?: string; task?: string; setup?: "accepted" | "declined" } = {},
   list?: () => Effect.Effect<unknown, unknown>,
 ) => {
   const run = routing(context(directory, list)).execute as unknown as (
@@ -65,6 +65,25 @@ const good = JSON.stringify({
   models: { light: "acme/falcon-mini" },
   profiles: { explorer: { effort: "high", match: "one named file", why: "w" } },
 });
+
+/**
+ * Two profiles one word apart, and the judge the config asks for. The lexical
+ * arm needs no settings, so it is the arm a test can exercise without a network.
+ */
+const withJudge = (judge: Record<string, string>): string =>
+  JSON.stringify({
+    models: { light: "acme/falcon-mini" },
+    profiles: {
+      explorer: { effort: "high", match: "Use when one named file has to be read" },
+      designer: { effort: "high", match: "Use when a design decision spans several files" },
+    },
+    judge,
+  });
+
+const judged = withJudge({ kind: "lexical" });
+
+/** The task that names the words of the first profile and none of the second. */
+const EXPLORE = "read one named file and say what it holds";
 
 describe("tools.spectre.routing", () => {
   test("a good config resolves a profile and names the ref to spend", async () => {
@@ -324,5 +343,66 @@ describe("tools.spectre.routing", () => {
     const out = at(await call(scratch.projectDir(), {}, () => Effect.fail("boom")), "problems");
 
     expect(out.problems).toContain("catalogue could not be read");
+  });
+
+  test("a judge that answers names the profile, and the row still carries the resolved model", async () => {
+    await scratch.writeProject(judged);
+    const out = at(await call(scratch.projectDir(), { task: EXPLORE }), "resolved");
+
+    expect(out.judge).toMatchObject({ status: "used", profile: "explorer" });
+    // The judge names no model, so the ref is the one a call with no judge
+    // returns.
+    expect(out.profiles[0]?.model.ref).toBe("acme/falcon-mini#high");
+    expect(out.profiles.map((one) => one.name)).toEqual(["explorer", "designer"]);
+    // A lexical score is not a probability, so the field is absent, not zero.
+    if (out.judge.status === "used") expect(out.judge.confidence).toBeUndefined();
+  });
+
+  test("the judge's answer carries no model", async () => {
+    await scratch.writeProject(judged);
+    const out = at(await call(scratch.projectDir(), { task: EXPLORE }), "resolved");
+
+    // The design rule: the judge picks a profile and the resolver picks the
+    // model. A later arm cannot add a model here without this test failing.
+    expect(Object.keys(out.judge).sort()).toEqual(["confidence", "profile", "status"]);
+  });
+
+  test("a judge that cannot answer is skipped, and the reason is the arm's own", async () => {
+    await scratch.writeProject(withJudge({ kind: "jev" }));
+    const out = at(await call(scratch.projectDir(), { task: EXPLORE }), "resolved");
+
+    expect(out.judge.status).toBe("skipped");
+    // The System One arm with no endpoint never touches the network.
+    if (out.judge.status === "skipped") expect(out.judge.reason).toContain("names no endpoint");
+    expect(out.profiles).toHaveLength(2);
+  });
+
+  test("a config with no judge says so, and the whole table still comes back", async () => {
+    await scratch.writeProject(good);
+    const out = at(await call(scratch.projectDir(), { task: "read one named file" }), "resolved");
+
+    expect(out.judge.status).toBe("skipped");
+    if (out.judge.status === "skipped") expect(out.judge.reason).toContain("names no judge");
+    expect(out.profiles.map((one) => one.name)).toEqual(["explorer"]);
+  });
+
+  test("a call with no task does not ask the judge", async () => {
+    await scratch.writeProject(judged);
+    const out = at(await call(scratch.projectDir()), "resolved");
+
+    expect(out.judge.status).toBe("skipped");
+    if (out.judge.status === "skipped") expect(out.judge.reason).toContain("names no task");
+  });
+
+  test("a named profile is the choice, so the judge is not asked", async () => {
+    await scratch.writeProject(judged);
+    const out = at(
+      await call(scratch.projectDir(), { profile: "designer", task: EXPLORE }),
+      "resolved",
+    );
+
+    expect(out.judge.status).toBe("skipped");
+    if (out.judge.status === "skipped") expect(out.judge.reason).toContain("names a profile");
+    expect(out.profiles.map((one) => one.name)).toEqual(["designer"]);
   });
 });
