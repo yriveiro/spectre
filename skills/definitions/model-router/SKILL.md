@@ -51,6 +51,25 @@ A skipped judge is a complete answer. The table is whole either way, and every
 row carries a model the resolver chose. Do not call the tool again to get a
 judge answer.
 
+## When nobody knows, play safe
+
+A probability below the threshold means the judge does not know which profile
+this is. Not knowing is a reason to spend **more**, not less, so the tool
+raises the row it names: `judge.escalated` is then `true` and `judge.effort`
+names the effort it was spent at. Spend that row as it is. It is the same
+profile, with more thinking behind it.
+
+The judge's other readings come with it in `judge.alternatives`, best first.
+They are the second readings of the same task, not mistakes. When the judge was
+unsure and a row you can see fits your own evaluation better, take that row
+instead and say so in one line. When nothing fits better, spend the escalated
+row.
+
+When the judge says nothing, **you** are the one who does not know, and the
+same rule is yours: if you are unsure between two profiles, take the one that
+asks for more thinking, because a task done on the wrong model costs a redo
+and a task done with too little thinking costs a wrong answer.
+
 ## What a profile is for
 
 A profile has two prose fields, and only one of them routes.

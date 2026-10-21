@@ -24,7 +24,21 @@ import type { Profile } from "./types";
  * a number the policy would threshold on wrongly.
  */
 export type Verdict =
-  | { readonly kind: "profile"; readonly profile: string; readonly confidence: number | undefined }
+  | {
+      readonly kind: "profile";
+      readonly profile: string;
+      readonly confidence: number | undefined;
+      /**
+       * The other profiles the judge gave a probability to, in the order it
+       * ranked them. They are the information a policy needs when the top
+       * answer is unsure: the runner-up is not a mistake, it is the second
+       * reading of the same task.
+       */
+      readonly alternatives?: ReadonlyArray<{
+        readonly profile: string;
+        readonly probability: number;
+      }>;
+    }
   | { readonly kind: "quiet"; readonly why: string };
 
 /**
@@ -147,6 +161,9 @@ export const lexicalJudge = (profiles: Readonly<Record<string, Profile>>): Judge
     const profile = rank(described, task);
     if (profile === undefined)
       return { kind: "quiet", why: "the task shares no term with a profile's match line" };
-    return { kind: "profile", profile, confidence: undefined };
+    // A lexical arm ranks, so it has one answer and no distribution. The
+    // alternatives are the ones it did not choose, and it has no probability
+    // for any of them, so the list is empty.
+    return { kind: "profile", profile, confidence: undefined, alternatives: [] };
   },
 });

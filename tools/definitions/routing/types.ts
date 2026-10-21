@@ -61,6 +61,11 @@ const Judge = Schema.Struct({
   key: Schema.optional(Schema.String),
   /** The budget for one question, in milliseconds. */
   timeout: Schema.optional(Schema.Int),
+  /**
+   * The probability below which the judge is treated as unsure. A profile the
+   * judge names with less confidence than this is spent one step higher.
+   */
+  threshold: Schema.optional(Schema.Number),
 });
 export type JudgeConfig = typeof Judge.Type;
 

@@ -143,7 +143,17 @@ describe("the call on the wire", () => {
 describe("a verdict", () => {
   test("a good answer is a profile and the probability the model gave it", async () => {
     const verdict = await arm({}).judge(TASK);
-    expect(verdict).toStrictEqual({ kind: "profile", profile: "search", confidence: 0.8 });
+    expect(verdict).toStrictEqual({
+      kind: "profile",
+      profile: "search",
+      confidence: 0.8,
+      // The distribution the model reported, best first. The runner-up is the
+      // second reading of the same task, and a policy needs it.
+      alternatives: [
+        { profile: "search", probability: 0.8 },
+        { profile: "mechanical", probability: 0.1 },
+      ],
+    });
   });
 
   test("the probability the model does not report stays undefined, and does not impersonate one", async () => {
@@ -157,6 +167,9 @@ describe("a verdict", () => {
       kind: "profile",
       profile: "mechanical",
       confidence: undefined,
+      // No probabilities, so no alternatives: an answer that cannot say how
+      // sure it is cannot say what the second best reading was either.
+      alternatives: [],
     });
   });
 });

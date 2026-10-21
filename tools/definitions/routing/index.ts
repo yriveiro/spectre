@@ -10,6 +10,7 @@ import { jevJudge, SYSTEMONE_KEY_ENV } from "./jev";
 import { type Judge, lexicalJudge, surface, type Verdict } from "./judge";
 import { decode, load } from "./load";
 import { FILE_NAME } from "./locate";
+import { decide } from "./policy";
 import { resolve } from "./resolve";
 import {
   DEFAULT_AGENT,
@@ -101,6 +102,23 @@ const Judged = Schema.Union([
     profile: Schema.String,
     /** The probability the judge reported, when its arm reports one. */
     confidence: Schema.optional(Schema.Number),
+    /** True when the profile was spent one step above its own effort. */
+    escalated: Schema.optional(Schema.Boolean),
+    /** The effort the profile was spent at, when it was raised. */
+    effort: Schema.optional(Schema.String),
+    /**
+     * The other profiles the judge gave a probability to, best first. They
+     * are the second readings of the same task, and a session that disagrees
+     * with the judge can see them.
+     */
+    alternatives: Schema.optional(
+      Schema.Array(
+        Schema.Struct({
+          profile: Schema.String,
+          probability: Schema.Number,
+        }),
+      ),
+    ),
   }),
   Schema.Struct({
     status: Schema.Literals(["skipped"]),
@@ -484,15 +502,81 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
       if (lines.length > 0) return failed(lines);
 
       // The judge is asked last, so a config with a problem never spends a
-      // request. It names a profile, and every row above already carries that
-      // profile's model, so nothing it says can change what is spent.
-      const judgement = yield* ask(yield* judgeFor(ctx, found.tables), input.task, input.profile);
+      // request.
+      let judgement = yield* ask(yield* judgeFor(ctx, found.tables), input.task, input.profile);
+
+      // An unsure judge plays safe.
+      //
+      // A probability below the threshold means the judge does not know which
+      // profile this is, and not knowing is a reason to spend more rather than
+      // less: the profile the judge named is spent one step above its own
+      // effort. The threshold is measured, not guessed. On the routing corpus
+      // no hit sits below 0.7 and the one low-confidence mistake sits at 0.46,
+      // so this rule catches that mistake and costs nothing. It cannot catch a
+      // confident mistake, and nothing can: two of the three mistakes on the
+      // corpus came with a probability of 0.98.
+      let table = shown;
+      if (judgement.status === "used") {
+        const { profile } = judgement;
+        const choice = decide(
+          {
+            profile,
+            confidence: judgement.confidence,
+            alternatives: judgement.alternatives,
+          },
+          found.tables.profiles,
+          found.tables.judge?.threshold,
+        );
+        const entry = found.tables.profiles[profile];
+        if (choice?.escalated === true && entry !== undefined) {
+          const one = resolve(
+            profile,
+            { ...entry, effort: choice.effort },
+            kept.kept,
+            DEFAULT_AGENT,
+          );
+          if (one.problem === undefined && one.resolution !== undefined) {
+            const row = {
+              name: profile,
+              match: entry.match,
+              effort: choice.effort,
+              agent: one.resolution.agent,
+              model: spent(one.resolution.primary),
+              crosscheck:
+                one.resolution.crosscheck === undefined
+                  ? undefined
+                  : spent(one.resolution.crosscheck),
+              crosscheckProblem: one.resolution.crosscheckProblem,
+              excluded: one.resolution.excluded.map(notThis),
+            };
+            table = shown.map((one) => (one.name === profile ? row : one));
+            judgement = {
+              ...judgement,
+              escalated: true,
+              effort: choice.effort,
+              alternatives: choice.alternatives,
+            };
+          }
+        }
+      }
+
+      if (judgement.status === "used") {
+        // The alternatives are the judge's second readings, and a session
+        // that disagrees with the judge needs to see them. The judge's own
+        // answer is not one of them.
+        const { profile } = judgement;
+        const alternatives = judgement.alternatives ?? [];
+        judgement = {
+          ...judgement,
+          alternatives: alternatives.filter((one) => one.profile !== profile),
+        };
+      }
 
       return {
         output: {
           status: "resolved",
           profiles:
-            input.profile === undefined ? shown : shown.filter((one) => one.name === input.profile),
+            input.profile === undefined ? table : table.filter((one) => one.name === input.profile),
           models: kept.kept.map((one) => ({ name: one.alias, model: one.ref })),
           sources: [...found.sources],
           asked: input.profile === undefined ? [] : [input.profile],
@@ -514,6 +598,8 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
  * and the answer is the declaration deciding what is public.
  */
 export { candidates, isFree, known, ladder } from "./catalogue";
+export type { Choice } from "./policy";
+export { decide, oneStepUp, PLAY_SAFE } from "./policy";
 export { effortOf, fit, KNOWN_ORDER, ladderOf, rungs } from "./effort";
 export type { JevDeps, JevSettings } from "./jev";
 export { DEFAULT_TIMEOUT_MS, jevJudge, SYSTEMONE_ENDPOINT, SYSTEMONE_KEY_ENV } from "./jev";

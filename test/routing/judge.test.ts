@@ -26,12 +26,22 @@ const verdict = (task: string, profiles: Record<string, Profile> = described): P
 describe("the lexical arm", () => {
   test("it names the profile the task fits", async () => {
     const got = await verdict("Fix a typo in a comment");
-    expect(got).toEqual({ kind: "profile", profile: "mechanical", confidence: undefined });
+    expect(got).toEqual({
+      kind: "profile",
+      profile: "mechanical",
+      confidence: undefined,
+      alternatives: [],
+    });
   });
 
   test("it names the other profile when the task fits the other one", async () => {
     const got = await verdict("This needs deep design thought across files");
-    expect(got).toEqual({ kind: "profile", profile: "thinking", confidence: undefined });
+    expect(got).toEqual({
+      kind: "profile",
+      profile: "thinking",
+      confidence: undefined,
+      alternatives: [],
+    });
   });
 
   test("it stays quiet when no profile fits", async () => {
@@ -52,20 +62,35 @@ describe("the lexical arm", () => {
   test("a tie keeps the profile the config listed first", async () => {
     const tied = table({ one: THINKING, two: THINKING });
     const got = await verdict("Deep design thought across files", tied);
-    expect(got).toEqual({ kind: "profile", profile: "one", confidence: undefined });
+    expect(got).toEqual({
+      kind: "profile",
+      profile: "one",
+      confidence: undefined,
+      alternatives: [],
+    });
   });
 
   test("the reverse order picks the other profile of the tie", async () => {
     const tied = table({ two: THINKING, one: THINKING });
     const got = await verdict("Deep design thought across files", tied);
-    expect(got).toEqual({ kind: "profile", profile: "two", confidence: undefined });
+    expect(got).toEqual({
+      kind: "profile",
+      profile: "two",
+      confidence: undefined,
+      alternatives: [],
+    });
   });
 
   test("a profile with no match line is offered to no arm", async () => {
     const withPinned = table({ pinned: null, mechanical: MECHANICAL });
     expect(surface(withPinned)).toEqual([{ profile: "mechanical", text: MECHANICAL }]);
     const got = await verdict("Fix a typo in a comment", withPinned);
-    expect(got).toEqual({ kind: "profile", profile: "mechanical", confidence: undefined });
+    expect(got).toEqual({
+      kind: "profile",
+      profile: "mechanical",
+      confidence: undefined,
+      alternatives: [],
+    });
   });
 
   test("it stays quiet when no profile has a match line", async () => {
@@ -85,7 +110,7 @@ describe("the lexical arm", () => {
     const got = await verdict("Fix a typo in a comment");
     // The design rule: the judge never names a model. The type says so, and this
     // says a later arm cannot add one to the object without a test going red.
-    expect(Object.keys(got).sort()).toEqual(["confidence", "kind", "profile"]);
+    expect(Object.keys(got).sort()).toEqual(["alternatives", "confidence", "kind", "profile"]);
   });
 });
 

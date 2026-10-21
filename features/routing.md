@@ -599,6 +599,48 @@ the effort where the judgement is unsure. That policy is the next thing to
 build, and it is not built.
 
 
+## The policy: when nobody knows, play safe
+
+A probability below the threshold means the judge does not know which profile
+this is. Not knowing is a reason to spend **more**, not less, so the profile
+the judge named is spent one step above its own effort, and the report says
+so: `judge.escalated` is true and `judge.effort` names the effort.
+
+The corpus measured the threshold. The confidence distribution on the
+routing corpus:
+
+| | 0-50% | 50-70% | 70-90% | 90-99% | 99-100% |
+| --- | --- | --- | --- | --- | --- |
+| the judge's hits (39) | 0 | 0 | 4 | 11 | 24 |
+| the judge's misses (3) | 1 | 0 | 0 | 2 | 0 |
+| the negative rows (8) | 0 | 0 | 1 | 0 | 7 |
+
+**No hit sits below 0.7, and the one low-confidence mistake sits at 0.46.** A
+threshold there catches that mistake and costs no hits, and a config may move
+it with `judge.threshold`.
+
+**The limit, stated plainly: two of the three mistakes came with a
+probability of 0.98**, and no threshold catches a confident error. Playing safe
+on uncertainty is insurance against the case where the judge is right and
+unsure, and the corpus does not contain that case. On this corpus the rule
+fired once, on a row the judge got wrong anyway, where it spent more for
+nothing. It is not a measured gain. It is a bounded cost against an
+unmeasured risk.
+
+The judge's other readings travel with the answer in `judge.alternatives`, best
+first. They are the second readings of the same task, and a session that
+disagrees with the judge can see them and take the row it prefers.
+
+### Who plays safe when there is no judge
+
+The tool reads a probability, and a probability is what tells it that nobody
+knows. With no judge there is no probability, so the tool cannot tell, and the
+responsibility moves to the session: the skill says that when the judge says
+nothing and the session is unsure between two profiles, the session takes the
+one that asks for more thinking. A task done on the wrong model costs a redo,
+and a task done with too little thinking costs a wrong answer.
+
+
 ## The open questions, restated
 
 1. **What does `none` mean** — the floor of a model, or an exact request for

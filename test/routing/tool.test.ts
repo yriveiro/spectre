@@ -364,7 +364,12 @@ describe("tools.spectre.routing", () => {
 
     // The design rule: the judge picks a profile and the resolver picks the
     // model. A later arm cannot add a model here without this test failing.
-    expect(Object.keys(out.judge).sort()).toEqual(["confidence", "profile", "status"]);
+    expect(Object.keys(out.judge).sort()).toEqual([
+      "alternatives",
+      "confidence",
+      "profile",
+      "status",
+    ]);
   });
 
   test("a judge that cannot answer is skipped, and the reason is the arm's own", async () => {

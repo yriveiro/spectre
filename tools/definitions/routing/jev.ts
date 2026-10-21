@@ -135,6 +135,30 @@ const given = (answer: WireAnswer, choice: string): number | undefined => {
 };
 
 /**
+ * The other choices the model gave a probability to, in the order it ranked
+ * them.
+ *
+ * The probabilities are the information a policy needs when the top answer is
+ * unsure: the runner-up is not a mistake, it is the second reading of the same
+ * task. A choice the model gave no probability to is not an alternative.
+ */
+const ranked = (
+  answer: WireAnswer,
+  criteria: Record<string, string>,
+): ReadonlyArray<{ readonly profile: string; readonly probability: number }> => {
+  const table = answer.probabilities;
+  if (!isRecord(table)) return [];
+  const out: Array<{ profile: string; probability: number }> = [];
+  for (const [profile, probability] of Object.entries(table)) {
+    if (!(profile in criteria)) continue;
+    if (typeof probability !== "number" || !Number.isFinite(probability)) continue;
+    if (probability <= 0) continue;
+    out.push({ profile, probability });
+  }
+  return out.toSorted((one, two) => two.probability - one.probability);
+};
+
+/**
  * The judge the config asks for.
  *
  * A task arrives, the arm asks one choice question, and the verdict carries
@@ -248,11 +272,15 @@ export const jevJudge = (
     if (typeof raw.choice !== "string") return quiet("The answer names no profile.");
 
     const choice = raw.choice;
-    if (choice === NONE_LABEL)
-      return quiet("The judge says no profile fits this task.");
+    if (choice === NONE_LABEL) return quiet("The judge says no profile fits this task.");
     if (!(choice in criteria))
       return quiet(`The answer names "${choice}", and the config has no profile with that name.`);
-    return { kind: "profile", profile: choice, confidence: given(raw, choice) };
+    return {
+      kind: "profile",
+      profile: choice,
+      confidence: given(raw, choice),
+      alternatives: ranked(raw, criteria),
+    };
   };
 
   return { judge };
