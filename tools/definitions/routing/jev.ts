@@ -46,6 +46,18 @@ export const DEFAULT_TIMEOUT_MS = 2000;
 /** The id the arm writes its one question under, and reads the answer from. */
 export const QUESTION_ID = "profile";
 
+/** The label of the way out of the question, and what it says. */
+export const NONE_LABEL = "none";
+
+/**
+ * The criterion that lets the judge stay quiet.
+ *
+ * It names the requests that are not work of any kind, because a request that
+ * fits no profile is not a request a profile should be chosen for.
+ */
+export const NONE_CRITERION =
+  "the request is not work of any kind: a greeting, a repetition, a translation, a question about the session, or an answer to a yes-or-no question";
+
 /** The instructions the question carries. */
 export const QUESTION_INSTRUCTIONS =
   "One task statement follows. Name the profile the task belongs to. Answer with one profile name.";
@@ -156,6 +168,13 @@ export const jevJudge = (
       // which filters the same way.
       if (match !== undefined && match !== "") criteria[name] = match;
     }
+    // The question carries a way out, and it is not decoration. A choice
+    // question with a closed set of labels always answers with one of them, so
+    // without this the judge fires on every request, including the ones that
+    // fit no profile. Measured on the routing corpus: without this criterion
+    // the judge named a profile for all eight negative rows, and with it, all
+    // eight say none and no judged row changes its answer.
+    if (Object.keys(criteria).length > 0) criteria[NONE_LABEL] = NONE_CRITERION;
     if (Object.keys(criteria).length === 0)
       return quiet('The profiles carry no "match" text, so the question has no choices.');
 
@@ -229,6 +248,8 @@ export const jevJudge = (
     if (typeof raw.choice !== "string") return quiet("The answer names no profile.");
 
     const choice = raw.choice;
+    if (choice === NONE_LABEL)
+      return quiet("The judge says no profile fits this task.");
     if (!(choice in criteria))
       return quiet(`The answer names "${choice}", and the config has no profile with that name.`);
     return { kind: "profile", profile: choice, confidence: given(raw, choice) };

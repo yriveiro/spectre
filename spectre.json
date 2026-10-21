@@ -48,5 +48,10 @@
       "why": "Restructure code that already works, across files, without changing behaviour. It needs thinking plus breadth of reading, so it takes the second-highest effort rather than the top, and keeps the other model's second-highest in reserve for the mechanical part of the move. The free model is the last rung."
     }
   },
+  "judge": {
+    "kind": "jev",
+    "model": "jev-1.13-free",
+    "timeout": 5000
+  },
   "dictionary": "/Users/yriveiro/Dump/asd-ste100-dictionary.json"
 }

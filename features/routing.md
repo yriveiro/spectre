@@ -543,11 +543,32 @@ the seven fires on the negative rows.
 | arm | hit | rate | regret | fired on negatives |
 | --- | --- | --- | --- | --- |
 | lexical over the `match` lines | 18/42 | 42.9% | 18.000 | 7 of 8 |
+| **the System One arm** | **39/42** | **92.9%** | **2.250** | **0 of 8** |
 | a model asked to name a profile | 39/42 | 92.9% | 2.250 | 0 of 8 |
-| the System One arm | not measured | — | — | — |
 
-The third row is empty because the arm needs a key, and the machine this was
-built on does not have one that works.
+The System One arm ties the best of the others on the hit rate, matches it on
+the silence, and adds the one thing neither of the others has: a **calibrated
+probability** on the profile it chose. It costs 668 input tokens and 73 output
+tokens per question, and it answers a closed question with a label rather than
+with prose.
+
+### The way out of the question is not decoration
+
+A choice question with a closed set of labels **always** answers with one of
+them. Measured on the corpus, the System One arm named a profile for all
+eight negative rows, because nothing in the question let it say otherwise.
+
+The fix is one criterion: the question carries a label for "this request is not
+work of any kind", and the answer of that label is a quiet verdict. With it,
+**all eight negative rows say none, and no judged row changes its answer.**
+
+That is the same rule the corpus was built on — a negative row asks the
+matcher to stay quiet — and it is the difference between a judge that routes
+everything and a judge that routes.
+
+The arm needs a key, and the machine this was built on has one that works:
+the Console API key in the background service's environment
+(`~/.config/opencode/service.json`, under `env`).
 
 The credential OpenCode holds for the Console integration is in its own store,
 and the plugin can reach it through the host's integration API
@@ -556,12 +577,11 @@ provider's credential that way, and a provider without its own integration id
 uses its provider id as the integration id). So the tool asks for the Console
 credential when the config names no key variable, and the arm carries it.
 
-**And that credential is rejected by the Console.** Tried against the live
-host: the chat-completions route answers **403**, the models list **401**, and
-the System One route **401** with `Invalid credential`. The key in the store is
-not a key the inference host accepts, so the System One arm needs a Console
-API key from the dashboard, and the config's `key` names the environment
-variable that holds it.
+**The credential OpenCode holds for the `opencode` provider is a different
+thing and does not work.** Tried against the live host: the chat-completions
+route answers **403**, the models list **401**, and the System One route
+**401** with `Invalid credential`. The key that works is the Console API key
+from the dashboard, and the service's environment carries it.
 
 The failure is legible rather than silent: the arm turns a status that is not
 a success into a quiet verdict whose reason names the status, the tool reports

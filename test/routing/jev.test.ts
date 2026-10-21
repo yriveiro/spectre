@@ -3,6 +3,8 @@ import {
   DEFAULT_TIMEOUT_MS,
   type JevSettings,
   jevJudge,
+  NONE_CRITERION,
+  NONE_LABEL,
   QUESTION_ID,
   SYSTEMONE_ENDPOINT,
   SYSTEMONE_KEY_ENV,
@@ -118,7 +120,18 @@ describe("the call on the wire", () => {
     expect(Object.keys(body.questions)).toEqual([QUESTION_ID]);
     const question = body.questions[QUESTION_ID];
     expect(question?.type).toBe("choice");
-    expect(question?.criteria).toEqual(MATCHES);
+    // The criteria carry the profiles and the way out. The way out is not
+    // decoration: a choice question with a closed set of labels always answers
+    // with one of them, and without it the judge fires on every request.
+    expect(question?.criteria).toEqual({ ...MATCHES, [NONE_LABEL]: NONE_CRITERION });
+  });
+
+  test("the way out is not a choice when no profile carries a match line", async () => {
+    const [fetch, got] = record(() => ok(GOOD));
+    const judge = jevJudge(SETTINGS, { worker: undefined }, { fetch, env: ENV });
+    const verdict = await judge.judge(TASK);
+    expect(reasonOf(verdict)).toContain("match");
+    expect(got).toHaveLength(0);
   });
 
   test("the default endpoint is the one the host's own provider builds", () => {
