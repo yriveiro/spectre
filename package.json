@@ -9,6 +9,7 @@
   },
   "files": [
     "index.ts",
+    "spectre.default.json",
     "agents",
     "commands",
     "skills",

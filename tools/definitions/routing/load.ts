@@ -14,7 +14,14 @@ const flatten = (message: string): string => {
   return path.length === 0 ? message.slice(0, cut) : `${path.join(".")}: ${message.slice(0, cut)}`;
 };
 
-const decode = (path: string, text: string): { file?: File; problem?: string } => {
+/**
+ * The config in a file's text, or the problem with it.
+ *
+ * The writer asks this question before it replaces a file, so the reader and
+ * the writer refuse the same things. One implementation, so a change to the
+ * rule is a change in one place.
+ */
+export const decode = (path: string, text: string): { file?: File; problem?: string } => {
   let raw: unknown;
   try {
     raw = Bun.JSONC.parse(text);
@@ -71,6 +78,8 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
     // value standing.
     let models: Record<string, string | null> = {};
     let profiles: Record<string, ProfileEntry | null> = {};
+    let provider: string | undefined;
+    let setup: { from: string } | undefined;
     // A string here is the path as written, and the file it was written in, so a
     // relative path resolves against the config that named it rather than against
     // whatever the process happens to be in.
@@ -89,6 +98,11 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
       sources.push(source.path);
       models = { ...models, ...read.file.models };
       profiles = { ...profiles, ...read.file.profiles };
+      if (read.file.provider !== undefined) provider = read.file.provider;
+      // Each file answers the setup question for itself. A later file with no
+      // answer clears an earlier one, so a project config over a global decline
+      // routes rather than staying silent.
+      setup = read.file.setup === undefined ? undefined : { from: source.path };
 
       // `null` removes a path an earlier file set, and `undefined` leaves the
       // earlier one standing. A key the reader did not write must not clear it.
@@ -102,6 +116,8 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
 
     return {
       tables: {
+        provider,
+        setup,
         models: settle(models, (value) => value),
         profiles: settle(profiles, one),
         dictionary,

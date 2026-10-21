@@ -14,7 +14,7 @@ skill in full before doing any work, including its inline Principles index.
 Navigate to a leaf \`principle-*\` skill whenever you apply that principle.
 
 Before you spawn a subagent, load the \`model-router\` skill. It evaluates the
-task, picks a model from the allowlist in \`spectre.jsonc\`, and hands back the
+task, picks a model from the allowlist in \`spectre.json\`, and hands back the
 exact string to pass as \`model\`. Do not write a model id from memory, whatever
 the provider offers.
 

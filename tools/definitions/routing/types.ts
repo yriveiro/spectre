@@ -1,14 +1,39 @@
 import type { Model } from "@opencode/schema/model";
 import { Schema } from "effect";
 
+/**
+ * The config file, and the tables it decodes into.
+ *
+ * A profile states a requirement, not a spend. `effort` is the requirement,
+ * `model` is a pin that overrides it, and `match` is the routing surface. The
+ * schema describes the file and it enforces nothing: the policy lives in
+ * `check.ts`, which reports what the schema cannot express.
+ */
+
 /** One model, or several in order of preference. */
 const ModelNames = Schema.Union([Schema.String, Schema.Array(Schema.String)]);
 
+/** The second opinion: the effort it is asked for, and how it is chosen. */
+const Crosscheck = Schema.Struct({
+  effort: Schema.optional(Schema.String),
+  prefer: Schema.optional(Schema.Literals(["free"])),
+});
+export type Crosscheck = typeof Crosscheck.Type;
+
 const Profile = Schema.Struct({
-  model: ModelNames,
-  why: Schema.String,
+  /** The thinking this task needs. A name from the catalogue, not a closed set. */
+  effort: Schema.optional(Schema.String),
+  /** A pin. It wins over `effort`. */
+  model: Schema.optional(ModelNames),
+  /** The second opinion, stated as a requirement. */
+  crosscheck: Schema.optional(Crosscheck),
+  /** The routing surface: the moment, with the nouns a prompt would carry. */
+  match: Schema.optional(Schema.String),
+  /** The rationale, for the human. The resolver never reads it. */
+  why: Schema.optional(Schema.String),
   agent: Schema.optional(Schema.String),
 });
+export type ProfileEntry = typeof Profile.Type;
 
 /**
  * A path to the reader's own copy of the ASD-STE100 dictionary, as JSON.
@@ -26,21 +51,125 @@ const Dictionary = Schema.Union([Schema.String, Schema.Null]);
  */
 export const Config = Schema.Struct({
   $schema: Schema.optional(Schema.String),
+  /**
+   * The stored answer to the setup question. `declined` says this repository
+   * routes on no model, so the question does not come again. An accepted answer
+   * writes the starter set itself, so it needs no marker.
+   */
+  setup: Schema.optional(Schema.Literals(["declined"])),
+  /** The default provider the page opens with, and the starter set. */
+  provider: Schema.optional(Schema.String),
   models: Schema.optional(Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Null]))),
   profiles: Schema.optional(Schema.Record(Schema.String, Schema.Union([Profile, Schema.Null]))),
   dictionary: Schema.optional(Dictionary),
 });
 
 export type File = typeof Config.Type;
-export type ProfileEntry = typeof Profile.Type;
+
+/** A profile as the tables hold it: one model list, and the requirement beside it. */
+export type Profile = {
+  /** The thinking this task needs. */
+  readonly effort?: string | undefined;
+  /** A pinned model, as a list so the shape matches the file. */
+  readonly model?: ReadonlyArray<string> | undefined;
+  /** The second opinion, stated as a requirement. */
+  readonly crosscheck?: Crosscheck | undefined;
+  /** The routing surface. */
+  readonly match?: string | undefined;
+  /** The rationale, for the human. */
+  readonly why?: string | undefined;
+  /** The agent the run happens under. */
+  readonly agent?: string | undefined;
+};
 
 export type Tables = {
+  /** The configured default provider, or absent. */
+  readonly provider: string | undefined;
+  /**
+   * The stored answer to the setup question, and the file that carries it. A
+   * later file with no answer clears an earlier one, so a project config
+   * overrides a decline written in the global file.
+   */
+  readonly setup?: { readonly from: string } | undefined;
   readonly models: Readonly<Record<string, string>>;
-  readonly profiles: Readonly<
-    Record<string, { model: ReadonlyArray<string>; why: string; agent?: string }>
-  >;
+  readonly profiles: Readonly<Record<string, Profile>>;
   /** The configured path, resolved against the config file that set it, or absent. */
   readonly dictionary?: { readonly path: string; readonly from: string };
+};
+
+/** A candidate the allowlist names, before the catalogue is consulted. */
+export type Allowed = {
+  readonly alias: string;
+  readonly ref: string;
+  /** The variant the allowlist pinned, when it pinned one. */
+  readonly pinned: string | undefined;
+};
+
+/** A model of the catalogue, read once and reduced to what a decision needs. */
+export type Known = {
+  readonly providerID: string;
+  readonly id: string;
+  readonly name: string;
+  readonly family: string | undefined;
+  /** The effort rungs the catalogue gives this model, in ladder order. */
+  readonly rungs: ReadonlyArray<string>;
+  readonly costInput: number;
+  readonly costOutput: number;
+  readonly enabled: boolean;
+  readonly status: string;
+  readonly tools: boolean;
+};
+
+/** A candidate: an alias, the model it names, and the rungs it can be asked for. */
+export type Candidate = {
+  readonly alias: string;
+  readonly ref: string;
+  readonly model: Known;
+  /** The rung the allowlist pinned, when it pinned one. */
+  readonly pinned: string | undefined;
+};
+
+/** The model one profile is spent on. */
+export type Pick = {
+  readonly alias: string;
+  readonly ref: string;
+  /** The rung asked for, when the model has one. */
+  readonly rung: string | undefined;
+  readonly pinned: boolean;
+  /** True when the ladder had no rung at the requirement and stepped up. */
+  readonly steppedUp: boolean;
+  /** The rung below the one used, when there is one. */
+  readonly below: string | undefined;
+  readonly family: string | undefined;
+  readonly rungs: ReadonlyArray<string>;
+  readonly costInput: number;
+  readonly costOutput: number;
+};
+
+/** A candidate that did not qualify, and how far it reaches. */
+export type Excluded = {
+  readonly alias: string;
+  readonly ref: string;
+  readonly reason: string;
+  readonly rungs: ReadonlyArray<string>;
+  /** The highest rung the model reaches, when it reaches one. */
+  readonly reaches: string | undefined;
+};
+
+/** One profile, resolved. */
+export type Resolution = {
+  readonly profile: string;
+  readonly agent: string;
+  readonly primary: Pick;
+  readonly crosscheck: Pick | undefined;
+  /**
+   * Why a declared crosscheck found no model, when it found none. A profile
+   * that declares a second opinion and gets none says so, because a reader
+   * cannot tell "no second opinion was asked for" from "the second opinion
+   * could not be had" when both arrive as an absent field.
+   */
+  readonly crosscheckProblem: string | undefined;
+  readonly excluded: ReadonlyArray<Excluded>;
 };
 
 /**

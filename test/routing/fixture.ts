@@ -15,7 +15,7 @@ export const CATALOGUE = [
 /**
  * The only domain the tool reads is the catalogue, so the fake context is one
  * call. `OPENCODE_CONFIG_DIR` is pinned to an empty directory so a developer's
- * own global `spectre.jsonc` cannot reach a test.
+ * own global config cannot reach a test.
  */
 export const useScratch = () => {
   const saved = Bun.env.OPENCODE_CONFIG_DIR;
@@ -38,8 +38,8 @@ export const useScratch = () => {
   return {
     globalDir,
     projectDir,
-    writeGlobal: (body: string) => Bun.write(`${globalDir()}/spectre.jsonc`, body),
-    writeProject: (body: string) => Bun.write(`${projectDir()}/spectre.jsonc`, body),
+    writeGlobal: (body: string, name = "spectre.json") => Bun.write(`${globalDir()}/${name}`, body),
+    writeProject: (body: string, name = "spectre.json") => Bun.write(`${projectDir()}/${name}`, body),
   };
 };
 

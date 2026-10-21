@@ -16,7 +16,7 @@ import * as tools from "./tools";
  * A duplicate id is not fatal: the first registration wins and the later one is
  * marked failed, so two copies load and the installed one silently takes the id.
  *
- * Nothing here decides anything from `spectre.jsonc`. Model routing is a tool,
+ * Nothing here decides anything from `spectre.json`. Model routing is a tool,
  * called when a model is about to be chosen, so a config mistake is reported to
  * whoever was about to route instead of stopping a session that had nothing to do
  * with it. `tools.spectre.prose` reads the dictionary path from the same file and

@@ -6,7 +6,8 @@ for each, and what is still open. It is not a log of how the design was reached.
 
 | File | Status | In one line |
 | ---- | ------ | ----------- |
-| [model-routing.md](./model-routing.md) | built | A `spectre.jsonc` file. It whitelists models and names the reasons to pick one. A profile resolves to a model string for a `subagent` call, not an agent body. |
+| [model-routing.md](./model-routing.md) | built | A `spectre.json` file (`spectre.jsonc` still reads). It whitelists models and states the effort each profile needs. The resolver turns that effort into a model string for a `subagent` call, not an agent body. |
+| [routing.md](./routing.md) | Phase A built | A profile states the effort a task needs, not a model id. The model is resolved at call time from the allowlist and the live catalogue. The page, the corpus and the judge are not. |
 | [data-root.md](./data-root.md) | built | Where a skill writes when the output has to outlive the session. The path shape, the permission that covers it, and who writes there. |
 | [arena.md](./arena.md) | reserved, not built | Run the same question on several models at once. The main chat picks the best answer. |
 | [session-return.md](./session-return.md) | built, unverified live | A session whose worktree was collected moves itself back to main and is told what happened to its work. No fetch: the user updates main. |
@@ -23,11 +24,11 @@ thing. The collision, and which one gives way, is recorded once in
 just uses the profiles. That order matters, so here it is in one picture.
 
 ```
-                    spectre.jsonc
+                    spectre.json
                           │
               ┌───────────┴───────────┐
               │  models{}  whitelist   │   ← every string checked on each call
-              │  profiles{}  name→why  │   ← the router's vocabulary
+              │  profiles{}  name→effort  │   ← the router's vocabulary
               └───────────┬───────────┘
         ┌──────────┬───────┴───────┬──────────────┐
         ▼          ▼               ▼              ▼
