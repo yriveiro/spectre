@@ -1,6 +1,6 @@
 import { dirname, resolve } from "node:path";
 import { Effect, Schema } from "effect";
-import { configPaths } from "./locate";
+import { configPaths, projectPath } from "./locate";
 import { Config, type File, type ProfileEntry, type Tables } from "./types";
 
 /**
@@ -62,11 +62,51 @@ const settle = <T, R>(
   return out;
 };
 
+/** The tables of a repository with no config. */
+const emptyTables = (): Tables => ({ provider: undefined, models: {}, profiles: {} });
+
 export type Loaded = {
   readonly tables: Tables;
   readonly sources: ReadonlyArray<string>;
   readonly problems: ReadonlyArray<string>;
 };
+
+/**
+ * The project's own config, with no global file merged into it.
+ *
+ * The tool merges, so the session sees the user's defaults on top of the
+ * repository's. The page edits the repository's file, and writing the merged
+ * result would copy the global config into the repository, which is a change
+ * nobody asked for.
+ */
+export const loadProject = (directory: string): Effect.Effect<Loaded> =>
+  Effect.gen(function* () {
+    const path = yield* projectPath(directory);
+    if (path === undefined) return { tables: emptyTables(), sources: [], problems: [] };
+    const found = yield* read(path);
+    if (found === undefined) return { tables: emptyTables(), sources: [], problems: [] };
+    const decoded = decode(found.path, found.text);
+    if (decoded.problem !== undefined)
+      return { tables: emptyTables(), sources: [], problems: [decoded.problem] };
+    if (decoded.file === undefined) return { tables: emptyTables(), sources: [], problems: [] };
+    return {
+      tables: {
+        provider: decoded.file.provider,
+        setup: decoded.file.setup === undefined ? undefined : { from: found.path },
+        models: settle(decoded.file.models, (value) => value),
+        profiles: settle(decoded.file.profiles, one),
+        dictionary:
+          decoded.file.dictionary === undefined || decoded.file.dictionary === null
+            ? undefined
+            : {
+                path: resolve(dirname(found.path), decoded.file.dictionary),
+                from: found.path,
+              },
+      },
+      sources: [found.path],
+      problems: [],
+    };
+  });
 
 /** Lowest precedence first. A later entry replaces the earlier one whole. */
 export const load = (directory: string): Effect.Effect<Loaded> =>

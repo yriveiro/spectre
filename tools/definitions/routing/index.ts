@@ -342,3 +342,33 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
       };
     }),
 });
+
+/**
+ * The public surface of this folder.
+ *
+ * The tool is the first consumer. The terminal page is the second, and it
+ * needs the same reader, the same resolver and the same writer, so a page
+ * cannot show something the router will not do. Nothing above
+ * `definitions/` imports a sibling of this folder: a second consumer of the
+ * internals is the signal that the boundary is wrong, and the answer is the
+ * declaration deciding what is public.
+ */
+export { load, loadProject } from "./load";
+export { FILE_NAME, LEGACY_NAME, projectPath } from "./locate";
+export { candidates, isFree, known, ladder } from "./catalogue";
+export { resolve as resolveProfile } from "./resolve";
+export { proposeAlias, serialise, writeConfig } from "./write";
+export { effortOf, fit, KNOWN_ORDER, ladderOf, rungs } from "./effort";
+export { formatRef, DEFAULT_AGENT } from "./types";
+export type {
+  Allowed,
+  Candidate,
+  Crosscheck,
+  Excluded,
+  Known,
+  Pick,
+  Profile,
+  ProfileEntry,
+  Resolution,
+  Tables,
+} from "./types";

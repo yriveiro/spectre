@@ -6,6 +6,8 @@
     "moduleResolution": "bundler",
     "moduleDetection": "force",
     "types": ["node", "bun"],
+    "jsx": "preserve",
+    "jsxImportSource": "@opentui/solid",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
@@ -13,6 +15,6 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true
   },
-  "include": ["index.ts", "agents", "eval", "scripts", "skills", "test", "tools"],
+  "include": ["index.ts", "tui", "agents", "eval", "scripts", "skills", "test", "tools"],
   "exclude": ["skills/definitions/elysia-best-practices/examples"]
 }

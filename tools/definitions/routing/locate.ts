@@ -47,6 +47,16 @@ const oneFile = (directory: string): Effect.Effect<string | undefined> =>
   });
 
 /**
+ * The project's own file, or undefined when the project has none.
+ *
+ * The tool merges the global file with the project's. The page edits, and it
+ * edits the project's file, so it needs to know which file that is without the
+ * global one folded in.
+ */
+export const projectPath = (directory: string): Effect.Effect<string | undefined> =>
+  oneFile(directory);
+
+/**
  * Lowest precedence first: the global file, then the project's. One file per
  * directory, so a directory holding both is read as the canonical one says and
  * the other is ignored — which one is a fact the tool reports through its

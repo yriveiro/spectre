@@ -390,11 +390,12 @@ The judge sits at the first step only. The second step is mechanical: the
 allowlist order, the effort rule and the catalogue. A judge that is absent
 changes who answers the first question and changes nothing about the second.
 
-That is the whole design rule: **the judge can add information to the profile
-choice, and it can never change how a profile resolves.** A judge that says
-"this is the `judgment` profile" picks a name from a list the user wrote. A
-judge that says "spend it on this model" would be a second resolver, and two
-resolvers disagree.
+That is the whole design rule: **the judge never names a model.** It names a
+profile and a probability, both drawn from a list the user wrote. A judge that
+said "spend it on this model" would be a second resolver, and two resolvers
+disagree. The policy may raise the effort when the probability is low, and
+the resolver still picks the model, and the allowlist order still decides
+which one.
 
 ### The switch
 
@@ -412,6 +413,32 @@ The judge lives in the config, beside the rest of it:
 No `judge` key means no judge. The key is absent from the schema in the
 build that has no judge, and a config that carries it is a problem that names
 the key, which is honest: that build has no judge to run.
+
+### The judge, in three arms
+
+The judge is one interface with three arms, and Phase C measures all three on
+the same corpus before any of them goes into the tool.
+
+| Arm | What it is | What it can say |
+| --- | --- | --- |
+| **lexical** | BM25 over the `match` lines | a profile, and no probability |
+| **model** | a chat model asked to name a profile | a profile, and no calibrated probability |
+| **jev** | a System One model asked the same question with typed criteria | a profile, and the probability the model reports |
+
+The two arms that are not Jev have no calibrated probability, and the design
+says so rather than inventing one. A lexical score is not a probability, and a
+chat model's confidence is not a calibrated one. The policy that raises the
+effort needs the third arm, so the policy waits for it.
+
+The Jev arm asks the question in the shape the model expects: a `state`,
+which is the task statement, and a `choice` question whose criteria are the
+profiles' `match` lines. The answer carries the choice and the probability
+for every criterion, so one call returns the profile and the confidence.
+
+The measurement decides the rest. A judge that does not beat the lexical arm
+on the corpus, priced by regret, is not worth a network call in the hot path,
+and the tool routes from the table as it does today.
+
 
 ### What happens when it does not answer
 
@@ -469,6 +496,77 @@ judgement in the parent's context instead of in a call.
 5. **What the page does with a profile no allowed model reaches** — offer the
    closest rung, or refuse with the capacity report. The tool reports it
    either way.
+
+## Phase C: what the measurement says
+
+The corpus is fifty blind rows: six for each of the seven profiles, and eight
+negative rows that fit none of them. Two writers wrote it, on two model
+families, from the taxonomy alone, and neither of them read a `match` line. None of
+the fifty rows shares a four-word run with any `match` line, which
+`eval/routing/tests/` holds them to, so the corpus is not the surface reading
+back the words that wrote it.
+
+The first read, on the lexical arm over the `match` lines:
+
+| Arm | hit@1 on the judged rows | negative rows it stayed quiet on |
+| --- | --- | --- |
+| lexical over `match` | 18 of 42, **42.9%** | 1 of 8 |
+| lexical over `why` | 14 of 42, **33.3%** | 1 of 8 |
+
+The random floor over seven labels is 14%, so the surface routes better than
+chance and a long way short of the 97.4% the skill harness's description arm
+reaches. Two things fall out of the table. The `match` lines are worth about
+ten points over the rationale, which is the first measured case for the split.
+And a lexical matcher cannot stay quiet: it fires on seven of the eight
+requests that fit no profile, because a bag of words has no way to say
+"none".
+
+### The confusion matrix is the useful part
+
+| expected → got | mechanical | search | worker | judgment | thinking | deep | refactor |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| mechanical | **3** | 0 | 0 | 3 | 0 | 0 | 0 |
+| search | 3 | **2** | 0 | 1 | 0 | 0 | 0 |
+| worker | 2 | 0 | **1** | 0 | 0 | 0 | 3 |
+| judgment | 0 | 0 | 2 | **3** | 0 | 0 | 1 |
+| thinking | 2 | 1 | 0 | 0 | **2** | 1 | 0 |
+| deep | 2 | 0 | 0 | 1 | 0 | **2** | 1 |
+| refactor | 0 | 0 | 0 | 0 | 1 | 0 | **5** |
+
+Eight of the twelve `worker` and `refactor` rows swapped between them, and
+three of the six `search` rows went to `mechanical`. The words overlap, and
+so do the meanings: "rename that setting everywhere" is a decided change and a
+restructure that alters no behaviour, and only one of those is the label a
+human would pick.
+
+### Two readings, and the measurement that tells them apart
+
+The overlap can be two different problems, and they call for opposite fixes.
+
+**The labels are too close.** `worker` and `refactor` need a sharper
+boundary, and the fix is in the `match` lines: the discriminator is whether
+the change alters what the code does, and the lines have to say so. A fresh
+blind batch measures the sharpened surface.
+
+**The boundaries are semantic and a bag of words cannot hold them.** Knowing
+that a rename changes no behaviour is a fact about the task, not a fact about
+the vocabulary, and a lexical arm has no way to weigh it. The fix is a reader
+that reasons, which is the judge.
+
+The two are told apart by the model arm, which reads the same seven lines and
+answers with judgement rather than with term frequency. If the model arm
+beats the lexical arm on the `worker` and `refactor` rows, the second reading
+holds and the judge has a job to do. If it does not, the labels need cutting
+and no judge will save them.
+
+### What the blind slice costs
+
+A blind row gets one read. The surface is about to change because of what this
+read shows, and the rule in `eval/README.md` is that such a row moves into
+`tuned` and a fresh row takes its place. So the fifty rows become the
+in-sample slice, the numbers above stay on the record as the honest read they
+were, and the next number comes from a fresh batch written blind.
+
 
 ## The plan
 
