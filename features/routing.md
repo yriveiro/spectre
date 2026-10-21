@@ -550,8 +550,8 @@ The System One arm ties the best of the others on the hit rate, matches it on
 the silence, and adds the one thing neither of the others has: a **calibrated
 probability** on the profile it chose. It costs 668 input tokens and 73 output
 tokens per question, and it answers a closed question with a label rather than
-with prose. The corpus measured the arm as the corpus was built: two writers
-who never saw the surface, and a surface they never read.
+with prose. The corpus measured the arm the way it measures everything else:
+two writers who never saw the surface, and a surface they never read.
 
 ### The way out of the question is not decoration
 
