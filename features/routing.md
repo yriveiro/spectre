@@ -550,7 +550,8 @@ The System One arm ties the best of the others on the hit rate, matches it on
 the silence, and adds the one thing neither of the others has: a **calibrated
 probability** on the profile it chose. It costs 668 input tokens and 73 output
 tokens per question, and it answers a closed question with a label rather than
-with prose.
+with prose. The corpus measured the arm as the corpus was built: two writers
+who never saw the surface, and a surface they never read.
 
 ### The way out of the question is not decoration
 
@@ -561,12 +562,14 @@ eight negative rows, because nothing in the question let it say otherwise.
 The fix is one criterion: the question carries a label for "this request is not
 work of any kind", and the answer of that label is a quiet verdict. With it,
 **all eight negative rows say none, and no judged row changes its answer.**
+The corpus caught it because a negative row asks the matcher to stay quiet,
+and the arm had no way to.
 
-That is the same rule the corpus was built on — a negative row asks the
+That is the same rule the corpus follows — a negative row asks the
 matcher to stay quiet — and it is the difference between a judge that routes
 everything and a judge that routes.
 
-The arm needs a key, and the machine this was built on has one that works:
+The arm needs a key, and this machine has one that works:
 the Console API key in the background service's environment
 (`~/.config/opencode/service.json`, under `env`).
 
