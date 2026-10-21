@@ -1,9 +1,11 @@
 # Routing by requirement (effort), not by model id
 
-Status: Phase A has landed. The page, the corpus and the judge have not. This
-file states what the feature must do, the platform facts it relies on with a
-source for each, the plan to follow, and what is still open. It is a
-requirements document, not a log of the design that produced it.
+Status: Phase A has landed, and so have the page, the corpus and the judge.
+The policy that reads the judge's probability, and the live terminal proof of
+the page, have not. This file states what the feature must do, the platform
+facts it relies on with a source for each, the plan to follow, and what is
+still open. It is a requirements document, not a log of the design that
+produced it.
 
 It replaces the parts of [model-routing.md](./model-routing.md) that couple a
 profile to a model id. That file stays: the tool, the skill, the config surface
