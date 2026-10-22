@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { deltaTable, deltas, flips, snapshot, type Run } from "../record";
-import { score, type Prediction } from "../score";
+import { deltas, deltaTable, flips, type Run, snapshot } from "../record";
+import { type Prediction, score } from "../score";
 
 const pred = (prompt: string, got: string): Prediction => ({ prompt, got, via: "text" });
 

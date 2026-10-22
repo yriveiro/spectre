@@ -1,4 +1,4 @@
-import { type Ci, type Snapshot } from "./classify";
+import type { Ci, Snapshot } from "./classify";
 
 const FIELDS =
   "number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,mergedAt";
@@ -184,9 +184,7 @@ export const readPr = async (
  * What `gh pr list` gave back. An empty list and a failed command are different
  * answers, so the type says so: a caller cannot read one as the other.
  */
-export type Listing =
-  | { readonly numbers: ReadonlyArray<number> }
-  | { readonly problem: string };
+export type Listing = { readonly numbers: ReadonlyArray<number> } | { readonly problem: string };
 
 /** Lowest number first: a stacked branch set lands bottom-up, so that is the order. */
 export const listingOf = (found: {
@@ -194,8 +192,7 @@ export const listingOf = (found: {
   readonly err: string;
   readonly code: number;
 }): Listing => {
-  if (found.code !== 0)
-    return { problem: found.err.split("\n")[0] ?? `gh exited ${found.code}` };
+  if (found.code !== 0) return { problem: found.err.split("\n")[0] ?? `gh exited ${found.code}` };
 
   const parsed: unknown = JSON.parse(found.out === "" ? "[]" : found.out);
   if (!Array.isArray(parsed)) return { problem: "gh pr list did not return a list of numbers" };
@@ -208,7 +205,8 @@ export const listingOf = (found: {
 };
 
 export const openPullRequests = async (cwd: string): Promise<Listing> => {
-  if (Bun.which("gh") === null) return { problem: "`gh` is not on PATH, so this listing decides nothing" };
+  if (Bun.which("gh") === null)
+    return { problem: "`gh` is not on PATH, so this listing decides nothing" };
 
   return listingOf(
     await run(cwd, ["pr", "list", "--state", "open", "--limit", "200", "--json", "number"]),

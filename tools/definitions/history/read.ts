@@ -18,16 +18,11 @@ export type Ownership = {
  * predictor in the defect literature: many small hands mean the file's meaning
  * sits in no one's head.
  */
-export const ownershipOf = (
-  commits: ReadonlyArray<Commit>,
-): Ownership | null => {
+export const ownershipOf = (commits: ReadonlyArray<Commit>): Ownership | null => {
   if (commits.length === 0) return null;
   const byAuthor = new Map<string, number>();
-  for (const commit of commits)
-    byAuthor.set(commit.author, (byAuthor.get(commit.author) ?? 0) + 1);
-  const ranked = [...byAuthor].toSorted(
-    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
-  );
+  for (const commit of commits) byAuthor.set(commit.author, (byAuthor.get(commit.author) ?? 0) + 1);
+  const ranked = [...byAuthor].toSorted((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const total = commits.length;
   const share = (count: number) => count / total;
   const top = ranked[0]!;

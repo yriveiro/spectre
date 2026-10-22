@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { branchOk, needsPush, type Facts } from "../../tools/definitions/pr/read";
+import { branchOk, type Facts, needsPush } from "../../tools/definitions/pr/read";
 
 const facts = (over: Partial<Extract<Facts, { readonly ok: true }>> = {}) => ({
   ok: true as const,

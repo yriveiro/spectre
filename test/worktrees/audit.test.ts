@@ -1,13 +1,19 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
 import type { Plugin } from "@opencode/plugin/effect";
-import type { Tool } from "@opencode/schema/tool";
 import { AbsolutePath } from "@opencode/schema/schema";
+import type { Tool } from "@opencode/schema/tool";
+import { Effect } from "effect";
 import { worktrees } from "../../tools/definitions/worktrees";
 
 const ctx = (directory: string) =>
   ({
-    location: { project: { id: "test", directory: AbsolutePath.make(directory), canonical: AbsolutePath.make(directory) } },
+    location: {
+      project: {
+        id: "test",
+        directory: AbsolutePath.make(directory),
+        canonical: AbsolutePath.make(directory),
+      },
+    },
   }) as unknown as Plugin.Context;
 
 type Row = {
@@ -75,7 +81,16 @@ const bareLayout = async () => {
   await git(base, ["clone", "-q", bare, `${base}/seed`]);
   await Bun.write(`${base}/seed/a.txt`, "one\n");
   await git(`${base}/seed`, ["add", "."]);
-  await git(`${base}/seed`, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "first"]);
+  await git(`${base}/seed`, [
+    "-c",
+    "user.email=t@t",
+    "-c",
+    "user.name=t",
+    "commit",
+    "-q",
+    "-m",
+    "first",
+  ]);
   await git(`${base}/seed`, ["push", "-q", bare, "HEAD:refs/heads/main"]);
   await git(bare, ["worktree", "add", "-q", main, "main"]);
   await git(main, ["worktree", "add", "-q", "-b", "feature", feature]);
@@ -102,8 +117,7 @@ const call = async (directory: string) => {
   const output = result.output as
     | { worktrees: ReadonlyArray<Row>; counts: Record<string, number>; problems?: string }
     | { status: string };
-  if (!("worktrees" in output))
-    throw new Error(`expected a survey, got status ${output.status}`);
+  if (!("worktrees" in output)) throw new Error(`expected a survey, got status ${output.status}`);
   return output;
 };
 
@@ -170,7 +184,10 @@ describe("a bare repository with linked worktrees", () => {
     const order = blocks.map((block) =>
       block.split("\n").includes("bare")
         ? "BARE"
-        : (block.match(/^worktree (.*)$/m)?.[1]?.split("/").pop() ?? "?"),
+        : (block
+            .match(/^worktree (.*)$/m)?.[1]
+            ?.split("/")
+            .pop() ?? "?"),
     );
 
     expect(order[0]).toBe("BARE");
@@ -206,11 +223,25 @@ describe("a bare repository with linked worktrees", () => {
     await Bun.write(`${base}/seed/a.txt`, "one\n");
     await git(`${base}/seed`, ["add", "."]);
     await git(`${base}/seed`, [
-      "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "first",
+      "-c",
+      "user.email=t@t",
+      "-c",
+      "user.name=t",
+      "commit",
+      "-q",
+      "-m",
+      "first",
     ]);
     await git(`${base}/seed`, ["push", "-q", bare, "HEAD:refs/heads/main"]);
     await git(bare, ["worktree", "add", "-q", main, "main"]);
-    await git(main, ["worktree", "add", "-q", "-b", "feature", `${base}/spectre-worktrees/feature`]);
+    await git(main, [
+      "worktree",
+      "add",
+      "-q",
+      "-b",
+      "feature",
+      `${base}/spectre-worktrees/feature`,
+    ]);
     await git(main, ["worktree", "add", "-q", "-b", "other", second]);
     await git(main, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
     await Bun.$`rm -rf ${`${base}/seed`}`.quiet();
@@ -221,7 +252,9 @@ describe("a bare repository with linked worktrees", () => {
     expect(page.worktrees.map((one) => one.branch).sort()).toEqual(["feature", "other"]);
     expect(page.worktrees.some((one) => endsWith(one.path, "/spectre"))).toBe(false);
     expect(page.worktrees.some((one) => endsWith(one.path, "/spectre-worktrees/main"))).toBe(false);
-    expect(page.worktrees.some((one) => endsWith(one.path, "/spectre-worktrees/second"))).toBe(true);
+    expect(page.worktrees.some((one) => endsWith(one.path, "/spectre-worktrees/second"))).toBe(
+      true,
+    );
   });
 });
 

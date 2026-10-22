@@ -1,4 +1,4 @@
-import { progress, type Progress } from "./progress";
+import { type Progress, progress } from "./progress";
 
 export type ModelStatus = {
   ref: string;

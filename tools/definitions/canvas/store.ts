@@ -236,7 +236,12 @@ export const present = async (canvas: string, platform: string): Promise<Present
   const launched = await run(dirname(canvas), [launcher, canvas]);
   if (!launched.ran) return { status: "not-opened", canvas, why: launched.err };
 
-  return { status: "opened", canvas, deadLinks: deadLinks(html), remoteScripts: remoteScripts(html) };
+  return {
+    status: "opened",
+    canvas,
+    deadLinks: deadLinks(html),
+    remoteScripts: remoteScripts(html),
+  };
 };
 
 export type EvidenceRow =

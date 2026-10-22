@@ -157,7 +157,13 @@ export const currentBranch = (cwd: string): Promise<Rev> =>
  * clean answer, so this answers nothing rather than forwarding it.
  */
 export const concreteRef = async (cwd: string, ref: string) => {
-  const got = await git(cwd, ["rev-parse", "--symbolic-full-name", "--verify", "--end-of-options", ref]);
+  const got = await git(cwd, [
+    "rev-parse",
+    "--symbolic-full-name",
+    "--verify",
+    "--end-of-options",
+    ref,
+  ]);
   if (!answered(got)) return undefined;
   const name = got.out.trim();
   return /^refs\/(heads|remotes)\/.+/.test(name) ? name : undefined;

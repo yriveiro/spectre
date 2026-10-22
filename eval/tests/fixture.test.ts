@@ -15,7 +15,6 @@ import { blind, heldOut, tuned } from "../fixture";
  * runs the same check before a row can land in the corpus.
  */
 
-
 describe("the blind slice", () => {
   test("no row quotes the description of the leaf it names", async () => {
     const definitions = await Effect.runPromise(load());
@@ -44,7 +43,9 @@ describe("the blind slice", () => {
   test("every principle has a row somewhere in the corpus", async () => {
     const definitions = await Effect.runPromise(load());
     const principles = definitions.map((one) => one.id).filter((id) => id.startsWith("principle-"));
-    const covered = new Set([...tuned, ...heldOut, ...blind].flatMap((row) => permitted(row.label)));
+    const covered = new Set(
+      [...tuned, ...heldOut, ...blind].flatMap((row) => permitted(row.label)),
+    );
 
     const uncovered = principles.filter((id) => !covered.has(id));
 

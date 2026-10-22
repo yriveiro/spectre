@@ -6,7 +6,7 @@
  * to eight categories of organisation, and this project is in none of them, so
  * nothing here carries the word list. What this file reads is a JSON export the
  * reader produced from a PDF they hold, pointed at by `dictionary` in
- * `spectre.jsonc`. The export format is documented in `tools/FOR_AGENTS.md`.
+ * `spectre.json`. The export format is documented in `tools/FOR_AGENTS.md`.
  *
  * Every finding this module produces is advisory and never fails a run, for the
  * same reason `passive-voice` does not: a word the reader has not checked against

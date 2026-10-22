@@ -69,8 +69,13 @@ const VARIANT = Bun.env.SPECTRE_WRITER_VARIANT ?? "low";
  * itself here.
  */
 const leaves = () =>
-  [...new Set([...tuned, ...heldOut, ...blind].filter((r) => r.label !== "none").flatMap((r) => permitted(r.label)))]
-    .toSorted();
+  [
+    ...new Set(
+      [...tuned, ...heldOut, ...blind]
+        .filter((r) => r.label !== "none")
+        .flatMap((r) => permitted(r.label)),
+    ),
+  ].toSorted();
 
 const PERSONAS = [
   "a backend engineer maintaining a small fleet of services",
@@ -84,7 +89,10 @@ const PERSONAS = [
 ];
 
 const ask = (id: string, persona: string, retry: number): string => {
-  const again = retry === 0 ? "" : " Your previous line was rejected. Write a different sentence: plainer, more concrete, a new angle on the same situation.";
+  const again =
+    retry === 0
+      ? ""
+      : " Your previous line was rejected. Write a different sentence: plainer, more concrete, a new angle on the same situation.";
   return `You are ${persona}, mid-task. Below is a work situation named by an id from a study of engineering practice:
 
 <id>${id}</id>
@@ -96,7 +104,10 @@ Reply with the sentence and nothing else.`;
 };
 
 const negativesAsk = (persona: string, retry: number): string => {
-  const again = retry === 0 ? "" : " Your previous line was rejected. Write a different sentence about a different ordinary task.";
+  const again =
+    retry === 0
+      ? ""
+      : " Your previous line was rejected. Write a different sentence about a different ordinary task.";
   return `You are ${persona}, at work. Write exactly one sentence a developer might say today about an ordinary, routine task — a chore about files, tooling or process, not a question about how to do something well.${again}
 
 Rules: plain everyday english, lower case like a chat message; 6 to 18 words; no lists, no markdown, no quotation marks, no trailing period; never use the words skill, principle, agent, router.
@@ -194,17 +205,19 @@ try {
     definitions.map((one) => [one.id as string, one.description ?? ""]),
   );
 
-  const targets = (ONLY.length > 0 ? leaves().filter((id) => ONLY.includes(id)) : leaves()).toSorted();
+  const targets = (
+    ONLY.length > 0 ? leaves().filter((id) => ONLY.includes(id)) : leaves()
+  ).toSorted();
   const shown = LIMIT > 0 ? targets.slice(0, LIMIT) : targets;
   const negatives = Array.from({ length: NEGATIVES }, (_, index) => `neg-${index}`);
-  say(`${shown.length} leaves, ${negatives.length} negatives, model pinned, concurrency ${CONCURRENCY}`);
+  say(
+    `${shown.length} leaves, ${negatives.length} negatives, model pinned, concurrency ${CONCURRENCY}`,
+  );
 
   const model = select(await client.models(), { variant: VARIANT }).models[0]!;
   say(`writer: ${ref(model)} (plugin absent, so the descriptions are not in its context)`);
 
-  const taken = new Set(
-    [...tuned, ...heldOut].map((row) => row.prompt.toLowerCase()),
-  );
+  const taken = new Set([...tuned, ...heldOut].map((row) => row.prompt.toLowerCase()));
 
   const rows: Record<string, string> = {};
   const failures: Array<{ id: string; why: string }> = [];
@@ -237,18 +250,17 @@ try {
   await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => worker(i)));
 
   if (halted !== undefined) throw new Error(`writer aborted: ${halted}`);
-  if (failures.length > 0)
-    for (const f of failures) say(`MISSING ${f.id}: ${f.why}`);
+  if (failures.length > 0) for (const f of failures) say(`MISSING ${f.id}: ${f.why}`);
 
   console.log(
     JSON.stringify(
       {
         model: ref(model),
         leaves: Object.fromEntries(
-        targets
-          .filter((id) => rows[id] !== undefined && (LIMIT <= 0 || shown.includes(id)))
-          .map((id) => [id, rows[id]!]),
-      ),
+          targets
+            .filter((id) => rows[id] !== undefined && (LIMIT <= 0 || shown.includes(id)))
+            .map((id) => [id, rows[id]!]),
+        ),
         negatives: negatives.flatMap((id) => (rows[id] === undefined ? [] : [rows[id]!])),
         failed: failures.map((f) => f.id),
       },

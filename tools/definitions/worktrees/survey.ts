@@ -5,18 +5,11 @@ import {
   count,
   dirtyOf,
   prFor,
+  type Tracked,
   trackedChanges,
   trackedOf,
-  type Tracked,
 } from "./classify";
-import {
-  answered,
-  git as run,
-  listed,
-  mainOf,
-  type PullRequest,
-  pullRequests,
-} from "./read";
+import { answered, listed, mainOf, type PullRequest, pullRequests, git as run } from "./read";
 
 export type Row = {
   readonly path: string;
@@ -35,8 +28,6 @@ export type Report = {
   readonly problems: ReadonlyArray<string>;
 };
 
-
-
 const kindOfPushed = (where: string): boolean | "unknown" => {
   if (where === "no-remote") return false;
   if (where === "unknown" || where === "detached") return "unknown";
@@ -45,7 +36,12 @@ const kindOfPushed = (where: string): boolean | "unknown" => {
 
 const remote = async (cwd: string, branch: string, head: string): Promise<string> => {
   if (branch === "") return "detached";
-  const exists = await run(cwd, ["show-ref", "--verify", "--quiet", `refs/remotes/origin/${branch}`]);
+  const exists = await run(cwd, [
+    "show-ref",
+    "--verify",
+    "--quiet",
+    `refs/remotes/origin/${branch}`,
+  ]);
   if (!exists.ran) return "unknown";
   if (exists.code !== 0) return "no-remote";
   const tip = await run(cwd, ["rev-parse", `origin/${branch}`]);
@@ -61,12 +57,20 @@ const remote = async (cwd: string, branch: string, head: string): Promise<string
  * reads `landed` while an N-into-1 squash reads `unlanded` — measured, not assumed.
  */
 const landing = async (main: string, branch: string, head: string) => {
-  const ancestor = await run(main, ["merge-base", "--is-ancestor", `${head}^{commit}`, "origin/main"]);
+  const ancestor = await run(main, [
+    "merge-base",
+    "--is-ancestor",
+    `${head}^{commit}`,
+    "origin/main",
+  ]);
   if (answered(ancestor)) return { merged: true, patches: "landed" } as const;
 
   const cherry = await run(main, ["cherry", "origin/main", branch]);
   if (!cherry.ran || cherry.code !== 0)
-    return { merged: ancestor.ran ? (false as const) : ("unknown" as const), patches: "unknown" } as const;
+    return {
+      merged: ancestor.ran ? (false as const) : ("unknown" as const),
+      patches: "unknown",
+    } as const;
   if (cherry.out === "") return { merged: false, patches: "landed" } as const;
   return { merged: false, patches: "unlanded" } as const;
 };
@@ -96,7 +100,9 @@ export const audit = async (directory: string): Promise<Report> => {
 
   const rest = listing.rows.filter((one) => one.bare !== true && one.branch !== "main");
 
-  const hasBase = answered(await run(directory, ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"]));
+  const hasBase = answered(
+    await run(directory, ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"]),
+  );
   if (!hasBase)
     problems.push(
       "origin/main is not fetched, so `merged` is false everywhere; fetch it before trusting `safe`",
@@ -131,7 +137,9 @@ export const audit = async (directory: string): Promise<Report> => {
       const spread = await landing(main, one.branch ?? "", head);
       const where = await remote(one.directory, one.branch ?? "", head);
 
-      const dirty: Tracked = answered(status) ? trackedOf(trackedChanges(status.out)) : { kind: "unknown" };
+      const dirty: Tracked = answered(status)
+        ? trackedOf(trackedChanges(status.out))
+        : { kind: "unknown" };
       const evidence = {
         dirty,
         merged: spread.merged,

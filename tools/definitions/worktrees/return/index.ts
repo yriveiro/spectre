@@ -1,8 +1,8 @@
 import type { Plugin } from "@opencode/plugin/effect";
-import { Tool } from "@opencode/schema/tool";
 import type { Session } from "@opencode/schema/session";
+import { Tool } from "@opencode/schema/tool";
 import { Effect } from "effect";
-import { home, say, type Standing } from "./home";
+import { home, type Standing, say } from "./home";
 import { ask } from "./standing";
 
 /**
@@ -40,9 +40,10 @@ export const update = (ctx: Plugin.Context) =>
         // at v2.1.1), so this callback has to be total: a prompt must not fail
         // because a rescue could not be measured.
         Effect.catchCause((cause) =>
-          Effect.logWarning("session return could not be measured", { sessionID: event.sessionID, cause }).pipe(
-            Effect.asVoid,
-          ),
+          Effect.logWarning("session return could not be measured", {
+            sessionID: event.sessionID,
+            cause,
+          }).pipe(Effect.asVoid),
         ),
       ),
     );
@@ -64,9 +65,10 @@ export const update = (ctx: Plugin.Context) =>
         // caller. Only a defect — a measurement that blew up — is swallowed, because a
         // defect must not become a rejected tool call the model cannot act on.
         Effect.catchDefect((defect) =>
-          Effect.logWarning("session return could not be measured", { sessionID: event.sessionID, defect }).pipe(
-            Effect.asVoid,
-          ),
+          Effect.logWarning("session return could not be measured", {
+            sessionID: event.sessionID,
+            defect,
+          }).pipe(Effect.asVoid),
         ),
       ),
     );

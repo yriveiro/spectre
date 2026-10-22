@@ -401,7 +401,7 @@ describe("with no dictionary configured", () => {
 
   test("the structural half runs with no dictionary at all", async () => {
     // The six structural rules need no word list. A caller with no `dictionary` in
-    // spectre.jsonc still gets them, which is the whole point of splitting them.
+    // spectre.json still gets them, which is the whole point of splitting them.
     const out = await call({ targets: ["skills/definitions/grammar/SKILL.md"] });
     expect(out.findings.length).toBeGreaterThan(0);
     expect(out.rulings).toEqual([]);

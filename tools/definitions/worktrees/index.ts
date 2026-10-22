@@ -264,7 +264,9 @@ const runStart = (ctx: Plugin.Context) =>
 
     const directory = made.success.directory;
     const attached = yield* Effect.promise(() =>
-      state.kind === "existing" ? takeBranch(directory, branch) : attachBranch(directory, branch, cut),
+      state.kind === "existing"
+        ? takeBranch(directory, branch)
+        : attachBranch(directory, branch, cut),
     );
     if (!attached.ran || attached.code !== 0)
       return {

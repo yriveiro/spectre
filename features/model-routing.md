@@ -1,7 +1,10 @@
-# Model routing (`spectre.jsonc`)
+# Model routing (`spectre.json`)
 
 Status: built. The tool is `tools/definitions/routing/`. `model-router` is the
-skill that calls it.
+skill that calls it. The config is JSON. The canonical name is `spectre.json`,
+and `spectre.jsonc` still reads. A profile states an effort, and the resolver
+picks the model. The effort rule and the resolver live in
+[routing.md](./routing.md) and are not repeated here.
 
 ## Goal
 
@@ -67,35 +70,38 @@ read at the tag. The appendix cites each one.
   with `onExcessProperty: "error"`, an unrecognised key is rejected and named.
 
 What is left for spectre is the policy OpenCode has no opinion about: **which
-models this user allows themselves to spend**, and **a name for a choice, with a
-reason attached**.
+models this user allows themselves to spend**, and **a requirement for each
+choice, with a reason attached**.
 
 ## Config surface
 
 Two keys. Neither builds an agent. This is spectre's own config and it is not
 OpenCode's: `opencode.jsonc` only loads the plugin.
 
-- **`models`.** The spend whitelist. A name, and the ref to spend. Every model
-  string the router may emit is one of these.
-- **`profiles`.** The router's vocabulary. A name, the model or ordered models it
-  resolves to, and the reason, so a choice is legible rather than arbitrary.
+- **`models`.** The spend whitelist. An alias, and the ref to spend. Every model
+  string the resolver may emit is one of these. The order is the preference
+  order: the first entry that fits is the one that is spent.
+- **`profiles`.** The router's vocabulary. A name, the effort it asks for, the
+  moment it serves, and the reason, so a choice is legible rather than
+  arbitrary.
 
 ```jsonc
 {
   "models": {
-    "mechanical": "opencode/mimo-v2.6-flash-free",
-    "standard":   "opencode-go/muse-spark-1.3-contributor#high",
-    "deep":       "opencode-go/kimi-k3#max"
+    "muse":    "opencode-go/muse-spark-1.3-contributor",
+    "minimax": "opencode-go/minimax-m3.1-flash-free"
   },
 
   "profiles": {
-    "explorer": {
-      "model": "mechanical",
-      "why": "One named file, or a command to run. No real thinking needed."
+    "search": {
+      "effort": "medium",
+      "match": "Find where something lives: grep, read, name the call sites.",
+      "why": "A missed symbol costs a second pass, so it runs above the floor."
     },
-    "refactor": {
-      "model": ["deep", "standard"],
-      "why": "Several symbols, or a whole subsystem. Read the blast radius first."
+    "deep": {
+      "effort": "max",
+      "match": "One hard problem with one right answer and no diff to read it from.",
+      "why": "Correctness over polish. A second family checks the answer."
     }
   }
 }
@@ -114,9 +120,12 @@ and its own feature file. Routing does not know it exists.
 
 | Key | Rule |
 | --- | ---- |
-| `models[*]` | `"providerID/modelID"` or `"providerID/modelID#variant"`. Must resolve in the catalogue. |
-| `profiles[*].model` | Required. A key in `models`, or a list of them in order of preference. |
-| `profiles[*].why` | Required. One line saying when this choice fits. The router matches the task against it. |
+| `models[*]` | `"providerID/modelID"`, with an optional `#variant` pin. Must resolve in the catalogue. A pinned variant is then the only rung the model is asked for. |
+| `profiles[*].effort` | The thinking the task needs. A name from the catalogue, not a closed set. |
+| `profiles[*].model` | Optional. A pin. It wins over `effort`. |
+| `profiles[*].match` | The routing surface: the moment, with the nouns a prompt would carry, and one exclusion. |
+| `profiles[*].crosscheck` | Optional. The second opinion, stated as a requirement rather than a model. |
+| `profiles[*].why` | One line saying when this choice fits, for the human. The resolver never reads it. |
 | `profiles[*].agent` | Optional. Must be a spectre agent. Defaults to `spectre`. |
 | `$schema` | Accepted and ignored. There is no emitted JSON Schema artifact. |
 
@@ -150,8 +159,11 @@ other, rather than a line in a config file. That is the right way round.
 
 | File | Path | Role |
 | ---- | ---- | ---- |
-| Global | `~/.config/opencode/spectre.jsonc` | defaults, on every repo |
-| Project | `<repo>/spectre.jsonc` | changes for this repo only |
+| Global | `~/.config/opencode/spectre.json` | defaults, on every repo |
+| Project | `<repo>/spectre.json` | changes for this repo only |
+
+A `spectre.jsonc` in either place still reads, so an existing setup keeps
+working. The writer only ever writes `spectre.json`.
 
 - **A later entry replaces the earlier one whole.** Not field by field. A project
   that wants a different `why` writes the whole profile. There is no patch type,
@@ -169,7 +181,8 @@ The global directory follows OpenCode's own precedence, so a user already pointi
 
 ### Reading it
 
-JSONC, comments allowed. Comments earn their keep in a file whose job is to be
+The file is JSON. The reader tolerates comments, and the writer never writes
+one. Comments earn their keep in a file whose job is to be
 read by a person deciding what bills them, and a comment beside a model ref is the
 cheapest documentation available.
 
@@ -199,14 +212,18 @@ name the key that is wrong. A config problem is an answer the router reads, not 
 failure that stops a session: a typo in a repo you are not routing in has no
 business breaking the plugin.
 
-1. Every `models[*]` parses as a ref, names a model in `ctx.model.list()`, and
-   carries a variant that model actually has. A miss is reported against the
+1. Every `models[*]` parses as a ref and names a model in `ctx.model.list()`.
+   A pinned variant must be one the model actually has. A miss is reported
+   against the
    **allowlist**, not the catalogue: the message names the models this user
    allowed and the ref each one points at. Never the models the provider offers.
    A real installation has a couple of hundred of those, a wall of text is not a
    list a human reads, and every name in it is a model the user did not agree to
    spend on.
-2. Every `profiles[*].model` names a key in `models`.
+2. Every `profiles[*].model` pin names a key in `models`.
+3. Every `profiles[*].effort` names an effort the catalogue holds. An effort
+   no allowed model reaches is a problem, and it reports capacity instead of
+   silence: which models the resolver tried and how far each one reaches.
 
 That is the whole list. It is short because the config is small, and it was longer
 before: an agent-name check and a `requires` capability check were both cut. The
@@ -233,27 +250,29 @@ therefore pass the check and still fail at generate time on an auth error.
 Two pieces, and neither one moves a model.
 
 **A tool**, `tools.spectre.routing`. It reads the config, merges, checks, and
-returns the strings. That is the whole mechanism: OpenCode already takes a `model`
-per `subagent` call, so this answers the only two questions a model cannot answer
-for itself: which strings are real, and which one fits the task.
+resolves each profile to a model string. That is the whole mechanism: OpenCode
+already takes a `model` per `subagent` call, so this answers the only two
+questions a model cannot answer for itself: which strings are real, and which
+one fits the task.
 
 **A skill**, `model-router`. Four steps, in this order:
 
 1. **Evaluate** the task: what it asks for, how much reading it needs, and what a
    wrong answer would cost. Stated in a line, before any model is looked at.
 2. **Ask** the tool what is allowed.
-3. **Choose** a profile whose `why` matches that evaluation, and one of its `models`.
+3. **Choose** a profile whose `match` names that moment. The tool returns the
+   string to spend.
 4. **Spawn** one `subagent` with that string, and say the choice in one line.
 
 The tool is read per call rather than baked into the skill at startup, so a config
 edited mid-session routes on the edit without a reload.
 
-**`why` is what step 3 reads.** It is the only description of when a profile fits, so
-the skill matches the task against it rather than against a table of signals frozen
-into the skill. There is deliberately no such table: a fixed list cannot know about a
-profile the user added yesterday, and it goes stale silently. The cost of dropping it
-is that the picking rests on the model's own reading of the task, which is the open
-question below.
+**`match` is what step 3 reads.** It is the only description of the moment a
+profile serves. The skill matches the task against it rather than against a
+table of signals frozen into the skill. There is deliberately no such table: a
+fixed list cannot know about a profile the user added yesterday, and it goes
+stale silently. The cost of dropping it is that the picking rests on the
+model's own reading of the task, which is the open question below.
 
 Asking a model how *hard* a task is does not work. Models guess about as well as a
 coin, and they guess toward the answer that sounds best. Asking what the task *is* is
@@ -274,22 +293,22 @@ turns out to be one.
 
 **The model string is a whitelist, not a guess.** The skill carries the exact
 strings the check produced, so it picks a *name* from the config and emits the
-string that name maps to. It never assembles an ID. This is why the config holds
-model refs rather than a difficulty score.
+string that name maps to. It never assembles an ID. The profile states the
+effort, and the resolver turns that effort into a string.
 
-**The allowlist is the whole vocabulary.** The models in `spectre.jsonc` are what
+**The allowlist is the whole vocabulary.** The models in `spectre.json` are what
 this user allows themselves to spend, and that list is usually far shorter than
 what the provider offers. The tool never widens it, and a model outside it is not
 spendable on a spectre subagent however well it fits. When nothing in the list
 fits, the skill says so and asks rather than reaching outside.
 
-**A profile may name several models, in order of preference.** Take the first that
+**A pin may name several models, in order of preference.** Take the first that
 fits, and go to a later one only when the task is plainly harder, saying that is
 what happened. The order is a preference order, not a menu to maximise from:
 taking the last entry every time spends money the user said not to spend and makes
 the earlier entries pointless.
 
-**Open:** is matching `why` against the task worth more than always taking the first
+**Open:** is matching `match` against the task worth more than always taking the first
 profile and escalating only when something looks hard? A router that is often wrong is
 worse than no router. Testable: run the same task twice and see whether the pick is
 stable.
@@ -380,7 +399,7 @@ anything in this file. The rule for reading the source is in `AGENTS.md`.
 
 A plugin has **no** `ctx.config`. The config plugins in `packages/core/src/config/plugin/`
 are built in and there is no surface for a third party to add config keys, which is
-why `spectre.jsonc` is read by hand and `opencode.jsonc` is left alone.
+why `spectre.json` is read by hand and `opencode.jsonc` is left alone.
 
 Probed at runtime on Bun 1.4.2 and on the pinned `effect@4.0.0-rc.112`:
 `Bun.JSONC.parse` as described under "Reading it"; `Schema.decodeUnknownSync` with

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Effect, Exit } from "effect";
 import { AbsolutePath } from "@opencode/schema/schema";
+import { Cause, Effect, Exit } from "effect";
+import { type Edge, ledger, live } from "../../tools/definitions/brain/ledger";
 import { useTempDirs } from "../fixture";
-import { ledger, live, type Edge } from "../../tools/definitions/brain/ledger";
 
 const temp = useTempDirs("brain");
 
@@ -221,9 +221,7 @@ describe("mint", () => {
     const text = await Bun.file(claim.path).text();
     expect(text).toContain("kind: gotcha");
     expect(text).toContain("subject:\n  - tools/definitions/canvas/store.ts");
-    expect(text).toContain(
-      'claim: "A canvas is never overwritten: save allocates the directory"',
-    );
+    expect(text).toContain('claim: "A canvas is never overwritten: save allocates the directory"');
     expect(text.endsWith("\n")).toBe(true);
     expect(/[ \t]+$/m.test(text)).toBe(false);
   });

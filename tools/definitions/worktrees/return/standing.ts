@@ -3,8 +3,8 @@ import type { Plugin } from "@opencode/plugin/effect";
 import { AbsolutePath } from "@opencode/schema/schema";
 import type { Session } from "@opencode/schema/session";
 import { Effect } from "effect";
-import { prFor, type PullRequest, type Tracked, trackedChanges, trackedOf } from "../classify";
-import { answered, git as run, listed, mainOf, pullRequests } from "../read";
+import { type PullRequest, prFor, type Tracked, trackedChanges, trackedOf } from "../classify";
+import { answered, listed, mainOf, pullRequests, git as run } from "../read";
 import type { Branch, Landing, Standing } from "./home";
 
 /**
@@ -40,7 +40,10 @@ const nameOf = async (
   const guess = basename(lost);
   const ref = await run(main, ["show-ref", "--verify", "--quiet", `refs/heads/${guess}`]);
   if (answered(ref)) return { kind: "recovered-from-path", name: guess };
-  return { kind: "unrecoverable", why: `git lists no row for ${lost} and has no branch named ${guess}` };
+  return {
+    kind: "unrecoverable",
+    why: `git lists no row for ${lost} and has no branch named ${guess}`,
+  };
 };
 
 /**
@@ -54,7 +57,12 @@ const landed = async (
 ): Promise<Landing> => {
   if (branch.kind === "unrecoverable") return { kind: "unknown", why: branch.why };
 
-  const ancestor = await run(main, ["merge-base", "--is-ancestor", `${branch.name}^{commit}`, "origin/main"]);
+  const ancestor = await run(main, [
+    "merge-base",
+    "--is-ancestor",
+    `${branch.name}^{commit}`,
+    "origin/main",
+  ]);
   if (answered(ancestor)) return { kind: "on-main", by: "ancestor" };
   if (prFor(branch.name, prs).includes("MERGED")) return { kind: "on-main", by: "merged-pr" };
 
@@ -63,10 +71,9 @@ const landed = async (
     return { kind: "unknown", why: `git could not compare ${branch.name} with origin/main` };
 
   const since = count(ahead.out);
-  if (since === undefined) return { kind: "unknown", why: `git returned no count for ${branch.name}` };
-  return since > 0
-    ? { kind: "not-on-main", since }
-    : { kind: "on-main", by: "ancestor" };
+  if (since === undefined)
+    return { kind: "unknown", why: `git returned no count for ${branch.name}` };
+  return since > 0 ? { kind: "not-on-main", since } : { kind: "on-main", by: "ancestor" };
 };
 
 const nothing = (session: Session.ID, lost: AbsolutePath, why: string): Standing => ({

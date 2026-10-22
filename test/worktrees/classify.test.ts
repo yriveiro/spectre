@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 import {
   bucket,
   count,
-  type Evidence,
-  dirtyOf,
   dirtyLabel,
-  prFor,
+  dirtyOf,
+  type Evidence,
   type PullRequest,
+  prFor,
   trackedChanges,
 } from "../../tools/definitions/worktrees/classify";
 
@@ -31,7 +31,9 @@ describe("what outranks what", () => {
   });
 
   test("squash evidence counts as landed on its own, since ancestry cannot see it", () => {
-    expect(bucket({ dirty: { kind: "clean" }, merged: false, patches: "landed", pushed: true })).toBe("safe");
+    expect(
+      bucket({ dirty: { kind: "clean" }, merged: false, patches: "landed", pushed: true }),
+    ).toBe("safe");
   });
 
   test("untracked files are not WIP, and do not hold a landed branch", () => {
@@ -41,14 +43,16 @@ describe("what outranks what", () => {
 
 describe("what the absence of a copy is worth", () => {
   test("a branch git hosts nowhere is held, not merely reviewed", () => {
-    expect(bucket({ dirty: { kind: "clean" }, merged: false, patches: "unlanded", pushed: false })).toBe(
-      "hold-unpushed",
-    );
+    expect(
+      bucket({ dirty: { kind: "clean" }, merged: false, patches: "unlanded", pushed: false }),
+    ).toBe("hold-unpushed");
   });
 
   test("a pushed branch that did not land is review, never safe", () => {
     // It may carry an open pull request, which git cannot see.
-    expect(bucket({ dirty: { kind: "clean" }, merged: false, patches: "unlanded", pushed: true })).toBe("review");
+    expect(
+      bucket({ dirty: { kind: "clean" }, merged: false, patches: "unlanded", pushed: true }),
+    ).toBe("review");
   });
 });
 
@@ -56,14 +60,23 @@ describe("a read that failed is not the reassuring answer", () => {
   test("an unknown dirty never reaches safe", () => {
     // `clean` is what the delete decision reads as a licence, so a failed status
     // must not become it.
-    expect(bucket({ dirty: { kind: "unknown" }, merged: false, patches: "unlanded", pushed: true })).toBe("review");
-    expect(bucket({ dirty: { kind: "unknown" }, merged: "unknown", patches: "unknown", pushed: "unknown" })).toBe(
-      "review",
-    );
+    expect(
+      bucket({ dirty: { kind: "unknown" }, merged: false, patches: "unlanded", pushed: true }),
+    ).toBe("review");
+    expect(
+      bucket({
+        dirty: { kind: "unknown" },
+        merged: "unknown",
+        patches: "unknown",
+        pushed: "unknown",
+      }),
+    ).toBe("review");
   });
 
   test("unknown base with no other proof is review, not safe", () => {
-    expect(bucket({ dirty: { kind: "clean" }, merged: "unknown", patches: "unknown", pushed: true })).toBe("review");
+    expect(
+      bucket({ dirty: { kind: "clean" }, merged: "unknown", patches: "unknown", pushed: true }),
+    ).toBe("review");
   });
 });
 
@@ -128,6 +141,8 @@ describe("prFor", () => {
   });
 
   test("two finished requests answer with either", () => {
-    expect(["#12/CLOSED", "#9/CLOSED"]).toContain(prFor("feat", [pr(12, "CLOSED", "feat"), pr(9, "CLOSED", "feat")]));
+    expect(["#12/CLOSED", "#9/CLOSED"]).toContain(
+      prFor("feat", [pr(12, "CLOSED", "feat"), pr(9, "CLOSED", "feat")]),
+    );
   });
 });

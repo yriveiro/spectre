@@ -5,7 +5,12 @@
 import { describe, expect, test } from "bun:test";
 import { AbsolutePath } from "@opencode/schema/schema";
 import type { Session } from "@opencode/schema/session";
-import { type Return, type Standing, home, say } from "../../tools/definitions/worktrees/return/home";
+import {
+  home,
+  type Return,
+  type Standing,
+  say,
+} from "../../tools/definitions/worktrees/return/home";
 
 const SESSION = "ses_test" as Session.ID;
 const LOST = AbsolutePath.make("/Users/x/dev/spectre-worktrees/fix-login");
@@ -81,7 +86,9 @@ describe("moving home, caught short", () => {
   });
 
   test("a dirty main is named with its tracked-change count and updating is left to the caller", () => {
-    const s = standing({ main: { kind: "found", directory: MAIN, dirty: { kind: "wip", count: 2 } } });
+    const s = standing({
+      main: { kind: "found", directory: MAIN, dirty: { kind: "wip", count: 2 } },
+    });
     const line = say(s);
     expect(line).toContain("main has 2 tracked changes");
     expect(line).toContain("Updating main is your call");
@@ -96,9 +103,7 @@ describe("moving home, caught short", () => {
     // `behind: undefined` means the ref is unknown, a different fact from 0, and the
     // sentence must not invent a number for it.
     expect(say(standing({ behind: undefined }))).not.toContain("commits behind");
-    expect(say(standing({ behind: 3 }))).toContain(
-      "main is 3 commits behind origin/main",
-    );
+    expect(say(standing({ behind: 3 }))).toContain("main is 3 commits behind origin/main");
   });
 
   test("unprovable landing is stated as unprovable, with the reason", () => {

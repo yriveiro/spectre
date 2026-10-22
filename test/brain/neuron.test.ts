@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Effect, Exit } from "effect";
 import { AbsolutePath } from "@opencode/schema/schema";
-import { parse, render, type Claim } from "../../tools/definitions/brain/neuron";
+import { Cause, Effect, Exit } from "effect";
+import { type Claim, parse, render } from "../../tools/definitions/brain/neuron";
 
 const run = <A>(effect: Effect.Effect<A, Error>): Promise<A> => Effect.runPromise(effect);
 
@@ -78,7 +78,7 @@ describe("parse", () => {
   });
 
   test("a note with no body parses", async () => {
-    const bodyless = "---\nid: \"x\"\nkind: \"lesson\"\nclaim: \"c\"\n---\n";
+    const bodyless = '---\nid: "x"\nkind: "lesson"\nclaim: "c"\n---\n';
     expect(await run(parse(bodyless, NOTE))).toEqual({
       id: "x",
       kind: "lesson",

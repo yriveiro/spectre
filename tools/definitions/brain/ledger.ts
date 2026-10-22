@@ -1,8 +1,8 @@
-import { basename, join } from "node:path";
 import { rename } from "node:fs/promises";
-import { Cause, Effect, Exit } from "effect";
+import { basename, join } from "node:path";
 import { AbsolutePath } from "@opencode/schema/schema";
-import { parse, render, type Claim } from "./neuron";
+import { Cause, Effect, Exit } from "effect";
+import { type Claim, parse, render } from "./neuron";
 
 export type Edge = {
   readonly kind: "relates" | "supersedes" | "contradicts" | "derived-from" | "demoted";
@@ -115,7 +115,9 @@ export const ledger = (project: AbsolutePath) => {
         try {
           await rename(tmp, path);
         } catch (cause) {
-          await Bun.file(tmp).unlink().catch(() => undefined);
+          await Bun.file(tmp)
+            .unlink()
+            .catch(() => undefined);
           throw cause;
         }
       },
@@ -198,9 +200,7 @@ export const ledger = (project: AbsolutePath) => {
       }
 
       return {
-        claims: claims.toSorted((one, two) =>
-          one.id < two.id ? -1 : one.id > two.id ? 1 : 0,
-        ),
+        claims: claims.toSorted((one, two) => (one.id < two.id ? -1 : one.id > two.id ? 1 : 0)),
         edges: live(edges),
         problems,
       };

@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
 import { join } from "node:path";
+import { Effect } from "effect";
 import { DESCRIPTION } from "../../tools/definitions/brain";
 import { attach, COLD } from "../../tools/definitions/brain/inject";
 
@@ -16,7 +16,10 @@ type Captured = (event: {
   messages: Array<{ role: string; content: Array<{ type: string; text?: string }> }>;
 }) => Effect.Effect<void>;
 
-const setup = async (tag: string, parentID?: string): Promise<{ dir: string; handler: Captured }> => {
+const setup = async (
+  tag: string,
+  parentID?: string,
+): Promise<{ dir: string; handler: Captured }> => {
   const dir = `${TMP}/spectre-brain-${process.pid}-${seq++}`;
   roots.push(dir);
   await Bun.write(`${dir}/.keep`, "");
@@ -50,7 +53,11 @@ const seed = async (dir: string, count: number): Promise<void> => {
     const id = `01K${String(i).padStart(24, "0")}`;
     await Bun.write(
       join(dir, ".spectre", "brain", "neurons", `${id}.md`),
-      neuron(id, i % 2 === 0 ? "gotcha" : "feature", `Claim number ${i} about canvases never being overwritten at all`),
+      neuron(
+        id,
+        i % 2 === 0 ? "gotcha" : "feature",
+        `Claim number ${i} about canvases never being overwritten at all`,
+      ),
     );
   }
 };

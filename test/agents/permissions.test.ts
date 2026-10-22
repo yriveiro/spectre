@@ -64,9 +64,11 @@ describe("data root permissions", () => {
     // The matcher takes the last rule that matches, so an allow before the deny
     // would be dead. Order is the whole mechanism, not a formatting detail.
     for (const id of agentIds)
-      expect((agents.get(id)?.permissions ?? []).some((rule) => rule.resource === BRAIN && rule.effect === "allow")).toBe(
-        id === "mnemonic",
-      );
+      expect(
+        (agents.get(id)?.permissions ?? []).some(
+          (rule) => rule.resource === BRAIN && rule.effect === "allow",
+        ),
+      ).toBe(id === "mnemonic");
   });
 
   test("the brain glob is project-relative, because a project file's resource is too", async () => {

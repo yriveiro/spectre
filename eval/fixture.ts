@@ -299,17 +299,20 @@ export const tuned: ReadonlyArray<Row> = [
     provenance: "judged",
   },
   {
-    prompt: "i am about to add a new mode to this parser, there is dead code around it, do i clear it first",
+    prompt:
+      "i am about to add a new mode to this parser, there is dead code around it, do i clear it first",
     label: "principle-subtract-before-you-add",
     provenance: "judged",
   },
   {
-    prompt: "i am extending this module, there is an unused flag and a wrapper that only forwards, do i remove them first",
+    prompt:
+      "i am extending this module, there is an unused flag and a wrapper that only forwards, do i remove them first",
     label: "principle-subtract-before-you-add",
     provenance: "judged",
   },
   {
-    prompt: "this class has options nobody passes and i am about to add one more, do i clear the old ones first",
+    prompt:
+      "this class has options nobody passes and i am about to add one more, do i clear the old ones first",
     label: "principle-subtract-before-you-add",
     provenance: "judged",
   },
@@ -419,7 +422,8 @@ export const tuned: ReadonlyArray<Row> = [
     provenance: "judged",
   },
   {
-    prompt: "what do we already know about this project, is there a decision about the retry policy",
+    prompt:
+      "what do we already know about this project, is there a decision about the retry policy",
     label: "playbook-brain",
     provenance: "judged",
   },
@@ -524,7 +528,8 @@ export const tuned: ReadonlyArray<Row> = [
     provenance: "judged",
   },
   {
-    prompt: "how long should it take a new reader to find where a value comes from and what can change it",
+    prompt:
+      "how long should it take a new reader to find where a value comes from and what can change it",
     label: "principle-minimize-reader-load",
     provenance: "judged",
   },
@@ -539,7 +544,8 @@ export const tuned: ReadonlyArray<Row> = [
     provenance: "judged",
   },
   {
-    prompt: "every new hire needs the same guidance from me about the setup, there has to be a better way",
+    prompt:
+      "every new hire needs the same guidance from me about the setup, there has to be a better way",
     label: "principle-encode-lessons-in-structure",
     provenance: "judged",
   },
@@ -549,12 +555,14 @@ export const tuned: ReadonlyArray<Row> = [
     provenance: "judged",
   },
   {
-    prompt: "i wrote the same review comment on three different changes, it should not depend on me noticing",
+    prompt:
+      "i wrote the same review comment on three different changes, it should not depend on me noticing",
     label: "principle-encode-lessons-in-structure",
     provenance: "judged",
   },
   {
-    prompt: "we have never built anything like this and a wrong choice would be expensive to undo, should we try two ways",
+    prompt:
+      "we have never built anything like this and a wrong choice would be expensive to undo, should we try two ways",
     label: "principle-exhaust-the-design-space",
     provenance: "judged",
   },
@@ -574,22 +582,26 @@ export const tuned: ReadonlyArray<Row> = [
     provenance: "judged",
   },
   {
-    prompt: "one part of the app feels slow and the rest is fine, should we fix the whole surface or only where people actually use it",
+    prompt:
+      "one part of the app feels slow and the rest is fine, should we fix the whole surface or only where people actually use it",
     label: "principle-experience-first",
     provenance: "judged",
   },
   {
-    prompt: "the team wants one more feature this quarter but the people using the app would not notice it, what should we ship",
+    prompt:
+      "the team wants one more feature this quarter but the people using the app would not notice it, what should we ship",
     label: "principle-experience-first",
     provenance: "judged",
   },
   {
-    prompt: "everything later depends on this first part, what should we settle now while it is still cheap to change",
+    prompt:
+      "everything later depends on this first part, what should we settle now while it is still cheap to change",
     label: "principle-foundational-thinking",
     provenance: "judged",
   },
   {
-    prompt: "the seams between the modules are not decided, we should pick them before any of the code exists",
+    prompt:
+      "the seams between the modules are not decided, we should pick them before any of the code exists",
     label: "principle-foundational-thinking",
     provenance: "judged",
   },
@@ -639,12 +651,14 @@ export const tuned: ReadonlyArray<Row> = [
     provenance: "judged",
   },
   {
-    prompt: "describing this change as the old design with one more case feels wrong, what should we do",
+    prompt:
+      "describing this change as the old design with one more case feels wrong, what should we do",
     label: "principle-redesign-from-first-principles",
     provenance: "judged",
   },
   {
-    prompt: "the work takes five commits and nobody can say what the end state looks like, what should we write down",
+    prompt:
+      "the work takes five commits and nobody can say what the end state looks like, what should we write down",
     label: "principle-outcome-oriented-execution",
     provenance: "judged",
   },
@@ -654,7 +668,8 @@ export const tuned: ReadonlyArray<Row> = [
     provenance: "judged",
   },
   {
-    prompt: "the last commit went in but the plan never said what finished looks like, how do we check",
+    prompt:
+      "the last commit went in but the plan never said what finished looks like, how do we check",
     label: "principle-outcome-oriented-execution",
     provenance: "judged",
   },
@@ -805,46 +820,198 @@ export const blind: ReadonlyArray<Row> = [
   // those leaves carry no row this batch and the instrument stays clean. A row
   // whose label the writer invented is noise in the denominator, not a miss.
   // The previous batch is in git history at 2560d8d.
-  { prompt: "leftover console.log statements are still sitting in the checkout flow PR", label: "code-hygiene", provenance: "judged" },
-  { prompt: "i keep retyping the same deploy check across three repos, so i'm finally pulling it into one shared script", label: "principle-build-the-lever", provenance: "judged" },
-  { prompt: "wait, who actually asked for a new date picker, the ticket only says the dropdown closes early on safari", label: "principle-attack-the-premise", provenance: "judged" },
-  { prompt: "the new dropdown component is pulling in a dozen imports from the old form lib and i keep editing files i don't own", label: "principle-boundary-discipline", provenance: "judged" },
-  { prompt: "the nightshift cron job keeps breaking when i touch the schema, so im writing it down in the repo notes instead of my head", label: "principle-encode-lessons-in-structure", provenance: "judged" },
-  { prompt: "i'm still poking at three ways to shard the events table before i commit to one", label: "principle-exhaust-the-design-space", provenance: "judged" },
-  { prompt: "the checkout api keeps 500ing on expired carts so we're tracing the cart schema instead of patching the endpoint again", label: "principle-fix-root-causes", provenance: "judged" },
-  { prompt: "the orders table keeps changing shape underneath us so i keep rewriting the same etl step before i touch anything downstream", label: "principle-foundational-thinking", provenance: "judged" },
-  { prompt: "the design system index is eating my context and i still need to finish the prop table for the button component", label: "principle-guard-the-context-window", provenance: "judged" },
-  { prompt: "the billing service still has that stale feature flag from the spring release and nobody has cleaned it out yet", label: "principle-hygiene", provenance: "judged" },
-  { prompt: "i'm not adding the retry and backoff logic to the ingest worker until we actually see failed rows in prod", label: "principle-laziness-protocol", provenance: "judged" },
-  { prompt: "the stripe webhook retry is charging customers twice again, so i need the payments endpoint to ignore duplicate event ids", label: "principle-make-operations-idempotent", provenance: "judged" },
-  { prompt: "our tabs component still accepts both null and undefined for hidden panels so the type union never catches the duplicates", label: "principle-make-states-unrepresentable", provenance: "judged" },
-  { prompt: "every service still on the old v1 payments schema, so i'm migrating callers first before deleting the legacy endpoint", label: "principle-migrate-callers-then-delete-legacy-apis", provenance: "judged" },
-  { prompt: "i keep rereading the same three api docs to figure out where the checkout page actually pulls its pricing from", label: "principle-minimize-reader-load", provenance: "judged" },
-  { prompt: "i keep adding one-off fields to the orders table instead of modelling the domain properly", label: "principle-model-the-domain", provenance: "judged" },
-  { prompt: "the airflow dag keeps failing on the staging cluster but i still can't tell if the new schema actually works end to end", label: "principle-prove-it-works", provenance: "judged" },
-  { prompt: "the payments service schema is wrong at the root, so i'm throwing out the old tables and rebuilding the model from scratch", label: "principle-redesign-from-first-principles", provenance: "judged" },
-  { prompt: "the events table is still shared while the export job serializes it, so i'm splitting the state out before the nightly sync runs", label: "principle-separate-before-serializing-shared-state", provenance: "judged" },
-  { prompt: "the design system PR is 900 lines, so im cutting it into a stack of small PRs each with its own passing test suite", label: "principle-sequence-verifiable-units", provenance: "judged" },
-  { prompt: "the payments schema keeps growing every week and nobody wants to drop anything, can we look at what we can remove", label: "principle-subtract-before-you-add", provenance: "judged" },
-  { prompt: "im writing a test for the billing sync job and i keep stubbing the kafka producer, is that testing the wrong thing", label: "principle-test-behavior-not-implementation", provenance: "judged" },
-  { prompt: "the checkout api returns 200 with an empty body so i'm adding a test that asserts the actual field before we ship it", label: "principle-test-for-truth", provenance: "judged" },
-  { prompt: "the billing service payloads are still untyped and i keep discovering new field names at runtime", label: "principle-type-system-discipline", provenance: "judged" },
-  { prompt: "before i land the dialog rewrite let me check the focus-trap claim against what the dom actually does in the a11y test suite", label: "principle-verification", provenance: "judged" },
+  {
+    prompt: "leftover console.log statements are still sitting in the checkout flow PR",
+    label: "code-hygiene",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "i keep retyping the same deploy check across three repos, so i'm finally pulling it into one shared script",
+    label: "principle-build-the-lever",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "wait, who actually asked for a new date picker, the ticket only says the dropdown closes early on safari",
+    label: "principle-attack-the-premise",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the new dropdown component is pulling in a dozen imports from the old form lib and i keep editing files i don't own",
+    label: "principle-boundary-discipline",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the nightshift cron job keeps breaking when i touch the schema, so im writing it down in the repo notes instead of my head",
+    label: "principle-encode-lessons-in-structure",
+    provenance: "judged",
+  },
+  {
+    prompt: "i'm still poking at three ways to shard the events table before i commit to one",
+    label: "principle-exhaust-the-design-space",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the checkout api keeps 500ing on expired carts so we're tracing the cart schema instead of patching the endpoint again",
+    label: "principle-fix-root-causes",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the orders table keeps changing shape underneath us so i keep rewriting the same etl step before i touch anything downstream",
+    label: "principle-foundational-thinking",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the design system index is eating my context and i still need to finish the prop table for the button component",
+    label: "principle-guard-the-context-window",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the billing service still has that stale feature flag from the spring release and nobody has cleaned it out yet",
+    label: "principle-hygiene",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "i'm not adding the retry and backoff logic to the ingest worker until we actually see failed rows in prod",
+    label: "principle-laziness-protocol",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the stripe webhook retry is charging customers twice again, so i need the payments endpoint to ignore duplicate event ids",
+    label: "principle-make-operations-idempotent",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "our tabs component still accepts both null and undefined for hidden panels so the type union never catches the duplicates",
+    label: "principle-make-states-unrepresentable",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "every service still on the old v1 payments schema, so i'm migrating callers first before deleting the legacy endpoint",
+    label: "principle-migrate-callers-then-delete-legacy-apis",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "i keep rereading the same three api docs to figure out where the checkout page actually pulls its pricing from",
+    label: "principle-minimize-reader-load",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "i keep adding one-off fields to the orders table instead of modelling the domain properly",
+    label: "principle-model-the-domain",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the airflow dag keeps failing on the staging cluster but i still can't tell if the new schema actually works end to end",
+    label: "principle-prove-it-works",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the payments service schema is wrong at the root, so i'm throwing out the old tables and rebuilding the model from scratch",
+    label: "principle-redesign-from-first-principles",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the events table is still shared while the export job serializes it, so i'm splitting the state out before the nightly sync runs",
+    label: "principle-separate-before-serializing-shared-state",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the design system PR is 900 lines, so im cutting it into a stack of small PRs each with its own passing test suite",
+    label: "principle-sequence-verifiable-units",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the payments schema keeps growing every week and nobody wants to drop anything, can we look at what we can remove",
+    label: "principle-subtract-before-you-add",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "im writing a test for the billing sync job and i keep stubbing the kafka producer, is that testing the wrong thing",
+    label: "principle-test-behavior-not-implementation",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the checkout api returns 200 with an empty body so i'm adding a test that asserts the actual field before we ship it",
+    label: "principle-test-for-truth",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the billing service payloads are still untyped and i keep discovering new field names at runtime",
+    label: "principle-type-system-discipline",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "before i land the dialog rewrite let me check the focus-trap claim against what the dom actually does in the a11y test suite",
+    label: "principle-verification",
+    provenance: "judged",
+  },
 
   // Leaves a blind writer cannot be trusted to instantiate from the id alone.
   // The moment lives in the description, which is exactly what the writer must
   // never see, so a fair row for these waits for a moment observed in real work.
-  { prompt: "i need to pull the diff on that pr into the canvas before the review lands on main", label: "pr-canvas", provenance: "judged" },
-  { prompt: "the checkout service keeps timing out so im swapping the postgres query for a cached lookup and seeing if the p95 improves", label: "playbook-hillclimb", provenance: "judged" },
+  {
+    prompt: "i need to pull the diff on that pr into the canvas before the review lands on main",
+    label: "pr-canvas",
+    provenance: "judged",
+  },
+  {
+    prompt:
+      "the checkout service keeps timing out so im swapping the postgres query for a cached lookup and seeing if the p95 improves",
+    label: "playbook-hillclimb",
+    provenance: "judged",
+  },
 
   // Ordinary work, written by the same blind writer under the same rules, that
   // must not pull a leaf. A router that fires on everything is as wrong as one
   // that fires on nothing.
-  { prompt: "i need to regenerate the type declarations before we cut the release", label: "none", provenance: "neg" },
-  { prompt: "i'm renaming the migration files to match the new timestamp convention", label: "none", provenance: "neg" },
-  { prompt: "i need to bump the peer dependency range in the component library package.json", label: "none", provenance: "neg" },
-  { prompt: "i need to rotate the expired service account key before the nightly job runs", label: "none", provenance: "neg" },
-  { prompt: "i need to bump the storybook version and rebuild the docs site before the release", label: "none", provenance: "neg" },
+  {
+    prompt: "i need to regenerate the type declarations before we cut the release",
+    label: "none",
+    provenance: "neg",
+  },
+  {
+    prompt: "i'm renaming the migration files to match the new timestamp convention",
+    label: "none",
+    provenance: "neg",
+  },
+  {
+    prompt: "i need to bump the peer dependency range in the component library package.json",
+    label: "none",
+    provenance: "neg",
+  },
+  {
+    prompt: "i need to rotate the expired service account key before the nightly job runs",
+    label: "none",
+    provenance: "neg",
+  },
+  {
+    prompt: "i need to bump the storybook version and rebuild the docs site before the release",
+    label: "none",
+    provenance: "neg",
+  },
 ];
 
 export const rows: ReadonlyArray<Row> = [...tuned, ...heldOut];

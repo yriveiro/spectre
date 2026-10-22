@@ -258,8 +258,8 @@ whether the tool is reachable at all.
 ## The dictionary export
 
 `tools.spectre.prose` reads the lexical half of ASD-STE100 from a JSON export the
-reader produced from their own copy of the specification. `spectre.jsonc` names the path
-under `dictionary`, and a relative one resolves against the config file that named it.
+reader produced from their own copy of the specification. `spectre.json` names the path
+under `dictionary` (`spectre.jsonc` still reads), and a relative one resolves against the config file that named it.
 
 The export is **not in this repository**. Issue 9, page 2 restricts reproduction of the
 dictionary to eight categories of organisation, and this project is in none of them. The

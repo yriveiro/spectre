@@ -1,6 +1,6 @@
 import { Effect } from "effect";
-import type { Claim } from "./neuron";
 import type { Edge } from "./ledger";
+import type { Claim } from "./neuron";
 
 export type Answer = {
   readonly claims: ReadonlyArray<Claim>;
@@ -37,10 +37,7 @@ const headline = (claim: Claim): string =>
 const costOf = (claim: Claim): number =>
   Math.max(1, Math.ceil(`${headline(claim)} ${claim.path}`.length / 4));
 
-const score = (
-  claims: ReadonlyArray<Claim>,
-  query: string,
-): ReadonlyMap<string, number> => {
+const score = (claims: ReadonlyArray<Claim>, query: string): ReadonlyMap<string, number> => {
   const terms = [...new Set(tokenize(query))];
   const docs = claims.map((claim) => ({ id: claim.id, tokens: tokenize(headline(claim)) }));
   const average =
@@ -80,9 +77,7 @@ export const recall = (input: {
   const known = (edge: Edge): boolean =>
     byId.has(edge.from) && (edge.to === null || byId.has(edge.to));
   const wellFormed = (edge: Edge): boolean =>
-    known(edge) &&
-    (edge.kind === "demoted" ? true : edge.to !== null) &&
-    edge.why.length > 0;
+    known(edge) && (edge.kind === "demoted" ? true : edge.to !== null) && edge.why.length > 0;
   const spreadable = input.edges.filter((edge) => wellFormed(edge) && SPREADABLE.has(edge.kind));
   for (const edge of input.edges) {
     if (wellFormed(edge)) continue;
@@ -134,9 +129,7 @@ export const recall = (input: {
       let inflow = 0;
       for (const other of neighbours.get(id) ?? []) {
         if (!within.has(other)) continue;
-        const degree = [...(neighbours.get(other) ?? [])].filter((end) =>
-          within.has(end),
-        ).length;
+        const degree = [...(neighbours.get(other) ?? [])].filter((end) => within.has(end)).length;
         if (degree > 0) inflow += (rank.get(other) ?? 0) / degree;
       }
       next.set(id, (1 - DAMPING) * (prior.get(id) ?? 0) + DAMPING * inflow);

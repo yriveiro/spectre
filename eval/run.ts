@@ -1,14 +1,14 @@
 import { boot } from "./boot";
 import { verify } from "./catalogue";
-import { observe } from "./observe";
+import { blind, heldOut, type Row, rows } from "./fixture";
 import { complete, head, systemic } from "./guard";
 import { ref, select } from "./models";
-import { plan } from "./progress";
-import { reporter } from "./reporter";
-import { deltaTable, deltas, flips, snapshot, type Run } from "./record";
-import { hitRateOf, NONE, score, table, type Prediction, type Report } from "./score";
+import { observe } from "./observe";
 import type { Model, Opencode } from "./opencode";
-import { blind, heldOut, rows, type Row } from "./fixture";
+import { plan } from "./progress";
+import { deltas, deltaTable, flips, type Run, snapshot } from "./record";
+import { reporter } from "./reporter";
+import { hitRateOf, NONE, type Prediction, type Report, score, table } from "./score";
 
 // One level up from this file, which lives in `eval/`. When the harness lived in
 // `test/skills/eval/` this needed three, and leaving it at three pointed the
@@ -93,7 +93,13 @@ const evaluate = async (
   return out;
 };
 
-const corpus: ReadonlyArray<Row> = BLIND ? blind : HELD_OUT ? heldOut : ROWS === 0 ? rows : head(rows, ROWS);
+const corpus: ReadonlyArray<Row> = BLIND
+  ? blind
+  : HELD_OUT
+    ? heldOut
+    : ROWS === 0
+      ? rows
+      : head(rows, ROWS);
 
 // ripwire scores its hit rate over the judged rows, the ones that name a leaf.
 // A negative row asks whether a matcher stays quiet, and a lexical matcher

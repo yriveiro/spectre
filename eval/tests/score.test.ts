@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { hitRateOf, NONE, permitted, score, table, type Prediction } from "../score";
 import type { Row } from "../fixture";
+import { hitRateOf, NONE, type Prediction, permitted, score, table } from "../score";
 
 const p = (prompt: string, got: string, via: Prediction["via"] = "text"): Prediction => ({
   prompt,

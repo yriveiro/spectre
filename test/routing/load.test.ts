@@ -23,12 +23,80 @@ describe("load", () => {
     );
     const found = await run(scratch.projectDir());
     expect(found.problems).toEqual([]);
-    expect(found.sources).toEqual([`${scratch.projectDir()}/spectre.jsonc`]);
+    expect(found.sources).toEqual([`${scratch.projectDir()}/spectre.json`]);
     expect(found.tables.models).toEqual({ light: "acme/falcon-mini" });
     expect(found.tables.profiles.explorer).toEqual({
       model: ["light"],
       why: "one named file",
     });
+  });
+
+  test("the canonical name is read and is the source", async () => {
+    await Bun.write(
+      `${scratch.projectDir()}/spectre.json`,
+      JSON.stringify({ models: { light: "acme/falcon-mini" } }),
+    );
+    const found = await run(scratch.projectDir());
+    expect(found.problems).toEqual([]);
+    expect(found.sources).toEqual([`${scratch.projectDir()}/spectre.json`]);
+    expect(found.tables.models).toEqual({ light: "acme/falcon-mini" });
+  });
+
+  test("one file per directory: the canonical file wins and the legacy one is ignored", async () => {
+    await Bun.write(
+      `${scratch.projectDir()}/spectre.json`,
+      JSON.stringify({ models: { light: "acme/falcon-mini" } }),
+    );
+    await scratch.writeProject(
+      JSON.stringify({ models: { heavy: "opencode/gpt-5" } }),
+      "spectre.jsonc",
+    );
+    const found = await run(scratch.projectDir());
+    expect(found.sources).toEqual([`${scratch.projectDir()}/spectre.json`]);
+    expect(found.tables.models).toEqual({ light: "acme/falcon-mini" });
+  });
+
+  test("the same rule holds in the global directory", async () => {
+    await Bun.write(
+      `${scratch.globalDir()}/spectre.json`,
+      JSON.stringify({ models: { light: "acme/falcon-mini" } }),
+    );
+    await scratch.writeGlobal(
+      JSON.stringify({ models: { heavy: "opencode/gpt-5" } }),
+      "spectre.jsonc",
+    );
+    const found = await run(scratch.projectDir());
+    expect(found.sources).toEqual([`${scratch.globalDir()}/spectre.json`]);
+    expect(found.tables.models).toEqual({ light: "acme/falcon-mini" });
+  });
+
+  test("a broken canonical file does not fall back to the legacy one beside it", async () => {
+    await Bun.write(`${scratch.projectDir()}/spectre.json`, "{ broken");
+    await scratch.writeProject(
+      JSON.stringify({ models: { light: "acme/falcon-mini" } }),
+      "spectre.jsonc",
+    );
+    const found = await run(scratch.projectDir());
+    expect(found.problems).toHaveLength(1);
+    expect(found.problems[0]).toContain(`${scratch.projectDir()}/spectre.json`);
+    expect(found.tables.models).toEqual({});
+  });
+
+  test("a spectre.jsonc with comments still reads, so an existing setup keeps working", async () => {
+    await scratch.writeProject(
+      [
+        "{",
+        "  // the page has not rewritten this file yet",
+        '  "models": { "light": "acme/falcon-mini" }, /* one model */',
+        '  "profiles": { "explorer": { "model": "light", "why": "w" } }',
+        "}",
+      ].join("\n"),
+      "spectre.jsonc",
+    );
+    const found = await run(scratch.projectDir());
+    expect(found.problems).toEqual([]);
+    expect(found.tables.models).toEqual({ light: "acme/falcon-mini" });
+    expect(found.tables.profiles.explorer?.model).toEqual(["light"]);
   });
 
   test("$schema is accepted", async () => {
@@ -56,9 +124,18 @@ describe("load", () => {
     expect(found.problems[0]).toContain("profiles.p.extra");
   });
 
-  test("a missing required field names the field", async () => {
+  test("a profile without a rationale decodes, because the rationale is optional", async () => {
     await scratch.writeProject(JSON.stringify({ profiles: { p: { model: "light" } } }));
-    expect((await run(scratch.projectDir())).problems[0]).toContain("profiles.p.why");
+    expect((await run(scratch.projectDir())).problems).toEqual([]);
+  });
+
+  test("a profile without a model decodes, because the effort carries the requirement", async () => {
+    await scratch.writeProject(
+      JSON.stringify({ profiles: { p: { effort: "high", match: "Use when exploring." } } }),
+    );
+    const found = await run(scratch.projectDir());
+    expect(found.problems).toEqual([]);
+    expect(found.tables.profiles.p).toEqual({ effort: "high", match: "Use when exploring." });
   });
 
   test("a value of the wrong type names the value", async () => {
@@ -70,7 +147,7 @@ describe("load", () => {
     await scratch.writeProject("{ this is not json");
     const found = await run(scratch.projectDir());
     expect(found.problems).toHaveLength(1);
-    expect(found.problems[0]).toContain(`${scratch.projectDir()}/spectre.jsonc`);
+    expect(found.problems[0]).toContain(`${scratch.projectDir()}/spectre.json`);
   });
 
   test("both files are read, lowest precedence first", async () => {
@@ -136,6 +213,32 @@ describe("load", () => {
   });
 });
 
+describe("the provider", () => {
+  test("a provider in the file is carried into the tables", async () => {
+    await scratch.writeProject(
+      JSON.stringify({ provider: "opencode-go", models: { light: "acme/falcon-mini" } }),
+    );
+    expect((await run(scratch.projectDir())).tables.provider).toBe("opencode-go");
+  });
+
+  test("the provider is absent when no file names one", async () => {
+    await scratch.writeProject(JSON.stringify({ models: { light: "acme/falcon-mini" } }));
+    expect((await run(scratch.projectDir())).tables.provider).toBeUndefined();
+  });
+
+  test("a later file replaces the provider whole", async () => {
+    await scratch.writeGlobal(JSON.stringify({ provider: "opencode-go" }));
+    await scratch.writeProject(JSON.stringify({ provider: "acme" }));
+    expect((await run(scratch.projectDir())).tables.provider).toBe("acme");
+  });
+
+  test("a key nobody wrote leaves the earlier provider standing", async () => {
+    await scratch.writeGlobal(JSON.stringify({ provider: "opencode-go" }));
+    await scratch.writeProject(JSON.stringify({ models: { light: "acme/falcon-mini" } }));
+    expect((await run(scratch.projectDir())).tables.provider).toBe("opencode-go");
+  });
+});
+
 describe("the dictionary path", () => {
   test("absent means the lexical half is off, and that is not a problem", async () => {
     await scratch.writeProject(JSON.stringify({ models: { light: "acme/falcon-mini" } }));
@@ -150,7 +253,7 @@ describe("the dictionary path", () => {
     await scratch.writeProject(JSON.stringify({ dictionary: "refs/ste100.json" }));
     const found = await run(scratch.projectDir());
     expect(found.tables.dictionary?.path).toBe(`${scratch.projectDir()}/refs/ste100.json`);
-    expect(found.tables.dictionary?.from).toBe(`${scratch.projectDir()}/spectre.jsonc`);
+    expect(found.tables.dictionary?.from).toBe(`${scratch.projectDir()}/spectre.json`);
   });
 
   test("a relative path in the global file resolves against the global file", async () => {

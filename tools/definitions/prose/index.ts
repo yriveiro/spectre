@@ -19,7 +19,7 @@ const Input = Schema.Struct({
   }),
   dictionary: Schema.optional(Schema.String).annotate({
     description:
-      "A dictionary export to use instead of the one spectre.jsonc names. Omit to use the configured path, which is the normal case.",
+      "A dictionary export to use instead of the one spectre.json names. Omit to use the configured path, which is the normal case.",
   }),
   limit: Schema.optional(Schema.Number).annotate({
     description: "Maximum findings to return. Default 400.",
@@ -104,14 +104,14 @@ What it will never report, on purpose:
   a regex false-positives on every hyphenated compound.
 - **Dropped articles.** Noticing a missing article needs semantics.
 
-**With no \`dictionary\` in \`spectre.jsonc\`, only the structural half runs.** The six
+**With no \`dictionary\` in \`spectre.json\`, only the structural half runs.** The six
 rules above need no word list, so they work unchanged. A call that passes \`words\` with no
 dictionary configured returns an empty \`rulings\` and no \`dictionary\` block rather than a
 verdict, because the question was not answerable and saying so is the honest answer. Both
 \`targets\` and \`words\` are optional, so a caller can ask about words alone and read
 nothing.
 
-The lexical half is off unless \`spectre.jsonc\` names a \`dictionary\`.
+The lexical half is off unless \`spectre.json\` names a \`dictionary\`.
 Pass \`words\` to rule on them: \`words: ["check", "secure", "grommet"]\` returns approved /
 not-approved / unknown, the part of speech each ruling holds for, the alternatives the
 dictionary offers, and the page label so you can check it in your own PDF. A word with no
@@ -300,7 +300,7 @@ const inventory = async (
 };
 
 /**
- * `dictionary` is the path from `spectre.jsonc`, passed in by the caller so this
+ * `dictionary` is the path from `spectre.json`, passed in by the caller so this
  * file reads no config. A missing key means the lexical half is off, which is not
  * an error: the structural rules do not need it.
  */
