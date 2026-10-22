@@ -2,10 +2,10 @@ import { usePlugin } from "@opencode/plugin/tui";
 import type { ResolvedTheme } from "@opencode/theme/tui";
 import { type RGBA, TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
-import { KNOWN_ORDER } from "../tools/definitions/routing";
-import { applied, type Edit, effortPicker, modelPicker, pinPicker, preview } from "./controls";
-import type { Draft, Model, Profile, Resolution } from "./data";
-import { field, h, show } from "./render";
+import { KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
+import { applied, type Edit, effortPicker, modelPicker, pinPicker, preview } from "./controls.tsx";
+import type { Draft, Model, Profile, Resolution } from "./data.ts";
+import { field, h, show } from "./render.ts";
 
 /**
  * The page.
@@ -68,6 +68,10 @@ export type PageInput = {
    * no writer of its own.
    */
   readonly onSave: () => void;
+  /**
+   * Dismiss the modal without writing.
+   */
+  readonly onClose?: () => void;
 };
 
 /**
@@ -300,8 +304,13 @@ const noneYet = (theme: ResolvedTheme, says: string): JSX.Element =>
 
 export const page = (input: PageInput): JSX.Element => {
   const context = usePlugin();
-  const theme = context.theme;
+  const theme =
+    typeof context.theme.surface === "function" ? context.theme.surface("dialog") : context.theme;
   const dialog = context.ui.dialog;
+  const close = () => {
+    if (input.onClose) input.onClose();
+    else dialog.clear();
+  };
 
   /**
    * A dialog, and what happens when it answers.
@@ -314,7 +323,7 @@ export const page = (input: PageInput): JSX.Element => {
   const run = (open: () => Promise<Edit | undefined>): void => {
     void open().then(
       (edit) => {
-        if (edit !== undefined) input.onChange(applied(input.draft, edit));
+        input.onChange(edit !== undefined ? applied(input.draft, edit) : input.draft);
       },
       (problem: unknown) => {
         context.ui.toast.show({
@@ -378,7 +387,13 @@ export const page = (input: PageInput): JSX.Element => {
   // scrolls it with or without focus.
   const tables = h(
     "scrollbox",
-    { flexGrow: 1, minHeight: 0, contentOptions: { flexDirection: "column" }, focused: () => true },
+    {
+      height: 16,
+      flexGrow: 1,
+      minHeight: 0,
+      contentOptions: { flexDirection: "column" },
+      focused: () => true,
+    },
     section(
       theme,
       "Profiles",
@@ -409,19 +424,20 @@ export const page = (input: PageInput): JSX.Element => {
       flexGrow: 1,
       minWidth: 0,
       minHeight: 0,
-      paddingLeft: 1,
-      paddingRight: 1,
-      paddingTop: 1,
+      paddingLeft: 2,
+      paddingRight: 2,
       paddingBottom: 1,
+      gap: 1,
     },
     h(
       "box",
       { flexDirection: "column", flexShrink: 0 },
-      h("text", { fg: theme.text.base, attributes: TextAttributes.BOLD }, "Routing"),
-      // The config line. With the file the entrypoint read, it names the
-      // file. Without one, it names nothing while the tables hold rows,
-      // because the page cannot tell which file they came from. An empty set
-      // of tables is the case of no config, and the line says so.
+      h(
+        "box",
+        { flexDirection: "row", justifyContent: "space-between" },
+        h("text", { fg: theme.text.base, attributes: TextAttributes.BOLD }, "Routing"),
+        h("text", { fg: theme.text.muted, onMouseUp: close }, "esc"),
+      ),
       show(
         () => input.source !== undefined || (input.rows.length === 0 && input.models.length === 0),
         () => field(theme, "config", () => input.source ?? "none yet"),
@@ -430,18 +446,49 @@ export const page = (input: PageInput): JSX.Element => {
     tables,
     h(
       "box",
-      { flexDirection: "column", flexShrink: 0, paddingTop: 1 },
+      {
+        flexDirection: "column",
+        flexShrink: 0,
+        paddingLeft: 1,
+        paddingRight: 1,
+        backgroundColor: theme.background?.raised.base,
+      },
       preview({ theme, draft: input.draft, models: input.catalogue }),
     ),
     h(
       "box",
-      { flexDirection: "row", flexShrink: 0, paddingTop: 1 },
+      { flexDirection: "column", flexShrink: 0 },
       h(
         "text",
-        { fg: theme.text.muted, wrapMode: "word", flexGrow: 1, minWidth: 0 },
+        { fg: theme.text.muted, wrapMode: "word" },
         "the page writes nothing by itself. A click writes the draft to the config file.",
       ),
-      h("text", { fg: theme.text.base, onMouseUp: () => input.onSave() }, "write it"),
+      h(
+        "box",
+        { flexDirection: "row", gap: 2, paddingTop: 1 },
+        h(
+          "text",
+          { fg: theme.text.base, onMouseUp: () => input.onSave() },
+          "enter ",
+          h("span", { style: { fg: theme.text.muted } }, "write it"),
+        ),
+        h(
+          "text",
+          {
+            fg: theme.text.base,
+            onMouseUp: () =>
+              run(() => modelPicker({ dialog, draft: input.draft, models: input.catalogue })),
+          },
+          "+ ",
+          h("span", { style: { fg: theme.text.muted } }, "add model"),
+        ),
+        h(
+          "text",
+          { fg: theme.text.base, onMouseUp: close },
+          "esc ",
+          h("span", { style: { fg: theme.text.muted } }, "close"),
+        ),
+      ),
     ),
   );
 };

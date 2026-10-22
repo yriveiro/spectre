@@ -1,5 +1,6 @@
 import { Plugin } from "@opencode/plugin/tui";
-import { createSignal } from "solid-js";
+import type { KeyEvent } from "@opentui/core";
+import { createSignal, onCleanup, onMount } from "solid-js";
 import {
   catalogue,
   type Draft,
@@ -9,9 +10,9 @@ import {
   resolve,
   save,
   source as sourceOf,
-} from "./data";
-import { page } from "./page";
-import { h } from "./render";
+} from "./data.ts";
+import { page } from "./page.tsx";
+import { h } from "./render.ts";
 
 /**
  * The terminal page that configures the routing.
@@ -217,44 +218,74 @@ export default Plugin.define({
       setRevision((value) => value + 1);
     };
 
+    const renderModal = () => {
+      const models = catalogue(listed());
+      const found = resolve(draft, models);
+
+      const rows = draft.profiles.map((profile, atIndex) => ({
+        profile,
+        resolution: found[atIndex] ?? absent(profile.name),
+      }));
+
+      const allow = draft.models.map((one) => {
+        const model = models.find((two) => {
+          const head = `${two.providerID}/${two.id}`;
+          return one.ref === head || one.ref.startsWith(`${head}#`);
+        });
+        return { alias: one.alias, ref: one.ref, model, problem: refused(model) };
+      });
+
+      return page({
+        rows,
+        models: allow,
+        catalogue: models,
+        draft,
+        onChange: (next) => {
+          onChange(next);
+          openModal();
+        },
+        onSave: () => {
+          onSave();
+          context.ui.dialog.clear();
+        },
+        onClose: () => context.ui.dialog.clear(),
+        source: at,
+      });
+    };
+
+    const openModal = (): void => {
+      context.ui.dialog.show(() => {
+        if (context.renderer?.keyInput) {
+          const onKeyPress = (event: KeyEvent) => {
+            if (event.name === "return" || event.name === "enter") {
+              event.preventDefault();
+              onSave();
+              context.ui.dialog.clear();
+              return;
+            }
+            if (event.name === "escape") {
+              event.preventDefault();
+              context.ui.dialog.clear();
+            }
+          };
+          onMount(() => {
+            context.renderer.keyInput.on("keypress", onKeyPress);
+          });
+          onCleanup(() => {
+            context.renderer.keyInput.off("keypress", onKeyPress);
+          });
+        }
+        return renderModal();
+      });
+      context.ui.dialog.set({ size: "large", centered: true });
+    };
+
     context.ui.router.register({
       name: PAGE,
-      render: () => {
-        const models = catalogue(listed());
-        const found = resolve(draft, models);
-
-        // The profile table joins the profile the page edits to the row the
-        // resolver answered, so an edit and its consequence sit on one line.
-        const rows = draft.profiles.map((profile, at) => ({
-          profile,
-          resolution: found[at] ?? absent(profile.name),
-        }));
-
-        // The allowlist table joins an alias to the catalogue row its ref
-        // names. The page shows the family, the rungs and the cost from there.
-        const allow = draft.models.map((one) => {
-          const model = models.find((two) => {
-            const head = `${two.providerID}/${two.id}`;
-            return one.ref === head || one.ref.startsWith(`${head}#`);
-          });
-          return { alias: one.alias, ref: one.ref, model, problem: refused(model) };
-        });
-
-        return page({
-          rows,
-          models: allow,
-          catalogue: models,
-          draft,
-          onChange,
-          onSave,
-          source: at,
-        });
-      },
+      render: renderModal,
     });
 
-    context.keymap.layer(() =>
-      opener(() => context.ui.router.navigate({ type: "plugin", name: PAGE })),
-    );
+    context.keymap.layer(() => opener(openModal));
 
     /** The profile this session would use: the first one under its agent. */
     const chosen = (sessionID: string) => {

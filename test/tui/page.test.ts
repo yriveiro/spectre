@@ -14,15 +14,26 @@ import { page } from "../../tui/page";
  */
 
 const GREY = RGBA.fromInts(200, 200, 200, 255);
+const RAISED = RGBA.fromInts(40, 40, 48, 255);
 const WARNING = RGBA.fromInts(255, 180, 0, 255);
 
-const theme = {
+const surfaceTokens = {
   text: {
     base: GREY,
     muted: GREY,
     faint: GREY,
     feedback: { warning: { base: WARNING, muted: GREY } },
   },
+  background: {
+    base: RAISED,
+    raised: { base: RAISED, high: RAISED, max: RAISED },
+    feedback: { warning: { base: RAISED }, error: { base: RAISED } },
+  },
+};
+
+const theme = {
+  ...surfaceTokens,
+  surface: () => surfaceTokens,
 };
 
 const models: ReadonlyArray<Model> = [
@@ -134,6 +145,7 @@ const host = (answer?: string) => {
 const frame = async (input: {
   readonly answer?: string;
   readonly onSave?: () => void;
+  readonly onClose?: () => void;
   readonly onChange?: (next: Draft) => void;
 }) => {
   const { asked, context } = host(input.answer);
@@ -149,25 +161,42 @@ const frame = async (input: {
             draft,
             onChange: input.onChange ?? (() => {}),
             onSave: input.onSave ?? (() => {}),
+            onClose: input.onClose ?? (() => {}),
             source: "/tmp/project/spectre.json",
           });
         },
       }),
-    { width: 100, height: 30 },
+    { width: 88, height: 32 },
   );
   await setup.renderOnce();
   return { setup, asked };
 };
 
-describe("the page draws what the session would spend", () => {
-  test("the frame carries the three tables and the write line", async () => {
+describe("the modal draws what the session would spend", () => {
+  test("the modal frame carries the header with esc, the tables and the footer bar", async () => {
     const { setup } = await frame({});
     const drawn = setup.captureCharFrame();
     expect(drawn).toContain("Routing");
+    expect(drawn).toContain("esc");
     expect(drawn).toContain("Profiles");
     expect(drawn).toContain("Allowlist");
     expect(drawn).toContain("Catalogue");
+    expect(drawn).toContain("enter");
     expect(drawn).toContain("write it");
+    await setup.dispose();
+  });
+
+  test("clicking esc in the modal closes it", async () => {
+    let closed = 0;
+    const { setup } = await frame({ onClose: () => closed++ });
+    const lines = setup.captureCharFrame().split("\n");
+    const row = lines.findIndex((one) => one.includes("Routing") && one.includes("esc"));
+    expect(row).toBeGreaterThan(-1);
+    const line = lines[row];
+    if (line === undefined) throw new Error("the frame has no header row");
+    await setup.mockMouse.click(line.lastIndexOf("esc"), row);
+    await setup.flush();
+    expect(closed).toBe(1);
     await setup.dispose();
   });
 
@@ -224,5 +253,125 @@ describe("the page changes the draft and writes it only when asked", () => {
     await setup.flush();
     expect(saved).toBe(1);
     await setup.dispose();
+  });
+});
+
+describe("the entrypoint opens the modal under the host's runtime plugin loader", () => {
+  test("running the opener opens the modal with dialog.show and uses the host's renderer", async () => {
+    const coreRuntime = await import("@opentui/core");
+    const { createRuntimePlugin } = await import("@opentui/core/runtime-plugin");
+    const solidJsRuntime = await import("solid-js");
+    const solidJsStoreRuntime = await import("solid-js/store");
+    const solidRuntime = await import("@opentui/solid");
+    const { Plugin, usePlugin } = await import("@opencode/plugin/tui");
+    const { createContext, useContext } = solidJsRuntime;
+
+    const HostRenderer = createContext<unknown>();
+    const created: Array<string> = [];
+    const hostSolid = {
+      ...solidRuntime,
+      createElement: (tag: string) => {
+        if (!useContext(HostRenderer)) throw new Error("No renderer found");
+        created.push(tag);
+        return { tag };
+      },
+      createTextNode: (text: string) => ({ text }),
+      insertNode: () => {},
+      insert: (_parent: unknown, accessor: unknown) => {
+        if (typeof accessor === "function") accessor();
+      },
+      setProp: () => {},
+      effect: (fn: (prev: unknown) => unknown) => {
+        fn(undefined);
+      },
+      memo: <T>(fn: () => T) => fn,
+    };
+
+    Bun.plugin(
+      createRuntimePlugin({
+        core: coreRuntime,
+        additional: {
+          "@opentui/solid": hostSolid,
+          "solid-js": solidJsRuntime,
+          "solid-js/store": solidJsStoreRuntime,
+          "@opencode/plugin/tui": { Plugin, PluginContextProvider, usePlugin },
+        },
+      }),
+    );
+
+    const path = `${import.meta.dir}/../../tui`;
+    for (const file of ["index.tsx", "page.tsx", "render.ts", "controls.tsx", "data.ts"]) {
+      delete require.cache[Bun.resolveSync(`${path}/${file}`, import.meta.dir)];
+    }
+
+    const mod = (await import(Bun.pathToFileURL(`${path}/index.tsx`).href)) as {
+      default: { setup: (ctx: unknown) => Promise<void> };
+    };
+
+    let shown: (() => unknown) | undefined;
+    let dialogOptions: { size?: string; centered?: boolean } | undefined;
+    let commandRun: (() => void) | undefined;
+    const { context } = host();
+    const fullContext = {
+      ...context,
+      location: { directory: "/tmp" },
+      renderer: { keyInput: { on: () => {}, off: () => {} } },
+      storage: {
+        store: <T extends object>(_k: string, opts: { initial: T }) =>
+          [opts.initial, async (fn: (d: T) => void) => fn(opts.initial)] as const,
+        memory: <T extends object>(_k: string, opts: { initial: T }) =>
+          [opts.initial, (fn: (d: T) => void) => fn(opts.initial)] as const,
+      },
+      data: {
+        location: { model: { list: () => [] } },
+        session: { get: () => undefined },
+      },
+      keymap: {
+        layer: (factory: () => { mode?: string; commands: ReadonlyArray<{ run: () => void }> }) => {
+          const built = factory();
+          if (built.mode === "global" && built.commands[0]) {
+            commandRun = built.commands[0].run;
+          }
+        },
+      },
+      ui: {
+        ...context.ui,
+        dialog: {
+          ...context.ui.dialog,
+          show: (render: () => unknown) => {
+            shown = render;
+          },
+          set: (options: { size?: string; centered?: boolean }) => {
+            dialogOptions = options;
+          },
+        },
+        router: {
+          register: () => () => {},
+          navigate: () => {},
+          current: () => ({ type: "home" }),
+        },
+        slot: () => () => {},
+      },
+    };
+
+    await mod.default.setup(fullContext);
+    if (commandRun === undefined) throw new Error("the entrypoint registered no opener command");
+    commandRun();
+    if (shown === undefined) throw new Error("the opener did not call dialog.show");
+    expect(dialogOptions).toEqual({ size: "large", centered: true });
+    const renderModal = shown;
+
+    createComponent(HostRenderer.Provider, {
+      value: true,
+      get children() {
+        return createComponent(PluginContextProvider, {
+          value: fullContext as never,
+          get children() {
+            return renderModal() as never;
+          },
+        });
+      },
+    });
+    expect(created).toContain("scrollbox");
   });
 });

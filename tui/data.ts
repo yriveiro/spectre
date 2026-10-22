@@ -12,7 +12,7 @@ import {
   resolveProfile,
   type Pick as Spent,
   writeConfig,
-} from "../tools/definitions/routing";
+} from "../tools/definitions/routing/index.ts";
 
 /**
  * What the page holds, and what it shows.

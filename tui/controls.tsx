@@ -9,15 +9,15 @@ import {
   ladderOf,
   proposeAlias,
   rungs,
-} from "../tools/definitions/routing";
+} from "../tools/definitions/routing/index.ts";
 import {
   type Draft,
   type Model,
   type Profile,
   type Resolution,
   resolve as resolveDraft,
-} from "./data";
-import { field, h } from "./render";
+} from "./data.ts";
+import { field, h } from "./render.ts";
 
 /**
  * The controls: the dialogs that change the draft.
