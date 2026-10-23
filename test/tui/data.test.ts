@@ -2,14 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { catalogue, read, resolve, save } from "../../tui/data";
 
-/**
- * The page's data layer.
- *
- * The page and the tool share one reader, one resolver and one writer, so the
- * cases here are the tool's cases seen from the page: what a profile resolves
- * to, what the page refuses to write, and what it leaves alone.
- */
-
 const scratch = () => join(Bun.env.TMPDIR ?? "/tmp", `spectre-tui-data-${crypto.randomUUID()}`);
 
 const row = (input: {
@@ -122,8 +114,6 @@ describe("the page reads the repository's own file", () => {
   });
 
   test("the global file is not folded into the draft", async () => {
-    // The page edits the repository's file. Writing the merged result would
-    // copy the global config into the repository.
     const at = await project();
     const global = scratch();
     await Bun.write(`${global}/.keep`, "");
@@ -169,10 +159,9 @@ describe("the page resolves what the tool resolves", () => {
     const at = await project();
     const rows = resolve(await read(at), catalogue(models));
     const mechanical = rows.find((one) => one.profile === "mechanical");
-    // The first allowed model cannot call tools, so the resolver skips it.
     expect(mechanical?.ref).toBe("opencode-go/deepseek-v4.1-flash#low");
     expect(mechanical?.rung).toBe("low");
-    expect(mechanical?.cost).toContain("0.15");
+    expect(mechanical?.cost).toBe("$0.15/$0.6");
   });
 
   test("a second opinion comes from another family, and the free one when it is asked for", async () => {

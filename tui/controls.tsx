@@ -17,12 +17,15 @@ import {
 } from "../tools/definitions/routing/index.ts";
 import {
   type Draft,
+  formatConfig,
+  formatCost,
   type Model,
+  normalizeCost,
   type Profile,
   type Resolution,
   resolve as resolveDraft,
 } from "./data.ts";
-import { bindKeyboard, field, h, type Palette, palette, show } from "./render.ts";
+import { bindKeyboard, field, h, palette, show } from "./render.ts";
 
 export const JEV_MODEL = "jev-1.13-free";
 export const DEFAULT_PROVIDER = "opencode-go";
@@ -36,6 +39,7 @@ export type Edit =
   | { readonly kind: "effort"; readonly profile: string; readonly effort: string }
   | { readonly kind: "pin"; readonly profile: string; readonly alias: string | undefined }
   | { readonly kind: "model"; readonly alias: string; readonly ref: string }
+  | { readonly kind: "remove-model"; readonly alias: string }
   | { readonly kind: "judge"; readonly enabled: boolean }
   | { readonly kind: "provider"; readonly provider: string };
 
@@ -68,11 +72,27 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
           }
         : undefined,
     };
-  if (edit.kind === "provider")
+  if (edit.kind === "provider") {
+    const models = draft.models.filter((one) => one.ref.startsWith(`${edit.provider}/`));
+    const held = new Set(models.map((one) => one.alias));
     return {
       ...draft,
       provider: edit.provider,
+      models,
+      profiles: draft.profiles.map((one) =>
+        one.pinned !== undefined && !held.has(one.pinned) ? { ...one, pinned: undefined } : one,
+      ),
     };
+  }
+  if (edit.kind === "remove-model") {
+    return {
+      ...draft,
+      models: draft.models.filter((one) => one.alias !== edit.alias),
+      profiles: draft.profiles.map((one) =>
+        one.pinned === edit.alias ? { ...one, pinned: undefined } : one,
+      ),
+    };
+  }
   return { ...draft, models: [...draft.models, { alias: edit.alias, ref: edit.ref }] };
 };
 
@@ -94,13 +114,12 @@ const knownOf = (one: Model): Known => ({
 const rungsOf = (one: Model): ReadonlyArray<string> =>
   rungs(ladderOf(one.rungs.map((id) => ({ id }))));
 
-const costLabelOf = (one: Model): string =>
-  isFree(knownOf(one)) ? "free" : `$${one.costInput}/$${one.costOutput}`;
+const costLabelOf = (one: Model): string => formatCost(one.costInput, one.costOutput);
 
 const describeModel = (one: Model): string => {
   const ladder = rungsOf(one);
-  const effort = ladder.length === 0 ? "no effort rungs" : `rungs: ${ladder.join(", ")}`;
-  const tools = one.tools ? "" : " · no tools";
+  const effort = ladder.length === 0 ? "No effort rungs" : `Rungs: ${ladder.join(", ")}`;
+  const tools = one.tools ? "" : " · No tools";
   return `${effort}${tools}`;
 };
 
@@ -125,10 +144,24 @@ export const isProviderAvailable = (
   return providers.includes(provider);
 };
 
-export type SelectedModel = {
-  readonly alias: string;
-  readonly ref: string;
-  readonly model: Model | undefined;
+export const isModelUsable = (
+  model: Model | undefined,
+  provider?: string | undefined,
+): model is Model => {
+  if (model === undefined) return false;
+  if (!model.enabled || model.deprecated || !model.tools) return false;
+  if (provider !== undefined && model.providerID !== provider) return false;
+  return true;
+};
+
+export const compatibleModelsFor = (
+  models: ReadonlyArray<Model>,
+  provider: string | undefined,
+): ReadonlyArray<Model> => {
+  const targetProvider = provider ?? DEFAULT_PROVIDER;
+  const available = availableProviders(models);
+  const filterByProvider = provider !== undefined || available.includes(targetProvider);
+  return models.filter((one) => isModelUsable(one, filterByProvider ? targetProvider : undefined));
 };
 
 const findCatalogModel = (models: ReadonlyArray<Model>, ref: string): Model | undefined =>
@@ -136,6 +169,36 @@ const findCatalogModel = (models: ReadonlyArray<Model>, ref: string): Model | un
     const head = refOf(one);
     return ref === head || ref.startsWith(`${head}#`);
   });
+
+export const usableDraft = (draft: Draft, catalogue: ReadonlyArray<Model>): Draft => {
+  const models = draft.models.filter((entry) => {
+    if (draft.provider !== undefined && !entry.ref.startsWith(`${draft.provider}/`)) {
+      return false;
+    }
+    if (catalogue.length === 0) return true;
+    const found = findCatalogModel(catalogue, entry.ref);
+    if (!isModelUsable(found, draft.provider)) return false;
+    const hash = entry.ref.indexOf("#");
+    const variant = hash === -1 ? undefined : entry.ref.slice(hash + 1);
+    if (variant !== undefined && !found.rungs.includes(variant)) return false;
+    return true;
+  });
+  if (models.length === draft.models.length) return draft;
+  const held = new Set(models.map((one) => one.alias));
+  return {
+    ...draft,
+    models,
+    profiles: draft.profiles.map((one) =>
+      one.pinned !== undefined && !held.has(one.pinned) ? { ...one, pinned: undefined } : one,
+    ),
+  };
+};
+
+export type SelectedModel = {
+  readonly alias: string;
+  readonly ref: string;
+  readonly model: Model | undefined;
+};
 
 const stripVariant = (ref: string): string => {
   const hash = ref.indexOf("#");
@@ -147,8 +210,9 @@ export const selectedModelFor = (
   models: ReadonlyArray<Model>,
   profile: Profile,
 ): SelectedModel | undefined => {
+  const cleanDraft = usableDraft(draft, models);
   if (profile.pinned !== undefined) {
-    const pinnedEntry = draft.models.find((one) => one.alias === profile.pinned);
+    const pinnedEntry = cleanDraft.models.find((one) => one.alias === profile.pinned);
     if (pinnedEntry !== undefined) {
       return {
         alias: pinnedEntry.alias,
@@ -163,17 +227,17 @@ export const selectedModelFor = (
     };
   }
 
-  const resolvedRows = resolveDraft(draft, models);
-  const profileIndex = draft.profiles.findIndex((one) => one.name === profile.name);
+  const resolvedRows = resolveDraft(cleanDraft, models);
+  const profileIndex = cleanDraft.profiles.findIndex((one) => one.name === profile.name);
   const resolved =
     profileIndex !== -1
       ? resolvedRows[profileIndex]
-      : resolveDraft({ ...draft, profiles: [profile] }, models)[0];
+      : resolveDraft({ ...cleanDraft, profiles: [profile] }, models)[0];
 
   if (resolved?.ref !== undefined) {
     const baseRef = stripVariant(resolved.ref);
     const catalogModel = findCatalogModel(models, resolved.ref);
-    const entry = draft.models.find(
+    const entry = cleanDraft.models.find(
       (one) => stripVariant(one.ref) === baseRef || one.ref === resolved.ref,
     );
     return {
@@ -183,9 +247,9 @@ export const selectedModelFor = (
     };
   }
 
-  for (const entry of draft.models) {
+  for (const entry of cleanDraft.models) {
     const catalogModel = findCatalogModel(models, entry.ref);
-    if (catalogModel?.enabled && !catalogModel.deprecated && catalogModel.tools) {
+    if (isModelUsable(catalogModel, cleanDraft.provider)) {
       return {
         alias: entry.alias,
         ref: stripVariant(entry.ref),
@@ -194,7 +258,7 @@ export const selectedModelFor = (
     }
   }
 
-  const firstEntry = draft.models[0];
+  const firstEntry = cleanDraft.models[0];
   if (firstEntry !== undefined) {
     return {
       alias: firstEntry.alias,
@@ -235,14 +299,14 @@ export const effortOptionsFor = (
   return allNames.map((name): EffortOptionRow => {
     const current = profile.effort === name && profile.pinned === undefined;
     if (model === undefined) {
-      const fallbackRef = selected?.ref ?? "no model selected";
+      const fallbackRef = selected?.ref ?? "No model selected";
       return {
         name,
         available: true,
         current,
         targetRef: selected !== undefined ? `${selected.ref}#${name}` : fallbackRef,
         cost: undefined,
-        reason: selected === undefined ? "add a model to the allowlist" : undefined,
+        reason: selected === undefined ? "Add a model to the allowlist" : undefined,
       };
     }
 
@@ -346,11 +410,11 @@ export const effortModal = (input: {
   const selectedModelText =
     selected?.model !== undefined
       ? `${selected.alias} (${refOf(selected.model)})`
-      : (selected?.ref ?? "no model selected");
+      : (selected?.ref ?? "No model selected");
   const supportedList =
     selected?.model !== undefined
-      ? rungsOf(selected.model).join(", ") || "none"
-      : "all catalogue efforts";
+      ? rungsOf(selected.model).join(", ") || "None"
+      : "All catalogue efforts";
 
   return h(
     "box",
@@ -383,10 +447,10 @@ export const effortModal = (input: {
           { fg: colors.text, attributes: TextAttributes.BOLD },
           `The effort for "${input.profile.name}"`,
         ),
-        h("text", { fg: colors.teal, onMouseUp: input.onCancel }, "esc"),
+        h("text", { fg: colors.teal, onMouseUp: input.onCancel }, "Esc"),
       ),
-      field(dialogTheme, "selected model", () => selectedModelText),
-      field(dialogTheme, "available efforts", () => supportedList),
+      field(dialogTheme, "Selected model", () => selectedModelText),
+      field(dialogTheme, "Available efforts", () => supportedList),
     ),
     h(
       "box",
@@ -409,15 +473,15 @@ export const effortModal = (input: {
           borderColor: colors.border,
         },
         h("text", { width: 3, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, ""),
-        h("text", { width: 12, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, "effort"),
-        h("text", { width: 12, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, "status"),
+        h("text", { width: 12, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, "Effort"),
+        h("text", { width: 12, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, "Status"),
         h(
           "text",
           { width: 36, flexGrow: 1, flexShrink: 1, minWidth: 0, fg: colors.blue, wrapMode: "none" },
-          "selected model",
+          "Selected model",
         ),
         h("text", { width: 12, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, () =>
-          "cost".padStart(12),
+          "Cost".padStart(12),
         ),
       ),
       ...rows.map((row, index) => {
@@ -534,21 +598,21 @@ export const effortModal = (input: {
         h(
           "text",
           { fg: colors.text, attributes: TextAttributes.BOLD },
-          "enter ",
-          h("span", { style: { fg: colors.muted } }, "select effort"),
+          "Enter ",
+          h("span", { style: { fg: colors.muted } }, "Select effort"),
         ),
         h(
           "text",
           { fg: colors.text, attributes: TextAttributes.BOLD },
           "↑/↓ ",
-          h("span", { style: { fg: colors.muted } }, "navigate available"),
+          h("span", { style: { fg: colors.muted } }, "Navigate available"),
         ),
       ),
       h(
         "text",
         { fg: colors.text, attributes: TextAttributes.BOLD, onMouseUp: input.onCancel },
-        "esc ",
-        h("span", { style: { fg: colors.muted } }, "back"),
+        "Esc ",
+        h("span", { style: { fg: colors.muted } }, "Back"),
       ),
     ),
   );
@@ -602,14 +666,15 @@ export const profileInfoModal = (input: {
   const { profile, resolution } = input;
   const selected = selectedModelFor(input.draft, input.models, profile);
   const effortText =
-    profile.pinned !== undefined ? `pinned to ${profile.pinned}` : (profile.effort ?? "not set");
+    profile.pinned !== undefined ? `Pinned to ${profile.pinned}` : (profile.effort ?? "Not set");
   const modelText =
     resolution?.ref ??
-    (selected?.model !== undefined ? refOf(selected.model) : (selected?.ref ?? "unresolved"));
+    (selected?.model !== undefined ? refOf(selected.model) : (selected?.ref ?? "Unresolved"));
   const crosscheckConfig =
     profile.crosscheck === undefined
-      ? "none"
+      ? "None"
       : `${profile.crosscheck.effort ?? profile.effort ?? "default"}${profile.crosscheck.prefer === "free" ? " (prefer free)" : ""}`;
+  const costText = normalizeCost(resolution?.cost) ?? "-";
 
   bindKeyboard(context.renderer, (event: KeyEvent) => {
     const key = event.name || event.sequence || "";
@@ -650,21 +715,21 @@ export const profileInfoModal = (input: {
           { fg: colors.cyan, attributes: TextAttributes.BOLD },
           `Profile "${profile.name}"`,
         ),
-        h("text", { fg: colors.teal, onMouseUp: input.onClose }, "esc"),
+        h("text", { fg: colors.teal, onMouseUp: input.onClose }, "Esc"),
       ),
       h(
         "box",
         { flexDirection: "row", justifyContent: "space-between", width: "100%" },
-        field(dialogTheme, "effort", () => effortText),
-        field(dialogTheme, "agent", () => profile.agent),
+        field(dialogTheme, "Effort", () => effortText),
+        field(dialogTheme, "Agent", () => profile.agent),
       ),
       h(
         "box",
         { flexDirection: "row", justifyContent: "space-between", width: "100%" },
-        field(dialogTheme, "selected model", () => modelText),
-        field(dialogTheme, "cost", () => resolution?.cost ?? "-"),
+        field(dialogTheme, "Selected model", () => modelText),
+        field(dialogTheme, "Cost", () => costText),
       ),
-      field(dialogTheme, "crosscheck", () =>
+      field(dialogTheme, "Crosscheck", () =>
         resolution?.crosscheck !== undefined
           ? `${crosscheckConfig} → ${resolution.crosscheck}`
           : crosscheckConfig,
@@ -757,14 +822,14 @@ export const profileInfoModal = (input: {
       h(
         "text",
         { fg: colors.text, attributes: TextAttributes.BOLD, onMouseUp: input.onClose },
-        "i / enter ",
-        h("span", { style: { fg: colors.muted } }, "return to profiles"),
+        "i / Enter ",
+        h("span", { style: { fg: colors.muted } }, "Return to profiles"),
       ),
       h(
         "text",
         { fg: colors.text, attributes: TextAttributes.BOLD, onMouseUp: input.onClose },
-        "esc ",
-        h("span", { style: { fg: colors.muted } }, "close"),
+        "Esc ",
+        h("span", { style: { fg: colors.muted } }, "Close"),
       ),
     ),
   );
@@ -799,6 +864,300 @@ export const profileInfo = async (input: {
     input.dialog.set({ size: "large", centered: true });
   });
 
+export type ProviderOptionRow = {
+  readonly name: string;
+  readonly available: boolean;
+  readonly current: boolean;
+  readonly modelCount: number;
+  readonly freeCount: number;
+};
+
+export const providerOptionsFor = (
+  draft: Draft,
+  models: ReadonlyArray<Model>,
+): ReadonlyArray<ProviderOptionRow> => {
+  const available = availableProviders(models);
+  const allNames: Array<string> = [...available];
+  if (draft.provider !== undefined && !allNames.includes(draft.provider)) {
+    allNames.unshift(draft.provider);
+  }
+  return allNames.map((name): ProviderOptionRow => {
+    const providerModels = models.filter((one) => isModelUsable(one, name));
+    const freeCount = providerModels.filter((one) => isFree(knownOf(one))).length;
+    return {
+      name,
+      available: available.includes(name),
+      current: draft.provider === name,
+      modelCount: providerModels.length,
+      freeCount,
+    };
+  });
+};
+
+export const providerModal = (input: {
+  readonly draft: Draft;
+  readonly models: ReadonlyArray<Model>;
+  readonly onSelect: (provider: string) => void;
+  readonly onCancel: () => void;
+}): JSX.Element => {
+  const context = usePlugin();
+  const dialogTheme =
+    typeof context.theme.surface === "function" ? context.theme.surface("dialog") : context.theme;
+  const colors = palette(context.theme, dialogTheme);
+  const rows = providerOptionsFor(input.draft, input.models);
+  const enabledIndices = rows.flatMap((row, idx) => (row.available ? [idx] : []));
+  const initialIndex = (() => {
+    const currentIdx = rows.findIndex((row) => row.current && row.available);
+    if (currentIdx !== -1) return currentIdx;
+    return enabledIndices[0] ?? 0;
+  })();
+
+  const [focusedIndex, setFocusedIndex] = createSignal(initialIndex);
+
+  const stepFocus = (delta: number): void => {
+    if (enabledIndices.length === 0) return;
+    const currentPos = enabledIndices.indexOf(focusedIndex());
+    const nextPos =
+      currentPos === -1 ? 0 : (currentPos + delta + enabledIndices.length) % enabledIndices.length;
+    const target = enabledIndices[nextPos];
+    if (target !== undefined) setFocusedIndex(target);
+  };
+
+  bindKeyboard(context.renderer, (event: KeyEvent) => {
+    const key = event.name || event.sequence || "";
+    if (key === "down" || key === "j") {
+      event.preventDefault();
+      event.stopPropagation();
+      stepFocus(1);
+      return;
+    }
+    if (key === "up" || key === "k") {
+      event.preventDefault();
+      event.stopPropagation();
+      stepFocus(-1);
+      return;
+    }
+    if (key === "return" || key === "enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      const row = rows[focusedIndex()];
+      if (row?.available) input.onSelect(row.name);
+      return;
+    }
+    if (key === "escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      input.onCancel();
+    }
+  });
+
+  const currentProviderText = input.draft.provider ?? `${DEFAULT_PROVIDER} (default)`;
+  const availableList =
+    rows
+      .filter((one) => one.available)
+      .map((one) => one.name)
+      .join(", ") || "None";
+
+  return h(
+    "box",
+    {
+      flexDirection: "column",
+      width: "100%",
+      border: true,
+      borderStyle: "rounded",
+      borderColor: colors.borderOuter,
+      backgroundColor: colors.modalBg,
+    },
+    h(
+      "box",
+      {
+        flexDirection: "column",
+        width: "100%",
+        flexShrink: 0,
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
+        border: ["bottom"],
+        borderColor: colors.border,
+      },
+      h(
+        "box",
+        { flexDirection: "row", justifyContent: "space-between", width: "100%" },
+        h("text", { fg: colors.text, attributes: TextAttributes.BOLD }, "Select default provider"),
+        h("text", { fg: colors.teal, onMouseUp: input.onCancel }, "Esc"),
+      ),
+      field(dialogTheme, "Current provider", () => currentProviderText),
+      field(dialogTheme, "Available providers", () => availableList),
+    ),
+    h(
+      "box",
+      {
+        flexDirection: "column",
+        width: "100%",
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
+      },
+      h(
+        "box",
+        {
+          flexDirection: "row",
+          width: "100%",
+          columnGap: 2,
+          paddingBottom: 1,
+          border: ["bottom"],
+          borderColor: colors.border,
+        },
+        h("text", { width: 3, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, ""),
+        h("text", { width: 20, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, "Provider"),
+        h("text", { width: 12, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, "Status"),
+        h(
+          "text",
+          { width: 28, flexGrow: 1, flexShrink: 1, minWidth: 0, fg: colors.blue, wrapMode: "none" },
+          "Models",
+        ),
+        h("text", { width: 12, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, () =>
+          "Free".padStart(12),
+        ),
+      ),
+      ...rows.map((row, index) => {
+        const [hovered, setHovered] = createSignal(false);
+        const isFocused = () => focusedIndex() === index;
+        const marker = () => {
+          if (row.current && isFocused()) return "▸●";
+          if (row.current) return " ●";
+          if (isFocused()) return "▸ ";
+          return "  ";
+        };
+        const nameColor = () => {
+          if (!row.available) return colors.disabled;
+          if (isFocused() || hovered()) return colors.cyan;
+          return colors.green;
+        };
+        const statusColor = () => (row.available ? colors.green : colors.disabled);
+        const detailColor = () => {
+          if (!row.available) return colors.disabled;
+          if (isFocused() || hovered()) return colors.text;
+          return colors.teal;
+        };
+
+        return h(
+          "box",
+          {
+            flexDirection: "row",
+            width: "100%",
+            columnGap: 2,
+            backgroundColor: () =>
+              row.available && (isFocused() || hovered()) ? colors.rowHoverBg : undefined,
+            onMouseOver: () => {
+              setHovered(true);
+              if (row.available) setFocusedIndex(index);
+            },
+            onMouseOut: () => setHovered(false),
+            onMouseUp: () => {
+              if (row.available) input.onSelect(row.name);
+            },
+          },
+          h(
+            "text",
+            {
+              width: 3,
+              flexShrink: 0,
+              fg: () => (row.available ? colors.cyan : colors.disabled),
+              wrapMode: "none",
+            },
+            marker,
+          ),
+          h(
+            "text",
+            {
+              width: 20,
+              flexShrink: 0,
+              fg: nameColor,
+              attributes: row.available ? TextAttributes.BOLD : TextAttributes.DIM,
+              wrapMode: "none",
+            },
+            row.name,
+          ),
+          h(
+            "text",
+            {
+              width: 12,
+              flexShrink: 0,
+              fg: statusColor,
+              wrapMode: "none",
+            },
+            row.available ? "available" : "disabled",
+          ),
+          h(
+            "text",
+            {
+              width: 28,
+              flexGrow: 1,
+              flexShrink: 1,
+              minWidth: 0,
+              fg: detailColor,
+              truncate: true,
+              wrapMode: "none",
+            },
+            row.available
+              ? `${row.modelCount} usable model${row.modelCount === 1 ? "" : "s"}`
+              : "Not available in this session",
+          ),
+          h(
+            "text",
+            {
+              width: 12,
+              flexShrink: 0,
+              fg: () => (row.available ? colors.muted : colors.disabled),
+              wrapMode: "none",
+            },
+            () => (row.available ? `${row.freeCount} free` : "-").padStart(12),
+          ),
+        );
+      }),
+    ),
+    h(
+      "box",
+      {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        backgroundColor: colors.insetBg,
+        border: ["top"],
+        borderColor: colors.border,
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
+      },
+      h(
+        "box",
+        { flexDirection: "row", gap: 3 },
+        h(
+          "text",
+          { fg: colors.text, attributes: TextAttributes.BOLD },
+          "Enter ",
+          h("span", { style: { fg: colors.muted } }, "Select provider"),
+        ),
+        h(
+          "text",
+          { fg: colors.text, attributes: TextAttributes.BOLD },
+          "↑/↓ ",
+          h("span", { style: { fg: colors.muted } }, "Navigate available"),
+        ),
+      ),
+      h(
+        "text",
+        { fg: colors.text, attributes: TextAttributes.BOLD, onMouseUp: input.onCancel },
+        "Esc ",
+        h("span", { style: { fg: colors.muted } }, "Back"),
+      ),
+    ),
+  );
+};
+
 export const providerPicker = async (input: {
   readonly dialog: Dialog;
   readonly draft: Draft;
@@ -807,57 +1166,54 @@ export const providerPicker = async (input: {
   const providers = availableProviders(input.models);
   if (providers.length === 0) return undefined;
 
-  const options: Array<DialogSelectOption<string>> = providers.map((providerID) => {
-    const providerModels = input.models.filter(
-      (one) => one.providerID === providerID && one.enabled && !one.deprecated && one.tools,
-    );
-    const freeCount = providerModels.filter((one) => isFree(knownOf(one))).length;
-    const countLabel = `${providerModels.length} model${providerModels.length === 1 ? "" : "s"}`;
-    const freeLabel = freeCount > 0 ? `${freeCount} free` : "available";
-    return {
-      title: providerID,
-      value: providerID,
-      description: countLabel,
-      footer: freeLabel,
+  return new Promise<Edit | undefined>((resolve) => {
+    let settled = false;
+    const finish = (value: Edit | undefined): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
     };
+
+    input.dialog.show(
+      () =>
+        providerModal({
+          draft: input.draft,
+          models: input.models,
+          onSelect: (chosen) => {
+            if (chosen === input.draft.provider) {
+              finish(undefined);
+              return;
+            }
+            finish({ kind: "provider", provider: chosen });
+          },
+          onCancel: () => finish(undefined),
+        }),
+      () => finish(undefined),
+    );
+    input.dialog.set({ size: "large", centered: true });
   });
-
-  const missingNote =
-    input.draft.provider !== undefined && !providers.includes(input.draft.provider)
-      ? ` ("${input.draft.provider}" is not available)`
-      : "";
-
-  const pending = input.dialog.select({
-    title: `Select default provider${missingNote}`,
-    placeholder: "Search available providers",
-    options,
-    current: input.draft.provider,
-    search: matches,
-  });
-  input.dialog.set({ size: "large", centered: true });
-  const chosen = await pending;
-
-  if (chosen === undefined || chosen === input.draft.provider) return undefined;
-  return { kind: "provider", provider: chosen };
 };
 
 export const pinPicker = async (input: {
   readonly dialog: Dialog;
   readonly draft: Draft;
+  readonly models?: ReadonlyArray<Model> | undefined;
   readonly profile: Profile;
 }): Promise<Edit | undefined> => {
+  const cleanDraft =
+    input.models !== undefined ? usableDraft(input.draft, input.models) : input.draft;
   const options: Array<DialogSelectOption<string>> = [
     {
       title: "Auto (by effort)",
       value: "",
       description: `profiles.${input.profile.name}.model`,
-      footer: "unpinned",
+      footer: "Unpinned",
     },
-    ...input.draft.models.map((one) => ({
+    ...cleanDraft.models.map((one) => ({
       title: one.alias,
       value: one.alias,
       description: one.ref,
-      footer: "pinned",
+      footer: "Pinned",
     })),
   ];
 
@@ -916,44 +1272,29 @@ export const modelPicker = async (input: {
   readonly draft: Draft;
   readonly models: ReadonlyArray<Model>;
 }): Promise<Edit | undefined> => {
-  const taken = input.draft.models.map((one) => one.alias);
-  const preferredProvider = input.draft.provider ?? DEFAULT_PROVIDER;
-  const orderedModels = [...input.models].sort((a, b) => {
-    const aPreferred = a.providerID === preferredProvider ? 0 : 1;
-    const bPreferred = b.providerID === preferredProvider ? 0 : 1;
-    if (aPreferred !== bPreferred) return aPreferred - bPreferred;
-    return 0;
-  });
+  const cleanDraft = usableDraft(input.draft, input.models);
+  const taken = cleanDraft.models.map((one) => one.alias);
+  const compatible = compatibleModelsFor(input.models, cleanDraft.provider);
 
-  const options: Array<DialogSelectOption<string>> = orderedModels.map((one) => {
+  const options: Array<DialogSelectOption<string>> = compatible.map((one) => {
     const ref = refOf(one);
-    const held = input.draft.models.some(
+    const held = cleanDraft.models.some(
       (entry) => entry.ref === ref || entry.ref.startsWith(`${ref}#`),
     );
-    const state = !one.enabled
-      ? "disabled"
-      : one.deprecated
-        ? "deprecated"
-        : !one.tools
-          ? "no tools"
-          : held
-            ? "in allowlist"
-            : undefined;
-
-    const familyText = one.family === undefined ? "no family" : one.family;
+    const familyText = one.family === undefined ? "No family" : one.family;
     return {
       title: ref,
       value: ref,
       description: `${familyText} · ${describeModel(one)}`,
-      footer: state ?? costLabelOf(one),
+      footer: held ? "In allowlist" : costLabelOf(one),
       category: one.providerID,
-      disabled: state !== undefined,
+      disabled: held,
     };
   });
 
   const pending = input.dialog.select({
     title: "Add a model to the allowlist",
-    placeholder: "Search the models this session can see",
+    placeholder: "Search compatible provider models",
     options,
     search: matches,
   });
@@ -961,7 +1302,7 @@ export const modelPicker = async (input: {
   const ref = await pending;
   if (ref === undefined) return undefined;
 
-  const model = input.models.find((one) => refOf(one) === ref);
+  const model = compatible.find((one) => refOf(one) === ref);
   if (model === undefined) return undefined;
 
   const alias = await aliasPrompt({
@@ -975,55 +1316,36 @@ export const modelPicker = async (input: {
   return { kind: "model", alias, ref };
 };
 
-type JsonField = {
-  readonly key: string;
-  readonly value: string;
-  readonly warning?: boolean;
-};
+export const removeModelPicker = async (input: {
+  readonly dialog: Dialog;
+  readonly draft: Draft;
+  readonly models: ReadonlyArray<Model>;
+}): Promise<Edit | undefined> => {
+  const cleanDraft = usableDraft(input.draft, input.models);
+  if (cleanDraft.models.length === 0) return undefined;
 
-const jsonFields = (one: Resolution): ReadonlyArray<JsonField> => {
-  if (one.problem !== undefined) {
-    return [
-      { key: "profile", value: one.profile },
-      { key: "problem", value: one.problem, warning: true },
-    ];
-  }
-  const fields: Array<JsonField> = [
-    { key: "profile", value: one.profile },
-    { key: "model", value: one.ref ?? "no model" },
-  ];
-  if (one.rung !== undefined) fields.push({ key: "effort", value: one.rung });
-  if (one.cost !== undefined) fields.push({ key: "cost", value: one.cost });
-  if (one.crosscheck !== undefined) fields.push({ key: "crosscheck", value: one.crosscheck });
-  return fields;
-};
+  const options: Array<DialogSelectOption<string>> = cleanDraft.models.map((entry) => {
+    const model = findCatalogModel(input.models, entry.ref);
+    const cost = model !== undefined ? costLabelOf(model) : "-";
+    return {
+      title: entry.alias,
+      value: entry.alias,
+      description: entry.ref,
+      footer: cost,
+    };
+  });
 
-const previewObject = (
-  colors: Palette,
-  one: Resolution,
-  last: boolean,
-): ReadonlyArray<JSX.Element> => {
-  const fields = jsonFields(one);
-  const body = fields.map((item, at) =>
-    h(
-      "text",
-      { fg: colors.teal, wrapMode: "word" },
-      "    ",
-      h("span", { style: { fg: colors.blue } }, JSON.stringify(item.key)),
-      ": ",
-      h(
-        "span",
-        { style: { fg: item.warning ? colors.warning : colors.green } },
-        JSON.stringify(item.value),
-      ),
-      at < fields.length - 1 ? "," : "",
-    ),
-  );
-  return [
-    h("text", { fg: colors.teal }, "  {"),
-    ...body,
-    h("text", { fg: colors.teal }, last ? "  }" : "  },"),
-  ];
+  const pending = input.dialog.select({
+    title: "Remove a model from the allowlist",
+    placeholder: "Search the allowlist",
+    options,
+    search: matches,
+  });
+  input.dialog.set({ size: "large", centered: true });
+  const alias = await pending;
+  if (alias === undefined) return undefined;
+
+  return { kind: "remove-model", alias };
 };
 
 export const preview = (input: {
@@ -1032,22 +1354,13 @@ export const preview = (input: {
   readonly models: ReadonlyArray<Model>;
 }): JSX.Element => {
   const colors = palette(input.theme);
-  const rows = resolveDraft(input.draft, input.models);
-  const lines =
-    rows.length === 0
-      ? [h("text", { fg: colors.teal }, "[]")]
-      : [
-          h("text", { fg: colors.teal }, "["),
-          ...rows.flatMap((one, at) => previewObject(colors, one, at === rows.length - 1)),
-          h("text", { fg: colors.teal }, "]"),
-        ];
+  const cleanDraft = usableDraft(input.draft, input.models);
+  const jsonText = formatConfig(cleanDraft);
+  const lines = jsonText
+    .split("\n")
+    .map((line) => h("text", { fg: colors.teal, wrapMode: "word" }, line));
 
-  return h(
-    "box",
-    { flexDirection: "column" },
-    h("text", { fg: colors.text }, "The draft is not saved. It resolves to:"),
-    ...lines,
-  );
+  return h("box", { flexDirection: "column" }, ...lines);
 };
 
 export const controls = (input: {
@@ -1085,7 +1398,7 @@ export const controls = (input: {
           ),
       },
       field(theme, `profiles.${one.name}.effort`, () =>
-        one.pinned === undefined ? (one.effort ?? "not set") : `pinned to ${one.pinned}`,
+        one.pinned === undefined ? (one.effort ?? "Not set") : `Pinned to ${one.pinned}`,
       ),
     ),
   );
@@ -1102,7 +1415,7 @@ export const controls = (input: {
         onMouseDown: () =>
           run(() => modelPicker({ dialog, draft: input.draft, models: input.models })),
       },
-      field(theme, "Add a model", () => "open the catalogue"),
+      field(theme, "Add a model", () => "Open the catalogue"),
     ),
     preview({ theme, draft: input.draft, models: input.models }),
   );
