@@ -24,7 +24,7 @@ import type { File, Known } from "./types";
 export const serialise = (config: File): string => {
   const ordered: Record<string, unknown> = {};
   if (config.$schema !== undefined) ordered.$schema = config.$schema;
-  for (const key of ["provider", "models", "profiles", "dictionary", "setup"] as const)
+  for (const key of ["provider", "models", "profiles", "judge", "dictionary", "setup"] as const)
     if (config[key] !== undefined) ordered[key] = config[key];
   return `${JSON.stringify(ordered, null, 2)}\n`;
 };
