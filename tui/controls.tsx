@@ -1,11 +1,13 @@
 import { usePlugin } from "@opencode/plugin/tui";
 import type { Dialog, DialogSelectOption } from "@opencode/plugin/tui/context";
 import type { ResolvedTheme } from "@opencode/theme/tui";
+import { type KeyEvent, TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
+import { createSignal } from "solid-js";
 import {
-  DEFAULT_AGENT,
   DEFAULT_TIMEOUT_MS,
   isFree,
+  KNOWN_ORDER,
   type Known,
   ladderOf,
   proposeAlias,
@@ -20,47 +22,23 @@ import {
   type Resolution,
   resolve as resolveDraft,
 } from "./data.ts";
-import { field, h, type Palette, palette } from "./render.ts";
+import { bindKeyboard, field, h, type Palette, palette, show } from "./render.ts";
 
-/**
- * The controls: the dialogs that change the draft.
- *
- * A control changes the draft and never writes the file. The page writes the
- * file only when the person asks, and `data.save` does the write.
- *
- * Each dialog carries the facts a person needs to choose: the cost, the rungs
- * and the number of allowed models that reach the effort. The resolver that
- * answers those questions is the one the tool uses, so the page cannot promise
- * a spend the router will not make.
- *
- * The dialogs return an `Edit` and they do not hold a draft. `controls` applies
- * the edit with `applied` and hands the next draft to `onChange`. A caller that
- * wires a dialog to a keybinding does the same two calls.
- */
-
-/** The default System One judge model id. */
 export const JEV_MODEL = "jev-1.13-free";
+export const DEFAULT_PROVIDER = "opencode-go";
 
-/** True when the environment carries a key for the System One judge. */
 export const isJevAvailable = (draft: Draft): boolean => {
   const keyName = draft.judge?.key ?? SYSTEMONE_KEY_ENV;
   return Boolean(Bun.env[keyName] || Bun.env.OPENCODE_API_KEY || Bun.env.OPENCODE_KEY);
 };
 
-/** One change a control makes to the draft. */
 export type Edit =
   | { readonly kind: "effort"; readonly profile: string; readonly effort: string }
   | { readonly kind: "pin"; readonly profile: string; readonly alias: string | undefined }
   | { readonly kind: "model"; readonly alias: string; readonly ref: string }
-  | { readonly kind: "judge"; readonly enabled: boolean };
+  | { readonly kind: "judge"; readonly enabled: boolean }
+  | { readonly kind: "provider"; readonly provider: string };
 
-/**
- * The draft with one edit applied.
- *
- * A model joins the end of the allowlist, because the order is the preference
- * order and the person put this model last. An effort replaces the value the
- * profile holds, and a judge toggle enables or clears the System One judge.
- */
 export const applied = (draft: Draft, edit: Edit): Draft => {
   if (edit.kind === "effort")
     return {
@@ -90,20 +68,16 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
           }
         : undefined,
     };
+  if (edit.kind === "provider")
+    return {
+      ...draft,
+      provider: edit.provider,
+    };
   return { ...draft, models: [...draft.models, { alias: edit.alias, ref: edit.ref }] };
 };
 
-/** The ref of a catalogue row, as the allowlist writes it. */
 const refOf = (one: Model): string => `${one.providerID}/${one.id}`;
 
-/**
- * The reduced catalogue row as the barrel's `Known`.
- *
- * `proposeAlias` reads the family, the id and the provider, and `isFree` reads
- * the cost. The two fields the reduction drops carry a stated answer here, and
- * neither call reads them. `tools` carries `true` because the reduced row has
- * no other answer to give.
- */
 const knownOf = (one: Model): Known => ({
   providerID: one.providerID,
   id: one.id,
@@ -117,102 +91,188 @@ const knownOf = (one: Model): Known => ({
   tools: true,
 });
 
-/** The ladder as a person reads it, in the order the resolver compares by. */
 const rungsOf = (one: Model): ReadonlyArray<string> =>
   rungs(ladderOf(one.rungs.map((id) => ({ id }))));
 
-/** The rungs and the cost, as one line. */
+const costLabelOf = (one: Model): string =>
+  isFree(knownOf(one)) ? "free" : `$${one.costInput}/$${one.costOutput}`;
+
 const describeModel = (one: Model): string => {
   const ladder = rungsOf(one);
-  const effort = ladder.length === 0 ? "No effort rungs" : `Rungs ${ladder.join(", ")}`;
-  const cost = isFree(knownOf(one)) ? "free" : `${one.costInput} in, ${one.costOutput} out`;
-  // A model that cannot call tools is not spendable on a subagent, and the
-  // resolver refuses it. The page says so rather than letting a person put it
-  // in the allowlist and wonder why it never runs.
-  const tools = one.tools ? "" : " Cannot call tools, so it is not spendable.";
-  return `${effort}. Cost ${cost}.${tools}`;
+  const effort = ladder.length === 0 ? "no effort rungs" : `rungs: ${ladder.join(", ")}`;
+  const tools = one.tools ? "" : " · no tools";
+  return `${effort}${tools}`;
 };
 
-/** The profile a reach probe resolves: one effort, no pin and no second opinion. */
-const probe = (effort: string): Profile => ({
-  name: "probe",
-  effort,
-  match: undefined,
-  why: undefined,
-  crosscheck: undefined,
-  agent: DEFAULT_AGENT,
-  pinned: undefined,
-});
-
-/** What one effort means for the allowlist. */
-type Reach = {
-  /** How many allowed models reach the effort. */
-  readonly reached: number;
-  /** How many entries the allowlist holds. */
-  readonly total: number;
-  /** The alias and the ref the router would spend, or undefined. */
-  readonly spent: string | undefined;
+export const availableProviders = (models: ReadonlyArray<Model>): ReadonlyArray<string> => {
+  const spendable = new Set<string>();
+  const anyEnabled = new Set<string>();
+  for (const one of models) {
+    if (!one.enabled || one.deprecated) continue;
+    anyEnabled.add(one.providerID);
+    if (one.tools) spendable.add(one.providerID);
+  }
+  return spendable.size > 0 ? [...spendable] : [...anyEnabled];
 };
 
-/**
- * The allowlist read one model at a time, at one effort.
- *
- * Each entry resolves on its own through `data.resolve`, which reads the
- * barrel's `candidates` and `resolveProfile`. The count is therefore the
- * router's own answer and not a second rule that can drift from it.
- */
-const reachOf = (draft: Draft, models: ReadonlyArray<Model>, effort: string): Reach => {
-  let reached = 0;
-  let spent: string | undefined;
+export const isProviderAvailable = (
+  provider: string | undefined,
+  models: ReadonlyArray<Model>,
+): boolean => {
+  const providers = availableProviders(models);
+  if (providers.length === 0) return true;
+  if (provider === undefined) return false;
+  return providers.includes(provider);
+};
 
-  for (const entry of draft.models) {
-    const [row] = resolveDraft(
-      { provider: draft.provider, models: [entry], profiles: [probe(effort)] },
-      models,
-    );
-    if (row?.ref === undefined) continue;
-    reached += 1;
-    if (spent === undefined) spent = `${entry.alias} ${row.ref}`;
+export type SelectedModel = {
+  readonly alias: string;
+  readonly ref: string;
+  readonly model: Model | undefined;
+};
+
+const findCatalogModel = (models: ReadonlyArray<Model>, ref: string): Model | undefined =>
+  models.find((one) => {
+    const head = refOf(one);
+    return ref === head || ref.startsWith(`${head}#`);
+  });
+
+const stripVariant = (ref: string): string => {
+  const hash = ref.indexOf("#");
+  return hash === -1 ? ref : ref.slice(0, hash);
+};
+
+export const selectedModelFor = (
+  draft: Draft,
+  models: ReadonlyArray<Model>,
+  profile: Profile,
+): SelectedModel | undefined => {
+  if (profile.pinned !== undefined) {
+    const pinnedEntry = draft.models.find((one) => one.alias === profile.pinned);
+    if (pinnedEntry !== undefined) {
+      return {
+        alias: pinnedEntry.alias,
+        ref: stripVariant(pinnedEntry.ref),
+        model: findCatalogModel(models, pinnedEntry.ref),
+      };
+    }
+    return {
+      alias: profile.pinned,
+      ref: profile.pinned,
+      model: undefined,
+    };
   }
 
-  return { reached, total: draft.models.length, spent };
+  const resolvedRows = resolveDraft(draft, models);
+  const profileIndex = draft.profiles.findIndex((one) => one.name === profile.name);
+  const resolved =
+    profileIndex !== -1
+      ? resolvedRows[profileIndex]
+      : resolveDraft({ ...draft, profiles: [profile] }, models)[0];
+
+  if (resolved?.ref !== undefined) {
+    const baseRef = stripVariant(resolved.ref);
+    const catalogModel = findCatalogModel(models, resolved.ref);
+    const entry = draft.models.find(
+      (one) => stripVariant(one.ref) === baseRef || one.ref === resolved.ref,
+    );
+    return {
+      alias: entry?.alias ?? baseRef,
+      ref: baseRef,
+      model: catalogModel,
+    };
+  }
+
+  for (const entry of draft.models) {
+    const catalogModel = findCatalogModel(models, entry.ref);
+    if (catalogModel?.enabled && !catalogModel.deprecated && catalogModel.tools) {
+      return {
+        alias: entry.alias,
+        ref: stripVariant(entry.ref),
+        model: catalogModel,
+      };
+    }
+  }
+
+  const firstEntry = draft.models[0];
+  if (firstEntry !== undefined) {
+    return {
+      alias: firstEntry.alias,
+      ref: stripVariant(firstEntry.ref),
+      model: findCatalogModel(models, firstEntry.ref),
+    };
+  }
+
+  return undefined;
 };
 
-/** The footer of one effort option. */
-const footerOf = (one: Reach): string => {
-  if (one.total === 0) return "The allowlist is empty, so no model reaches this effort.";
-  if (one.reached === 0)
-    return `No allowed model reaches this effort. The allowlist holds ${one.total}.`;
-  const count = `${one.reached} of ${one.total} allowed models reach this effort.`;
-  return one.spent === undefined ? count : `${count} The router spends ${one.spent}.`;
+export type EffortOptionRow = {
+  readonly name: string;
+  readonly available: boolean;
+  readonly current: boolean;
+  readonly targetRef: string;
+  readonly cost: string | undefined;
+  readonly reason: string | undefined;
 };
 
-/**
- * The effort names the catalogue declares, in the order the resolver compares
- * by, with the floor in front of them.
- *
- * A name no model declares is not on the list, because the router cannot spend
- * it. The value the profile holds stays on the list even so, so the person sees
- * the value the router refuses.
- *
- * `none` is always on the list, because the router can spend it on every
- * model: a model with rungs is spent at its lowest one, and a model with no
- * thinking control is spent at its own default. It is the floor, not a name
- * only the models that declare it can hold.
- */
-const effortNames = (
+export const effortOptionsFor = (
+  draft: Draft,
   models: ReadonlyArray<Model>,
-  current: string | undefined,
-): ReadonlyArray<string> => {
-  const declared = models.flatMap((one) => one.rungs);
-  const names = rungs(ladderOf(declared.map((id) => ({ id }))));
-  const floor = "none";
-  const held = [floor, ...names.filter((one) => one !== floor)];
-  if (current === undefined || held.includes(current)) return held;
-  return [...held, current];
+  profile: Profile,
+): ReadonlyArray<EffortOptionRow> => {
+  const selected = selectedModelFor(draft, models, profile);
+  const model = selected?.model;
+  const declaredRungs = model !== undefined ? rungsOf(model) : [];
+  const allNames: Array<string> = [...KNOWN_ORDER];
+
+  for (const rung of declaredRungs) {
+    if (!allNames.includes(rung)) allNames.push(rung);
+  }
+  if (profile.effort !== undefined && !allNames.includes(profile.effort)) {
+    allNames.push(profile.effort);
+  }
+
+  return allNames.map((name): EffortOptionRow => {
+    const current = profile.effort === name && profile.pinned === undefined;
+    if (model === undefined) {
+      const fallbackRef = selected?.ref ?? "no model selected";
+      return {
+        name,
+        available: true,
+        current,
+        targetRef: selected !== undefined ? `${selected.ref}#${name}` : fallbackRef,
+        cost: undefined,
+        reason: selected === undefined ? "add a model to the allowlist" : undefined,
+      };
+    }
+
+    const available = declaredRungs.length === 0 ? name === "none" : declaredRungs.includes(name);
+    const baseRef = refOf(model);
+    const targetRef =
+      declaredRungs.length === 0 && name === "none" ? baseRef : `${baseRef}#${name}`;
+
+    if (available) {
+      return {
+        name,
+        available: true,
+        current,
+        targetRef,
+        cost: costLabelOf(model),
+        reason: undefined,
+      };
+    }
+
+    return {
+      name,
+      available: false,
+      current,
+      targetRef: baseRef,
+      cost: undefined,
+      reason: `not supported by ${baseRef}`,
+    };
+  });
 };
 
-/** A query matched against the title, the description and the category. */
 const matches = (
   query: string,
   options: readonly DialogSelectOption<string>[],
@@ -224,48 +284,563 @@ const matches = (
   );
 };
 
-/** The effort picker: one profile's requirement, and what each choice costs. */
+export const effortModal = (input: {
+  readonly profile: Profile;
+  readonly draft: Draft;
+  readonly models: ReadonlyArray<Model>;
+  readonly onSelect: (effort: string) => void;
+  readonly onCancel: () => void;
+}): JSX.Element => {
+  const context = usePlugin();
+  const dialogTheme =
+    typeof context.theme.surface === "function" ? context.theme.surface("dialog") : context.theme;
+  const colors = palette(context.theme, dialogTheme);
+  const selected = selectedModelFor(input.draft, input.models, input.profile);
+  const rows = effortOptionsFor(input.draft, input.models, input.profile);
+  const enabledIndices = rows.flatMap((row, idx) => (row.available ? [idx] : []));
+  const initialIndex = (() => {
+    const currentIdx = rows.findIndex((row) => row.current && row.available);
+    if (currentIdx !== -1) return currentIdx;
+    return enabledIndices[0] ?? 0;
+  })();
+
+  const [focusedIndex, setFocusedIndex] = createSignal(initialIndex);
+
+  const stepFocus = (delta: number): void => {
+    if (enabledIndices.length === 0) return;
+    const currentPos = enabledIndices.indexOf(focusedIndex());
+    const nextPos =
+      currentPos === -1 ? 0 : (currentPos + delta + enabledIndices.length) % enabledIndices.length;
+    const target = enabledIndices[nextPos];
+    if (target !== undefined) setFocusedIndex(target);
+  };
+
+  bindKeyboard(context.renderer, (event: KeyEvent) => {
+    const key = event.name || event.sequence || "";
+    if (key === "down" || key === "j") {
+      event.preventDefault();
+      event.stopPropagation();
+      stepFocus(1);
+      return;
+    }
+    if (key === "up" || key === "k") {
+      event.preventDefault();
+      event.stopPropagation();
+      stepFocus(-1);
+      return;
+    }
+    if (key === "return" || key === "enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      const row = rows[focusedIndex()];
+      if (row?.available) input.onSelect(row.name);
+      return;
+    }
+    if (key === "escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      input.onCancel();
+    }
+  });
+
+  const selectedModelText =
+    selected?.model !== undefined
+      ? `${selected.alias} (${refOf(selected.model)})`
+      : (selected?.ref ?? "no model selected");
+  const supportedList =
+    selected?.model !== undefined
+      ? rungsOf(selected.model).join(", ") || "none"
+      : "all catalogue efforts";
+
+  return h(
+    "box",
+    {
+      flexDirection: "column",
+      width: "100%",
+      border: true,
+      borderStyle: "rounded",
+      borderColor: colors.borderOuter,
+      backgroundColor: colors.modalBg,
+    },
+    h(
+      "box",
+      {
+        flexDirection: "column",
+        width: "100%",
+        flexShrink: 0,
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
+        border: ["bottom"],
+        borderColor: colors.border,
+      },
+      h(
+        "box",
+        { flexDirection: "row", justifyContent: "space-between", width: "100%" },
+        h(
+          "text",
+          { fg: colors.text, attributes: TextAttributes.BOLD },
+          `The effort for "${input.profile.name}"`,
+        ),
+        h("text", { fg: colors.teal, onMouseUp: input.onCancel }, "esc"),
+      ),
+      field(dialogTheme, "selected model", () => selectedModelText),
+      field(dialogTheme, "available efforts", () => supportedList),
+    ),
+    h(
+      "box",
+      {
+        flexDirection: "column",
+        width: "100%",
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
+      },
+      h(
+        "box",
+        {
+          flexDirection: "row",
+          width: "100%",
+          columnGap: 2,
+          paddingBottom: 1,
+          border: ["bottom"],
+          borderColor: colors.border,
+        },
+        h("text", { width: 3, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, ""),
+        h("text", { width: 12, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, "effort"),
+        h("text", { width: 12, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, "status"),
+        h(
+          "text",
+          { width: 36, flexGrow: 1, flexShrink: 1, minWidth: 0, fg: colors.blue, wrapMode: "none" },
+          "selected model",
+        ),
+        h("text", { width: 12, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, () =>
+          "cost".padStart(12),
+        ),
+      ),
+      ...rows.map((row, index) => {
+        const [hovered, setHovered] = createSignal(false);
+        const isFocused = () => focusedIndex() === index;
+        const marker = () => {
+          if (row.current && isFocused()) return "▸●";
+          if (row.current) return " ●";
+          if (isFocused()) return "▸ ";
+          return "  ";
+        };
+        const nameColor = () => {
+          if (!row.available) return colors.disabled;
+          if (isFocused() || hovered()) return colors.cyan;
+          return colors.green;
+        };
+        const statusColor = () => (row.available ? colors.green : colors.disabled);
+        const targetColor = () => {
+          if (!row.available) return colors.disabled;
+          if (isFocused() || hovered()) return colors.text;
+          return colors.teal;
+        };
+
+        return h(
+          "box",
+          {
+            flexDirection: "row",
+            width: "100%",
+            columnGap: 2,
+            backgroundColor: () =>
+              row.available && (isFocused() || hovered()) ? colors.rowHoverBg : undefined,
+            onMouseOver: () => {
+              setHovered(true);
+              if (row.available) setFocusedIndex(index);
+            },
+            onMouseOut: () => setHovered(false),
+            onMouseUp: () => {
+              if (row.available) input.onSelect(row.name);
+            },
+          },
+          h(
+            "text",
+            {
+              width: 3,
+              flexShrink: 0,
+              fg: () => (row.available ? colors.cyan : colors.disabled),
+              wrapMode: "none",
+            },
+            marker,
+          ),
+          h(
+            "text",
+            {
+              width: 12,
+              flexShrink: 0,
+              fg: nameColor,
+              attributes: row.available ? TextAttributes.BOLD : TextAttributes.DIM,
+              wrapMode: "none",
+            },
+            row.name,
+          ),
+          h(
+            "text",
+            {
+              width: 12,
+              flexShrink: 0,
+              fg: statusColor,
+              wrapMode: "none",
+            },
+            row.available ? "available" : "disabled",
+          ),
+          h(
+            "text",
+            {
+              width: 36,
+              flexGrow: 1,
+              flexShrink: 1,
+              minWidth: 0,
+              fg: targetColor,
+              truncate: true,
+              wrapMode: "none",
+            },
+            row.available ? row.targetRef : (row.reason ?? "not supported"),
+          ),
+          h(
+            "text",
+            {
+              width: 12,
+              flexShrink: 0,
+              fg: () => (row.available ? colors.muted : colors.disabled),
+              wrapMode: "none",
+            },
+            () => (row.cost ?? "-").padStart(12),
+          ),
+        );
+      }),
+    ),
+    h(
+      "box",
+      {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        backgroundColor: colors.insetBg,
+        border: ["top"],
+        borderColor: colors.border,
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
+      },
+      h(
+        "box",
+        { flexDirection: "row", gap: 3 },
+        h(
+          "text",
+          { fg: colors.text, attributes: TextAttributes.BOLD },
+          "enter ",
+          h("span", { style: { fg: colors.muted } }, "select effort"),
+        ),
+        h(
+          "text",
+          { fg: colors.text, attributes: TextAttributes.BOLD },
+          "↑/↓ ",
+          h("span", { style: { fg: colors.muted } }, "navigate available"),
+        ),
+      ),
+      h(
+        "text",
+        { fg: colors.text, attributes: TextAttributes.BOLD, onMouseUp: input.onCancel },
+        "esc ",
+        h("span", { style: { fg: colors.muted } }, "back"),
+      ),
+    ),
+  );
+};
+
 export const effortPicker = async (input: {
   readonly dialog: Dialog;
   readonly draft: Draft;
   readonly models: ReadonlyArray<Model>;
   readonly profile: Profile;
-}): Promise<Edit | undefined> => {
-  const pin =
-    input.profile.pinned === undefined ? undefined : ` (pinned to ${input.profile.pinned})`;
-  const options: Array<DialogSelectOption<string>> = effortNames(
-    input.models,
-    input.profile.effort,
-  ).map((name) => ({
-    title: name,
-    value: name,
-    description: `profiles.${input.profile.name}.effort${pin ?? ""}`,
-    footer: footerOf(reachOf(input.draft, input.models, name)),
-  }));
+}): Promise<Edit | undefined> =>
+  new Promise<Edit | undefined>((resolve) => {
+    let settled = false;
+    const finish = (value: Edit | undefined): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
 
-  const chosen = await input.dialog.select({
-    title: `The effort for "${input.profile.name}"`,
-    placeholder: "Search the effort names",
-    options,
-    current: input.profile.effort,
+    input.dialog.show(
+      () =>
+        effortModal({
+          profile: input.profile,
+          draft: input.draft,
+          models: input.models,
+          onSelect: (chosen) => {
+            if (chosen === input.profile.effort && input.profile.pinned === undefined) {
+              finish(undefined);
+              return;
+            }
+            finish({ kind: "effort", profile: input.profile.name, effort: chosen });
+          },
+          onCancel: () => finish(undefined),
+        }),
+      () => finish(undefined),
+    );
+    input.dialog.set({ size: "large", centered: true });
   });
 
-  if (
-    chosen === undefined ||
-    (chosen === input.profile.effort && input.profile.pinned === undefined)
-  )
-    return undefined;
-  return { kind: "effort", profile: input.profile.name, effort: chosen };
+export const profileInfoModal = (input: {
+  readonly profile: Profile;
+  readonly resolution: Resolution | undefined;
+  readonly draft: Draft;
+  readonly models: ReadonlyArray<Model>;
+  readonly onClose: () => void;
+}): JSX.Element => {
+  const context = usePlugin();
+  const dialogTheme =
+    typeof context.theme.surface === "function" ? context.theme.surface("dialog") : context.theme;
+  const colors = palette(context.theme, dialogTheme);
+  const { profile, resolution } = input;
+  const selected = selectedModelFor(input.draft, input.models, profile);
+  const effortText =
+    profile.pinned !== undefined ? `pinned to ${profile.pinned}` : (profile.effort ?? "not set");
+  const modelText =
+    resolution?.ref ??
+    (selected?.model !== undefined ? refOf(selected.model) : (selected?.ref ?? "unresolved"));
+  const crosscheckConfig =
+    profile.crosscheck === undefined
+      ? "none"
+      : `${profile.crosscheck.effort ?? profile.effort ?? "default"}${profile.crosscheck.prefer === "free" ? " (prefer free)" : ""}`;
+
+  bindKeyboard(context.renderer, (event: KeyEvent) => {
+    const key = event.name || event.sequence || "";
+    if (key === "escape" || key === "return" || key === "enter" || key === "i") {
+      event.preventDefault();
+      event.stopPropagation();
+      input.onClose();
+    }
+  });
+
+  return h(
+    "box",
+    {
+      flexDirection: "column",
+      width: "100%",
+      border: true,
+      borderStyle: "rounded",
+      borderColor: colors.borderOuter,
+      backgroundColor: colors.modalBg,
+    },
+    h(
+      "box",
+      {
+        flexDirection: "column",
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
+        gap: 1,
+        border: ["bottom"],
+        borderColor: colors.border,
+      },
+      h(
+        "box",
+        { flexDirection: "row", justifyContent: "space-between", width: "100%" },
+        h(
+          "text",
+          { fg: colors.cyan, attributes: TextAttributes.BOLD },
+          `Profile "${profile.name}"`,
+        ),
+        h("text", { fg: colors.teal, onMouseUp: input.onClose }, "esc"),
+      ),
+      h(
+        "box",
+        { flexDirection: "row", justifyContent: "space-between", width: "100%" },
+        field(dialogTheme, "effort", () => effortText),
+        field(dialogTheme, "agent", () => profile.agent),
+      ),
+      h(
+        "box",
+        { flexDirection: "row", justifyContent: "space-between", width: "100%" },
+        field(dialogTheme, "selected model", () => modelText),
+        field(dialogTheme, "cost", () => resolution?.cost ?? "-"),
+      ),
+      field(dialogTheme, "crosscheck", () =>
+        resolution?.crosscheck !== undefined
+          ? `${crosscheckConfig} → ${resolution.crosscheck}`
+          : crosscheckConfig,
+      ),
+    ),
+    h(
+      "box",
+      {
+        flexDirection: "column",
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
+        gap: 1,
+      },
+      h(
+        "box",
+        {
+          flexDirection: "column",
+          border: true,
+          borderStyle: "rounded",
+          borderColor: colors.border,
+          backgroundColor: colors.insetBg,
+          paddingLeft: 2,
+          paddingRight: 2,
+          paddingTop: 1,
+          paddingBottom: 1,
+          gap: 1,
+        },
+        h("text", { fg: colors.blue, attributes: TextAttributes.BOLD }, "When to use (match)"),
+        h(
+          "text",
+          { fg: colors.text, wrapMode: "word" },
+          profile.match ?? "No match rule configured for this profile.",
+        ),
+      ),
+      h(
+        "box",
+        {
+          flexDirection: "column",
+          border: true,
+          borderStyle: "rounded",
+          borderColor: colors.border,
+          backgroundColor: colors.insetBg,
+          paddingLeft: 2,
+          paddingRight: 2,
+          paddingTop: 1,
+          paddingBottom: 1,
+          gap: 1,
+        },
+        h("text", { fg: colors.blue, attributes: TextAttributes.BOLD }, "Why (rationale)"),
+        h(
+          "text",
+          { fg: colors.muted, wrapMode: "word" },
+          profile.why ?? "No rationale recorded for this profile.",
+        ),
+      ),
+      show(
+        () => resolution?.problem !== undefined,
+        () =>
+          h(
+            "box",
+            {
+              flexDirection: "column",
+              border: true,
+              borderStyle: "rounded",
+              borderColor: colors.warning,
+              paddingLeft: 2,
+              paddingRight: 2,
+              paddingTop: 1,
+              paddingBottom: 1,
+            },
+            h("text", { fg: colors.warning, wrapMode: "word" }, resolution?.problem ?? ""),
+          ),
+      ),
+    ),
+    h(
+      "box",
+      {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        backgroundColor: colors.insetBg,
+        border: ["top"],
+        borderColor: colors.border,
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
+      },
+      h(
+        "text",
+        { fg: colors.text, attributes: TextAttributes.BOLD, onMouseUp: input.onClose },
+        "i / enter ",
+        h("span", { style: { fg: colors.muted } }, "return to profiles"),
+      ),
+      h(
+        "text",
+        { fg: colors.text, attributes: TextAttributes.BOLD, onMouseUp: input.onClose },
+        "esc ",
+        h("span", { style: { fg: colors.muted } }, "close"),
+      ),
+    ),
+  );
 };
 
-/**
- * The pin picker: the model a profile spends on, whatever the effort says.
- *
- * A pin names an entry in the allowlist, so the options are the allowlist's
- * entries and not the catalogue's models: a model the user did not allow is
- * not spendable here, and the picker says so by not offering it. The first
- * option clears the pin, so a profile that had one can have it back.
- */
+export const profileInfo = async (input: {
+  readonly dialog: Dialog;
+  readonly profile: Profile;
+  readonly resolution: Resolution | undefined;
+  readonly draft: Draft;
+  readonly models: ReadonlyArray<Model>;
+}): Promise<undefined> =>
+  new Promise<undefined>((resolve) => {
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      resolve(undefined);
+    };
+
+    input.dialog.show(
+      () =>
+        profileInfoModal({
+          profile: input.profile,
+          resolution: input.resolution,
+          draft: input.draft,
+          models: input.models,
+          onClose: finish,
+        }),
+      finish,
+    );
+    input.dialog.set({ size: "large", centered: true });
+  });
+
+export const providerPicker = async (input: {
+  readonly dialog: Dialog;
+  readonly draft: Draft;
+  readonly models: ReadonlyArray<Model>;
+}): Promise<Edit | undefined> => {
+  const providers = availableProviders(input.models);
+  if (providers.length === 0) return undefined;
+
+  const options: Array<DialogSelectOption<string>> = providers.map((providerID) => {
+    const providerModels = input.models.filter(
+      (one) => one.providerID === providerID && one.enabled && !one.deprecated && one.tools,
+    );
+    const freeCount = providerModels.filter((one) => isFree(knownOf(one))).length;
+    const countLabel = `${providerModels.length} model${providerModels.length === 1 ? "" : "s"}`;
+    const freeLabel = freeCount > 0 ? `${freeCount} free` : "available";
+    return {
+      title: providerID,
+      value: providerID,
+      description: countLabel,
+      footer: freeLabel,
+    };
+  });
+
+  const missingNote =
+    input.draft.provider !== undefined && !providers.includes(input.draft.provider)
+      ? ` ("${input.draft.provider}" is not available)`
+      : "";
+
+  const pending = input.dialog.select({
+    title: `Select default provider${missingNote}`,
+    placeholder: "Search available providers",
+    options,
+    current: input.draft.provider,
+    search: matches,
+  });
+  input.dialog.set({ size: "large", centered: true });
+  const chosen = await pending;
+
+  if (chosen === undefined || chosen === input.draft.provider) return undefined;
+  return { kind: "provider", provider: chosen };
+};
+
 export const pinPicker = async (input: {
   readonly dialog: Dialog;
   readonly draft: Draft;
@@ -273,32 +848,33 @@ export const pinPicker = async (input: {
 }): Promise<Edit | undefined> => {
   const options: Array<DialogSelectOption<string>> = [
     {
-      title: "No pin",
+      title: "Auto (by effort)",
       value: "",
       description: `profiles.${input.profile.name}.model`,
-      footer: "The profile asks for an effort, and the router picks the model.",
+      footer: "unpinned",
     },
     ...input.draft.models.map((one) => ({
       title: one.alias,
       value: one.alias,
       description: one.ref,
-      footer: "The profile spends this model whatever the effort says.",
+      footer: "pinned",
     })),
   ];
 
-  const chosen = await input.dialog.select({
+  const pending = input.dialog.select({
     title: `The model "${input.profile.name}" spends`,
     placeholder: "Search the allowlist",
     options,
     current: input.profile.pinned ?? "",
   });
+  input.dialog.set({ size: "xlarge", centered: true });
+  const chosen = await pending;
 
   if (chosen === undefined) return undefined;
   if ((chosen === "") === (input.profile.pinned === undefined)) return undefined;
   return { kind: "pin", profile: input.profile.name, alias: chosen === "" ? undefined : chosen };
 };
 
-/** Why the alias is not valid, or undefined when it is. */
 const aliasProblem = (name: string, taken: ReadonlyArray<string>): string | undefined => {
   if (name === "") return "Type an alias. Use lowercase letters, digits and hyphens only.";
   if (!/^[a-z0-9][a-z0-9-]*$/.test(name))
@@ -307,13 +883,6 @@ const aliasProblem = (name: string, taken: ReadonlyArray<string>): string | unde
   return undefined;
 };
 
-/**
- * The alias of a model that joins the allowlist.
- *
- * The charset is lowercase letters, digits and hyphens, so a name can never
- * carry a slash or a hash and can never look like a ref. A refused name asks
- * again, and a cancel answers undefined.
- */
 export const aliasPrompt = async (input: {
   readonly dialog: Dialog;
   readonly ref: string;
@@ -323,13 +892,15 @@ export const aliasPrompt = async (input: {
   let value = input.proposed;
 
   for (;;) {
-    const answer = await input.dialog.prompt({
+    const pending = input.dialog.prompt({
       title: `The alias for ${input.ref}`,
       description:
         "Use lowercase letters, digits and hyphens only. The first character is a letter or a digit.",
       placeholder: input.proposed,
       value,
     });
+    input.dialog.set({ size: "large", centered: true });
+    const answer = await pending;
     if (answer === undefined) return undefined;
 
     const problem = aliasProblem(answer, input.taken);
@@ -340,48 +911,54 @@ export const aliasPrompt = async (input: {
   }
 };
 
-/**
- * The model picker: every model this session can see, grouped by provider.
- *
- * A model the router refuses is on the list and cannot be chosen, so the person
- * reads why. A model already in the allowlist is marked, so the same ref cannot
- * join twice. A chosen model asks for its alias before it joins.
- */
 export const modelPicker = async (input: {
   readonly dialog: Dialog;
   readonly draft: Draft;
   readonly models: ReadonlyArray<Model>;
 }): Promise<Edit | undefined> => {
   const taken = input.draft.models.map((one) => one.alias);
-  const options: Array<DialogSelectOption<string>> = input.models.map((one) => {
+  const preferredProvider = input.draft.provider ?? DEFAULT_PROVIDER;
+  const orderedModels = [...input.models].sort((a, b) => {
+    const aPreferred = a.providerID === preferredProvider ? 0 : 1;
+    const bPreferred = b.providerID === preferredProvider ? 0 : 1;
+    if (aPreferred !== bPreferred) return aPreferred - bPreferred;
+    return 0;
+  });
+
+  const options: Array<DialogSelectOption<string>> = orderedModels.map((one) => {
     const ref = refOf(one);
     const held = input.draft.models.some(
       (entry) => entry.ref === ref || entry.ref.startsWith(`${ref}#`),
     );
     const state = !one.enabled
-      ? "disabled in the catalogue"
+      ? "disabled"
       : one.deprecated
-        ? "deprecated in the catalogue"
-        : held
-          ? "already in the allowlist"
-          : undefined;
+        ? "deprecated"
+        : !one.tools
+          ? "no tools"
+          : held
+            ? "in allowlist"
+            : undefined;
 
+    const familyText = one.family === undefined ? "no family" : one.family;
     return {
       title: ref,
       value: ref,
-      description: one.family === undefined ? "no family" : one.family,
-      footer: state === undefined ? describeModel(one) : `${state}. ${describeModel(one)}`,
+      description: `${familyText} · ${describeModel(one)}`,
+      footer: state ?? costLabelOf(one),
       category: one.providerID,
       disabled: state !== undefined,
     };
   });
 
-  const ref = await input.dialog.select({
+  const pending = input.dialog.select({
     title: "Add a model to the allowlist",
     placeholder: "Search the models this session can see",
     options,
     search: matches,
   });
+  input.dialog.set({ size: "xlarge", centered: true });
+  const ref = await pending;
   if (ref === undefined) return undefined;
 
   const model = input.models.find((one) => refOf(one) === ref);
@@ -398,14 +975,12 @@ export const modelPicker = async (input: {
   return { kind: "model", alias, ref };
 };
 
-/** One property in a resolved JSON preview object. */
 type JsonField = {
   readonly key: string;
   readonly value: string;
   readonly warning?: boolean;
 };
 
-/** The JSON properties that describe one profile resolution. */
 const jsonFields = (one: Resolution): ReadonlyArray<JsonField> => {
   if (one.problem !== undefined) {
     return [
@@ -423,7 +998,6 @@ const jsonFields = (one: Resolution): ReadonlyArray<JsonField> => {
   return fields;
 };
 
-/** One syntax-highlighted JSON object inside the preview array. */
 const previewObject = (
   colors: Palette,
   one: Resolution,
@@ -452,12 +1026,6 @@ const previewObject = (
   ];
 };
 
-/**
- * The preview of an unsaved edit, rendered as syntax-highlighted JSON.
- *
- * It reads the draft and the catalogue, and never the file. `data.resolve`
- * reads the barrel's resolver, so the preview and the router agree.
- */
 export const preview = (input: {
   readonly theme: ResolvedTheme;
   readonly draft: Draft;
@@ -482,17 +1050,6 @@ export const preview = (input: {
   );
 };
 
-/**
- * The controls, as the rows a person presses.
- *
- * One row per profile opens the effort picker for that profile. One row opens
- * the model picker. The preview goes under them, so a changed draft shows its
- * own result before the person saves it.
- *
- * `onChange` receives the next draft. This file never writes the config, and
- * the caller must not write it here either. The write is a separate action,
- * and a person asks for it.
- */
 export const controls = (input: {
   readonly onChange: (next: Draft) => void;
   readonly draft: Draft;

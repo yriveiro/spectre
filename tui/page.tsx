@@ -1,53 +1,42 @@
 import { usePlugin } from "@opencode/plugin/tui";
 import type { ResolvedTheme } from "@opencode/theme/tui";
-import { type RGBA, TextAttributes } from "@opentui/core";
-import type { JSX } from "@opentui/solid";
+import { type KeyEvent, type RGBA, TextAttributes } from "@opentui/core";
+import { type JSX, useRenderer } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import { KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
 import {
   applied,
+  DEFAULT_PROVIDER,
   type Edit,
   effortPicker,
   isJevAvailable,
+  isProviderAvailable,
   JEV_MODEL,
   modelPicker,
   pinPicker,
   preview,
+  profileInfo,
+  providerPicker,
 } from "./controls.tsx";
 import type { Draft, Model, Profile, Resolution } from "./data.ts";
-import { field, h, type Palette, palette, show } from "./render.ts";
+import { bindKeyboard, field, h, type Palette, palette, show } from "./render.ts";
 
-/**
- * The page.
- *
- * The modal organises routing configuration into three tabs (`Profiles`,
- * `Allowlist`, `Preview`), with a header that shows the config file and a
- * radio toggle for the Jev System One judge.
- */
-
-/** The three tabs of the routing modal. */
 export type TabId = "profiles" | "allowlist" | "preview";
 
 export const TABS: ReadonlyArray<TabId> = ["profiles", "allowlist", "preview"];
 
-/** One profile and what it resolves to under the draft the page shows. */
 export type ProfileRow = {
   readonly profile: Profile;
-  /** The resolution the resolver reached, or nothing while it works. */
   readonly resolution: Resolution | undefined;
 };
 
-/** One allowlist entry, in the read order, with the catalogue's facts. */
 export type EntryRow = {
   readonly alias: string;
   readonly ref: string;
-  /** Nothing when the catalogue holds no model for the ref. */
   readonly model: Model | undefined;
-  /** Why the entry cannot be spent, when the entrypoint knows one. */
   readonly problem?: string | undefined;
 };
 
-/** The page's inputs. Each one comes from the entrypoint. */
 export type PageInput = {
   readonly rows: ReadonlyArray<ProfileRow>;
   readonly models: ReadonlyArray<EntryRow>;
@@ -57,15 +46,18 @@ export type PageInput = {
   readonly tab?: TabId | undefined;
   readonly onTabChange?: ((tab: TabId) => void) | undefined;
   readonly selectedRow?: number | undefined;
+  readonly onRowChange?: ((row: number) => void) | undefined;
   readonly jevAvailable?: boolean | undefined;
+  readonly terminalWidth?: number | undefined;
+  readonly terminalHeight?: number | undefined;
   readonly onChange: (next: Draft) => void;
+  readonly onProviderChange?: ((next: Draft) => void) | undefined;
   readonly onSave: () => void;
   readonly onClose?: () => void;
 };
 
 const ORDER: ReadonlyArray<string> = KNOWN_ORDER;
 
-/** The rungs sorted by the known order, followed by any unranked names. */
 const rungsView = (rungs: ReadonlyArray<string>): string => {
   const ranked = rungs
     .filter((one) => ORDER.includes(one))
@@ -74,11 +66,9 @@ const rungsView = (rungs: ReadonlyArray<string>): string => {
   return [...ranked, ...unranked].join(", ");
 };
 
-/** The cost as one cell. */
 const costView = (costInput: number, costOutput: number): string =>
   costInput === 0 && costOutput === 0 ? "free" : `$${costInput}/$${costOutput}`;
 
-/** True when a resolved cost line names a rate of $1 or more per million tokens. */
 const isExpensiveCost = (cost: string | undefined): boolean => {
   if (cost === undefined) return false;
   for (const match of cost.matchAll(/\$(\d+(?:\.\d+)?)/g)) {
@@ -87,23 +77,126 @@ const isExpensiveCost = (cost: string | undefined): boolean => {
   return false;
 };
 
-/** Column widths, in cells. */
-const GUTTER = 2;
-const NAME = 11;
-const EFFORT = 12;
-const COST = 19;
-const INDEX = 3;
-const ALIAS = 14;
-const FAMILY = 14;
-const RUNGS = 18;
-const ALLOW_COST = 12;
 const INDENT = 2;
 
-const cell = (width: number, value: () => string, tone: RGBA): JSX.Element =>
-  h("text", { width, fg: tone, truncate: true, wrapMode: "none" }, value);
+export type LayoutMetrics = {
+  readonly modalWidth: number;
+  readonly bodyHeight: number;
+  readonly profileColumns: {
+    readonly gutter: number;
+    readonly name: number;
+    readonly info: number;
+    readonly effort: number;
+    readonly model: number;
+    readonly cost: number;
+  };
+  readonly entryColumns: {
+    readonly index: number;
+    readonly alias: number;
+    readonly family: number;
+    readonly rungs: number;
+    readonly model: number;
+    readonly cost: number;
+  };
+};
 
-const flexCell = (value: () => string, tone: RGBA): JSX.Element =>
-  h("text", { fg: tone, flexGrow: 1, minWidth: 0, truncate: true, wrapMode: "none" }, value);
+export const layoutMetrics = (input: {
+  readonly terminalWidth?: number | undefined;
+  readonly terminalHeight?: number | undefined;
+  readonly rows: ReadonlyArray<ProfileRow>;
+  readonly models: ReadonlyArray<EntryRow>;
+}): LayoutMetrics => {
+  const termWidth = input.terminalWidth ?? 116;
+  const termHeight = input.terminalHeight ?? 40;
+  const modalWidth = Math.min(116, Math.max(76, termWidth));
+  const bodyHeight = Math.max(16, Math.min(34, termHeight - 14));
+  const innerWidth = Math.max(60, modalWidth - 9);
+
+  const pGutter = 2;
+  const pInfo = 3;
+  const maxProfileName = input.rows.reduce((max, one) => Math.max(max, one.profile.name.length), 7);
+  const pName = Math.max(10, Math.min(16, maxProfileName + 1));
+
+  const maxEffort = input.rows.reduce((max, one) => {
+    const label = one.profile.pinned !== undefined ? "pinned" : (one.profile.effort ?? "-");
+    return Math.max(max, label.length);
+  }, 6);
+  const pEffort = Math.max(12, Math.min(15, maxEffort + 4));
+
+  const maxProfileCost = input.rows.reduce(
+    (max, one) => Math.max(max, (one.resolution?.cost ?? "-").length),
+    4,
+  );
+  const pCost = Math.max(8, Math.min(20, maxProfileCost));
+  const pGaps = 5;
+  const pModel = Math.max(20, innerWidth - pGutter - pName - pInfo - pEffort - pCost - pGaps);
+
+  const eIndex = 3;
+  const maxAlias = input.models.reduce((max, one) => Math.max(max, one.alias.length), 5);
+  const eAlias = Math.max(8, Math.min(16, maxAlias + 1));
+
+  const maxFamily = input.models.reduce(
+    (max, one) => Math.max(max, (one.model?.family ?? "-").length),
+    6,
+  );
+  const eFamily = Math.max(8, Math.min(14, maxFamily + 1));
+
+  const maxRungs = input.models.reduce((max, one) => {
+    const text =
+      one.model === undefined || one.model.rungs.length === 0 ? "-" : rungsView(one.model.rungs);
+    return Math.max(max, text.length);
+  }, 5);
+  const eRungs = Math.max(12, Math.min(22, maxRungs + 1));
+
+  const maxEntryCost = input.models.reduce((max, one) => {
+    const text =
+      one.model === undefined ? "-" : costView(one.model.costInput, one.model.costOutput);
+    return Math.max(max, text.length);
+  }, 4);
+  const eCost = Math.max(6, Math.min(12, maxEntryCost));
+  const eGaps = 5;
+  const eModel = Math.max(20, innerWidth - eIndex - eAlias - eFamily - eRungs - eCost - eGaps);
+
+  return {
+    modalWidth,
+    bodyHeight,
+    profileColumns: {
+      gutter: pGutter,
+      name: pName,
+      info: pInfo,
+      effort: pEffort,
+      model: pModel,
+      cost: pCost,
+    },
+    entryColumns: {
+      index: eIndex,
+      alias: eAlias,
+      family: eFamily,
+      rungs: eRungs,
+      model: eModel,
+      cost: eCost,
+    },
+  };
+};
+
+const cell = (width: number, value: () => string, tone: RGBA): JSX.Element =>
+  h("text", { width, flexShrink: 0, fg: tone, truncate: true, wrapMode: "none" }, value);
+
+const modelCell = (width: number, value: () => string, tone: RGBA): JSX.Element =>
+  h(
+    "text",
+    {
+      width,
+      flexGrow: 1,
+      flexShrink: 1,
+      flexBasis: 0,
+      minWidth: 0,
+      fg: tone,
+      truncate: true,
+      wrapMode: "none",
+    },
+    value,
+  );
 
 const costCell = (width: number, value: () => string, tone: RGBA): JSX.Element =>
   h("text", { width, flexShrink: 0, fg: tone, wrapMode: "none" }, () => value().padStart(width));
@@ -115,7 +208,6 @@ const indentedLine = (tone: RGBA, text: string): JSX.Element =>
     h("text", { fg: tone, wrapMode: "word" }, text),
   );
 
-/** A TUI-styled select dropdown cell with an inset surface and cyan chevron. */
 const selectControl = (input: {
   readonly colors: Palette;
   readonly width?: number;
@@ -129,6 +221,8 @@ const selectControl = (input: {
     {
       width: input.width,
       flexGrow: input.flexGrow,
+      flexShrink: input.flexGrow !== undefined ? 1 : 0,
+      flexBasis: input.flexGrow !== undefined && input.width === undefined ? 0 : undefined,
       minWidth: input.flexGrow !== undefined ? 0 : undefined,
       flexDirection: "row",
       justifyContent: "space-between",
@@ -144,6 +238,8 @@ const selectControl = (input: {
       {
         fg: () => (hovered() ? input.colors.cyan : input.colors.text),
         flexGrow: 1,
+        flexShrink: 1,
+        flexBasis: 0,
         minWidth: 0,
         truncate: true,
         wrapMode: "none",
@@ -162,7 +258,80 @@ const selectControl = (input: {
   );
 };
 
-/** The Jev System One judge radio/toggle row in the modal header. */
+const infoBadge = (input: {
+  readonly colors: Palette;
+  readonly width: number;
+  readonly onOpen: () => void;
+}): JSX.Element => {
+  const [hovered, setHovered] = createSignal(false);
+  return h(
+    "box",
+    {
+      width: input.width,
+      flexShrink: 0,
+      flexDirection: "row",
+      justifyContent: "center",
+      backgroundColor: () => (hovered() ? input.colors.selectHoverBg : undefined),
+      onMouseOver: () => setHovered(true),
+      onMouseOut: () => setHovered(false),
+      onMouseUp: input.onOpen,
+    },
+    h(
+      "text",
+      {
+        fg: () => (hovered() ? input.colors.cyan : input.colors.teal),
+        attributes: TextAttributes.BOLD,
+        wrapMode: "none",
+      },
+      "ⓘ",
+    ),
+  );
+};
+
+const providerBar = (input: {
+  readonly colors: Palette;
+  readonly provider: string | undefined;
+  readonly available: boolean;
+  readonly onOpen: () => void;
+}): JSX.Element => {
+  const [hovered, setHovered] = createSignal(false);
+  const label = input.provider ?? `${DEFAULT_PROVIDER} (default)`;
+  const statusText = input.available ? "change ▾" : "unavailable — select provider ▾";
+  const statusTone = input.available
+    ? () => (hovered() ? input.colors.cyan : input.colors.muted)
+    : () => input.colors.warning;
+
+  return h(
+    "box",
+    {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      onMouseOver: () => setHovered(true),
+      onMouseOut: () => setHovered(false),
+      onMouseUp: input.onOpen,
+    },
+    h(
+      "text",
+      { fg: input.colors.blue, truncate: true, wrapMode: "none" },
+      "provider: ",
+      h(
+        "span",
+        { style: { fg: input.available ? input.colors.text : input.colors.warning } },
+        label,
+      ),
+    ),
+    h(
+      "text",
+      {
+        fg: statusTone,
+        flexShrink: 0,
+        wrapMode: "none",
+      },
+      statusText,
+    ),
+  );
+};
+
 const jevToggleBar = (input: {
   readonly colors: Palette;
   readonly modelName: string;
@@ -204,7 +373,6 @@ const jevToggleBar = (input: {
   );
 };
 
-/** The horizontal tab bar for switching between Profiles, Allowlist, and Preview. */
 const tabBar = (input: {
   readonly colors: Palette;
   readonly active: TabId;
@@ -227,12 +395,14 @@ const tabBar = (input: {
       backgroundColor: input.colors.insetBg,
       border: ["bottom"],
       borderColor: input.colors.border,
-      paddingLeft: 2,
-      paddingRight: 2,
+      paddingLeft: 3,
+      paddingRight: 3,
+      paddingTop: 1,
+      paddingBottom: 1,
     },
     h(
       "box",
-      { flexDirection: "row", gap: 2 },
+      { flexDirection: "row", gap: 3 },
       ...items.map((item) => {
         const selected = item.id === input.active;
         return h(
@@ -259,13 +429,18 @@ const tabBar = (input: {
   );
 };
 
-/** One row of the profile table. */
 const profileRow = (
   colors: Palette,
   theme: ResolvedTheme,
+  cols: LayoutMetrics["profileColumns"],
   row: ProfileRow,
   selected: boolean,
-  actions: { readonly effort: () => void; readonly pin: () => void },
+  actions: {
+    readonly effort: () => void;
+    readonly pin: () => void;
+    readonly info: () => void;
+    readonly selectRow: () => void;
+  },
 ): JSX.Element => {
   const profile = row.profile;
   const [hovered, setHovered] = createSignal(false);
@@ -273,7 +448,8 @@ const profileRow = (
   const effort = profile.pinned !== undefined ? "pinned" : (profile.effort ?? "-");
   const ref = row.resolution?.ref ?? "-";
   const nameProps = {
-    width: NAME,
+    width: cols.name,
+    flexShrink: 0,
     fg: selected ? colors.cyan : colors.text,
     attributes: selected ? TextAttributes.BOLD : TextAttributes.NONE,
     truncate: true,
@@ -284,22 +460,29 @@ const profileRow = (
     "box",
     {
       flexDirection: "column",
+      width: "100%",
       backgroundColor: () => (hovered() ? colors.rowHoverBg : undefined),
-      onMouseOver: () => setHovered(true),
+      onMouseOver: () => {
+        setHovered(true);
+        actions.selectRow();
+      },
       onMouseOut: () => setHovered(false),
     },
     h(
       "box",
-      { flexDirection: "row", columnGap: 1 },
-      cell(GUTTER, () => (selected ? "▸" : " "), colors.cyan),
+      { flexDirection: "row", columnGap: 1, width: "100%" },
+      cell(cols.gutter, () => (selected ? "▸" : " "), colors.cyan),
       h("text", nameProps, () => profile.name),
-      selectControl({ colors, width: EFFORT, value: effort, onOpen: actions.effort }),
-      selectControl({ colors, flexGrow: 1, value: ref, onOpen: actions.pin }),
-      costCell(COST, () => row.resolution?.cost ?? "-", costTone),
-    ),
-    show(
-      () => profile.match !== undefined,
-      () => indentedLine(colors.muted, profile.match ?? ""),
+      infoBadge({ colors, width: cols.info, onOpen: actions.info }),
+      selectControl({ colors, width: cols.effort, value: effort, onOpen: actions.effort }),
+      selectControl({
+        colors,
+        width: cols.model,
+        flexGrow: 1,
+        value: ref,
+        onOpen: actions.pin,
+      }),
+      costCell(cols.cost, () => row.resolution?.cost ?? "-", costTone),
     ),
     show(
       () => row.resolution !== undefined && row.resolution.crosscheck !== undefined,
@@ -317,32 +500,37 @@ const profileRow = (
   );
 };
 
-/** One row of the allowlist table. */
-const entryRow = (colors: Palette, row: EntryRow, index: number): JSX.Element => {
+const entryRow = (
+  colors: Palette,
+  cols: LayoutMetrics["entryColumns"],
+  row: EntryRow,
+  index: number,
+): JSX.Element => {
   const model = row.model;
   const [hovered, setHovered] = createSignal(false);
   return h(
     "box",
     {
       flexDirection: "column",
+      width: "100%",
       backgroundColor: () => (hovered() ? colors.rowHoverBg : undefined),
       onMouseOver: () => setHovered(true),
       onMouseOut: () => setHovered(false),
     },
     h(
       "box",
-      { flexDirection: "row", columnGap: 1 },
-      cell(INDEX, () => String(index + 1), colors.faint),
-      cell(ALIAS, () => row.alias, colors.text),
-      cell(FAMILY, () => model?.family ?? "-", colors.text),
+      { flexDirection: "row", columnGap: 1, width: "100%" },
+      cell(cols.index, () => String(index + 1), colors.faint),
+      cell(cols.alias, () => row.alias, colors.text),
+      cell(cols.family, () => model?.family ?? "-", colors.text),
       cell(
-        RUNGS,
+        cols.rungs,
         () => (model === undefined || model.rungs.length === 0 ? "-" : rungsView(model.rungs)),
         colors.muted,
       ),
-      flexCell(() => row.ref, colors.text),
+      modelCell(cols.model, () => row.ref, colors.text),
       costCell(
-        ALLOW_COST,
+        cols.cost,
         () => (model === undefined ? "-" : costView(model.costInput, model.costOutput)),
         colors.muted,
       ),
@@ -354,7 +542,6 @@ const entryRow = (colors: Palette, row: EntryRow, index: number): JSX.Element =>
   );
 };
 
-/** One section of a tab: its caption, its underlined header row, and its table body. */
 const section = (
   colors: Palette,
   caption: string,
@@ -363,14 +550,16 @@ const section = (
 ): JSX.Element =>
   h(
     "box",
-    { flexDirection: "column" },
+    { flexDirection: "column", width: "100%", gap: 1 },
     h("text", { fg: colors.muted, wrapMode: "word" }, caption),
     h(
       "box",
       {
         flexDirection: "row",
         columnGap: 1,
+        width: "100%",
         paddingTop: 1,
+        paddingBottom: 1,
         border: ["bottom"],
         borderColor: colors.border,
       },
@@ -379,26 +568,28 @@ const section = (
     body,
   );
 
-/** The accent-blue column headers above each table. */
 const headerCells = {
-  profiles: (colors: Palette): ReadonlyArray<JSX.Element> => [
-    cell(GUTTER, () => "", colors.blue),
-    cell(NAME, () => "profile", colors.blue),
-    cell(EFFORT, () => "effort", colors.blue),
-    flexCell(() => "model", colors.blue),
-    costCell(COST, () => "cost", colors.blue),
+  profiles: (
+    colors: Palette,
+    cols: LayoutMetrics["profileColumns"],
+  ): ReadonlyArray<JSX.Element> => [
+    cell(cols.gutter, () => "", colors.blue),
+    cell(cols.name, () => "profile", colors.blue),
+    cell(cols.info, () => "i", colors.blue),
+    cell(cols.effort, () => "effort", colors.blue),
+    modelCell(cols.model, () => "model", colors.blue),
+    costCell(cols.cost, () => "cost", colors.blue),
   ],
-  entries: (colors: Palette): ReadonlyArray<JSX.Element> => [
-    cell(INDEX, () => "#", colors.blue),
-    cell(ALIAS, () => "alias", colors.blue),
-    cell(FAMILY, () => "family", colors.blue),
-    cell(RUNGS, () => "rungs", colors.blue),
-    flexCell(() => "model", colors.blue),
-    costCell(ALLOW_COST, () => "cost", colors.blue),
+  entries: (colors: Palette, cols: LayoutMetrics["entryColumns"]): ReadonlyArray<JSX.Element> => [
+    cell(cols.index, () => "#", colors.blue),
+    cell(cols.alias, () => "alias", colors.blue),
+    cell(cols.family, () => "family", colors.blue),
+    cell(cols.rungs, () => "rungs", colors.blue),
+    modelCell(cols.model, () => "model", colors.blue),
+    costCell(cols.cost, () => "cost", colors.blue),
   ],
 };
 
-/** One action button in the footer bar, with a bold key and hover highlight. */
 const footerButton = (input: {
   readonly key: string;
   readonly label: string;
@@ -430,7 +621,6 @@ const footerButton = (input: {
   );
 };
 
-/** Renders the syntax-highlighted JSON preview tab body. */
 const previewTab = (
   colors: Palette,
   theme: ResolvedTheme,
@@ -439,17 +629,20 @@ const previewTab = (
 ): JSX.Element =>
   h(
     "box",
-    { flexDirection: "column", gap: 1 },
+    { flexDirection: "column", gap: 1, width: "100%" },
     h(
       "box",
       {
         flexDirection: "column",
+        width: "100%",
         border: true,
         borderStyle: "rounded",
         borderColor: colors.border,
         backgroundColor: colors.insetBg,
-        paddingLeft: 1,
-        paddingRight: 1,
+        paddingLeft: 2,
+        paddingRight: 2,
+        paddingTop: 1,
+        paddingBottom: 1,
       },
       preview({ theme, draft, models: catalogue }),
     ),
@@ -460,24 +653,32 @@ const previewTab = (
     ),
   );
 
-/** Renders the active tab body inside the modal's scrollable area. */
 const activeTabBody = (input: {
   readonly tab: TabId;
   readonly colors: Palette;
   readonly theme: ResolvedTheme;
+  readonly metrics: LayoutMetrics;
   readonly rows: ReadonlyArray<ProfileRow>;
   readonly models: ReadonlyArray<EntryRow>;
   readonly catalogue: ReadonlyArray<Model>;
   readonly draft: Draft;
-  readonly selectedRow: number;
-  readonly actions: (profile: Profile) => { readonly effort: () => void; readonly pin: () => void };
+  readonly selectedRow: () => number;
+  readonly actions: (
+    row: ProfileRow,
+    index: number,
+  ) => {
+    readonly effort: () => void;
+    readonly pin: () => void;
+    readonly info: () => void;
+    readonly selectRow: () => void;
+  };
 }): JSX.Element => {
-  const { colors, theme } = input;
+  const { colors, theme, metrics } = input;
   if (input.tab === "allowlist") {
     const entries = h(
       "box",
-      { flexDirection: "column" },
-      () => input.models.map((row, index) => entryRow(colors, row, index)),
+      { flexDirection: "column", width: "100%", gap: 1 },
+      () => input.models.map((row, index) => entryRow(colors, metrics.entryColumns, row, index)),
       show(
         () => input.models.length === 0,
         () => indentedLine(colors.muted, "no entries yet"),
@@ -486,7 +687,7 @@ const activeTabBody = (input: {
     return section(
       colors,
       "the resolver reads the entries from the top and spends the first model that fits",
-      headerCells.entries(colors),
+      headerCells.entries(colors, metrics.entryColumns),
       entries,
     );
   }
@@ -495,10 +696,17 @@ const activeTabBody = (input: {
   }
   const profiles = h(
     "box",
-    { flexDirection: "column" },
+    { flexDirection: "column", width: "100%", gap: 1 },
     () =>
       input.rows.map((row, index) =>
-        profileRow(colors, theme, row, index === input.selectedRow, input.actions(row.profile)),
+        profileRow(
+          colors,
+          theme,
+          metrics.profileColumns,
+          row,
+          index === input.selectedRow(),
+          input.actions(row, index),
+        ),
       ),
     show(
       () => input.rows.length === 0,
@@ -507,24 +715,93 @@ const activeTabBody = (input: {
   );
   return section(
     colors,
-    "the requirement each profile names, and the model the resolver would spend on it",
-    headerCells.profiles(colors),
+    "the requirement each profile names, and the model the resolver would spend on it (press i or click ⓘ for profile details)",
+    headerCells.profiles(colors, metrics.profileColumns),
     profiles,
   );
 };
 
+const TAB_DELTAS: Readonly<Record<string, number>> = { tab: 1, "]": 1, "[": -1 };
+const ROW_DELTAS: Readonly<Record<string, number>> = { down: 1, j: 1, up: -1, k: -1 };
+
+const stepTab = (current: TabId, delta: number): TabId => {
+  const at = TABS.indexOf(current);
+  const next = ((at === -1 ? 0 : at) + delta + TABS.length) % TABS.length;
+  return TABS[next] ?? "profiles";
+};
+
+const stepRow = (current: number, total: number, delta: number): number =>
+  total <= 0 ? 0 : (current + delta + total) % total;
+
+export const dispatchModalKey = (
+  event: KeyEvent,
+  actions: {
+    readonly saveAndClose: () => void;
+    readonly close: () => void;
+    readonly moveTab: (delta: number) => void;
+    readonly moveRow: (delta: number) => void;
+    readonly addModel?: () => void;
+    readonly openInfo?: () => void;
+  },
+): void => {
+  const key = event.name || event.sequence || "";
+  if (key === "return" || key === "enter") {
+    event.preventDefault();
+    actions.saveAndClose();
+    return;
+  }
+  if (key === "escape") {
+    event.preventDefault();
+    actions.close();
+    return;
+  }
+  if (key === "+" || key === "kpplus" || event.sequence === "+" || (key === "=" && event.shift)) {
+    event.preventDefault();
+    actions.addModel?.();
+    return;
+  }
+  if ((key === "i" || event.sequence === "i") && !event.ctrl && !event.meta && !event.super) {
+    event.preventDefault();
+    actions.openInfo?.();
+    return;
+  }
+  const tabDelta = TAB_DELTAS[key] ?? (event.sequence ? TAB_DELTAS[event.sequence] : undefined);
+  if (tabDelta !== undefined) {
+    event.preventDefault();
+    actions.moveTab(tabDelta);
+    return;
+  }
+  const rowDelta = ROW_DELTAS[key];
+  if (rowDelta !== undefined) actions.moveRow(rowDelta);
+};
+
 export const page = (input: PageInput): JSX.Element => {
   const context = usePlugin();
+  let liveRenderer: typeof context.renderer | undefined = context.renderer;
+  try {
+    const fromSolid = useRenderer();
+    if (fromSolid) liveRenderer = fromSolid;
+  } catch {
+    liveRenderer = context.renderer;
+  }
   const theme =
     typeof context.theme.surface === "function" ? context.theme.surface("dialog") : context.theme;
   const colors = palette(context.theme, theme);
   const dialog = context.ui.dialog;
   const activeTab: TabId = input.tab ?? "profiles";
-  const selectedRow = input.selectedRow ?? 0;
+  const [selectedRow, setSelectedRow] = createSignal(input.selectedRow ?? 0);
   const jevAvailable = input.jevAvailable ?? isJevAvailable(input.draft);
   const jevEnabled =
     jevAvailable && input.draft.judge !== undefined && input.draft.judge.kind !== "lexical";
   const jevModel = input.draft.judge?.model ?? JEV_MODEL;
+  const providerAvailable = isProviderAvailable(input.draft.provider, input.catalogue);
+
+  const metrics = layoutMetrics({
+    terminalWidth: input.terminalWidth ?? context.renderer?.width ?? liveRenderer?.width,
+    terminalHeight: input.terminalHeight ?? context.renderer?.height ?? liveRenderer?.height,
+    rows: input.rows,
+    models: input.models,
+  });
 
   const close = () => {
     if (input.onClose) input.onClose();
@@ -534,6 +811,15 @@ export const page = (input: PageInput): JSX.Element => {
   const run = (open: () => Promise<Edit | undefined>): void => {
     void open().then(
       (edit) => {
+        if (edit?.kind === "provider") {
+          const next = applied(input.draft, edit);
+          if (input.onProviderChange) input.onProviderChange(next);
+          else {
+            input.onChange(next);
+            input.onSave();
+          }
+          return;
+        }
         input.onChange(edit !== undefined ? applied(input.draft, edit) : input.draft);
       },
       (problem: unknown) => {
@@ -546,28 +832,83 @@ export const page = (input: PageInput): JSX.Element => {
     );
   };
 
-  const actions = (profile: Profile) => ({
+  const openAddModel = (): void => {
+    run(() => modelPicker({ dialog, draft: input.draft, models: input.catalogue }));
+  };
+
+  const openProfileInfo = (row: ProfileRow | undefined): void => {
+    if (row === undefined) return;
+    run(() =>
+      profileInfo({
+        dialog,
+        profile: row.profile,
+        resolution: row.resolution,
+        draft: input.draft,
+        models: input.catalogue,
+      }),
+    );
+  };
+
+  const openProviderPicker = (): void => {
+    run(() => providerPicker({ dialog, draft: input.draft, models: input.catalogue }));
+  };
+
+  bindKeyboard(context.renderer, (event: KeyEvent) =>
+    dispatchModalKey(event, {
+      saveAndClose: () => {
+        input.onSave();
+        close();
+      },
+      close,
+      moveTab: (delta) => {
+        input.onTabChange?.(stepTab(activeTab, delta));
+      },
+      moveRow: (delta) => {
+        if (activeTab !== "profiles") return;
+        const next = stepRow(selectedRow(), input.rows.length, delta);
+        setSelectedRow(next);
+        input.onRowChange?.(next);
+      },
+      addModel: openAddModel,
+      openInfo: () => {
+        if (activeTab !== "profiles") return;
+        openProfileInfo(input.rows[selectedRow()]);
+      },
+    }),
+  );
+
+  const actions = (row: ProfileRow, index: number) => ({
     effort: () =>
-      run(() => effortPicker({ dialog, draft: input.draft, models: input.catalogue, profile })),
-    pin: () => run(() => pinPicker({ dialog, draft: input.draft, profile })),
+      run(() =>
+        effortPicker({ dialog, draft: input.draft, models: input.catalogue, profile: row.profile }),
+      ),
+    pin: () => run(() => pinPicker({ dialog, draft: input.draft, profile: row.profile })),
+    info: () => openProfileInfo(row),
+    selectRow: () => {
+      setSelectedRow(index);
+      input.onRowChange?.(index);
+    },
   });
 
   const body = h(
     "scrollbox",
     {
-      height: 18,
+      width: "100%",
+      height: metrics.bodyHeight,
       flexGrow: 1,
       minHeight: 0,
-      paddingLeft: 2,
-      paddingRight: 2,
+      paddingLeft: 3,
+      paddingRight: 3,
       paddingTop: 1,
-      contentOptions: { flexDirection: "column", gap: 1 },
+      paddingBottom: 1,
+      contentOptions: { flexDirection: "column", gap: 1, width: "100%" },
       focused: () => true,
     },
     activeTabBody({
       tab: activeTab,
       colors,
       theme,
+      metrics,
       rows: input.rows,
       models: input.models,
       catalogue: input.catalogue,
@@ -581,6 +922,7 @@ export const page = (input: PageInput): JSX.Element => {
     "box",
     {
       flexDirection: "column",
+      width: "100%",
       flexGrow: 1,
       minWidth: 0,
       minHeight: 0,
@@ -593,15 +935,18 @@ export const page = (input: PageInput): JSX.Element => {
       "box",
       {
         flexDirection: "column",
+        width: "100%",
         flexShrink: 0,
-        paddingLeft: 2,
-        paddingRight: 2,
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
         border: ["bottom"],
         borderColor: colors.border,
       },
       h(
         "box",
-        { flexDirection: "row", justifyContent: "space-between" },
+        { flexDirection: "row", justifyContent: "space-between", width: "100%" },
         h("text", { fg: colors.text, attributes: TextAttributes.BOLD }, "Routing"),
         h("text", { fg: colors.teal, onMouseUp: close }, "esc"),
       ),
@@ -609,6 +954,12 @@ export const page = (input: PageInput): JSX.Element => {
         () => input.source !== undefined || (input.rows.length === 0 && input.models.length === 0),
         () => field(theme, "config", () => input.source ?? "none yet"),
       ),
+      providerBar({
+        colors,
+        provider: input.draft.provider,
+        available: providerAvailable,
+        onOpen: openProviderPicker,
+      }),
       jevToggleBar({
         colors,
         modelName: jevModel,
@@ -640,16 +991,17 @@ export const page = (input: PageInput): JSX.Element => {
       {
         flexDirection: "row",
         justifyContent: "space-between",
+        width: "100%",
         flexShrink: 0,
         backgroundColor: colors.insetBg,
         border: ["top"],
         borderColor: colors.border,
-        paddingLeft: 2,
-        paddingRight: 2,
+        paddingLeft: 3,
+        paddingRight: 3,
       },
       h(
         "box",
-        { flexDirection: "row", gap: 3 },
+        { flexDirection: "row", gap: 4 },
         footerButton({
           key: "enter",
           label: "write it",
@@ -664,9 +1016,20 @@ export const page = (input: PageInput): JSX.Element => {
           hoverKeyColor: colors.cyan,
           textColor: colors.text,
           mutedColor: colors.muted,
-          onPress: () =>
-            run(() => modelPicker({ dialog, draft: input.draft, models: input.catalogue })),
+          onPress: openAddModel,
         }),
+        show(
+          () => activeTab === "profiles" && input.rows.length > 0,
+          () =>
+            footerButton({
+              key: "i",
+              label: "profile info",
+              hoverKeyColor: colors.teal,
+              textColor: colors.text,
+              mutedColor: colors.muted,
+              onPress: () => openProfileInfo(input.rows[selectedRow()]),
+            }),
+        ),
       ),
       footerButton({
         key: "esc",

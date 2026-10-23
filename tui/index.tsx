@@ -1,7 +1,8 @@
 import { Plugin } from "@opencode/plugin/tui";
-import { type KeyEvent, TextAttributes } from "@opentui/core";
+import { TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
-import { createSignal, onCleanup, onMount } from "solid-js";
+import { createSignal } from "solid-js";
+import { applied, isProviderAvailable, providerPicker } from "./controls.tsx";
 import {
   catalogue,
   type Draft,
@@ -12,18 +13,9 @@ import {
   save,
   source as sourceOf,
 } from "./data.ts";
-import { page, TABS, type TabId } from "./page.tsx";
+import { page, type TabId } from "./page.tsx";
 import { h, show } from "./render.ts";
 
-/**
- * The terminal page that configures the routing.
- *
- * The plugin's own entrypoint is the server side, and it registers the tool
- * the session calls. This entrypoint is the terminal side, and it registers the
- * page a person opens when they want to change what the session spends.
- */
-
-/** The draft, with the arrays the page changes. */
 type Editable<Value> =
   Value extends ReadonlyArray<infer Item>
     ? Array<Editable<Item>>
@@ -33,22 +25,17 @@ type Editable<Value> =
 
 type MutableDraft = Editable<Draft>;
 
-/** The empty draft a repository with no config starts from. */
 const EMPTY: Draft = { provider: undefined, models: [], profiles: [] };
 
-/** The route name. The command opens this page by name. */
 const PAGE = "Routing";
 
-/** The storage keys. One holds the draft, one the directory, and one the sidebar collapse state. */
 const DRAFT = "draft";
 const SOURCE = "source";
 const VIEW = "view";
 
-/** The message of a value that reached the error channel. */
 const message = (problem: unknown): string =>
   problem instanceof Error ? problem.message : String(problem);
 
-/** A deep copy, so the page, the store and the writer never share an object. */
 const copy = (draft: Draft): MutableDraft => ({
   provider: draft.provider,
   judge: draft.judge === undefined ? undefined : { ...draft.judge },
@@ -72,7 +59,6 @@ const copy = (draft: Draft): MutableDraft => ({
   })),
 });
 
-/** Copies a draft's mutable fields into a target draft object. */
 const assignDraft = (target: MutableDraft, source: MutableDraft): void => {
   target.provider = source.provider;
   target.judge = source.judge;
@@ -80,52 +66,6 @@ const assignDraft = (target: MutableDraft, source: MutableDraft): void => {
   target.profiles = source.profiles;
 };
 
-/** Cycles to the next or previous tab in the modal tab strip. */
-const stepTab = (current: TabId, delta: number): TabId => {
-  const at = TABS.indexOf(current);
-  const next = ((at === -1 ? 0 : at) + delta + TABS.length) % TABS.length;
-  return TABS[next] ?? "profiles";
-};
-
-/** Moves the selected profile row index with wraparound. */
-const stepRow = (current: number, total: number, delta: number): number =>
-  total <= 0 ? 0 : (current + delta + total) % total;
-
-const TAB_DELTAS: Readonly<Record<string, number>> = { tab: 1, "]": 1, "[": -1 };
-const ROW_DELTAS: Readonly<Record<string, number>> = { down: 1, j: 1, up: -1, k: -1 };
-
-/** Handles one keypress while the routing modal is open. */
-const dispatchModalKey = (
-  event: KeyEvent,
-  actions: {
-    readonly saveAndClose: () => void;
-    readonly close: () => void;
-    readonly moveTab: (delta: number) => void;
-    readonly moveRow: (delta: number) => void;
-  },
-): void => {
-  const key = event.name || event.sequence || "";
-  if (key === "return" || key === "enter") {
-    event.preventDefault();
-    actions.saveAndClose();
-    return;
-  }
-  if (key === "escape") {
-    event.preventDefault();
-    actions.close();
-    return;
-  }
-  const tabDelta = TAB_DELTAS[key] ?? (event.sequence ? TAB_DELTAS[event.sequence] : undefined);
-  if (tabDelta !== undefined) {
-    event.preventDefault();
-    actions.moveTab(tabDelta);
-    return;
-  }
-  const rowDelta = ROW_DELTAS[key];
-  if (rowDelta !== undefined) actions.moveRow(rowDelta);
-};
-
-/** The row of a profile the resolver did not answer for. */
 const absent = (name: string): Resolution => ({
   profile: name,
   ref: undefined,
@@ -135,7 +75,6 @@ const absent = (name: string): Resolution => ({
   problem: "the resolver returned no row",
 });
 
-/** Why an allowlist entry cannot be spent, or undefined when it can. */
 const refused = (model: Model | undefined): string | undefined => {
   if (model === undefined) return "this session cannot see the model";
   if (!model.enabled) return "the model is disabled";
@@ -143,13 +82,11 @@ const refused = (model: Model | undefined): string | undefined => {
   return undefined;
 };
 
-/** Strips the provider prefix from a `providerID/modelID#variant` ref for the sidebar column. */
 const shortRef = (ref: string): string => {
   const slash = ref.indexOf("/");
   return slash === -1 ? ref : ref.slice(slash + 1);
 };
 
-/** The collapsed summary beside the sidebar heading: `(3 active, 1 error)`. */
 const summaryOf = (rows: ReadonlyArray<Resolution>, open: boolean): string => {
   if (open) return "";
   const active = rows.filter((one) => one.problem === undefined && one.ref !== undefined).length;
@@ -158,7 +95,6 @@ const summaryOf = (rows: ReadonlyArray<Resolution>, open: boolean): string => {
   return ` (${active} active${errors})`;
 };
 
-/** One profile row inside the collapsible sidebar section. */
 const sidebarRow = (
   theme: Plugin.Context["theme"],
   row: Resolution,
@@ -204,7 +140,6 @@ const sidebarRow = (
   );
 };
 
-/** The collapsible Routing section in the session sidebar, modeled on OpenCode's MCP section. */
 export const sidebarSection = (input: {
   readonly theme: Plugin.Context["theme"];
   readonly open: () => boolean;
@@ -247,7 +182,6 @@ export const sidebarSection = (input: {
       ),
   );
 
-/** Formats a session's model selection as `providerID/modelID` or `providerID/modelID#variant`. */
 const sessionModelRef = (
   model:
     | { readonly providerID: string; readonly id: string; readonly variant?: string }
@@ -259,7 +193,6 @@ const sessionModelRef = (
     : `${model.providerID}/${model.id}#${model.variant}`;
 };
 
-/** Picks the profile index that matches the subagent's model or agent. */
 const subagentProfileIndex = (
   profiles: ReadonlyArray<{ readonly name: string; readonly agent: string }>,
   resolutions: ReadonlyArray<Resolution>,
@@ -278,7 +211,6 @@ const subagentProfileIndex = (
   return byAgent === -1 ? 0 : byAgent;
 };
 
-/** What the docked footer shows for a subagent session, or undefined on a main session. */
 export const subagentLine = (input: {
   readonly session:
     | {
@@ -311,7 +243,6 @@ export const subagentLine = (input: {
   return `${name} uses ${ref}${cost}`;
 };
 
-/** The docked footer bar above the composer, shown only on subagent sessions. */
 export const subagentFooter = (input: {
   readonly theme: Plugin.Context["theme"];
   readonly line: () => string | undefined;
@@ -328,17 +259,9 @@ export const subagentFooter = (input: {
   );
 
 /**
- * The command that opens the page.
- *
  * The layer is global because the palette is itself a mode. A command in the
  * base mode is not reachable while the palette dialog is open, and a command
- * nobody can reach is a command the palette does not list. This page opens
- * from the palette, from the slash command, and from nowhere else, so it has
- * to be reachable in every mode. Measured in a terminal: without this line the
- * palette answered "No results found".
- *
- * It is a value rather than a closure over the setup, so a test can read it
- * without a host.
+ * nobody can reach is a command the palette does not list.
  */
 export const opener = (open: () => void) => ({
   mode: "global" as const,
@@ -360,9 +283,6 @@ export default Plugin.define({
   setup: async (context) => {
     const directory = context.location?.directory ?? Bun.env.PWD ?? ".";
 
-    // The draft survives a reload, so an edit is not lost when the terminal
-    // restarts. The source key says which directory the draft belongs to,
-    // because the terminal keeps one copy for every project.
     const [stored, setStored] = context.storage.store<MutableDraft>(DRAFT, {
       initial: { provider: undefined, models: [], profiles: [] },
     });
@@ -375,8 +295,6 @@ export default Plugin.define({
     });
     const [open, setOpen] = createSignal(view.open ?? true);
 
-    // The name of the file the draft came from. The reader knows it and the
-    // page does not, and the page names it in its heading.
     const at = await sourceOf(directory).catch(() => undefined);
 
     if (at !== undefined || !source.seeded || source.directory !== directory) {
@@ -396,16 +314,12 @@ export default Plugin.define({
       });
     }
 
-    // The page changes this object in place. The entrypoint is the only place
-    // that writes the file, so the page cannot save without asking.
     const draft: MutableDraft = copy(stored);
     let activeTab: TabId = "profiles";
     let selectedRow = 0;
 
-    // The sidebar redraws when an edit lands, so its rows are never stale.
     const [revision, setRevision] = createSignal(0);
 
-    /** The catalogue this session can see, read when a render needs it. */
     const listed = (sessionID?: string) => {
       const location =
         (sessionID === undefined ? undefined : context.data.session.get(sessionID)?.location) ??
@@ -413,15 +327,9 @@ export default Plugin.define({
       return context.data.location.model.list(location) ?? [];
     };
 
-    /** The config as the page saves it. */
     const persist = async (): Promise<void> => {
       const next = copy(draft);
-      try {
-        await setStored((held) => assignDraft(held, next));
-      } catch {
-        // The file is the copy that matters. A storage write that fails does
-        // not stop the save below.
-      }
+      await setStored((held) => assignDraft(held, next)).catch(() => undefined);
       setRevision((value) => value + 1);
       try {
         await save(directory, next);
@@ -439,18 +347,10 @@ export default Plugin.define({
       }
     };
 
-    /** The page calls this when the person asks to save. */
     const onSave = (): void => {
       void persist();
     };
 
-    /**
-     * A dialog changed the draft.
-     *
-     * The draft is the entrypoint's object, and the page hands the next one
-     * back, so the change lands in the one the store and the writer read. The
-     * revision moves so the composer line redraws with the change.
-     */
     const onChange = (next: Draft): void => {
       assignDraft(draft, copy(next));
       setRevision((value) => value + 1);
@@ -480,13 +380,21 @@ export default Plugin.define({
         draft,
         tab: activeTab,
         selectedRow,
+        onRowChange: (next) => {
+          selectedRow = next;
+        },
         onTabChange: (next) => {
           activeTab = next;
-          openModal();
+          showModal();
         },
         onChange: (next) => {
           onChange(next);
-          openModal();
+          showModal();
+        },
+        onProviderChange: (next) => {
+          onChange(next);
+          onSave();
+          showModal();
         },
         onSave: () => {
           onSave();
@@ -497,36 +405,28 @@ export default Plugin.define({
       });
     };
 
+    const showModal = (): void => {
+      context.ui.dialog.show(() => renderModal());
+      context.ui.dialog.set({ size: "xlarge", centered: true });
+    };
+
     const openModal = (): void => {
-      context.ui.dialog.show(() => {
-        if (context.renderer?.keyInput) {
-          const onKeyPress = (event: KeyEvent) =>
-            dispatchModalKey(event, {
-              saveAndClose: () => {
-                onSave();
-                context.ui.dialog.clear();
-              },
-              close: () => context.ui.dialog.clear(),
-              moveTab: (delta) => {
-                activeTab = stepTab(activeTab, delta);
-                openModal();
-              },
-              moveRow: (delta) => {
-                if (activeTab !== "profiles") return;
-                selectedRow = stepRow(selectedRow, draft.profiles.length, delta);
-                openModal();
-              },
-            });
-          onMount(() => {
-            context.renderer.keyInput.on("keypress", onKeyPress);
-          });
-          onCleanup(() => {
-            context.renderer.keyInput.off("keypress", onKeyPress);
-          });
-        }
-        return renderModal();
-      });
-      context.ui.dialog.set({ size: "large", centered: true });
+      const models = catalogue(listed());
+      if (!isProviderAvailable(draft.provider, models)) {
+        void providerPicker({
+          dialog: context.ui.dialog,
+          draft,
+          models,
+        }).then((edit) => {
+          if (edit !== undefined) {
+            onChange(applied(draft, edit));
+            onSave();
+          }
+          showModal();
+        });
+        return;
+      }
+      showModal();
     };
 
     context.ui.router.register({
@@ -536,7 +436,6 @@ export default Plugin.define({
 
     context.keymap.layer(() => opener(openModal));
 
-    /** The resolved profile rows for the session sidebar, recomputed when the draft changes. */
     const resolvedRows = (sessionID: string): ReadonlyArray<Resolution> => {
       revision();
       if (draft.profiles.length === 0) return [];
