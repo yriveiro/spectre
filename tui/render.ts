@@ -1,5 +1,5 @@
 import type { ResolvedTheme } from "@opencode/theme/tui";
-import { RGBA } from "@opentui/core";
+import { type KeyEvent, RGBA } from "@opentui/core";
 import {
   createElement,
   createTextNode,
@@ -9,7 +9,9 @@ import {
   type JSX,
   memo,
   setProp,
+  useRenderer,
 } from "@opentui/solid";
+import { onCleanup } from "solid-js";
 
 /**
  * The small render helpers the page uses.
@@ -153,3 +155,28 @@ export const field = (theme: ResolvedTheme, label: string, value: () => string):
     `${label}: `,
     h("span", { style: { fg: theme.text.muted } }, value()),
   );
+
+export const bindKeyboard = (
+  fallbackRenderer:
+    | {
+        readonly keyInput?: {
+          on: (event: "keypress", handler: (key: KeyEvent) => void) => void;
+          off: (event: "keypress", handler: (key: KeyEvent) => void) => void;
+        };
+      }
+    | undefined,
+  handler: (event: KeyEvent) => void,
+): void => {
+  let keyInput = fallbackRenderer?.keyInput;
+  try {
+    const live = useRenderer();
+    if (live?.keyInput) keyInput = live.keyInput;
+  } catch {
+    keyInput = fallbackRenderer?.keyInput;
+  }
+  if (!keyInput) return;
+  keyInput.on("keypress", handler);
+  onCleanup(() => {
+    keyInput.off("keypress", handler);
+  });
+};
