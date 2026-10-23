@@ -435,6 +435,25 @@ describe("resolve: the pin", () => {
     expect(found.resolution?.primary.alias).toBe("minimax");
   });
 
+  test("a pinned model uses the profile's effort when the model supports that rung", () => {
+    const found = resolve(
+      "worker",
+      { effort: "low", model: ["glm"] },
+      kept([
+        allow("muse", "opencode-go/muse-spark-1.3-contributor"),
+        allow("glm", "opencode-go/glm-5.3-flash"),
+      ]),
+      "spectre",
+    );
+    expect(found.problem).toBeUndefined();
+    expect(found.resolution?.primary).toMatchObject({
+      alias: "glm",
+      ref: "opencode-go/glm-5.3-flash",
+      rung: "low",
+      pinned: true,
+    });
+  });
+
   test("a pinned variant is the rung the pin reports", () => {
     const found = resolve(
       "worker",

@@ -91,11 +91,15 @@ export const pick = (
  */
 const spent = (candidate: Candidate, got: Fit | undefined, pinned: boolean): Pick => {
   if (pinned)
-    return pick(candidate, candidate.pinned, {
-      pinned: true,
-      steppedUp: false,
-      below: undefined,
-    });
+    return pick(
+      candidate,
+      candidate.pinned ?? (got?.kind === "rung" ? got.at.name : undefined),
+      {
+        pinned: true,
+        steppedUp: false,
+        below: undefined,
+      },
+    );
   if (got === undefined || got.kind !== "rung")
     return pick(candidate, undefined, { pinned: false, steppedUp: false, below: undefined });
   return pick(candidate, got.at.name, {
@@ -287,6 +291,10 @@ export const resolve = (
   const crossWant = crossName === undefined ? undefined : effortOf(crossName);
 
   if (pinned !== undefined) {
+    const pinnedGot =
+      entry.effort !== undefined && pinned.model.rungs.includes(entry.effort)
+        ? rungFor(pinned, effortOf(entry.effort))
+        : undefined;
     const rows = rowsFor(candidates, undefined, crossWant);
     const crossRow =
       crossWant === undefined
@@ -295,7 +303,7 @@ export const resolve = (
     return spentBy(
       profile,
       agent,
-      spent(pinned, undefined, true),
+      spent(pinned, pinnedGot, true),
       crossRow,
       excludedBy(rows, pinned, undefined, crossWant, crossRow),
       crossWant,
