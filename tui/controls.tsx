@@ -6,6 +6,8 @@ import type { JSX } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import {
   DEFAULT_TIMEOUT_MS,
+  effortOf,
+  fit,
   isFree,
   KNOWN_ORDER,
   type Known,
@@ -36,8 +38,18 @@ export const isJevAvailable = (draft: Draft): boolean => {
 };
 
 export type Edit =
-  | { readonly kind: "effort"; readonly profile: string; readonly effort: string }
-  | { readonly kind: "pin"; readonly profile: string; readonly alias: string | undefined }
+  | {
+      readonly kind: "effort";
+      readonly profile: string;
+      readonly effort: string;
+      readonly pinned?: string | undefined;
+    }
+  | {
+      readonly kind: "pin";
+      readonly profile: string;
+      readonly alias: string | undefined;
+      readonly effort?: string | undefined;
+    }
   | { readonly kind: "model"; readonly alias: string; readonly ref: string }
   | { readonly kind: "remove-model"; readonly alias: string }
   | { readonly kind: "judge"; readonly enabled: boolean }
@@ -48,14 +60,18 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
     return {
       ...draft,
       profiles: draft.profiles.map((one) =>
-        one.name === edit.profile ? { ...one, effort: edit.effort, pinned: undefined } : one,
+        one.name === edit.profile
+          ? { ...one, effort: edit.effort, pinned: one.pinned ?? edit.pinned }
+          : one,
       ),
     };
   if (edit.kind === "pin")
     return {
       ...draft,
       profiles: draft.profiles.map((one) =>
-        one.name === edit.profile ? { ...one, pinned: edit.alias } : one,
+        one.name === edit.profile
+          ? { ...one, pinned: edit.alias, effort: edit.effort ?? one.effort }
+          : one,
       ),
     };
   if (edit.kind === "judge")
@@ -183,8 +199,11 @@ export const usableDraft = (draft: Draft, catalogue: ReadonlyArray<Model>): Draf
     if (variant !== undefined && !found.rungs.includes(variant)) return false;
     return true;
   });
-  if (models.length === draft.models.length) return draft;
   const held = new Set(models.map((one) => one.alias));
+  const hasInvalidPin =
+    catalogue.length > 0 &&
+    draft.profiles.some((one) => one.pinned !== undefined && !held.has(one.pinned));
+  if (models.length === draft.models.length && !hasInvalidPin) return draft;
   return {
     ...draft,
     models,
@@ -220,19 +239,12 @@ export const selectedModelFor = (
         model: findCatalogModel(models, pinnedEntry.ref),
       };
     }
-    return {
-      alias: profile.pinned,
-      ref: profile.pinned,
-      model: undefined,
-    };
   }
 
-  const resolvedRows = resolveDraft(cleanDraft, models);
-  const profileIndex = cleanDraft.profiles.findIndex((one) => one.name === profile.name);
-  const resolved =
-    profileIndex !== -1
-      ? resolvedRows[profileIndex]
-      : resolveDraft({ ...cleanDraft, profiles: [profile] }, models)[0];
+  const [resolved] = resolveDraft(
+    { ...cleanDraft, profiles: [{ ...profile, pinned: undefined }] },
+    models,
+  );
 
   if (resolved?.ref !== undefined) {
     const baseRef = stripVariant(resolved.ref);
@@ -297,16 +309,19 @@ export const effortOptionsFor = (
   }
 
   return allNames.map((name): EffortOptionRow => {
-    const current = profile.effort === name && profile.pinned === undefined;
+    const current = profile.effort === name;
     if (model === undefined) {
       const fallbackRef = selected?.ref ?? "No model selected";
       return {
         name,
-        available: true,
+        available: false,
         current,
-        targetRef: selected !== undefined ? `${selected.ref}#${name}` : fallbackRef,
+        targetRef: fallbackRef,
         cost: undefined,
-        reason: selected === undefined ? "Add a model to the allowlist" : undefined,
+        reason:
+          selected === undefined
+            ? "Add a model to the allowlist"
+            : `not supported by ${fallbackRef}`,
       };
     }
 
@@ -631,6 +646,11 @@ export const effortPicker = async (input: {
       settled = true;
       resolve(value);
     };
+    const selected = selectedModelFor(input.draft, input.models, input.profile);
+    const selectedAlias =
+      selected !== undefined && input.draft.models.some((one) => one.alias === selected.alias)
+        ? selected.alias
+        : undefined;
 
     input.dialog.show(
       () =>
@@ -639,11 +659,16 @@ export const effortPicker = async (input: {
           draft: input.draft,
           models: input.models,
           onSelect: (chosen) => {
-            if (chosen === input.profile.effort && input.profile.pinned === undefined) {
+            if (chosen === input.profile.effort) {
               finish(undefined);
               return;
             }
-            finish({ kind: "effort", profile: input.profile.name, effort: chosen });
+            finish({
+              kind: "effort",
+              profile: input.profile.name,
+              effort: chosen,
+              pinned: input.profile.pinned ?? selectedAlias,
+            });
           },
           onCancel: () => finish(undefined),
         }),
@@ -666,7 +691,7 @@ export const profileInfoModal = (input: {
   const { profile, resolution } = input;
   const selected = selectedModelFor(input.draft, input.models, profile);
   const effortText =
-    profile.pinned !== undefined ? `Pinned to ${profile.pinned}` : (profile.effort ?? "Not set");
+    profile.effort ?? (profile.pinned !== undefined ? `Pinned to ${profile.pinned}` : "Not set");
   const modelText =
     resolution?.ref ??
     (selected?.model !== undefined ? refOf(selected.model) : (selected?.ref ?? "Unresolved"));
@@ -1194,6 +1219,22 @@ export const providerPicker = async (input: {
   });
 };
 
+const supportedEffortFor = (
+  model: Model | undefined,
+  effort: string | undefined,
+): string | undefined => {
+  if (model === undefined) return effort;
+  const declared = rungsOf(model);
+  if (declared.length === 0) return "none";
+  if (effort !== undefined && declared.includes(effort)) return effort;
+  if (effort !== undefined) {
+    const got = fit(ladderOf(model.rungs.map((id) => ({ id }))), effortOf(effort));
+    if (got.kind === "rung") return got.at.name;
+    if (got.kind === "short" && got.best !== undefined) return got.best.name;
+  }
+  return declared[0];
+};
+
 export const pinPicker = async (input: {
   readonly dialog: Dialog;
   readonly draft: Draft;
@@ -1227,8 +1268,26 @@ export const pinPicker = async (input: {
   const chosen = await pending;
 
   if (chosen === undefined) return undefined;
-  if ((chosen === "") === (input.profile.pinned === undefined)) return undefined;
-  return { kind: "pin", profile: input.profile.name, alias: chosen === "" ? undefined : chosen };
+  const nextAlias = chosen === "" ? undefined : chosen;
+  if (nextAlias === input.profile.pinned) return undefined;
+  const chosenEntry =
+    nextAlias === undefined
+      ? undefined
+      : cleanDraft.models.find((one) => one.alias === nextAlias);
+  const chosenModel =
+    chosenEntry !== undefined && input.models !== undefined
+      ? findCatalogModel(input.models, chosenEntry.ref)
+      : undefined;
+  const nextEffort =
+    nextAlias === undefined
+      ? input.profile.effort
+      : supportedEffortFor(chosenModel, input.profile.effort);
+  return {
+    kind: "pin",
+    profile: input.profile.name,
+    alias: nextAlias,
+    effort: nextEffort,
+  };
 };
 
 const aliasProblem = (name: string, taken: ReadonlyArray<string>): string | undefined => {
@@ -1398,7 +1457,7 @@ export const controls = (input: {
           ),
       },
       field(theme, `profiles.${one.name}.effort`, () =>
-        one.pinned === undefined ? (one.effort ?? "Not set") : `Pinned to ${one.pinned}`,
+        one.effort ?? (one.pinned === undefined ? "Not set" : `Pinned to ${one.pinned}`),
       ),
     ),
   );

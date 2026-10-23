@@ -139,7 +139,7 @@ export const layoutMetrics = (input: {
   const pName = Math.max(10, Math.min(16, maxProfileName + 1));
 
   const maxEffort = input.rows.reduce((max, one) => {
-    const label = one.profile.pinned !== undefined ? "Pinned" : (one.profile.effort ?? "-");
+    const label = one.profile.effort ?? (one.profile.pinned !== undefined ? "Pinned" : "-");
     return Math.max(max, label.length);
   }, 6);
   const pEffort = Math.max(12, Math.min(15, maxEffort + 4));
@@ -490,7 +490,7 @@ const profileRow = (
   const [hovered, setHovered] = createSignal(false);
   const costText = normalizeCost(row.resolution?.cost) ?? "-";
   const costTone = isExpensiveCost(costText) ? colors.yellow : colors.muted;
-  const effort = profile.pinned !== undefined ? "Pinned" : (profile.effort ?? "-");
+  const effort = profile.effort ?? (profile.pinned !== undefined ? "Pinned" : "-");
   const ref = row.resolution?.ref ?? "-";
   const nameProps = {
     width: cols.name,

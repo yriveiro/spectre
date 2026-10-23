@@ -4,15 +4,18 @@ import { PluginContextProvider } from "@opencode/plugin/tui";
 import { RGBA } from "@opentui/core";
 import { createComponent, testRender } from "@opentui/solid";
 import {
+  applied,
   compatibleModelsFor,
   effortModal,
   effortOptionsFor,
+  effortPicker,
   isProviderAvailable,
+  pinPicker,
   profileInfoModal,
   providerModal,
   usableDraft,
 } from "../../tui/controls";
-import type { Draft, Model, Resolution } from "../../tui/data";
+import { type Draft, type Model, type Resolution, resolve as resolveDraft } from "../../tui/data";
 import { sidebarSection, subagentFooter, subagentLine } from "../../tui/index";
 import { type EntryRow, layoutMetrics, page, type TabId } from "../../tui/page";
 
@@ -639,6 +642,115 @@ describe("the page changes the draft and writes it only when asked", () => {
     await effortSetup.flush();
     expect(selectedEffort).toBe("low");
     await effortSetup.dispose();
+  });
+
+  test("adjusting effort shows efforts available to the selected model with unsupported efforts disabled, and choosing an effort does not reset the selected model", async () => {
+    const pinnedDraft = applied(draft, { kind: "pin", profile: "worker", alias: "glm-flash" });
+    const pinnedProfile = pinnedDraft.profiles.find((one) => one.name === "worker");
+    if (pinnedProfile === undefined) throw new Error("worker profile missing");
+    expect(pinnedProfile.pinned).toBe("glm-flash");
+
+    const options = effortOptionsFor(pinnedDraft, models, pinnedProfile);
+    const byName = new Map(options.map((one) => [one.name, one]));
+    expect(byName.get("none")?.available).toBe(false);
+    expect(byName.get("none")?.reason).toBe("not supported by acme/glm-5.3-flash");
+    expect(byName.get("minimal")?.available).toBe(false);
+    expect(byName.get("minimal")?.reason).toBe("not supported by acme/glm-5.3-flash");
+    expect(byName.get("low")?.available).toBe(true);
+    expect(byName.get("low")?.targetRef).toBe("acme/glm-5.3-flash#low");
+    expect(byName.get("medium")?.available).toBe(false);
+    expect(byName.get("medium")?.reason).toBe("not supported by acme/glm-5.3-flash");
+    expect(byName.get("high")?.available).toBe(true);
+    expect(byName.get("high")?.current).toBe(true);
+    expect(byName.get("high")?.targetRef).toBe("acme/glm-5.3-flash#high");
+    expect(byName.get("xhigh")?.available).toBe(false);
+    expect(byName.get("xhigh")?.reason).toBe("not supported by acme/glm-5.3-flash");
+    expect(byName.get("max")?.available).toBe(true);
+    expect(byName.get("max")?.targetRef).toBe("acme/glm-5.3-flash#max");
+
+    const afterEffort = applied(pinnedDraft, {
+      kind: "effort",
+      profile: "worker",
+      effort: "low",
+    });
+    const updatedWorker = afterEffort.profiles.find((one) => one.name === "worker");
+    expect(updatedWorker?.effort).toBe("low");
+    expect(updatedWorker?.pinned).toBe("glm-flash");
+    const resolvedWorker = resolveDraft(afterEffort, models).find(
+      (one) => one.profile === "worker",
+    );
+    expect(resolvedWorker?.ref).toBe("acme/glm-5.3-flash#low");
+
+    const unpinnedMaxDraft: Draft = {
+      ...draft,
+      profiles: [
+        {
+          name: "thinking",
+          effort: "max",
+          match: undefined,
+          why: undefined,
+          crosscheck: undefined,
+          agent: "spectre",
+          pinned: undefined,
+        },
+      ],
+    };
+    const thinkingProfile = unpinnedMaxDraft.profiles[0];
+    if (thinkingProfile === undefined) throw new Error("thinking profile missing");
+    const { shownRenders, context } = host();
+    const pendingEdit = effortPicker({
+      dialog: context.ui.dialog as never,
+      draft: unpinnedMaxDraft,
+      models,
+      profile: thinkingProfile,
+    });
+    expect(shownRenders.length).toBe(1);
+    const pickerSetup = await testRender(
+      () =>
+        createComponent(PluginContextProvider, {
+          value: context as never,
+          get children() {
+            return shownRenders[0]?.() as never;
+          },
+        }),
+      { width: 92, height: 24 },
+    );
+    await pickerSetup.renderOnce();
+    const pickerFrame = pickerSetup.captureCharFrame();
+    expect(pickerFrame).toContain("glm-flash (acme/glm-5.3-flash)");
+    expect(pickerFrame).toContain("not supported by acme/glm-5.3-flash");
+    const pickerLines = pickerFrame.split("\n");
+    const lowLine = pickerLines.findIndex((one) => one.includes("acme/glm-5.3-flash#low"));
+    expect(lowLine).toBeGreaterThan(-1);
+    await pickerSetup.mockMouse.click(10, lowLine);
+    await pickerSetup.flush();
+    const edit = await pendingEdit;
+    expect(edit).toEqual({
+      kind: "effort",
+      profile: "thinking",
+      effort: "low",
+      pinned: "glm-flash",
+    });
+    if (edit === undefined) throw new Error("expected an effort edit");
+    const afterPicker = applied(unpinnedMaxDraft, edit);
+    expect(resolveDraft(afterPicker, models)[0]?.ref).toBe("acme/glm-5.3-flash#low");
+    await pickerSetup.dispose();
+
+    const updatedThinking = afterPicker.profiles[0];
+    if (updatedThinking === undefined) throw new Error("thinking profile missing");
+    const { context: pinCtx } = host("muse");
+    const switchedPin = await pinPicker({
+      dialog: pinCtx.ui.dialog as never,
+      draft: afterPicker,
+      models,
+      profile: updatedThinking,
+    });
+    expect(switchedPin).toEqual({
+      kind: "pin",
+      profile: "thinking",
+      alias: "muse",
+      effort: "low",
+    });
   });
 
   test("the write line writes the draft", async () => {
