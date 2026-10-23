@@ -31,6 +31,15 @@ const capture = async (typed: string) => {
 };
 
 const body = join(import.meta.dir, "..", "..", "commands", "definitions", "pr", "prompt.md");
+const playbook = join(
+  import.meta.dir,
+  "..",
+  "..",
+  "skills",
+  "definitions",
+  "playbook-opening-a-pr",
+  "SKILL.md",
+);
 
 describe("the /pr command", () => {
   test("it is named pr, so the palette resolves /pr", async () => {
@@ -57,15 +66,22 @@ describe("the /pr command", () => {
     expect(seen[0]?.text).not.toContain("The user added:");
   });
 
-  test("the prompt drives the tool, and never the forge directly", async () => {
-    const text = await Bun.file(body).text();
-    expect(text).toContain("tools.spectre.pr");
-    expect(text).toContain("never call `gh pr create` yourself");
+  test("the prompt delegates PR work to the playbook", async () => {
+    const { seen } = await capture("");
+    expect(seen[0]?.text).toContain("playbook-opening-a-pr");
   });
 
-  test("the prompt is not empty and is a real file on disk", async () => {
-    const text = await Bun.file(body).text();
-    expect(text.length).toBeGreaterThan(500);
+  test("the playbook routes independent prep before PR composition", async () => {
+    const text = await Bun.file(playbook).text();
+    const firstPhase = text.match(/^## Phase [A-Z]: (.+)$/m)?.[1];
+    const prep = text.indexOf("## Phase D: Parallel preparation");
+    const fields = text.indexOf("## Phase E: Title and body");
+
+    expect(firstPhase).toBe("Worktree");
+    expect(prep).toBeGreaterThanOrEqual(0);
+    expect(fields).toBeGreaterThan(prep);
+    expect(text.slice(prep, fields)).toContain("tools.spectre.routing");
+    expect(text.slice(prep, fields)).toContain("mechanical");
   });
 });
 

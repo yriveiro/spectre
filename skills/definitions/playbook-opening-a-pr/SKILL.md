@@ -10,8 +10,8 @@ Open a `todolist` with one entry per phase before the first push.
 1. Worktree
 2. Commits
 3. Split
-4. Title
-5. Body
+4. Parallel preparation
+5. Title and body
 6. Stack
 7. Open
 8. Handover
@@ -83,7 +83,7 @@ Each commit message uses this shape:
 - <incompatibility and required migration>]
 ```
 
-The types, the scope and the subject come from Phase D. `# Description` and
+The type, scope, and subject come from Phase E. `# Description` and
 `# Changes` are required; `# Breaking Changes` only when the staged change breaks
 something. The `!` before the colon marks it.
 
@@ -117,7 +117,30 @@ A large change that passes is not a problem to solve by cutting. Size predicts h
 much a reviewer holds at once, and writing the change faster does not widen that.
 Put the order of the parts in `## Scope` so nobody needs the whole diff in view.
 
-## Phase D and E: Title and body
+## Phase D: Parallel preparation
+
+Before you fill the PR fields, list the independent checks and reviews. Run command
+checks in parallel when their inputs and outputs do not conflict. Give read-only
+review lanes disjoint diff areas. Do not parallelize dependent work or branch writes.
+Keep one owner for the final split, the PR fields, and the `tools.spectre.pr` call.
+If no useful task can run in parallel, mark this phase `n/a` and state why.
+
+For each useful subagent lane, load `model-router` and call
+`tools.spectre.routing({ task: "<one lane>" })`. A grep, read, run, or report task
+usually fits the `mechanical` profile or its equivalent. Use a profile with more
+effort for semantic review, scope analysis, or risk analysis. Follow the judge's
+choice when it is used. When it skips, match the task to the profile's `match` line.
+If you are unsure between profiles, follow `model-router` and choose more effort.
+Follow `model-router` for `setup`, `declined`, or `problems`. Never choose a profile
+by array position or guess a model. Pass the selected profile's `agent` and exact
+`model.ref`.
+
+Launch all independent subagents together with `background: true`. Give each a
+bounded, read-only task and ask for evidence. No subagent edits or commits on the
+branch, or calls `tools.spectre.pr`. Wait for each result, verify its evidence, and
+resolve dependent fixes before you write the fields.
+
+## Phase E: Title and body
 
 Do not compose either one. `tools.spectre.pr` writes both from structured fields and
 refuses a body that breaks the rules below, so a pull request opened through it cannot
