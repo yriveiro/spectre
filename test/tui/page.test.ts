@@ -3,7 +3,8 @@ import { PluginContextProvider } from "@opencode/plugin/tui";
 import { RGBA } from "@opentui/core";
 import { createComponent, testRender } from "@opentui/solid";
 import type { Draft, Model, Resolution } from "../../tui/data";
-import { page } from "../../tui/page";
+import { sidebarSection, subagentFooter, subagentLine } from "../../tui/index";
+import { page, type TabId } from "../../tui/page";
 
 /**
  * The page, in a real renderer.
@@ -144,6 +145,10 @@ const host = (answer?: string) => {
 
 const frame = async (input: {
   readonly answer?: string;
+  readonly tab?: TabId;
+  readonly draft?: Draft;
+  readonly jevAvailable?: boolean;
+  readonly onTabChange?: (tab: TabId) => void;
   readonly onSave?: () => void;
   readonly onClose?: () => void;
   readonly onChange?: (next: Draft) => void;
@@ -158,7 +163,10 @@ const frame = async (input: {
             rows,
             models: entries,
             catalogue: models,
-            draft,
+            draft: input.draft ?? draft,
+            tab: input.tab,
+            jevAvailable: input.jevAvailable,
+            onTabChange: input.onTabChange,
             onChange: input.onChange ?? (() => {}),
             onSave: input.onSave ?? (() => {}),
             onClose: input.onClose ?? (() => {}),
@@ -173,17 +181,62 @@ const frame = async (input: {
 };
 
 describe("the modal draws what the session would spend", () => {
-  test("the modal frame carries the header with esc, the tables and the footer bar", async () => {
-    const { setup } = await frame({});
+  test("the modal frame carries the header with esc, the Jev toggle, the tabs and the footer bar", async () => {
+    const { setup } = await frame({ jevAvailable: false });
     const drawn = setup.captureCharFrame();
     expect(drawn).toContain("Routing");
     expect(drawn).toContain("esc");
-    expect(drawn).toContain("Profiles");
-    expect(drawn).toContain("Allowlist");
-    expect(drawn).toContain("Catalogue");
+    expect(drawn).toContain("judge:");
+    expect(drawn).toContain("jev-1.13-free");
+    expect(drawn).toContain("(○) disabled (no OPENCODE_KEY)");
+    expect(drawn).toContain("Profiles (2)");
+    expect(drawn).toContain("Allowlist (2)");
+    expect(drawn).toContain("Preview");
     expect(drawn).toContain("enter");
     expect(drawn).toContain("write it");
+    expect(drawn).toContain("add model");
+    expect(drawn).toContain("close");
     await setup.dispose();
+  });
+
+  test("the Jev toggle appears disabled without OPENCODE_KEY and toggles the judge when available", async () => {
+    let changed: Draft | undefined;
+    const { setup: disabledSetup } = await frame({
+      jevAvailable: false,
+      onChange: (next) => {
+        changed = next;
+      },
+    });
+    const disabledLines = disabledSetup.captureCharFrame().split("\n");
+    const disabledRow = disabledLines.findIndex((one) => one.includes("judge:"));
+    expect(disabledRow).toBeGreaterThan(-1);
+    await disabledSetup.mockMouse.click(10, disabledRow);
+    await disabledSetup.flush();
+    expect(changed).toBeUndefined();
+    await disabledSetup.dispose();
+
+    const { setup: availableSetup } = await frame({
+      jevAvailable: true,
+      onChange: (next) => {
+        changed = next;
+      },
+    });
+    const availableFrame = availableSetup.captureCharFrame();
+    expect(availableFrame).toContain("( ) on  (●) off");
+    const availableRow = availableFrame.split("\n").findIndex((one) => one.includes("judge:"));
+    expect(availableRow).toBeGreaterThan(-1);
+    await availableSetup.mockMouse.click(10, availableRow);
+    await availableSetup.flush();
+    expect(changed?.judge?.kind).toBe("jev");
+    expect(changed?.judge?.model).toBe("jev-1.13-free");
+    await availableSetup.dispose();
+
+    const { setup: enabledSetup } = await frame({
+      jevAvailable: true,
+      draft: changed,
+    });
+    expect(enabledSetup.captureCharFrame()).toContain("(●) on  ( ) off");
+    await enabledSetup.dispose();
   });
 
   test("clicking esc in the modal closes it", async () => {
@@ -218,11 +271,33 @@ describe("the modal draws what the session would spend", () => {
     await setup.dispose();
   });
 
-  test("the allowlist keeps the order the resolver reads", async () => {
-    const { setup } = await frame({});
-    const drawn = setup.captureCharFrame();
-    expect(drawn.indexOf("muse")).toBeLessThan(drawn.indexOf("glm-flash"));
-    await setup.dispose();
+  test("the allowlist tab keeps the order the resolver reads, and the preview tab renders JSON", async () => {
+    let selectedTab: TabId | undefined;
+    const { setup: tabClickSetup } = await frame({
+      onTabChange: (next) => {
+        selectedTab = next;
+      },
+    });
+    const tabLines = tabClickSetup.captureCharFrame().split("\n");
+    const tabRow = tabLines.findIndex((one) => one.includes("Allowlist (2)"));
+    expect(tabRow).toBeGreaterThan(-1);
+    const tabLine = tabLines[tabRow];
+    if (tabLine === undefined) throw new Error("the frame has no tab bar");
+    await tabClickSetup.mockMouse.click(tabLine.indexOf("Allowlist"), tabRow);
+    await tabClickSetup.flush();
+    expect(selectedTab).toBe("allowlist");
+    await tabClickSetup.dispose();
+
+    const { setup: allowSetup } = await frame({ tab: "allowlist" });
+    const allowDrawn = allowSetup.captureCharFrame();
+    expect(allowDrawn.indexOf("muse")).toBeLessThan(allowDrawn.indexOf("glm-flash"));
+    await allowSetup.dispose();
+
+    const { setup: previewSetup } = await frame({ tab: "preview" });
+    const previewDrawn = previewSetup.captureCharFrame();
+    expect(previewDrawn).toContain("The draft is not saved. It resolves to:");
+    expect(previewDrawn).toContain('"profile": "worker"');
+    await previewSetup.dispose();
   });
 });
 
@@ -241,6 +316,22 @@ describe("the page changes the draft and writes it only when asked", () => {
     await setup.dispose();
   });
 
+  test("a press on the effort dropdown opens the effort picker and a press on the model dropdown opens the pin picker", async () => {
+    const { setup, asked } = await frame({ answer: "muse" });
+    const lines = setup.captureCharFrame().split("\n");
+    const row = lines.findIndex((one) => one.includes("worker"));
+    expect(row).toBeGreaterThan(-1);
+    const line = lines[row];
+    if (line === undefined) throw new Error("the frame has no worker row");
+    await setup.mockMouse.click(line.indexOf("high"), row);
+    await setup.flush();
+    expect(asked.at(-1)).toContain("effort");
+    await setup.mockMouse.click(line.indexOf("acme/muse-spark-1.3#high"), row);
+    await setup.flush();
+    expect(asked.at(-1)).toContain('The model "worker" spends');
+    await setup.dispose();
+  });
+
   test("the write line is the only thing that writes", async () => {
     let saved = 0;
     const { setup } = await frame({ onSave: () => saved++ });
@@ -253,6 +344,120 @@ describe("the page changes the draft and writes it only when asked", () => {
     await setup.flush();
     expect(saved).toBe(1);
     await setup.dispose();
+  });
+});
+
+describe("the sidebar section shows the routing status and collapses like MCP", () => {
+  const sidebarRows: ReadonlyArray<Resolution> = [
+    spent,
+    {
+      profile: "pinned",
+      ref: undefined,
+      rung: undefined,
+      cost: undefined,
+      crosscheck: undefined,
+      problem: 'profiles.pinned.model: "ghost" is not an allowed model in this session.',
+    },
+  ];
+
+  test("the sidebar section lists each profile when open, toggles on header click, and renders the summary when collapsed", async () => {
+    let openState = true;
+    let modalOpened = 0;
+    const openSetup = await testRender(
+      () =>
+        sidebarSection({
+          theme: theme as never,
+          open: () => openState,
+          onToggle: () => {
+            openState = !openState;
+          },
+          onOpenModal: () => {
+            modalOpened += 1;
+          },
+          rows: () => sidebarRows,
+        }),
+      { width: 42, height: 10 },
+    );
+    await openSetup.renderOnce();
+
+    const expanded = openSetup.captureCharFrame();
+    expect(expanded).toContain("▼");
+    expect(expanded).toContain("Routing");
+    expect(expanded).toContain("worker");
+    expect(expanded).toContain("muse-spark-1.3#high");
+    expect(expanded).toContain("pinned");
+    expect(expanded).toContain("Error");
+
+    const workerLine = expanded.split("\n").findIndex((one) => one.includes("worker"));
+    expect(workerLine).toBeGreaterThan(-1);
+    await openSetup.mockMouse.click(4, workerLine);
+    await openSetup.flush();
+    expect(modalOpened).toBe(1);
+
+    const headerLine = expanded.split("\n").findIndex((one) => one.includes("Routing"));
+    expect(headerLine).toBeGreaterThan(-1);
+    await openSetup.mockMouse.click(2, headerLine);
+    await openSetup.flush();
+    expect(openState).toBe(false);
+    await openSetup.dispose();
+
+    const closedSetup = await testRender(
+      () =>
+        sidebarSection({
+          theme: theme as never,
+          open: () => openState,
+          onToggle: () => {
+            openState = !openState;
+          },
+          onOpenModal: () => {},
+          rows: () => sidebarRows,
+        }),
+      { width: 42, height: 10 },
+    );
+    await closedSetup.renderOnce();
+
+    const collapsed = closedSetup.captureCharFrame();
+    expect(collapsed).toContain("▶ Routing (1 active, 1 error)");
+    expect(collapsed).not.toContain("muse-spark-1.3#high");
+    await closedSetup.dispose();
+  });
+
+  test("the docked composer footer renders nothing in the main session and shows the profile and model on a subagent", async () => {
+    const mainLine = subagentLine({
+      session: { parentID: undefined, agent: "spectre" },
+      profiles: draft.profiles,
+      resolutions: sidebarRows,
+    });
+    expect(mainLine).toBeUndefined();
+
+    const mainSetup = await testRender(
+      () => subagentFooter({ theme: theme as never, line: () => mainLine }),
+      { width: 60, height: 2 },
+    );
+    await mainSetup.renderOnce();
+    expect(mainSetup.captureCharFrame().trim()).toBe("");
+    await mainSetup.dispose();
+
+    const childLine = subagentLine({
+      session: {
+        parentID: "ses_root",
+        agent: "spectre",
+        model: { providerID: "acme", id: "muse-spark-1.3", variant: "high" },
+      },
+      profiles: draft.profiles,
+      resolutions: sidebarRows,
+    });
+    expect(childLine).toBe("worker uses acme/muse-spark-1.3#high, $0.1 in, $0.2 out");
+
+    const childSetup = await testRender(
+      () => subagentFooter({ theme: theme as never, line: () => childLine }),
+      { width: 80, height: 2 },
+    );
+    await childSetup.renderOnce();
+    expect(childSetup.captureCharFrame()).toContain(
+      "routing worker uses acme/muse-spark-1.3#high, $0.1 in, $0.2 out",
+    );
+    await childSetup.dispose();
   });
 });
 
@@ -311,6 +516,7 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
     let shown: (() => unknown) | undefined;
     let dialogOptions: { size?: string; centered?: boolean } | undefined;
     let commandRun: (() => void) | undefined;
+    const slotTargets: Array<string> = [];
     const { context } = host();
     const fullContext = {
       ...context,
@@ -350,11 +556,15 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
           navigate: () => {},
           current: () => ({ type: "home" }),
         },
-        slot: () => () => {},
+        slot: (claim: { append?: string }) => {
+          if (claim.append) slotTargets.push(claim.append);
+          return () => {};
+        },
       },
     };
 
     await mod.default.setup(fullContext);
+    expect(slotTargets).toEqual(["sidebar.content", "session.composer.top"]);
     if (commandRun === undefined) throw new Error("the entrypoint registered no opener command");
     commandRun();
     if (shown === undefined) throw new Error("the opener did not call dialog.show");

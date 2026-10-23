@@ -5,6 +5,7 @@ import {
   candidates,
   DEFAULT_AGENT,
   FILE_NAME,
+  type JudgeConfig,
   known,
   loadProject,
   type ProfileEntry,
@@ -63,6 +64,8 @@ export type Draft = {
   /** The allowlist, in the order the resolver reads. */
   readonly models: ReadonlyArray<{ readonly alias: string; readonly ref: string }>;
   readonly profiles: ReadonlyArray<Profile>;
+  /** The judge settings, when configured. */
+  readonly judge?: JudgeConfig | undefined;
 };
 
 /** What one profile resolves to under a draft. */
@@ -122,6 +125,7 @@ export const read = (directory: string): Promise<Draft> =>
     // silence.
     return {
       provider: found.tables.provider,
+      judge: found.tables.judge,
       models,
       profiles: Object.entries(found.tables.profiles).map(([name, entry]) => {
         // The resolver spends the first pin the allowlist holds. The page
@@ -255,6 +259,7 @@ const preserved = async (path: string): Promise<Record<string, unknown>> => {
 /** The draft as the file declares it. */
 const written = (draft: Draft): Parameters<typeof writeConfig>[1] => ({
   provider: draft.provider,
+  judge: draft.judge,
   models: Object.fromEntries(draft.models.map((one) => [one.alias, one.ref])),
   profiles: Object.fromEntries(
     draft.profiles.map((one) => [
@@ -287,6 +292,7 @@ export const save = (directory: string, draft: Draft): Promise<void> => {
     // page answers the question again. The marker goes.
     const rest = { ...kept };
     delete rest.setup;
+    delete rest.judge;
     const file = { ...rest, ...written(draft) } as Parameters<typeof writeConfig>[1];
     return Effect.runPromise(writeConfig(path, file));
   });

@@ -4,11 +4,14 @@ import type { ResolvedTheme } from "@opencode/theme/tui";
 import type { JSX } from "@opentui/solid";
 import {
   DEFAULT_AGENT,
+  DEFAULT_TIMEOUT_MS,
   isFree,
   type Known,
   ladderOf,
   proposeAlias,
   rungs,
+  SYSTEMONE_ENDPOINT,
+  SYSTEMONE_KEY_ENV,
 } from "../tools/definitions/routing/index.ts";
 import {
   type Draft,
@@ -17,7 +20,7 @@ import {
   type Resolution,
   resolve as resolveDraft,
 } from "./data.ts";
-import { field, h } from "./render.ts";
+import { field, h, type Palette, palette } from "./render.ts";
 
 /**
  * The controls: the dialogs that change the draft.
@@ -35,25 +38,35 @@ import { field, h } from "./render.ts";
  * wires a dialog to a keybinding does the same two calls.
  */
 
+/** The default System One judge model id. */
+export const JEV_MODEL = "jev-1.13-free";
+
+/** True when the environment carries a key for the System One judge. */
+export const isJevAvailable = (draft: Draft): boolean => {
+  const keyName = draft.judge?.key ?? SYSTEMONE_KEY_ENV;
+  return Boolean(Bun.env[keyName] || Bun.env.OPENCODE_API_KEY || Bun.env.OPENCODE_KEY);
+};
+
 /** One change a control makes to the draft. */
 export type Edit =
   | { readonly kind: "effort"; readonly profile: string; readonly effort: string }
   | { readonly kind: "pin"; readonly profile: string; readonly alias: string | undefined }
-  | { readonly kind: "model"; readonly alias: string; readonly ref: string };
+  | { readonly kind: "model"; readonly alias: string; readonly ref: string }
+  | { readonly kind: "judge"; readonly enabled: boolean };
 
 /**
  * The draft with one edit applied.
  *
  * A model joins the end of the allowlist, because the order is the preference
  * order and the person put this model last. An effort replaces the value the
- * profile holds.
+ * profile holds, and a judge toggle enables or clears the System One judge.
  */
 export const applied = (draft: Draft, edit: Edit): Draft => {
   if (edit.kind === "effort")
     return {
       ...draft,
       profiles: draft.profiles.map((one) =>
-        one.name === edit.profile ? { ...one, effort: edit.effort } : one,
+        one.name === edit.profile ? { ...one, effort: edit.effort, pinned: undefined } : one,
       ),
     };
   if (edit.kind === "pin")
@@ -62,6 +75,20 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
       profiles: draft.profiles.map((one) =>
         one.name === edit.profile ? { ...one, pinned: edit.alias } : one,
       ),
+    };
+  if (edit.kind === "judge")
+    return {
+      ...draft,
+      judge: edit.enabled
+        ? {
+            kind: "jev",
+            model: draft.judge?.model ?? JEV_MODEL,
+            endpoint: draft.judge?.endpoint ?? SYSTEMONE_ENDPOINT,
+            key: draft.judge?.key ?? SYSTEMONE_KEY_ENV,
+            timeout: draft.judge?.timeout ?? DEFAULT_TIMEOUT_MS,
+            threshold: draft.judge?.threshold,
+          }
+        : undefined,
     };
   return { ...draft, models: [...draft.models, { alias: edit.alias, ref: edit.ref }] };
 };
@@ -223,7 +250,11 @@ export const effortPicker = async (input: {
     current: input.profile.effort,
   });
 
-  if (chosen === undefined || chosen === input.profile.effort) return undefined;
+  if (
+    chosen === undefined ||
+    (chosen === input.profile.effort && input.profile.pinned === undefined)
+  )
+    return undefined;
   return { kind: "effort", profile: input.profile.name, effort: chosen };
 };
 
@@ -367,20 +398,62 @@ export const modelPicker = async (input: {
   return { kind: "model", alias, ref };
 };
 
-/** One profile of the draft, and what it resolves to. */
-const previewLine = (theme: ResolvedTheme, one: Resolution): JSX.Element => {
-  if (one.problem !== undefined)
-    return h("text", { fg: theme.text.feedback.warning.base }, `${one.profile}: ${one.problem}`);
+/** One property in a resolved JSON preview object. */
+type JsonField = {
+  readonly key: string;
+  readonly value: string;
+  readonly warning?: boolean;
+};
 
-  const parts = [one.profile, one.ref ?? "no model"];
-  if (one.rung !== undefined) parts.push(one.rung);
-  if (one.cost !== undefined) parts.push(one.cost);
-  if (one.crosscheck !== undefined) parts.push(`second opinion ${one.crosscheck}`);
-  return h("text", { fg: theme.text.base }, parts.join("  "));
+/** The JSON properties that describe one profile resolution. */
+const jsonFields = (one: Resolution): ReadonlyArray<JsonField> => {
+  if (one.problem !== undefined) {
+    return [
+      { key: "profile", value: one.profile },
+      { key: "problem", value: one.problem, warning: true },
+    ];
+  }
+  const fields: Array<JsonField> = [
+    { key: "profile", value: one.profile },
+    { key: "model", value: one.ref ?? "no model" },
+  ];
+  if (one.rung !== undefined) fields.push({ key: "effort", value: one.rung });
+  if (one.cost !== undefined) fields.push({ key: "cost", value: one.cost });
+  if (one.crosscheck !== undefined) fields.push({ key: "crosscheck", value: one.crosscheck });
+  return fields;
+};
+
+/** One syntax-highlighted JSON object inside the preview array. */
+const previewObject = (
+  colors: Palette,
+  one: Resolution,
+  last: boolean,
+): ReadonlyArray<JSX.Element> => {
+  const fields = jsonFields(one);
+  const body = fields.map((item, at) =>
+    h(
+      "text",
+      { fg: colors.teal, wrapMode: "word" },
+      "    ",
+      h("span", { style: { fg: colors.blue } }, JSON.stringify(item.key)),
+      ": ",
+      h(
+        "span",
+        { style: { fg: item.warning ? colors.warning : colors.green } },
+        JSON.stringify(item.value),
+      ),
+      at < fields.length - 1 ? "," : "",
+    ),
+  );
+  return [
+    h("text", { fg: colors.teal }, "  {"),
+    ...body,
+    h("text", { fg: colors.teal }, last ? "  }" : "  },"),
+  ];
 };
 
 /**
- * The preview of an unsaved edit.
+ * The preview of an unsaved edit, rendered as syntax-highlighted JSON.
  *
  * It reads the draft and the catalogue, and never the file. `data.resolve`
  * reads the barrel's resolver, so the preview and the router agree.
@@ -390,16 +463,21 @@ export const preview = (input: {
   readonly draft: Draft;
   readonly models: ReadonlyArray<Model>;
 }): JSX.Element => {
+  const colors = palette(input.theme);
   const rows = resolveDraft(input.draft, input.models);
   const lines =
     rows.length === 0
-      ? [h("text", { fg: input.theme.text.faint }, "The draft holds no profile.")]
-      : rows.map((one) => previewLine(input.theme, one));
+      ? [h("text", { fg: colors.teal }, "[]")]
+      : [
+          h("text", { fg: colors.teal }, "["),
+          ...rows.flatMap((one, at) => previewObject(colors, one, at === rows.length - 1)),
+          h("text", { fg: colors.teal }, "]"),
+        ];
 
   return h(
     "box",
     { flexDirection: "column" },
-    h("text", { fg: input.theme.text.faint }, "The draft is not saved. It resolves to:"),
+    h("text", { fg: colors.text }, "The draft is not saved. It resolves to:"),
     ...lines,
   );
 };

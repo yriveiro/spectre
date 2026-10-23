@@ -2,29 +2,33 @@ import { usePlugin } from "@opencode/plugin/tui";
 import type { ResolvedTheme } from "@opencode/theme/tui";
 import { type RGBA, TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
+import { createSignal } from "solid-js";
 import { KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
-import { applied, type Edit, effortPicker, modelPicker, pinPicker, preview } from "./controls.tsx";
+import {
+  applied,
+  type Edit,
+  effortPicker,
+  isJevAvailable,
+  JEV_MODEL,
+  modelPicker,
+  pinPicker,
+  preview,
+} from "./controls.tsx";
 import type { Draft, Model, Profile, Resolution } from "./data.ts";
-import { field, h, show } from "./render.ts";
+import { field, h, type Palette, palette, show } from "./render.ts";
 
 /**
  * The page.
  *
- * Three tables: the profiles and what they resolve to, the allowlist, and the
- * catalogue. The catalogue is the largest and the least important, so it goes
- * last. The match line stands under the name, because it is the routing
- * surface, and a person who edits it reads it there.
- *
- * The page is a view. It reads no file and holds no draft. The entrypoint
- * hands the data through the props, and `onEdit` is the one action it takes
- * back: the write of the draft the dialogs have changed. The theme comes from
- * the plugin context, which the host gives every page it renders, so no prop
- * carries colour.
- *
- * The props may carry getters. The helpers in `render.ts` re-read one, so the
- * entrypoint can make this tree follow the draft store while a person edits
- * it. The page needs no knowledge of the store for that.
+ * The modal organises routing configuration into three tabs (`Profiles`,
+ * `Allowlist`, `Preview`), with a header that shows the config file and a
+ * radio toggle for the Jev System One judge.
  */
+
+/** The three tabs of the routing modal. */
+export type TabId = "profiles" | "allowlist" | "preview";
+
+export const TABS: ReadonlyArray<TabId> = ["profiles", "allowlist", "preview"];
 
 /** One profile and what it resolves to under the draft the page shows. */
 export type ProfileRow = {
@@ -48,43 +52,20 @@ export type PageInput = {
   readonly rows: ReadonlyArray<ProfileRow>;
   readonly models: ReadonlyArray<EntryRow>;
   readonly catalogue: ReadonlyArray<Model>;
-  /**
-   * The config file the draft came from. The entrypoint knows it, because it
-   * read the file; the page cannot work it out.
-   */
   readonly source?: string | undefined;
-  /**
-   * The draft the dialogs change. The page holds no draft of its own.
-   */
   readonly draft: Draft;
-  /**
-   * A dialog changed the draft. The entrypoint holds it, so the page hands
-   * the next one back and the entrypoint keeps it.
-   */
+  readonly tab?: TabId | undefined;
+  readonly onTabChange?: ((tab: TabId) => void) | undefined;
+  readonly selectedRow?: number | undefined;
+  readonly jevAvailable?: boolean | undefined;
   readonly onChange: (next: Draft) => void;
-  /**
-   * The write of the draft. The dialogs change the draft in the entrypoint;
-   * a click passes it here, and the entrypoint writes it. The page carries
-   * no writer of its own.
-   */
   readonly onSave: () => void;
-  /**
-   * Dismiss the modal without writing.
-   */
   readonly onClose?: () => void;
 };
 
-/**
- * The names the known order ranks, as plain strings for the sort below. The
- * catalogue gives every other name no rank, so the page sorts it by identity.
- */
 const ORDER: ReadonlyArray<string> = KNOWN_ORDER;
 
-/**
- * The rungs as a person reads them. The known order ranks the names it knows
- * and sorts them by rank. The names it cannot rank keep the order the
- * catalogue gave them, and they come after the ranked ones.
- */
+/** The rungs sorted by the known order, followed by any unranked names. */
 const rungsView = (rungs: ReadonlyArray<string>): string => {
   const ranked = rungs
     .filter((one) => ORDER.includes(one))
@@ -93,99 +74,232 @@ const rungsView = (rungs: ReadonlyArray<string>): string => {
   return [...ranked, ...unranked].join(", ");
 };
 
-/**
- * The cost as one cell. A model with no cost says so in one word, because the
- * free model is the rung the cross-check prefers.
- */
+/** The cost as one cell. */
 const costView = (costInput: number, costOutput: number): string =>
   costInput === 0 && costOutput === 0 ? "free" : `$${costInput}/$${costOutput}`;
 
-/** One column width, in cells. A header and its rows read the same number. */
-const NAME = 12;
-const EFFORT = 9;
-const COST = 12;
-const INDEX = 3;
-const ALIAS = 16;
-const PROVIDER = 16;
-const FAMILY = 18;
-const RUNGS = 20;
+/** True when a resolved cost line names a rate of $1 or more per million tokens. */
+const isExpensiveCost = (cost: string | undefined): boolean => {
+  if (cost === undefined) return false;
+  for (const match of cost.matchAll(/\$(\d+(?:\.\d+)?)/g)) {
+    if (Number(match[1]) >= 1) return true;
+  }
+  return false;
+};
 
-/** The indent of the lines that sit under a row. */
+/** Column widths, in cells. */
+const GUTTER = 2;
+const NAME = 11;
+const EFFORT = 12;
+const COST = 19;
+const INDEX = 3;
+const ALIAS = 14;
+const FAMILY = 14;
+const RUNGS = 18;
+const ALLOW_COST = 12;
 const INDENT = 2;
 
-/** One cell of fixed width. The text that is too long for it is cut. */
 const cell = (width: number, value: () => string, tone: RGBA): JSX.Element =>
   h("text", { width, fg: tone, truncate: true, wrapMode: "none" }, value);
 
-/** One cell that takes what the row has left, after the fixed cells. */
 const flexCell = (value: () => string, tone: RGBA): JSX.Element =>
   h("text", { fg: tone, flexGrow: 1, minWidth: 0, truncate: true, wrapMode: "none" }, value);
 
-/** A cost cell, set against the right edge of its table. */
-const costCell = (value: () => string, tone: RGBA): JSX.Element =>
-  h("text", { fg: tone, wrapMode: "none" }, () => value().padStart(COST));
+const costCell = (width: number, value: () => string, tone: RGBA): JSX.Element =>
+  h("text", { width, flexShrink: 0, fg: tone, wrapMode: "none" }, () => value().padStart(width));
 
-/** A line that says why a row failed, in warning, and is cut by the width. */
-const problemLine = (theme: ResolvedTheme, problem: string): JSX.Element =>
+const indentedLine = (tone: RGBA, text: string): JSX.Element =>
   h(
     "box",
     { paddingLeft: INDENT, paddingRight: 1 },
-    h("text", { fg: theme.text.feedback.warning.base, wrapMode: "word" }, problem),
+    h("text", { fg: tone, wrapMode: "word" }, text),
   );
 
-/**
- * One row of the profile table.
- *
- * The first line carries the requirement and the spend. A profile that names
- * its own ref is marked `pinned`, because the pin wins over the effort. The
- * match line stands under the name. The second opinion and the problem
- * follow, each on its own line and only when the resolver reaches one.
- */
+/** A TUI-styled select dropdown cell with an inset surface and cyan chevron. */
+const selectControl = (input: {
+  readonly colors: Palette;
+  readonly width?: number;
+  readonly flexGrow?: number;
+  readonly value: string;
+  readonly onOpen: () => void;
+}): JSX.Element => {
+  const [hovered, setHovered] = createSignal(false);
+  return h(
+    "box",
+    {
+      width: input.width,
+      flexGrow: input.flexGrow,
+      minWidth: input.flexGrow !== undefined ? 0 : undefined,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingLeft: 1,
+      paddingRight: 1,
+      backgroundColor: () => (hovered() ? input.colors.selectHoverBg : input.colors.insetBg),
+      onMouseOver: () => setHovered(true),
+      onMouseOut: () => setHovered(false),
+      onMouseUp: input.onOpen,
+    },
+    h(
+      "text",
+      {
+        fg: () => (hovered() ? input.colors.cyan : input.colors.text),
+        flexGrow: 1,
+        minWidth: 0,
+        truncate: true,
+        wrapMode: "none",
+      },
+      input.value,
+    ),
+    h(
+      "text",
+      {
+        fg: input.colors.cyan,
+        flexShrink: 0,
+        wrapMode: "none",
+      },
+      " ▾",
+    ),
+  );
+};
+
+/** The Jev System One judge radio/toggle row in the modal header. */
+const jevToggleBar = (input: {
+  readonly colors: Palette;
+  readonly modelName: string;
+  readonly enabled: boolean;
+  readonly available: boolean;
+  readonly onToggle: () => void;
+}): JSX.Element => {
+  const { colors, available, enabled } = input;
+  const radioText = !available
+    ? "(○) disabled (no OPENCODE_KEY)"
+    : enabled
+      ? "(●) on  ( ) off"
+      : "( ) on  (●) off";
+  const radioColor = !available ? colors.disabled : enabled ? colors.green : colors.muted;
+
+  return h(
+    "box",
+    {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      onMouseUp: input.onToggle,
+    },
+    h(
+      "text",
+      { fg: colors.blue, truncate: true, wrapMode: "none" },
+      "judge: ",
+      h("span", { style: { fg: available ? colors.text : colors.disabled } }, input.modelName),
+    ),
+    h(
+      "text",
+      {
+        fg: radioColor,
+        attributes: available && enabled ? TextAttributes.BOLD : TextAttributes.NONE,
+        flexShrink: 0,
+        wrapMode: "none",
+      },
+      radioText,
+    ),
+  );
+};
+
+/** The horizontal tab bar for switching between Profiles, Allowlist, and Preview. */
+const tabBar = (input: {
+  readonly colors: Palette;
+  readonly active: TabId;
+  readonly profileCount: number;
+  readonly allowCount: number;
+  readonly onSelect: (tab: TabId) => void;
+}): JSX.Element => {
+  const items: ReadonlyArray<{ readonly id: TabId; readonly label: string }> = [
+    { id: "profiles", label: `Profiles (${input.profileCount})` },
+    { id: "allowlist", label: `Allowlist (${input.allowCount})` },
+    { id: "preview", label: "Preview" },
+  ];
+
+  return h(
+    "box",
+    {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      flexShrink: 0,
+      backgroundColor: input.colors.insetBg,
+      border: ["bottom"],
+      borderColor: input.colors.border,
+      paddingLeft: 2,
+      paddingRight: 2,
+    },
+    h(
+      "box",
+      { flexDirection: "row", gap: 2 },
+      ...items.map((item) => {
+        const selected = item.id === input.active;
+        return h(
+          "box",
+          {
+            paddingLeft: 1,
+            paddingRight: 1,
+            backgroundColor: selected ? input.colors.modalBg : undefined,
+            onMouseUp: () => input.onSelect(item.id),
+          },
+          h(
+            "text",
+            {
+              fg: selected ? input.colors.cyan : input.colors.muted,
+              attributes: selected ? TextAttributes.BOLD : TextAttributes.NONE,
+              wrapMode: "none",
+            },
+            selected ? `▸ ${item.label}` : `  ${item.label}`,
+          ),
+        );
+      }),
+    ),
+    h("text", { fg: input.colors.faint, wrapMode: "none" }, "[/] tabs"),
+  );
+};
+
+/** One row of the profile table. */
 const profileRow = (
+  colors: Palette,
   theme: ResolvedTheme,
   row: ProfileRow,
+  selected: boolean,
   actions: { readonly effort: () => void; readonly pin: () => void },
 ): JSX.Element => {
   const profile = row.profile;
+  const [hovered, setHovered] = createSignal(false);
+  const costTone = isExpensiveCost(row.resolution?.cost) ? colors.yellow : colors.muted;
+  const effort = profile.pinned !== undefined ? "pinned" : (profile.effort ?? "-");
+  const ref = row.resolution?.ref ?? "-";
+  const nameProps = {
+    width: NAME,
+    fg: selected ? colors.cyan : colors.text,
+    attributes: selected ? TextAttributes.BOLD : TextAttributes.NONE,
+    truncate: true,
+    wrapMode: "none",
+    onMouseUp: actions.effort,
+  };
   return h(
     "box",
-    { flexDirection: "column" },
+    {
+      flexDirection: "column",
+      backgroundColor: () => (hovered() ? colors.rowHoverBg : undefined),
+      onMouseOver: () => setHovered(true),
+      onMouseOut: () => setHovered(false),
+    },
     h(
       "box",
       { flexDirection: "row", columnGap: 1 },
-      h(
-        "text",
-        {
-          width: NAME,
-          fg: theme.text.base,
-          truncate: true,
-          wrapMode: "none",
-          onMouseUp: actions.effort,
-        },
-        () => profile.name,
-      ),
-      h(
-        "text",
-        {
-          width: EFFORT,
-          fg: theme.text.base,
-          truncate: true,
-          wrapMode: "none",
-          onMouseUp: actions.pin,
-        },
-        () => (profile.pinned !== undefined ? "pinned" : (profile.effort ?? "-")),
-      ),
-      flexCell(() => row.resolution?.ref ?? "-", theme.text.base),
-      costCell(() => row.resolution?.cost ?? "-", theme.text.muted),
+      cell(GUTTER, () => (selected ? "▸" : " "), colors.cyan),
+      h("text", nameProps, () => profile.name),
+      selectControl({ colors, width: EFFORT, value: effort, onOpen: actions.effort }),
+      selectControl({ colors, flexGrow: 1, value: ref, onOpen: actions.pin }),
+      costCell(COST, () => row.resolution?.cost ?? "-", costTone),
     ),
     show(
       () => profile.match !== undefined,
-      () =>
-        h(
-          "text",
-          { fg: theme.text.muted, wrapMode: "word", paddingLeft: INDENT },
-          () => profile.match ?? "",
-        ),
+      () => indentedLine(colors.muted, profile.match ?? ""),
     ),
     show(
       () => row.resolution !== undefined && row.resolution.crosscheck !== undefined,
@@ -198,68 +312,51 @@ const profileRow = (
     ),
     show(
       () => row.resolution !== undefined && row.resolution.problem !== undefined,
-      () => problemLine(theme, row.resolution?.problem ?? ""),
+      () => indentedLine(colors.warning, row.resolution?.problem ?? ""),
     ),
   );
 };
 
-/**
- * One row of the allowlist table.
- *
- * The number is the position in the read order, and the order decides the
- * spend: the resolver reads the entries from the top and spends the first
- * model that fits. The catalogue's facts stand beside the ref, so one line
- * carries the entry and the model. A problem under the line says why the
- * entry cannot be spent, when the entrypoint knows one.
- */
-const entryRow = (theme: ResolvedTheme, row: EntryRow, index: number): JSX.Element => {
+/** One row of the allowlist table. */
+const entryRow = (colors: Palette, row: EntryRow, index: number): JSX.Element => {
   const model = row.model;
+  const [hovered, setHovered] = createSignal(false);
   return h(
     "box",
-    { flexDirection: "column" },
+    {
+      flexDirection: "column",
+      backgroundColor: () => (hovered() ? colors.rowHoverBg : undefined),
+      onMouseOver: () => setHovered(true),
+      onMouseOut: () => setHovered(false),
+    },
     h(
       "box",
       { flexDirection: "row", columnGap: 1 },
-      cell(INDEX, () => String(index + 1), theme.text.faint),
-      cell(ALIAS, () => row.alias, theme.text.base),
-      cell(FAMILY, () => model?.family ?? "-", theme.text.muted),
+      cell(INDEX, () => String(index + 1), colors.faint),
+      cell(ALIAS, () => row.alias, colors.text),
+      cell(FAMILY, () => model?.family ?? "-", colors.text),
       cell(
         RUNGS,
         () => (model === undefined || model.rungs.length === 0 ? "-" : rungsView(model.rungs)),
-        theme.text.muted,
+        colors.muted,
       ),
-      flexCell(() => row.ref, theme.text.base),
+      flexCell(() => row.ref, colors.text),
       costCell(
+        ALLOW_COST,
         () => (model === undefined ? "-" : costView(model.costInput, model.costOutput)),
-        theme.text.muted,
+        colors.muted,
       ),
     ),
     show(
       () => row.problem !== undefined,
-      () => problemLine(theme, row.problem ?? ""),
+      () => indentedLine(colors.warning, row.problem ?? ""),
     ),
   );
 };
 
-/** One row of the catalogue table: a model this session can see. */
-const catalogueRow = (theme: ResolvedTheme, model: Model): JSX.Element =>
-  h(
-    "box",
-    { flexDirection: "row", columnGap: 1 },
-    cell(PROVIDER, () => model.providerID, theme.text.muted),
-    flexCell(() => model.id, theme.text.base),
-    cell(FAMILY, () => model.family ?? "-", theme.text.muted),
-    cell(RUNGS, () => (model.rungs.length === 0 ? "-" : rungsView(model.rungs)), theme.text.muted),
-    costCell(() => costView(model.costInput, model.costOutput), theme.text.muted),
-  );
-
-/**
- * One section of the page: its title, its caption, and its table. The caption
- * says what the table shows.
- */
+/** One section of a tab: its caption, its underlined header row, and its table body. */
 const section = (
-  theme: ResolvedTheme,
-  title: string,
+  colors: Palette,
   caption: string,
   head: ReadonlyArray<JSX.Element>,
   body: JSX.Element,
@@ -267,59 +364,173 @@ const section = (
   h(
     "box",
     { flexDirection: "column" },
-    h("text", { fg: theme.text.base, attributes: TextAttributes.BOLD, paddingTop: 1 }, title),
-    h("text", { fg: theme.text.muted, wrapMode: "word" }, caption),
-    h("box", { flexDirection: "row", columnGap: 1, paddingTop: 1 }, head),
+    h("text", { fg: colors.muted, wrapMode: "word" }, caption),
+    h(
+      "box",
+      {
+        flexDirection: "row",
+        columnGap: 1,
+        paddingTop: 1,
+        border: ["bottom"],
+        borderColor: colors.border,
+      },
+      head,
+    ),
     body,
   );
 
-/** The faint cells above a table. They read the widths its rows read. */
+/** The accent-blue column headers above each table. */
 const headerCells = {
-  profiles: (theme: ResolvedTheme): ReadonlyArray<JSX.Element> => [
-    cell(NAME, () => "profile", theme.text.faint),
-    cell(EFFORT, () => "effort", theme.text.faint),
-    flexCell(() => "model", theme.text.faint),
-    costCell(() => "cost", theme.text.faint),
+  profiles: (colors: Palette): ReadonlyArray<JSX.Element> => [
+    cell(GUTTER, () => "", colors.blue),
+    cell(NAME, () => "profile", colors.blue),
+    cell(EFFORT, () => "effort", colors.blue),
+    flexCell(() => "model", colors.blue),
+    costCell(COST, () => "cost", colors.blue),
   ],
-  entries: (theme: ResolvedTheme): ReadonlyArray<JSX.Element> => [
-    cell(INDEX, () => "", theme.text.faint),
-    cell(ALIAS, () => "alias", theme.text.faint),
-    cell(FAMILY, () => "family", theme.text.faint),
-    cell(RUNGS, () => "rungs", theme.text.faint),
-    flexCell(() => "model", theme.text.faint),
-    costCell(() => "cost", theme.text.faint),
-  ],
-  catalogue: (theme: ResolvedTheme): ReadonlyArray<JSX.Element> => [
-    cell(PROVIDER, () => "provider", theme.text.faint),
-    flexCell(() => "model", theme.text.faint),
-    cell(FAMILY, () => "family", theme.text.faint),
-    cell(RUNGS, () => "rungs", theme.text.faint),
-    costCell(() => "cost", theme.text.faint),
+  entries: (colors: Palette): ReadonlyArray<JSX.Element> => [
+    cell(INDEX, () => "#", colors.blue),
+    cell(ALIAS, () => "alias", colors.blue),
+    cell(FAMILY, () => "family", colors.blue),
+    cell(RUNGS, () => "rungs", colors.blue),
+    flexCell(() => "model", colors.blue),
+    costCell(ALLOW_COST, () => "cost", colors.blue),
   ],
 };
 
-/** The line a table shows when it holds no rows. */
-const noneYet = (theme: ResolvedTheme, says: string): JSX.Element =>
-  h("box", { paddingLeft: INDENT, paddingRight: 1 }, h("text", { fg: theme.text.muted }, says));
+/** One action button in the footer bar, with a bold key and hover highlight. */
+const footerButton = (input: {
+  readonly key: string;
+  readonly label: string;
+  readonly hoverKeyColor: RGBA;
+  readonly textColor: RGBA;
+  readonly mutedColor: RGBA;
+  readonly onPress: () => void;
+}): JSX.Element => {
+  const [hovered, setHovered] = createSignal(false);
+  return h(
+    "text",
+    {
+      fg: () => (hovered() ? input.hoverKeyColor : input.textColor),
+      attributes: TextAttributes.BOLD,
+      onMouseOver: () => setHovered(true),
+      onMouseOut: () => setHovered(false),
+      onMouseUp: input.onPress,
+    },
+    `${input.key} `,
+    h(
+      "span",
+      {
+        style: () => ({
+          fg: hovered() ? input.textColor : input.mutedColor,
+        }),
+      },
+      input.label,
+    ),
+  );
+};
+
+/** Renders the syntax-highlighted JSON preview tab body. */
+const previewTab = (
+  colors: Palette,
+  theme: ResolvedTheme,
+  draft: Draft,
+  catalogue: ReadonlyArray<Model>,
+): JSX.Element =>
+  h(
+    "box",
+    { flexDirection: "column", gap: 1 },
+    h(
+      "box",
+      {
+        flexDirection: "column",
+        border: true,
+        borderStyle: "rounded",
+        borderColor: colors.border,
+        backgroundColor: colors.insetBg,
+        paddingLeft: 1,
+        paddingRight: 1,
+      },
+      preview({ theme, draft, models: catalogue }),
+    ),
+    h(
+      "text",
+      { fg: colors.muted, wrapMode: "word" },
+      "the page writes nothing by itself. A click writes the draft to the config file.",
+    ),
+  );
+
+/** Renders the active tab body inside the modal's scrollable area. */
+const activeTabBody = (input: {
+  readonly tab: TabId;
+  readonly colors: Palette;
+  readonly theme: ResolvedTheme;
+  readonly rows: ReadonlyArray<ProfileRow>;
+  readonly models: ReadonlyArray<EntryRow>;
+  readonly catalogue: ReadonlyArray<Model>;
+  readonly draft: Draft;
+  readonly selectedRow: number;
+  readonly actions: (profile: Profile) => { readonly effort: () => void; readonly pin: () => void };
+}): JSX.Element => {
+  const { colors, theme } = input;
+  if (input.tab === "allowlist") {
+    const entries = h(
+      "box",
+      { flexDirection: "column" },
+      () => input.models.map((row, index) => entryRow(colors, row, index)),
+      show(
+        () => input.models.length === 0,
+        () => indentedLine(colors.muted, "no entries yet"),
+      ),
+    );
+    return section(
+      colors,
+      "the resolver reads the entries from the top and spends the first model that fits",
+      headerCells.entries(colors),
+      entries,
+    );
+  }
+  if (input.tab === "preview") {
+    return previewTab(colors, theme, input.draft, input.catalogue);
+  }
+  const profiles = h(
+    "box",
+    { flexDirection: "column" },
+    () =>
+      input.rows.map((row, index) =>
+        profileRow(colors, theme, row, index === input.selectedRow, input.actions(row.profile)),
+      ),
+    show(
+      () => input.rows.length === 0,
+      () => indentedLine(colors.muted, "no profiles yet"),
+    ),
+  );
+  return section(
+    colors,
+    "the requirement each profile names, and the model the resolver would spend on it",
+    headerCells.profiles(colors),
+    profiles,
+  );
+};
 
 export const page = (input: PageInput): JSX.Element => {
   const context = usePlugin();
   const theme =
     typeof context.theme.surface === "function" ? context.theme.surface("dialog") : context.theme;
+  const colors = palette(context.theme, theme);
   const dialog = context.ui.dialog;
+  const activeTab: TabId = input.tab ?? "profiles";
+  const selectedRow = input.selectedRow ?? 0;
+  const jevAvailable = input.jevAvailable ?? isJevAvailable(input.draft);
+  const jevEnabled =
+    jevAvailable && input.draft.judge !== undefined && input.draft.judge.kind !== "lexical";
+  const jevModel = input.draft.judge?.model ?? JEV_MODEL;
+
   const close = () => {
     if (input.onClose) input.onClose();
     else dialog.clear();
   };
 
-  /**
-   * A dialog, and what happens when it answers.
-   *
-   * The answer is a change to the draft, and the draft belongs to the
-   * entrypoint. The page hands the next one back and the entrypoint keeps it.
-   * A dialog that stops says so in a toast, because a person who pressed a
-   * row and saw nothing would press it again.
-   */
   const run = (open: () => Promise<Edit | undefined>): void => {
     void open().then(
       (edit) => {
@@ -335,86 +546,35 @@ export const page = (input: PageInput): JSX.Element => {
     );
   };
 
-  /** The two actions a profile row opens: its effort, and its pin. */
   const actions = (profile: Profile) => ({
     effort: () =>
       run(() => effortPicker({ dialog, draft: input.draft, models: input.catalogue, profile })),
     pin: () => run(() => pinPicker({ dialog, draft: input.draft, profile })),
   });
 
-  const profiles = h(
-    "box",
-    { flexDirection: "column" },
-    () => input.rows.map((row) => profileRow(theme, row, actions(row.profile))),
-    show(
-      () => input.rows.length === 0,
-      () => noneYet(theme, "no profiles yet"),
-    ),
-  );
-
-  const entries = h(
-    "box",
-    { flexDirection: "column" },
-    () => input.models.map((row, index) => entryRow(theme, row, index)),
-    show(
-      () => input.models.length === 0,
-      () => noneYet(theme, "no entries yet"),
-    ),
-    h(
-      "text",
-      {
-        fg: theme.text.muted,
-        paddingLeft: INDENT,
-        onMouseUp: () =>
-          run(() => modelPicker({ dialog, draft: input.draft, models: input.catalogue })),
-      },
-      "add a model to the allowlist",
-    ),
-  );
-
-  const catalogue = h(
-    "box",
-    { flexDirection: "column" },
-    () => input.catalogue.map((model) => catalogueRow(theme, model)),
-    show(
-      () => input.catalogue.length === 0,
-      () => noneYet(theme, "no models"),
-    ),
-  );
-
-  // The scrollbox takes the space the heading and the write line leave. The
-  // page focuses it, so the up and down keys scroll it, and the mouse wheel
-  // scrolls it with or without focus.
-  const tables = h(
+  const body = h(
     "scrollbox",
     {
-      height: 16,
+      height: 18,
       flexGrow: 1,
       minHeight: 0,
-      contentOptions: { flexDirection: "column" },
+      paddingLeft: 2,
+      paddingRight: 2,
+      paddingTop: 1,
+      contentOptions: { flexDirection: "column", gap: 1 },
       focused: () => true,
     },
-    section(
+    activeTabBody({
+      tab: activeTab,
+      colors,
       theme,
-      "Profiles",
-      "the requirement each profile names, and the model the resolver would spend on it",
-      headerCells.profiles(theme),
-      profiles,
-    ),
-    section(
-      theme,
-      "Allowlist",
-      "the resolver reads the entries from the top and spends the first model that fits",
-      headerCells.entries(theme),
-      entries,
-    ),
-    section(
-      theme,
-      "Catalogue",
-      "every model this session can see, with its ladder and its cost",
-      headerCells.catalogue(theme),
-      catalogue,
-    ),
+      rows: input.rows,
+      models: input.models,
+      catalogue: input.catalogue,
+      draft: input.draft,
+      selectedRow,
+      actions,
+    }),
   );
 
   return h(
@@ -424,71 +584,98 @@ export const page = (input: PageInput): JSX.Element => {
       flexGrow: 1,
       minWidth: 0,
       minHeight: 0,
-      paddingLeft: 2,
-      paddingRight: 2,
-      paddingBottom: 1,
-      gap: 1,
+      border: true,
+      borderStyle: "rounded",
+      borderColor: colors.borderOuter,
+      backgroundColor: colors.modalBg,
     },
-    h(
-      "box",
-      { flexDirection: "column", flexShrink: 0 },
-      h(
-        "box",
-        { flexDirection: "row", justifyContent: "space-between" },
-        h("text", { fg: theme.text.base, attributes: TextAttributes.BOLD }, "Routing"),
-        h("text", { fg: theme.text.muted, onMouseUp: close }, "esc"),
-      ),
-      show(
-        () => input.source !== undefined || (input.rows.length === 0 && input.models.length === 0),
-        () => field(theme, "config", () => input.source ?? "none yet"),
-      ),
-    ),
-    tables,
     h(
       "box",
       {
         flexDirection: "column",
         flexShrink: 0,
-        paddingLeft: 1,
-        paddingRight: 1,
-        backgroundColor: theme.background?.raised.base,
+        paddingLeft: 2,
+        paddingRight: 2,
+        border: ["bottom"],
+        borderColor: colors.border,
       },
-      preview({ theme, draft: input.draft, models: input.catalogue }),
-    ),
-    h(
-      "box",
-      { flexDirection: "column", flexShrink: 0 },
-      h(
-        "text",
-        { fg: theme.text.muted, wrapMode: "word" },
-        "the page writes nothing by itself. A click writes the draft to the config file.",
-      ),
       h(
         "box",
-        { flexDirection: "row", gap: 2, paddingTop: 1 },
-        h(
-          "text",
-          { fg: theme.text.base, onMouseUp: () => input.onSave() },
-          "enter ",
-          h("span", { style: { fg: theme.text.muted } }, "write it"),
-        ),
-        h(
-          "text",
-          {
-            fg: theme.text.base,
-            onMouseUp: () =>
-              run(() => modelPicker({ dialog, draft: input.draft, models: input.catalogue })),
-          },
-          "+ ",
-          h("span", { style: { fg: theme.text.muted } }, "add model"),
-        ),
-        h(
-          "text",
-          { fg: theme.text.base, onMouseUp: close },
-          "esc ",
-          h("span", { style: { fg: theme.text.muted } }, "close"),
-        ),
+        { flexDirection: "row", justifyContent: "space-between" },
+        h("text", { fg: colors.text, attributes: TextAttributes.BOLD }, "Routing"),
+        h("text", { fg: colors.teal, onMouseUp: close }, "esc"),
       ),
+      show(
+        () => input.source !== undefined || (input.rows.length === 0 && input.models.length === 0),
+        () => field(theme, "config", () => input.source ?? "none yet"),
+      ),
+      jevToggleBar({
+        colors,
+        modelName: jevModel,
+        enabled: jevEnabled,
+        available: jevAvailable,
+        onToggle: () => {
+          if (!jevAvailable) {
+            context.ui.toast.show({
+              title: "Routing",
+              message: "Set OPENCODE_API_KEY to enable the Jev judge",
+              variant: "warning",
+            });
+            return;
+          }
+          input.onChange(applied(input.draft, { kind: "judge", enabled: !jevEnabled }));
+        },
+      }),
+    ),
+    tabBar({
+      colors,
+      active: activeTab,
+      profileCount: input.rows.length,
+      allowCount: input.models.length,
+      onSelect: (next) => input.onTabChange?.(next),
+    }),
+    body,
+    h(
+      "box",
+      {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        flexShrink: 0,
+        backgroundColor: colors.insetBg,
+        border: ["top"],
+        borderColor: colors.border,
+        paddingLeft: 2,
+        paddingRight: 2,
+      },
+      h(
+        "box",
+        { flexDirection: "row", gap: 3 },
+        footerButton({
+          key: "enter",
+          label: "write it",
+          hoverKeyColor: colors.green,
+          textColor: colors.text,
+          mutedColor: colors.muted,
+          onPress: () => input.onSave(),
+        }),
+        footerButton({
+          key: "+",
+          label: "add model",
+          hoverKeyColor: colors.cyan,
+          textColor: colors.text,
+          mutedColor: colors.muted,
+          onPress: () =>
+            run(() => modelPicker({ dialog, draft: input.draft, models: input.catalogue })),
+        }),
+      ),
+      footerButton({
+        key: "esc",
+        label: "close",
+        hoverKeyColor: colors.red,
+        textColor: colors.text,
+        mutedColor: colors.muted,
+        onPress: close,
+      }),
     ),
   );
 };

@@ -1,5 +1,6 @@
 import { Plugin } from "@opencode/plugin/tui";
-import type { KeyEvent } from "@opentui/core";
+import { type KeyEvent, TextAttributes } from "@opentui/core";
+import type { JSX } from "@opentui/solid";
 import { createSignal, onCleanup, onMount } from "solid-js";
 import {
   catalogue,
@@ -11,8 +12,8 @@ import {
   save,
   source as sourceOf,
 } from "./data.ts";
-import { page } from "./page.tsx";
-import { h } from "./render.ts";
+import { page, TABS, type TabId } from "./page.tsx";
+import { h, show } from "./render.ts";
 
 /**
  * The terminal page that configures the routing.
@@ -38,9 +39,10 @@ const EMPTY: Draft = { provider: undefined, models: [], profiles: [] };
 /** The route name. The command opens this page by name. */
 const PAGE = "Routing";
 
-/** The storage keys. One holds the draft, the other the directory it came from. */
+/** The storage keys. One holds the draft, one the directory, and one the sidebar collapse state. */
 const DRAFT = "draft";
 const SOURCE = "source";
+const VIEW = "view";
 
 /** The message of a value that reached the error channel. */
 const message = (problem: unknown): string =>
@@ -49,6 +51,7 @@ const message = (problem: unknown): string =>
 /** A deep copy, so the page, the store and the writer never share an object. */
 const copy = (draft: Draft): MutableDraft => ({
   provider: draft.provider,
+  judge: draft.judge === undefined ? undefined : { ...draft.judge },
   // Storage returns whatever JSON it holds. A missing list is an empty one,
   // so one bad file cannot stop the plugin from loading.
   models: (Array.isArray(draft.models) ? draft.models : []).map((one) => ({
@@ -69,6 +72,59 @@ const copy = (draft: Draft): MutableDraft => ({
   })),
 });
 
+/** Copies a draft's mutable fields into a target draft object. */
+const assignDraft = (target: MutableDraft, source: MutableDraft): void => {
+  target.provider = source.provider;
+  target.judge = source.judge;
+  target.models = source.models;
+  target.profiles = source.profiles;
+};
+
+/** Cycles to the next or previous tab in the modal tab strip. */
+const stepTab = (current: TabId, delta: number): TabId => {
+  const at = TABS.indexOf(current);
+  const next = ((at === -1 ? 0 : at) + delta + TABS.length) % TABS.length;
+  return TABS[next] ?? "profiles";
+};
+
+/** Moves the selected profile row index with wraparound. */
+const stepRow = (current: number, total: number, delta: number): number =>
+  total <= 0 ? 0 : (current + delta + total) % total;
+
+const TAB_DELTAS: Readonly<Record<string, number>> = { tab: 1, "]": 1, "[": -1 };
+const ROW_DELTAS: Readonly<Record<string, number>> = { down: 1, j: 1, up: -1, k: -1 };
+
+/** Handles one keypress while the routing modal is open. */
+const dispatchModalKey = (
+  event: KeyEvent,
+  actions: {
+    readonly saveAndClose: () => void;
+    readonly close: () => void;
+    readonly moveTab: (delta: number) => void;
+    readonly moveRow: (delta: number) => void;
+  },
+): void => {
+  const key = event.name || event.sequence || "";
+  if (key === "return" || key === "enter") {
+    event.preventDefault();
+    actions.saveAndClose();
+    return;
+  }
+  if (key === "escape") {
+    event.preventDefault();
+    actions.close();
+    return;
+  }
+  const tabDelta = TAB_DELTAS[key] ?? (event.sequence ? TAB_DELTAS[event.sequence] : undefined);
+  if (tabDelta !== undefined) {
+    event.preventDefault();
+    actions.moveTab(tabDelta);
+    return;
+  }
+  const rowDelta = ROW_DELTAS[key];
+  if (rowDelta !== undefined) actions.moveRow(rowDelta);
+};
+
 /** The row of a profile the resolver did not answer for. */
 const absent = (name: string): Resolution => ({
   profile: name,
@@ -87,8 +143,189 @@ const refused = (model: Model | undefined): string | undefined => {
   return undefined;
 };
 
-/** One line of the composer: the profile, the spend, or the problem. */
-type Line = { readonly body: string; readonly problem: boolean };
+/** Strips the provider prefix from a `providerID/modelID#variant` ref for the sidebar column. */
+const shortRef = (ref: string): string => {
+  const slash = ref.indexOf("/");
+  return slash === -1 ? ref : ref.slice(slash + 1);
+};
+
+/** The collapsed summary beside the sidebar heading: `(3 active, 1 error)`. */
+const summaryOf = (rows: ReadonlyArray<Resolution>, open: boolean): string => {
+  if (open) return "";
+  const active = rows.filter((one) => one.problem === undefined && one.ref !== undefined).length;
+  const bad = rows.filter((one) => one.problem !== undefined).length;
+  const errors = bad > 0 ? `, ${bad} error${bad > 1 ? "s" : ""}` : "";
+  return ` (${active} active${errors})`;
+};
+
+/** One profile row inside the collapsible sidebar section. */
+const sidebarRow = (
+  theme: Plugin.Context["theme"],
+  row: Resolution,
+  onOpen: () => void,
+): JSX.Element => {
+  const failed = row.problem !== undefined;
+  const errorColor = theme.text.feedback.error?.base ?? theme.text.feedback.warning.base;
+  const dotColor = failed ? errorColor : (theme.text.feedback.success?.base ?? theme.text.base);
+  const statusColor = failed ? errorColor : theme.text.muted;
+  const right = failed ? "Error" : row.ref === undefined ? "-" : shortRef(row.ref);
+
+  return h(
+    "box",
+    {
+      flexDirection: "row",
+      gap: 1,
+      minWidth: 0,
+      onMouseUp: onOpen,
+    },
+    h("text", { flexShrink: 0, fg: dotColor }, "•"),
+    h(
+      "text",
+      {
+        fg: theme.text.base,
+        attributes: TextAttributes.BOLD,
+        wrapMode: "none",
+        truncate: true,
+        flexGrow: 1,
+        flexShrink: 1,
+        minWidth: 0,
+      },
+      row.profile,
+    ),
+    h(
+      "text",
+      {
+        fg: statusColor,
+        wrapMode: "none",
+        flexShrink: 0,
+      },
+      right,
+    ),
+  );
+};
+
+/** The collapsible Routing section in the session sidebar, modeled on OpenCode's MCP section. */
+export const sidebarSection = (input: {
+  readonly theme: Plugin.Context["theme"];
+  readonly open: () => boolean;
+  readonly onToggle: () => void;
+  readonly onOpenModal: () => void;
+  readonly rows: () => ReadonlyArray<Resolution>;
+}): JSX.Element =>
+  show(
+    () => input.rows().length > 0,
+    () =>
+      h(
+        "box",
+        { flexDirection: "column" },
+        h(
+          "box",
+          {
+            flexDirection: "row",
+            gap: 1,
+            onMouseDown: input.onToggle,
+          },
+          h("text", { fg: input.theme.text.base }, () => (input.open() ? "▼" : "▶")),
+          h(
+            "box",
+            { flexDirection: "row" },
+            h("text", { fg: input.theme.text.base, attributes: TextAttributes.BOLD }, "Routing"),
+            h("text", { fg: input.theme.text.muted }, () => summaryOf(input.rows(), input.open())),
+          ),
+        ),
+        h(
+          "box",
+          { flexDirection: "column" },
+          show(
+            () => input.open(),
+            () =>
+              h("box", { flexDirection: "column" }, () =>
+                input.rows().map((row) => sidebarRow(input.theme, row, input.onOpenModal)),
+              ),
+          ),
+        ),
+      ),
+  );
+
+/** Formats a session's model selection as `providerID/modelID` or `providerID/modelID#variant`. */
+const sessionModelRef = (
+  model:
+    | { readonly providerID: string; readonly id: string; readonly variant?: string }
+    | undefined,
+): string | undefined => {
+  if (model === undefined) return undefined;
+  return model.variant === undefined
+    ? `${model.providerID}/${model.id}`
+    : `${model.providerID}/${model.id}#${model.variant}`;
+};
+
+/** Picks the profile index that matches the subagent's model or agent. */
+const subagentProfileIndex = (
+  profiles: ReadonlyArray<{ readonly name: string; readonly agent: string }>,
+  resolutions: ReadonlyArray<Resolution>,
+  sessionRef: string | undefined,
+  agent: string | undefined,
+): number => {
+  if (sessionRef !== undefined) {
+    const exact = resolutions.findIndex(
+      (one, at) => one.ref === sessionRef && profiles[at]?.agent === agent,
+    );
+    if (exact !== -1) return exact;
+    const byRef = resolutions.findIndex((one) => one.ref === sessionRef);
+    if (byRef !== -1) return byRef;
+  }
+  const byAgent = profiles.findIndex((one) => one.agent === agent);
+  return byAgent === -1 ? 0 : byAgent;
+};
+
+/** What the docked footer shows for a subagent session, or undefined on a main session. */
+export const subagentLine = (input: {
+  readonly session:
+    | {
+        readonly parentID?: string | null;
+        readonly agent?: string;
+        readonly model?: {
+          readonly providerID: string;
+          readonly id: string;
+          readonly variant?: string;
+        };
+      }
+    | undefined;
+  readonly profiles: ReadonlyArray<{ readonly name: string; readonly agent: string }>;
+  readonly resolutions: ReadonlyArray<Resolution>;
+}): string | undefined => {
+  if (!input.session?.parentID) return undefined;
+  const sessionRef = sessionModelRef(input.session.model);
+  const index = subagentProfileIndex(
+    input.profiles,
+    input.resolutions,
+    sessionRef,
+    input.session.agent,
+  );
+  const row = input.resolutions[index];
+  const ref = sessionRef ?? row?.ref;
+  if (ref === undefined) return undefined;
+
+  const name = input.profiles[index]?.name ?? input.session.agent ?? "subagent";
+  const cost = row?.cost !== undefined && row.ref === ref ? `, ${row.cost}` : "";
+  return `${name} uses ${ref}${cost}`;
+};
+
+/** The docked footer bar above the composer, shown only on subagent sessions. */
+export const subagentFooter = (input: {
+  readonly theme: Plugin.Context["theme"];
+  readonly line: () => string | undefined;
+}): JSX.Element =>
+  show(
+    () => input.line() !== undefined,
+    () =>
+      h(
+        "box",
+        { flexDirection: "row", gap: 1, paddingLeft: 3, paddingRight: 3 },
+        h("text", { fg: input.theme.text.faint }, "routing"),
+        h("text", { fg: input.theme.text.base }, () => input.line() ?? ""),
+      ),
+  );
 
 /**
  * The command that opens the page.
@@ -133,11 +370,16 @@ export default Plugin.define({
       initial: { directory, seeded: false },
     });
 
+    const [view, setView] = context.storage.store(VIEW, {
+      initial: { open: true },
+    });
+    const [open, setOpen] = createSignal(view.open ?? true);
+
     // The name of the file the draft came from. The reader knows it and the
     // page does not, and the page names it in its heading.
     const at = await sourceOf(directory).catch(() => undefined);
 
-    if (!source.seeded || source.directory !== directory) {
+    if (at !== undefined || !source.seeded || source.directory !== directory) {
       const found = await read(directory).catch((problem: unknown) => {
         context.ui.toast.show({
           title: "Routing",
@@ -147,11 +389,7 @@ export default Plugin.define({
         return EMPTY;
       });
       const next = copy(found);
-      await setStored((held) => {
-        held.provider = next.provider;
-        held.models = next.models;
-        held.profiles = next.profiles;
-      });
+      await setStored((held) => assignDraft(held, next));
       await setSource((held) => {
         held.directory = directory;
         held.seeded = true;
@@ -161,22 +399,25 @@ export default Plugin.define({
     // The page changes this object in place. The entrypoint is the only place
     // that writes the file, so the page cannot save without asking.
     const draft: MutableDraft = copy(stored);
+    let activeTab: TabId = "profiles";
+    let selectedRow = 0;
 
-    // The composer redraws when an edit lands, so its line is never stale.
+    // The sidebar redraws when an edit lands, so its rows are never stale.
     const [revision, setRevision] = createSignal(0);
 
     /** The catalogue this session can see, read when a render needs it. */
-    const listed = () => context.data.location.model.list(context.location) ?? [];
+    const listed = (sessionID?: string) => {
+      const location =
+        (sessionID === undefined ? undefined : context.data.session.get(sessionID)?.location) ??
+        context.location;
+      return context.data.location.model.list(location) ?? [];
+    };
 
     /** The config as the page saves it. */
     const persist = async (): Promise<void> => {
       const next = copy(draft);
       try {
-        await setStored((held) => {
-          held.provider = next.provider;
-          held.models = next.models;
-          held.profiles = next.profiles;
-        });
+        await setStored((held) => assignDraft(held, next));
       } catch {
         // The file is the copy that matters. A storage write that fails does
         // not stop the save below.
@@ -211,10 +452,7 @@ export default Plugin.define({
      * revision moves so the composer line redraws with the change.
      */
     const onChange = (next: Draft): void => {
-      const held = copy(next);
-      draft.provider = held.provider;
-      draft.models = held.models;
-      draft.profiles = held.profiles;
+      assignDraft(draft, copy(next));
       setRevision((value) => value + 1);
     };
 
@@ -240,6 +478,12 @@ export default Plugin.define({
         models: allow,
         catalogue: models,
         draft,
+        tab: activeTab,
+        selectedRow,
+        onTabChange: (next) => {
+          activeTab = next;
+          openModal();
+        },
         onChange: (next) => {
           onChange(next);
           openModal();
@@ -256,18 +500,23 @@ export default Plugin.define({
     const openModal = (): void => {
       context.ui.dialog.show(() => {
         if (context.renderer?.keyInput) {
-          const onKeyPress = (event: KeyEvent) => {
-            if (event.name === "return" || event.name === "enter") {
-              event.preventDefault();
-              onSave();
-              context.ui.dialog.clear();
-              return;
-            }
-            if (event.name === "escape") {
-              event.preventDefault();
-              context.ui.dialog.clear();
-            }
-          };
+          const onKeyPress = (event: KeyEvent) =>
+            dispatchModalKey(event, {
+              saveAndClose: () => {
+                onSave();
+                context.ui.dialog.clear();
+              },
+              close: () => context.ui.dialog.clear(),
+              moveTab: (delta) => {
+                activeTab = stepTab(activeTab, delta);
+                openModal();
+              },
+              moveRow: (delta) => {
+                if (activeTab !== "profiles") return;
+                selectedRow = stepRow(selectedRow, draft.profiles.length, delta);
+                openModal();
+              },
+            });
           onMount(() => {
             context.renderer.keyInput.on("keypress", onKeyPress);
           });
@@ -287,44 +536,44 @@ export default Plugin.define({
 
     context.keymap.layer(() => opener(openModal));
 
-    /** The profile this session would use: the first one under its agent. */
-    const chosen = (sessionID: string) => {
-      const agent = context.data.session.get(sessionID)?.agent;
-      const at = draft.profiles.findIndex((one) => one.agent === agent);
-      return draft.profiles[at === -1 ? 0 : at];
+    /** The resolved profile rows for the session sidebar, recomputed when the draft changes. */
+    const resolvedRows = (sessionID: string): ReadonlyArray<Resolution> => {
+      revision();
+      if (draft.profiles.length === 0) return [];
+      const found = resolve(draft, catalogue(listed(sessionID)));
+      return draft.profiles.map((profile, atIndex) => found[atIndex] ?? absent(profile.name));
     };
 
-    /** The composer line, computed from the draft and the live catalogue. */
-    const line = (sessionID: string): Line => {
-      revision();
-      if (draft.profiles.length === 0) return { body: "no profile is configured", problem: false };
-      const profile = chosen(sessionID);
-      if (profile === undefined) return { body: "no profile is configured", problem: false };
-      const found = resolve(draft, catalogue(listed()));
-      const at = draft.profiles.indexOf(profile);
-      const row = found[at] ?? absent(profile.name);
-      if (row.problem !== undefined)
-        return { body: `${profile.name}: ${row.problem}`, problem: true };
-      const rung = row.rung === undefined ? "" : ` (${row.rung})`;
-      const cost = row.cost === undefined ? "" : `, ${row.cost}`;
-      return { body: `${profile.name} uses ${row.ref}${rung}${cost}`, problem: false };
-    };
+    context.ui.slot({
+      append: "sidebar.content",
+      render: (input) =>
+        sidebarSection({
+          theme: context.theme,
+          open,
+          onToggle: () => {
+            const next = !open();
+            setOpen(next);
+            void setView((held) => {
+              held.open = next;
+            }).catch(() => undefined);
+          },
+          onOpenModal: () => openModal(),
+          rows: () => resolvedRows(input.sessionID),
+        }),
+    });
 
     context.ui.slot({
       append: "session.composer.top",
       render: (input) =>
-        h(
-          "box",
-          { flexDirection: "row", paddingLeft: 1 },
-          h("text", { fg: () => context.theme.text.faint, content: () => "routing " }),
-          h("text", {
-            fg: () =>
-              line(input.sessionID).problem
-                ? context.theme.text.feedback.warning.base
-                : context.theme.text.base,
-            content: () => line(input.sessionID).body,
-          }),
-        ),
+        subagentFooter({
+          theme: context.theme,
+          line: () =>
+            subagentLine({
+              session: context.data.session.get(input.sessionID),
+              profiles: draft.profiles,
+              resolutions: resolvedRows(input.sessionID),
+            }),
+        }),
     });
   },
 });
