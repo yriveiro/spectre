@@ -2,11 +2,11 @@ import { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
 import { createSignal } from "solid-js";
-import { applied, isProviderAvailable, providerPicker } from "./controls.tsx";
+import { applied, isProviderAvailable, providerPicker, usableDraft } from "./controls.tsx";
 import {
   catalogue,
   type Draft,
-  type Model,
+  normalizeCost,
   type Resolution,
   read,
   resolve,
@@ -39,8 +39,6 @@ const message = (problem: unknown): string =>
 const copy = (draft: Draft): MutableDraft => ({
   provider: draft.provider,
   judge: draft.judge === undefined ? undefined : { ...draft.judge },
-  // Storage returns whatever JSON it holds. A missing list is an empty one,
-  // so one bad file cannot stop the plugin from loading.
   models: (Array.isArray(draft.models) ? draft.models : []).map((one) => ({
     alias: one.alias,
     ref: one.ref,
@@ -72,15 +70,8 @@ const absent = (name: string): Resolution => ({
   rung: undefined,
   cost: undefined,
   crosscheck: undefined,
-  problem: "the resolver returned no row",
+  problem: "The resolver returned no row",
 });
-
-const refused = (model: Model | undefined): string | undefined => {
-  if (model === undefined) return "this session cannot see the model";
-  if (!model.enabled) return "the model is disabled";
-  if (model.deprecated) return "the model is deprecated";
-  return undefined;
-};
 
 const shortRef = (ref: string): string => {
   const slash = ref.indexOf("/");
@@ -239,7 +230,8 @@ export const subagentLine = (input: {
   if (ref === undefined) return undefined;
 
   const name = input.profiles[index]?.name ?? input.session.agent ?? "subagent";
-  const cost = row?.cost !== undefined && row.ref === ref ? `, ${row.cost}` : "";
+  const normalizedCost = normalizeCost(row?.cost);
+  const cost = normalizedCost !== undefined && row?.ref === ref ? `, ${normalizedCost}` : "";
   return `${name} uses ${ref}${cost}`;
 };
 
@@ -253,16 +245,11 @@ export const subagentFooter = (input: {
       h(
         "box",
         { flexDirection: "row", gap: 1, paddingLeft: 3, paddingRight: 3 },
-        h("text", { fg: input.theme.text.faint }, "routing"),
+        h("text", { fg: input.theme.text.faint }, "Routing"),
         h("text", { fg: input.theme.text.base }, () => input.line() ?? ""),
       ),
   );
 
-/**
- * The layer is global because the palette is itself a mode. A command in the
- * base mode is not reachable while the palette dialog is open, and a command
- * nobody can reach is a command the palette does not list.
- */
 export const opener = (open: () => void) => ({
   mode: "global" as const,
   commands: [
@@ -301,7 +288,7 @@ export default Plugin.define({
       const found = await read(directory).catch((problem: unknown) => {
         context.ui.toast.show({
           title: "Routing",
-          message: `the config could not be read: ${message(problem)}`,
+          message: `The config could not be read: ${message(problem)}`,
           variant: "error",
         });
         return EMPTY;
@@ -328,14 +315,16 @@ export default Plugin.define({
     };
 
     const persist = async (): Promise<void> => {
-      const next = copy(draft);
+      const models = catalogue(listed());
+      const next = copy(usableDraft(draft, models));
+      assignDraft(draft, next);
       await setStored((held) => assignDraft(held, next)).catch(() => undefined);
       setRevision((value) => value + 1);
       try {
         await save(directory, next);
         context.ui.toast.show({
           title: "Routing",
-          message: "the config was written",
+          message: "The config was written",
           variant: "success",
         });
       } catch (problem) {
@@ -358,26 +347,27 @@ export default Plugin.define({
 
     const renderModal = () => {
       const models = catalogue(listed());
-      const found = resolve(draft, models);
+      const clean = usableDraft(draft, models);
+      const found = resolve(clean, models);
 
-      const rows = draft.profiles.map((profile, atIndex) => ({
+      const rows = clean.profiles.map((profile, atIndex) => ({
         profile,
         resolution: found[atIndex] ?? absent(profile.name),
       }));
 
-      const allow = draft.models.map((one) => {
+      const allow = clean.models.map((one) => {
         const model = models.find((two) => {
           const head = `${two.providerID}/${two.id}`;
           return one.ref === head || one.ref.startsWith(`${head}#`);
         });
-        return { alias: one.alias, ref: one.ref, model, problem: refused(model) };
+        return { alias: one.alias, ref: one.ref, model };
       });
 
       return page({
         rows,
         models: allow,
         catalogue: models,
-        draft,
+        draft: clean,
         tab: activeTab,
         selectedRow,
         onRowChange: (next) => {
@@ -438,9 +428,11 @@ export default Plugin.define({
 
     const resolvedRows = (sessionID: string): ReadonlyArray<Resolution> => {
       revision();
-      if (draft.profiles.length === 0) return [];
-      const found = resolve(draft, catalogue(listed(sessionID)));
-      return draft.profiles.map((profile, atIndex) => found[atIndex] ?? absent(profile.name));
+      const models = catalogue(listed(sessionID));
+      const clean = usableDraft(draft, models);
+      if (clean.profiles.length === 0) return [];
+      const found = resolve(clean, models);
+      return clean.profiles.map((profile, atIndex) => found[atIndex] ?? absent(profile.name));
     };
 
     context.ui.slot({

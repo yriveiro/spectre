@@ -4,14 +4,17 @@ import { PluginContextProvider } from "@opencode/plugin/tui";
 import { RGBA } from "@opentui/core";
 import { createComponent, testRender } from "@opentui/solid";
 import {
+  compatibleModelsFor,
   effortModal,
   effortOptionsFor,
   isProviderAvailable,
   profileInfoModal,
+  providerModal,
+  usableDraft,
 } from "../../tui/controls";
 import type { Draft, Model, Resolution } from "../../tui/data";
 import { sidebarSection, subagentFooter, subagentLine } from "../../tui/index";
-import { layoutMetrics, page, type TabId } from "../../tui/page";
+import { type EntryRow, layoutMetrics, page, type TabId } from "../../tui/page";
 
 const GREY = RGBA.fromInts(200, 200, 200, 255);
 const RAISED = RGBA.fromInts(40, 40, 48, 255);
@@ -95,7 +98,7 @@ const spent: Resolution = {
   profile: "worker",
   ref: "acme/muse-spark-1.3#high",
   rung: "high",
-  cost: "$0.1 in, $0.2 out",
+  cost: "$0.1/$0.2",
   crosscheck: undefined,
   problem: undefined,
 };
@@ -118,7 +121,7 @@ const rows = [
   },
 ];
 
-const entries = [
+const entries: ReadonlyArray<EntryRow> = [
   { alias: "muse", ref: "acme/muse-spark-1.3", model: models[0] },
   { alias: "glm-flash", ref: "acme/glm-5.3-flash", model: models[1] },
 ];
@@ -152,6 +155,8 @@ const frame = async (input: {
   readonly answer?: string;
   readonly tab?: TabId;
   readonly draft?: Draft;
+  readonly models?: ReadonlyArray<EntryRow>;
+  readonly catalogue?: ReadonlyArray<Model>;
   readonly jevAvailable?: boolean;
   readonly width?: number;
   readonly height?: number;
@@ -169,8 +174,8 @@ const frame = async (input: {
         get children() {
           return page({
             rows,
-            models: entries,
-            catalogue: models,
+            models: input.models ?? entries,
+            catalogue: input.catalogue ?? models,
             draft: input.draft ?? draft,
             tab: input.tab,
             jevAvailable: input.jevAvailable,
@@ -190,23 +195,31 @@ const frame = async (input: {
 };
 
 describe("the modal draws what the session would spend", () => {
-  test("the modal frame carries the header with esc, the provider bar, the Jev toggle, the tabs and the footer bar", async () => {
+  test("the modal frame carries the header with Esc, the provider select, the Jev toggle, the tabs, the Info column and the footer bar", async () => {
     const { setup } = await frame({ jevAvailable: false });
     const drawn = setup.captureCharFrame();
     expect(drawn).toContain("Routing");
-    expect(drawn).toContain("esc");
-    expect(drawn).toContain("provider: acme");
-    expect(drawn).toContain("judge:");
+    expect(drawn).toContain("Esc");
+    expect(drawn).toContain("Provider:");
+    expect(drawn).toContain("acme");
+    expect(drawn).toContain("Judge:");
     expect(drawn).toContain("jev-1.13-free");
-    expect(drawn).toContain("(○) disabled (no OPENCODE_KEY)");
+    expect(drawn).toContain("(○) Disabled (no OPENCODE_KEY)");
     expect(drawn).toContain("Profiles (2)");
     expect(drawn).toContain("Allowlist (2)");
     expect(drawn).toContain("Preview");
-    expect(drawn).toContain("enter");
-    expect(drawn).toContain("write it");
-    expect(drawn).toContain("add model");
-    expect(drawn).toContain("profile info");
-    expect(drawn).toContain("close");
+    expect(drawn).toContain("Profile");
+    expect(drawn).toContain("Info");
+    expect(drawn).toContain("Effort");
+    expect(drawn).toContain("Model");
+    expect(drawn).toContain("Cost");
+    expect(drawn).not.toContain("the requirement each profile names");
+    expect(drawn).toContain("Enter");
+    expect(drawn).toContain("Write it");
+    expect(drawn).toContain("Add model");
+    expect(drawn).toContain("Remove model");
+    expect(drawn).toContain("Profile info");
+    expect(drawn).toContain("Close");
     await setup.dispose();
   });
 
@@ -224,6 +237,7 @@ describe("the modal draws what the session would spend", () => {
       models: entries,
     });
     expect(wide.modalWidth).toBe(116);
+    expect(wide.profileColumns.info).toBe(4);
     expect(wide.profileColumns.model).toBeGreaterThan(narrow.profileColumns.model);
     expect(wide.entryColumns.model).toBeGreaterThan(narrow.entryColumns.model);
     expect(wide.bodyHeight).toBeGreaterThan(narrow.bodyHeight);
@@ -244,7 +258,7 @@ describe("the modal draws what the session would spend", () => {
       },
     });
     const disabledLines = disabledSetup.captureCharFrame().split("\n");
-    const disabledRow = disabledLines.findIndex((one) => one.includes("judge:"));
+    const disabledRow = disabledLines.findIndex((one) => one.includes("Judge:"));
     expect(disabledRow).toBeGreaterThan(-1);
     await disabledSetup.mockMouse.click(10, disabledRow);
     await disabledSetup.flush();
@@ -258,8 +272,8 @@ describe("the modal draws what the session would spend", () => {
       },
     });
     const availableFrame = availableSetup.captureCharFrame();
-    expect(availableFrame).toContain("( ) on  (●) off");
-    const availableRow = availableFrame.split("\n").findIndex((one) => one.includes("judge:"));
+    expect(availableFrame).toContain("( ) On  (●) Off");
+    const availableRow = availableFrame.split("\n").findIndex((one) => one.includes("Judge:"));
     expect(availableRow).toBeGreaterThan(-1);
     await availableSetup.mockMouse.click(10, availableRow);
     await availableSetup.flush();
@@ -271,32 +285,32 @@ describe("the modal draws what the session would spend", () => {
       jevAvailable: true,
       draft: changed,
     });
-    expect(enabledSetup.captureCharFrame()).toContain("(●) on  ( ) off");
+    expect(enabledSetup.captureCharFrame()).toContain("(●) On  ( ) Off");
     await enabledSetup.dispose();
   });
 
-  test("clicking esc in the modal closes it", async () => {
+  test("clicking Esc in the modal closes it", async () => {
     let closed = 0;
     const { setup } = await frame({ onClose: () => closed++ });
     const lines = setup.captureCharFrame().split("\n");
-    const row = lines.findIndex((one) => one.includes("Routing") && one.includes("esc"));
+    const row = lines.findIndex((one) => one.includes("Routing") && one.includes("Esc"));
     expect(row).toBeGreaterThan(-1);
     const line = lines[row];
     if (line === undefined) throw new Error("the frame has no header row");
-    await setup.mockMouse.click(line.lastIndexOf("esc"), row);
+    await setup.mockMouse.click(line.lastIndexOf("Esc"), row);
     await setup.flush();
     expect(closed).toBe(1);
     await setup.dispose();
   });
 
-  test("a profile shows its effort, info icon, the model it spends and the cost", async () => {
+  test("a profile shows its effort, info icon, the model it spends and the normalized cost", async () => {
     const { setup } = await frame({});
     const drawn = setup.captureCharFrame();
     expect(drawn).toContain("worker");
     expect(drawn).toContain("ⓘ");
     expect(drawn).toContain("high");
     expect(drawn).toContain("acme/muse-spark-1.3#high");
-    expect(drawn).toContain("$0.1 in");
+    expect(drawn).toContain("$0.1/$0.2");
     await setup.dispose();
   });
 
@@ -308,7 +322,7 @@ describe("the modal draws what the session would spend", () => {
     await setup.dispose();
   });
 
-  test("the allowlist tab keeps the order the resolver reads, and the preview tab renders JSON", async () => {
+  test("the allowlist tab hides unusable or incompatible models, and the preview tab renders the spectre.json that will be written", async () => {
     let selectedTab: TabId | undefined;
     const { setup: tabClickSetup } = await frame({
       onTabChange: (next) => {
@@ -325,16 +339,87 @@ describe("the modal draws what the session would spend", () => {
     expect(selectedTab).toBe("allowlist");
     await tabClickSetup.dispose();
 
-    const { setup: allowSetup } = await frame({ tab: "allowlist" });
+    const mixedEntries: ReadonlyArray<EntryRow> = [
+      ...entries,
+      { alias: "ghost", ref: "opencode-go/ghost", model: undefined },
+      {
+        alias: "other",
+        ref: "other/model-1",
+        model: {
+          providerID: "other",
+          id: "model-1",
+          name: "Other",
+          family: "other",
+          rungs: ["low"],
+          costInput: 0.1,
+          costOutput: 0.2,
+          enabled: true,
+          deprecated: false,
+          tools: true,
+        },
+      },
+    ];
+    const { setup: allowSetup } = await frame({ tab: "allowlist", models: mixedEntries });
     const allowDrawn = allowSetup.captureCharFrame();
+    expect(allowDrawn).toContain("Allowlist (2)");
     expect(allowDrawn.indexOf("muse")).toBeLessThan(allowDrawn.indexOf("glm-flash"));
+    expect(allowDrawn).not.toContain("opencode-go/ghost");
+    expect(allowDrawn).not.toContain("other/model-1");
     await allowSetup.dispose();
 
     const { setup: previewSetup } = await frame({ tab: "preview" });
     const previewDrawn = previewSetup.captureCharFrame();
-    expect(previewDrawn).toContain("The draft is not saved. It resolves to:");
-    expect(previewDrawn).toContain('"profile": "worker"');
+    expect(previewDrawn).toContain('"provider": "acme"');
+    expect(previewDrawn).toContain('"models": {');
+    expect(previewDrawn).toContain('"muse": "acme/muse-spark-1.3"');
+    expect(previewDrawn).toContain('"profiles": {');
+    expect(previewDrawn).toContain('"worker": {');
     await previewSetup.dispose();
+  });
+
+  test("compatibleModelsFor and usableDraft keep only usable models matching the configured provider", () => {
+    const mixedCatalog: ReadonlyArray<Model> = [
+      ...models,
+      {
+        providerID: "other-provider",
+        id: "foreign",
+        name: "Foreign",
+        family: "foreign",
+        rungs: ["high"],
+        costInput: 0.2,
+        costOutput: 0.4,
+        enabled: true,
+        deprecated: false,
+        tools: true,
+      },
+      {
+        providerID: "acme",
+        id: "disabled-model",
+        name: "Disabled",
+        family: "disabled",
+        rungs: ["high"],
+        costInput: 0.2,
+        costOutput: 0.4,
+        enabled: false,
+        deprecated: false,
+        tools: true,
+      },
+    ];
+    expect(compatibleModelsFor(mixedCatalog, "acme").map((one) => one.id)).toEqual([
+      "muse-spark-1.3",
+      "glm-5.3-flash",
+    ]);
+
+    const dirtyDraft: Draft = {
+      ...draft,
+      models: [
+        ...draft.models,
+        { alias: "foreign", ref: "other-provider/foreign" },
+        { alias: "missing", ref: "acme/missing-model" },
+      ],
+    };
+    const cleaned = usableDraft(dirtyDraft, mixedCatalog);
+    expect(cleaned.models).toEqual(draft.models);
   });
 });
 
@@ -368,12 +453,74 @@ describe("the page changes the draft and writes it only when asked", () => {
     await setup.dispose();
   });
 
-  test("pressing + on the keyboard opens the model picker just like clicking + add model", async () => {
+  test("pressing + on the keyboard opens the model picker just like clicking + Add model", async () => {
     const { setup, asked } = await frame({});
     setup.mockInput.pressKey("+");
     await setup.flush();
     expect(asked).toContain("Add a model to the allowlist");
     await setup.dispose();
+  });
+
+  test("removing a model in the allowlist via ✕ or - removes it from the draft and clears its pin", async () => {
+    const changes: Array<Draft> = [];
+    const { setup } = await frame({
+      tab: "allowlist",
+      onChange: (next) => {
+        changes.push(next);
+      },
+    });
+    const lines = setup.captureCharFrame().split("\n");
+    const row = lines.findIndex((one) => one.includes("muse") && one.includes("✕"));
+    expect(row).toBeGreaterThan(-1);
+    const line = lines[row];
+    if (line === undefined) throw new Error("the frame has no muse row");
+    await setup.mockMouse.click(line.indexOf("✕"), row);
+    await setup.flush();
+    expect(changes[0]?.models.map((one) => one.alias)).toEqual(["glm-flash"]);
+    expect(changes[0]?.profiles.find((one) => one.name === "pinned")?.pinned).toBeUndefined();
+
+    setup.mockInput.pressKey("-");
+    await setup.flush();
+    expect(changes[1]?.models.map((one) => one.alias)).toEqual(["glm-flash"]);
+    await setup.dispose();
+  });
+
+  test("the provider selector uses the same table submodal style as the effort selector", async () => {
+    const { context } = host();
+    let selectedProvider: string | undefined;
+    const providerSetup = await testRender(
+      () =>
+        createComponent(PluginContextProvider, {
+          value: context as never,
+          get children() {
+            return providerModal({
+              draft: { ...draft, provider: "opencode-go" },
+              models,
+              onSelect: (chosen) => {
+                selectedProvider = chosen;
+              },
+              onCancel: () => {},
+            });
+          },
+        }),
+      { width: 92, height: 20 },
+    );
+    await providerSetup.renderOnce();
+    const drawn = providerSetup.captureCharFrame();
+    expect(drawn).toContain("Select default provider");
+    expect(drawn).toContain("opencode-go");
+    expect(drawn).toContain("disabled");
+    expect(drawn).toContain("acme");
+    expect(drawn).toContain("available");
+    expect(drawn).toContain("2 usable models");
+
+    const lines = drawn.split("\n");
+    const acmeRow = lines.findIndex((one) => one.includes("acme") && one.includes("available"));
+    expect(acmeRow).toBeGreaterThan(-1);
+    await providerSetup.mockMouse.click(10, acmeRow);
+    await providerSetup.flush();
+    expect(selectedProvider).toBe("acme");
+    await providerSetup.dispose();
   });
 
   test("clicking the info icon or pressing i opens the profile explanation submodal", async () => {
@@ -420,6 +567,7 @@ describe("the page changes the draft and writes it only when asked", () => {
     expect(infoFrame).toContain("Why (rationale)");
     expect(infoFrame).toContain("cheap");
     expect(infoFrame).toContain("acme/muse-spark-1.3#high");
+    expect(infoFrame).toContain("$0.1/$0.2");
 
     infoSetup.mockInput.pressKey("i");
     await infoSetup.flush();
@@ -497,11 +645,11 @@ describe("the page changes the draft and writes it only when asked", () => {
     let saved = 0;
     const { setup } = await frame({ onSave: () => saved++ });
     const drawn = setup.captureCharFrame();
-    const line = drawn.split("\n").findIndex((one) => one.includes("write it"));
+    const line = drawn.split("\n").findIndex((one) => one.includes("Write it"));
     expect(line).toBeGreaterThan(-1);
     const target = drawn.split("\n")[line];
     if (target === undefined) throw new Error("the frame has no write line");
-    await setup.mockMouse.click(target.indexOf("write it"), line);
+    await setup.mockMouse.click(target.indexOf("Write it"), line);
     await setup.flush();
     expect(saved).toBe(1);
     await setup.dispose();
@@ -583,7 +731,7 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
     await closedSetup.dispose();
   });
 
-  test("the docked composer footer renders nothing in the main session and shows the profile and model on a subagent", async () => {
+  test("the docked composer footer renders nothing in the main session and shows the profile and normalized cost on a subagent", async () => {
     const mainLine = subagentLine({
       session: { parentID: undefined, agent: "spectre" },
       profiles: draft.profiles,
@@ -608,7 +756,7 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
       profiles: draft.profiles,
       resolutions: sidebarRows,
     });
-    expect(childLine).toBe("worker uses acme/muse-spark-1.3#high, $0.1 in, $0.2 out");
+    expect(childLine).toBe("worker uses acme/muse-spark-1.3#high, $0.1/$0.2");
 
     const childSetup = await testRender(
       () => subagentFooter({ theme: theme as never, line: () => childLine }),
@@ -616,14 +764,14 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
     );
     await childSetup.renderOnce();
     expect(childSetup.captureCharFrame()).toContain(
-      "routing worker uses acme/muse-spark-1.3#high, $0.1 in, $0.2 out",
+      "Routing worker uses acme/muse-spark-1.3#high, $0.1/$0.2",
     );
     await childSetup.dispose();
   });
 });
 
 describe("the entrypoint opens the modal under the host's runtime plugin loader", () => {
-  test("running the opener opens the modal with xlarge size, and prompts for default provider and saves when unavailable", async () => {
+  test("running the opener opens the provider submodal when unavailable and opens the modal with xlarge size when available", async () => {
     expect(isProviderAvailable("opencode-go", models)).toBe(false);
     expect(isProviderAvailable("acme", models)).toBe(true);
 
@@ -637,6 +785,7 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
 
     const HostRenderer = createContext<unknown>();
     const created: Array<string> = [];
+    const createdTexts: Array<string> = [];
     const hostSolid = {
       ...solidRuntime,
       createElement: (tag: string) => {
@@ -644,7 +793,10 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
         created.push(tag);
         return { tag };
       },
-      createTextNode: (text: string) => ({ text }),
+      createTextNode: (text: string) => {
+        createdTexts.push(text);
+        return { text };
+      },
       insertNode: () => {},
       insert: (_parent: unknown, accessor: unknown) => {
         if (typeof accessor === "function") accessor();
@@ -681,7 +833,7 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
     await Bun.write(
       `${tempDir}/spectre.json`,
       JSON.stringify({
-        provider: "opencode-go",
+        provider: "acme",
         models: { muse: "acme/muse-spark-1.3" },
         profiles: { worker: { effort: "high" } },
       }),
@@ -690,7 +842,6 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
     let shown: (() => unknown) | undefined;
     let dialogOptions: { size?: string; centered?: boolean } | undefined;
     let commandRun: (() => void) | undefined;
-    const selectTitles: Array<string> = [];
     const slotTargets: Array<string> = [];
     const { context } = host("acme");
     const fullContext = {
@@ -735,10 +886,6 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
         ...context.ui,
         dialog: {
           ...context.ui.dialog,
-          select: async (opts: { title: string }) => {
-            selectTitles.push(opts.title);
-            return "acme";
-          },
           show: (render: () => unknown) => {
             shown = render;
           },
@@ -763,10 +910,6 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
     if (commandRun === undefined) throw new Error("the entrypoint registered no opener command");
     commandRun();
     await Bun.sleep(20);
-
-    expect(selectTitles[0]).toContain("Select default provider");
-    const savedConfig = (await Bun.file(`${tempDir}/spectre.json`).json()) as { provider?: string };
-    expect(savedConfig.provider).toBe("acme");
 
     if (shown === undefined) throw new Error("the opener did not call dialog.show");
     expect(dialogOptions).toEqual({ size: "xlarge", centered: true });

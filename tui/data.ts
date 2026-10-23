@@ -12,19 +12,10 @@ import {
   projectPath,
   resolveProfile,
   type Pick as Spent,
+  serialise,
   writeConfig,
 } from "../tools/definitions/routing/index.ts";
 
-/**
- * What the page holds, and what it shows.
- *
- * The page reads the same config file the tool reads, and it resolves the same
- * way the tool resolves, so the page cannot promise something the router will
- * not do. The catalogue comes from the terminal's own model list, which is the
- * list the session sees.
- */
-
-/** One model of the catalogue, reduced to what the page shows. */
 export type Model = {
   readonly providerID: string;
   readonly id: string;
@@ -35,101 +26,70 @@ export type Model = {
   readonly costOutput: number;
   readonly enabled: boolean;
   readonly deprecated: boolean;
-  /** A model that cannot call tools is not spendable on a subagent. */
   readonly tools: boolean;
 };
 
-/** A profile as the page edits it. */
 export type Profile = {
   readonly name: string;
-  /** The thinking the task needs. */
   readonly effort: string | undefined;
-  /** The routing surface. */
   readonly match: string | undefined;
-  /** The rationale, for the human. */
   readonly why: string | undefined;
-  /** The second opinion, stated as a requirement. */
   readonly crosscheck:
     | { readonly effort: string | undefined; readonly prefer: string | undefined }
     | undefined;
-  /** The agent the run happens under. */
   readonly agent: string;
-  /** A pinned model, when the profile names one. */
   readonly pinned: string | undefined;
 };
 
-/** The config as the page holds it. */
 export type Draft = {
   readonly provider: string | undefined;
-  /** The allowlist, in the order the resolver reads. */
   readonly models: ReadonlyArray<{ readonly alias: string; readonly ref: string }>;
   readonly profiles: ReadonlyArray<Profile>;
-  /** The judge settings, when configured. */
   readonly judge?: JudgeConfig | undefined;
 };
 
-/** What one profile resolves to under a draft. */
 export type Resolution = {
   readonly profile: string;
-  /** The ref the resolver would spend, variant included. */
   readonly ref: string | undefined;
   readonly rung: string | undefined;
-  /** The cost, in the catalogue's units. */
   readonly cost: string | undefined;
-  /** The second opinion, when the profile asks for one. */
   readonly crosscheck: string | undefined;
-  /** Why a profile resolved to nothing. */
   readonly problem: string | undefined;
 };
 
-/**
- * The canonical file name. The barrel does not export it, and the reader takes
- * this name before the legacy `.jsonc` one, so the writer owns this file.
- */
+export const formatCost = (costInput: number, costOutput: number): string =>
+  `$${costInput}/$${costOutput}`;
 
-/** The cost as one string, in dollars per million tokens. */
-const money = (value: number): string => `$${value}`;
+export const normalizeCost = (cost: string | undefined): string | undefined => {
+  if (cost === undefined) return undefined;
+  const nums = [...cost.matchAll(/\$(\d+(?:\.\d+)?)/g)].map((match) => match[1]);
+  if (nums.length >= 2 && nums[0] !== undefined && nums[1] !== undefined) {
+    return `$${nums[0]}/$${nums[1]}`;
+  }
+  return cost;
+};
 
-/**
- * The ref to spend, composed as the tool composes it: one rung is a `#`
- * suffix, and a ref the allowlist pinned already carries it.
- */
 const spendRef = (one: Spent): string =>
   one.rung === undefined || one.ref.includes("#") ? one.ref : `${one.ref}#${one.rung}`;
 
-/** The pinned names as a list, whether the entry carries one or several. */
 const pins = (model: ProfileEntry["model"]): ReadonlyArray<string> => {
   if (model === undefined) return [];
   return typeof model === "string" ? [model] : model;
 };
 
-/**
- * The config file the draft came from, or undefined when the project has none.
- *
- * The page names the file in its heading, and it cannot work the name out: the
- * reader is the only thing that knows which of the two names a directory
- * holds.
- */
 export const source = (directory: string): Promise<string | undefined> =>
   Effect.runPromise(projectPath(directory));
 
-/** The config in the directory, or an empty draft when there is none. */
 export const read = (directory: string): Promise<Draft> =>
   Effect.runPromise(loadProject(directory)).then((found) => {
     const models = Object.entries(found.tables.models).map(([alias, ref]) => ({ alias, ref }));
     const held = new Set(models.map((one) => one.alias));
 
-    // A file that does not decode contributes no table, and this shape has no
-    // field for the problem. `save` decodes the project file again and refuses
-    // with the reader's message, so a broken file is never replaced in
-    // silence.
     return {
       provider: found.tables.provider,
       judge: found.tables.judge,
       models,
       profiles: Object.entries(found.tables.profiles).map(([name, entry]) => {
-        // The resolver spends the first pin the allowlist holds. The page
-        // shows that name, because it is the name the page can edit.
         const named = pins(entry.model);
         return {
           name,
@@ -147,30 +107,20 @@ export const read = (directory: string): Promise<Draft> =>
     };
   });
 
-/**
- * A catalogue row, and the two facts `known` reads that the page does not
- * show. `catalogue` builds the row, so `resolve` reads what the catalogue said
- * instead of a value it guessed.
- */
 type Row = Model & {
   readonly status?: string;
   readonly tools?: boolean;
 };
 
-/** The catalogue, reduced. */
 export const catalogue = (models: ReadonlyArray<ModelInfo>): ReadonlyArray<Model> => {
   const rows: Array<Row> = [];
   for (const info of models) {
-    // The terminal's row and the schema's row describe one model. The
-    // terminal type carries no brand, so the boundary casts once and `known`
-    // reads the fields.
     const one = known(info as unknown as Schema.Info);
     rows.push({ ...one, deprecated: one.status === "deprecated" });
   }
   return rows;
 };
 
-/** The schema row behind a reduced model, for the barrel's `candidates`. */
 const info = (one: Model): Schema.Info => {
   const row = one as Row;
   return {
@@ -186,7 +136,6 @@ const info = (one: Model): Schema.Info => {
   } as unknown as Schema.Info;
 };
 
-/** What every profile resolves to under a draft. */
 export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArray<Resolution> => {
   const kept = candidates(
     draft.models.map((one) => ({ alias: one.alias, ref: one.ref, pinned: undefined })),
@@ -230,19 +179,13 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
       profile: profile.name,
       ref: spendRef(primary),
       rung: primary.rung,
-      cost: `${money(primary.costInput)} in / ${money(primary.costOutput)} out`,
+      cost: formatCost(primary.costInput, primary.costOutput),
       crosscheck: crosscheck === undefined ? undefined : spendRef(crosscheck),
       problem: undefined,
     };
   });
 };
 
-/**
- * The keys of the file the page does not edit. The writer owns the whole
- * file, so a key it cannot see would be lost on the first save. The writer
- * decodes the file again and refuses a broken one, so this read carries no
- * policy of its own.
- */
 const preserved = async (path: string): Promise<Record<string, unknown>> => {
   const file = Bun.file(path);
   if (!(await file.exists())) return {};
@@ -256,7 +199,6 @@ const preserved = async (path: string): Promise<Record<string, unknown>> => {
   }
 };
 
-/** The draft as the file declares it. */
 const written = (draft: Draft): Parameters<typeof writeConfig>[1] => ({
   provider: draft.provider,
   judge: draft.judge,
@@ -276,20 +218,17 @@ const written = (draft: Draft): Parameters<typeof writeConfig>[1] => ({
               },
         match: one.match,
         why: one.why,
-        // The default is implicit. A profile that does not name an agent
-        // takes the default, so the file does not state it again.
         agent: one.agent === DEFAULT_AGENT ? undefined : one.agent,
       },
     ]),
   ),
 });
 
-/** The config written to the directory. */
+export const formatConfig = (draft: Draft): string => serialise(written(draft)).trimEnd();
+
 export const save = (directory: string, draft: Draft): Promise<void> => {
   const path = `${directory}/${FILE_NAME}`;
   return preserved(path).then((kept) => {
-    // The marker says "do not route", and a person who saves a config on the
-    // page answers the question again. The marker goes.
     const rest = { ...kept };
     delete rest.setup;
     delete rest.judge;

@@ -10,6 +10,7 @@ import {
   type Edit,
   effortPicker,
   isJevAvailable,
+  isModelUsable,
   isProviderAvailable,
   JEV_MODEL,
   modelPicker,
@@ -17,8 +18,16 @@ import {
   preview,
   profileInfo,
   providerPicker,
+  removeModelPicker,
 } from "./controls.tsx";
-import type { Draft, Model, Profile, Resolution } from "./data.ts";
+import {
+  type Draft,
+  formatCost,
+  type Model,
+  normalizeCost,
+  type Profile,
+  type Resolution,
+} from "./data.ts";
 import { bindKeyboard, field, h, type Palette, palette, show } from "./render.ts";
 
 export type TabId = "profiles" | "allowlist" | "preview";
@@ -66,9 +75,6 @@ const rungsView = (rungs: ReadonlyArray<string>): string => {
   return [...ranked, ...unranked].join(", ");
 };
 
-const costView = (costInput: number, costOutput: number): string =>
-  costInput === 0 && costOutput === 0 ? "free" : `$${costInput}/$${costOutput}`;
-
 const isExpensiveCost = (cost: string | undefined): boolean => {
   if (cost === undefined) return false;
   for (const match of cost.matchAll(/\$(\d+(?:\.\d+)?)/g)) {
@@ -76,6 +82,19 @@ const isExpensiveCost = (cost: string | undefined): boolean => {
   }
   return false;
 };
+
+export const usableEntryRows = (
+  entries: ReadonlyArray<EntryRow>,
+  provider: string | undefined,
+): ReadonlyArray<EntryRow> =>
+  entries.filter((row) => {
+    if (provider !== undefined && !row.ref.startsWith(`${provider}/`)) return false;
+    if (!isModelUsable(row.model, provider)) return false;
+    const hash = row.ref.indexOf("#");
+    const variant = hash === -1 ? undefined : row.ref.slice(hash + 1);
+    if (variant !== undefined && !row.model.rungs.includes(variant)) return false;
+    return true;
+  });
 
 const INDENT = 2;
 
@@ -91,12 +110,14 @@ export type LayoutMetrics = {
     readonly cost: number;
   };
   readonly entryColumns: {
+    readonly gutter: number;
     readonly index: number;
     readonly alias: number;
     readonly family: number;
     readonly rungs: number;
     readonly model: number;
     readonly cost: number;
+    readonly remove: number;
   };
 };
 
@@ -113,25 +134,27 @@ export const layoutMetrics = (input: {
   const innerWidth = Math.max(60, modalWidth - 9);
 
   const pGutter = 2;
-  const pInfo = 3;
+  const pInfo = 4;
   const maxProfileName = input.rows.reduce((max, one) => Math.max(max, one.profile.name.length), 7);
   const pName = Math.max(10, Math.min(16, maxProfileName + 1));
 
   const maxEffort = input.rows.reduce((max, one) => {
-    const label = one.profile.pinned !== undefined ? "pinned" : (one.profile.effort ?? "-");
+    const label = one.profile.pinned !== undefined ? "Pinned" : (one.profile.effort ?? "-");
     return Math.max(max, label.length);
   }, 6);
   const pEffort = Math.max(12, Math.min(15, maxEffort + 4));
 
   const maxProfileCost = input.rows.reduce(
-    (max, one) => Math.max(max, (one.resolution?.cost ?? "-").length),
+    (max, one) => Math.max(max, (normalizeCost(one.resolution?.cost) ?? "-").length),
     4,
   );
-  const pCost = Math.max(8, Math.min(20, maxProfileCost));
+  const pCost = Math.max(8, Math.min(14, maxProfileCost));
   const pGaps = 5;
   const pModel = Math.max(20, innerWidth - pGutter - pName - pInfo - pEffort - pCost - pGaps);
 
+  const eGutter = 2;
   const eIndex = 3;
+  const eRemove = 6;
   const maxAlias = input.models.reduce((max, one) => Math.max(max, one.alias.length), 5);
   const eAlias = Math.max(8, Math.min(16, maxAlias + 1));
 
@@ -150,12 +173,15 @@ export const layoutMetrics = (input: {
 
   const maxEntryCost = input.models.reduce((max, one) => {
     const text =
-      one.model === undefined ? "-" : costView(one.model.costInput, one.model.costOutput);
+      one.model === undefined ? "-" : formatCost(one.model.costInput, one.model.costOutput);
     return Math.max(max, text.length);
   }, 4);
   const eCost = Math.max(6, Math.min(12, maxEntryCost));
-  const eGaps = 5;
-  const eModel = Math.max(20, innerWidth - eIndex - eAlias - eFamily - eRungs - eCost - eGaps);
+  const eGaps = 7;
+  const eModel = Math.max(
+    18,
+    innerWidth - eGutter - eIndex - eAlias - eFamily - eRungs - eCost - eRemove - eGaps,
+  );
 
   return {
     modalWidth,
@@ -169,12 +195,14 @@ export const layoutMetrics = (input: {
       cost: pCost,
     },
     entryColumns: {
+      gutter: eGutter,
       index: eIndex,
       alias: eAlias,
       family: eFamily,
       rungs: eRungs,
       model: eModel,
       cost: eCost,
+      remove: eRemove,
     },
   };
 };
@@ -213,9 +241,11 @@ const selectControl = (input: {
   readonly width?: number;
   readonly flexGrow?: number;
   readonly value: string;
+  readonly tone?: RGBA | undefined;
   readonly onOpen: () => void;
 }): JSX.Element => {
   const [hovered, setHovered] = createSignal(false);
+  const baseTone = input.tone ?? input.colors.text;
   return h(
     "box",
     {
@@ -236,7 +266,7 @@ const selectControl = (input: {
     h(
       "text",
       {
-        fg: () => (hovered() ? input.colors.cyan : input.colors.text),
+        fg: () => (hovered() ? input.colors.cyan : baseTone),
         flexGrow: 1,
         flexShrink: 1,
         flexBasis: 0,
@@ -288,47 +318,61 @@ const infoBadge = (input: {
   );
 };
 
+const removeBadge = (input: {
+  readonly colors: Palette;
+  readonly width: number;
+  readonly onRemove: () => void;
+}): JSX.Element => {
+  const [hovered, setHovered] = createSignal(false);
+  return h(
+    "box",
+    {
+      width: input.width,
+      flexShrink: 0,
+      flexDirection: "row",
+      justifyContent: "center",
+      backgroundColor: () => (hovered() ? input.colors.selectHoverBg : undefined),
+      onMouseOver: () => setHovered(true),
+      onMouseOut: () => setHovered(false),
+      onMouseUp: input.onRemove,
+    },
+    h(
+      "text",
+      {
+        fg: () => (hovered() ? input.colors.red : input.colors.muted),
+        attributes: TextAttributes.BOLD,
+        wrapMode: "none",
+      },
+      "✕",
+    ),
+  );
+};
+
 const providerBar = (input: {
   readonly colors: Palette;
   readonly provider: string | undefined;
   readonly available: boolean;
   readonly onOpen: () => void;
 }): JSX.Element => {
-  const [hovered, setHovered] = createSignal(false);
   const label = input.provider ?? `${DEFAULT_PROVIDER} (default)`;
-  const statusText = input.available ? "change ▾" : "unavailable — select provider ▾";
-  const statusTone = input.available
-    ? () => (hovered() ? input.colors.cyan : input.colors.muted)
-    : () => input.colors.warning;
+  const selectValue = input.available ? label : `${label} (unavailable)`;
+  const selectWidth = Math.max(16, Math.min(36, selectValue.length + 4));
 
   return h(
     "box",
     {
       flexDirection: "row",
       justifyContent: "space-between",
-      onMouseOver: () => setHovered(true),
-      onMouseOut: () => setHovered(false),
-      onMouseUp: input.onOpen,
+      width: "100%",
     },
-    h(
-      "text",
-      { fg: input.colors.blue, truncate: true, wrapMode: "none" },
-      "provider: ",
-      h(
-        "span",
-        { style: { fg: input.available ? input.colors.text : input.colors.warning } },
-        label,
-      ),
-    ),
-    h(
-      "text",
-      {
-        fg: statusTone,
-        flexShrink: 0,
-        wrapMode: "none",
-      },
-      statusText,
-    ),
+    h("text", { fg: input.colors.blue, truncate: true, wrapMode: "none" }, "Provider:"),
+    selectControl({
+      colors: input.colors,
+      width: selectWidth,
+      value: selectValue,
+      tone: input.available ? input.colors.text : input.colors.warning,
+      onOpen: input.onOpen,
+    }),
   );
 };
 
@@ -341,10 +385,10 @@ const jevToggleBar = (input: {
 }): JSX.Element => {
   const { colors, available, enabled } = input;
   const radioText = !available
-    ? "(○) disabled (no OPENCODE_KEY)"
+    ? "(○) Disabled (no OPENCODE_KEY)"
     : enabled
-      ? "(●) on  ( ) off"
-      : "( ) on  (●) off";
+      ? "(●) On  ( ) Off"
+      : "( ) On  (●) Off";
   const radioColor = !available ? colors.disabled : enabled ? colors.green : colors.muted;
 
   return h(
@@ -357,7 +401,7 @@ const jevToggleBar = (input: {
     h(
       "text",
       { fg: colors.blue, truncate: true, wrapMode: "none" },
-      "judge: ",
+      "Judge: ",
       h("span", { style: { fg: available ? colors.text : colors.disabled } }, input.modelName),
     ),
     h(
@@ -425,7 +469,7 @@ const tabBar = (input: {
         );
       }),
     ),
-    h("text", { fg: input.colors.faint, wrapMode: "none" }, "[/] tabs"),
+    h("text", { fg: input.colors.faint, wrapMode: "none" }, "[/] Tabs"),
   );
 };
 
@@ -444,8 +488,9 @@ const profileRow = (
 ): JSX.Element => {
   const profile = row.profile;
   const [hovered, setHovered] = createSignal(false);
-  const costTone = isExpensiveCost(row.resolution?.cost) ? colors.yellow : colors.muted;
-  const effort = profile.pinned !== undefined ? "pinned" : (profile.effort ?? "-");
+  const costText = normalizeCost(row.resolution?.cost) ?? "-";
+  const costTone = isExpensiveCost(costText) ? colors.yellow : colors.muted;
+  const effort = profile.pinned !== undefined ? "Pinned" : (profile.effort ?? "-");
   const ref = row.resolution?.ref ?? "-";
   const nameProps = {
     width: cols.name,
@@ -482,7 +527,7 @@ const profileRow = (
         value: ref,
         onOpen: actions.pin,
       }),
-      costCell(cols.cost, () => row.resolution?.cost ?? "-", costTone),
+      costCell(cols.cost, () => costText, costTone),
     ),
     show(
       () => row.resolution !== undefined && row.resolution.crosscheck !== undefined,
@@ -490,7 +535,7 @@ const profileRow = (
         h(
           "box",
           { paddingLeft: INDENT, paddingRight: 1 },
-          field(theme, "crosscheck", () => row.resolution?.crosscheck ?? ""),
+          field(theme, "Crosscheck", () => row.resolution?.crosscheck ?? ""),
         ),
     ),
     show(
@@ -505,6 +550,11 @@ const entryRow = (
   cols: LayoutMetrics["entryColumns"],
   row: EntryRow,
   index: number,
+  selected: boolean,
+  actions: {
+    readonly remove: () => void;
+    readonly selectRow: () => void;
+  },
 ): JSX.Element => {
   const model = row.model;
   const [hovered, setHovered] = createSignal(false);
@@ -514,14 +564,18 @@ const entryRow = (
       flexDirection: "column",
       width: "100%",
       backgroundColor: () => (hovered() ? colors.rowHoverBg : undefined),
-      onMouseOver: () => setHovered(true),
+      onMouseOver: () => {
+        setHovered(true);
+        actions.selectRow();
+      },
       onMouseOut: () => setHovered(false),
     },
     h(
       "box",
       { flexDirection: "row", columnGap: 1, width: "100%" },
+      cell(cols.gutter, () => (selected ? "▸" : " "), colors.cyan),
       cell(cols.index, () => String(index + 1), colors.faint),
-      cell(cols.alias, () => row.alias, colors.text),
+      cell(cols.alias, () => row.alias, selected ? colors.cyan : colors.text),
       cell(cols.family, () => model?.family ?? "-", colors.text),
       cell(
         cols.rungs,
@@ -531,27 +585,24 @@ const entryRow = (
       modelCell(cols.model, () => row.ref, colors.text),
       costCell(
         cols.cost,
-        () => (model === undefined ? "-" : costView(model.costInput, model.costOutput)),
+        () => (model === undefined ? "-" : formatCost(model.costInput, model.costOutput)),
         colors.muted,
       ),
-    ),
-    show(
-      () => row.problem !== undefined,
-      () => indentedLine(colors.warning, row.problem ?? ""),
+      removeBadge({ colors, width: cols.remove, onRemove: actions.remove }),
     ),
   );
 };
 
 const section = (
   colors: Palette,
-  caption: string,
+  caption: string | undefined,
   head: ReadonlyArray<JSX.Element>,
   body: JSX.Element,
 ): JSX.Element =>
   h(
     "box",
     { flexDirection: "column", width: "100%", gap: 1 },
-    h("text", { fg: colors.muted, wrapMode: "word" }, caption),
+    caption !== undefined ? h("text", { fg: colors.muted, wrapMode: "word" }, caption) : null,
     h(
       "box",
       {
@@ -574,19 +625,21 @@ const headerCells = {
     cols: LayoutMetrics["profileColumns"],
   ): ReadonlyArray<JSX.Element> => [
     cell(cols.gutter, () => "", colors.blue),
-    cell(cols.name, () => "profile", colors.blue),
-    cell(cols.info, () => "i", colors.blue),
-    cell(cols.effort, () => "effort", colors.blue),
-    modelCell(cols.model, () => "model", colors.blue),
-    costCell(cols.cost, () => "cost", colors.blue),
+    cell(cols.name, () => "Profile", colors.blue),
+    cell(cols.info, () => "Info", colors.blue),
+    cell(cols.effort, () => "Effort", colors.blue),
+    modelCell(cols.model, () => "Model", colors.blue),
+    costCell(cols.cost, () => "Cost", colors.blue),
   ],
   entries: (colors: Palette, cols: LayoutMetrics["entryColumns"]): ReadonlyArray<JSX.Element> => [
+    cell(cols.gutter, () => "", colors.blue),
     cell(cols.index, () => "#", colors.blue),
-    cell(cols.alias, () => "alias", colors.blue),
-    cell(cols.family, () => "family", colors.blue),
-    cell(cols.rungs, () => "rungs", colors.blue),
-    modelCell(cols.model, () => "model", colors.blue),
-    costCell(cols.cost, () => "cost", colors.blue),
+    cell(cols.alias, () => "Alias", colors.blue),
+    cell(cols.family, () => "Family", colors.blue),
+    cell(cols.rungs, () => "Rungs", colors.blue),
+    modelCell(cols.model, () => "Model", colors.blue),
+    costCell(cols.cost, () => "Cost", colors.blue),
+    cell(cols.remove, () => "Remove", colors.blue),
   ],
 };
 
@@ -649,7 +702,7 @@ const previewTab = (
     h(
       "text",
       { fg: colors.muted, wrapMode: "word" },
-      "the page writes nothing by itself. A click writes the draft to the config file.",
+      "The page writes nothing by itself. Press Enter to write spectre.json.",
     ),
   );
 
@@ -663,6 +716,7 @@ const activeTabBody = (input: {
   readonly catalogue: ReadonlyArray<Model>;
   readonly draft: Draft;
   readonly selectedRow: () => number;
+  readonly selectedEntryRow: () => number;
   readonly actions: (
     row: ProfileRow,
     index: number,
@@ -672,21 +726,38 @@ const activeTabBody = (input: {
     readonly info: () => void;
     readonly selectRow: () => void;
   };
+  readonly entryActions: (
+    row: EntryRow,
+    index: number,
+  ) => {
+    readonly remove: () => void;
+    readonly selectRow: () => void;
+  };
 }): JSX.Element => {
   const { colors, theme, metrics } = input;
   if (input.tab === "allowlist") {
     const entries = h(
       "box",
       { flexDirection: "column", width: "100%", gap: 1 },
-      () => input.models.map((row, index) => entryRow(colors, metrics.entryColumns, row, index)),
+      () =>
+        input.models.map((row, index) =>
+          entryRow(
+            colors,
+            metrics.entryColumns,
+            row,
+            index,
+            index === input.selectedEntryRow(),
+            input.entryActions(row, index),
+          ),
+        ),
       show(
         () => input.models.length === 0,
-        () => indentedLine(colors.muted, "no entries yet"),
+        () => indentedLine(colors.muted, "No entries yet"),
       ),
     );
     return section(
       colors,
-      "the resolver reads the entries from the top and spends the first model that fits",
+      "The resolver reads the entries from the top and spends the first model that fits.",
       headerCells.entries(colors, metrics.entryColumns),
       entries,
     );
@@ -710,15 +781,10 @@ const activeTabBody = (input: {
       ),
     show(
       () => input.rows.length === 0,
-      () => indentedLine(colors.muted, "no profiles yet"),
+      () => indentedLine(colors.muted, "No profiles yet"),
     ),
   );
-  return section(
-    colors,
-    "the requirement each profile names, and the model the resolver would spend on it (press i or click ⓘ for profile details)",
-    headerCells.profiles(colors, metrics.profileColumns),
-    profiles,
-  );
+  return section(colors, undefined, headerCells.profiles(colors, metrics.profileColumns), profiles);
 };
 
 const TAB_DELTAS: Readonly<Record<string, number>> = { tab: 1, "]": 1, "[": -1 };
@@ -741,6 +807,7 @@ export const dispatchModalKey = (
     readonly moveTab: (delta: number) => void;
     readonly moveRow: (delta: number) => void;
     readonly addModel?: () => void;
+    readonly removeModel?: () => void;
     readonly openInfo?: () => void;
   },
 ): void => {
@@ -758,6 +825,18 @@ export const dispatchModalKey = (
   if (key === "+" || key === "kpplus" || event.sequence === "+" || (key === "=" && event.shift)) {
     event.preventDefault();
     actions.addModel?.();
+    return;
+  }
+  if (
+    key === "-" ||
+    key === "kpminus" ||
+    event.sequence === "-" ||
+    key === "delete" ||
+    key === "backspace" ||
+    ((key === "x" || event.sequence === "x") && !event.ctrl && !event.meta && !event.super)
+  ) {
+    event.preventDefault();
+    actions.removeModel?.();
     return;
   }
   if ((key === "i" || event.sequence === "i") && !event.ctrl && !event.meta && !event.super) {
@@ -790,17 +869,19 @@ export const page = (input: PageInput): JSX.Element => {
   const dialog = context.ui.dialog;
   const activeTab: TabId = input.tab ?? "profiles";
   const [selectedRow, setSelectedRow] = createSignal(input.selectedRow ?? 0);
+  const [selectedEntryRow, setSelectedEntryRow] = createSignal(0);
   const jevAvailable = input.jevAvailable ?? isJevAvailable(input.draft);
   const jevEnabled =
     jevAvailable && input.draft.judge !== undefined && input.draft.judge.kind !== "lexical";
   const jevModel = input.draft.judge?.model ?? JEV_MODEL;
   const providerAvailable = isProviderAvailable(input.draft.provider, input.catalogue);
+  const usableModels = usableEntryRows(input.models, input.draft.provider);
 
   const metrics = layoutMetrics({
     terminalWidth: input.terminalWidth ?? context.renderer?.width ?? liveRenderer?.width,
     terminalHeight: input.terminalHeight ?? context.renderer?.height ?? liveRenderer?.height,
     rows: input.rows,
-    models: input.models,
+    models: usableModels,
   });
 
   const close = () => {
@@ -836,6 +917,21 @@ export const page = (input: PageInput): JSX.Element => {
     run(() => modelPicker({ dialog, draft: input.draft, models: input.catalogue }));
   };
 
+  const removeEntryByAlias = (alias: string): void => {
+    input.onChange(applied(input.draft, { kind: "remove-model", alias }));
+  };
+
+  const triggerRemoveModel = (): void => {
+    if (activeTab === "allowlist") {
+      const row = usableModels[selectedEntryRow()] ?? usableModels[0];
+      if (row !== undefined) {
+        removeEntryByAlias(row.alias);
+      }
+      return;
+    }
+    run(() => removeModelPicker({ dialog, draft: input.draft, models: input.catalogue }));
+  };
+
   const openProfileInfo = (row: ProfileRow | undefined): void => {
     if (row === undefined) return;
     run(() =>
@@ -864,12 +960,19 @@ export const page = (input: PageInput): JSX.Element => {
         input.onTabChange?.(stepTab(activeTab, delta));
       },
       moveRow: (delta) => {
-        if (activeTab !== "profiles") return;
-        const next = stepRow(selectedRow(), input.rows.length, delta);
-        setSelectedRow(next);
-        input.onRowChange?.(next);
+        if (activeTab === "profiles") {
+          const next = stepRow(selectedRow(), input.rows.length, delta);
+          setSelectedRow(next);
+          input.onRowChange?.(next);
+          return;
+        }
+        if (activeTab === "allowlist") {
+          const next = stepRow(selectedEntryRow(), usableModels.length, delta);
+          setSelectedEntryRow(next);
+        }
       },
       addModel: openAddModel,
+      removeModel: triggerRemoveModel,
       openInfo: () => {
         if (activeTab !== "profiles") return;
         openProfileInfo(input.rows[selectedRow()]);
@@ -882,11 +985,21 @@ export const page = (input: PageInput): JSX.Element => {
       run(() =>
         effortPicker({ dialog, draft: input.draft, models: input.catalogue, profile: row.profile }),
       ),
-    pin: () => run(() => pinPicker({ dialog, draft: input.draft, profile: row.profile })),
+    pin: () =>
+      run(() =>
+        pinPicker({ dialog, draft: input.draft, models: input.catalogue, profile: row.profile }),
+      ),
     info: () => openProfileInfo(row),
     selectRow: () => {
       setSelectedRow(index);
       input.onRowChange?.(index);
+    },
+  });
+
+  const entryActions = (row: EntryRow, index: number) => ({
+    remove: () => removeEntryByAlias(row.alias),
+    selectRow: () => {
+      setSelectedEntryRow(index);
     },
   });
 
@@ -910,11 +1023,13 @@ export const page = (input: PageInput): JSX.Element => {
       theme,
       metrics,
       rows: input.rows,
-      models: input.models,
+      models: usableModels,
       catalogue: input.catalogue,
       draft: input.draft,
       selectedRow,
+      selectedEntryRow,
       actions,
+      entryActions,
     }),
   );
 
@@ -948,11 +1063,11 @@ export const page = (input: PageInput): JSX.Element => {
         "box",
         { flexDirection: "row", justifyContent: "space-between", width: "100%" },
         h("text", { fg: colors.text, attributes: TextAttributes.BOLD }, "Routing"),
-        h("text", { fg: colors.teal, onMouseUp: close }, "esc"),
+        h("text", { fg: colors.teal, onMouseUp: close }, "Esc"),
       ),
       show(
-        () => input.source !== undefined || (input.rows.length === 0 && input.models.length === 0),
-        () => field(theme, "config", () => input.source ?? "none yet"),
+        () => input.source !== undefined || (input.rows.length === 0 && usableModels.length === 0),
+        () => field(theme, "Config", () => input.source ?? "None yet"),
       ),
       providerBar({
         colors,
@@ -982,7 +1097,7 @@ export const page = (input: PageInput): JSX.Element => {
       colors,
       active: activeTab,
       profileCount: input.rows.length,
-      allowCount: input.models.length,
+      allowCount: usableModels.length,
       onSelect: (next) => input.onTabChange?.(next),
     }),
     body,
@@ -1003,8 +1118,8 @@ export const page = (input: PageInput): JSX.Element => {
         "box",
         { flexDirection: "row", gap: 4 },
         footerButton({
-          key: "enter",
-          label: "write it",
+          key: "Enter",
+          label: "Write it",
           hoverKeyColor: colors.green,
           textColor: colors.text,
           mutedColor: colors.muted,
@@ -1012,18 +1127,30 @@ export const page = (input: PageInput): JSX.Element => {
         }),
         footerButton({
           key: "+",
-          label: "add model",
+          label: "Add model",
           hoverKeyColor: colors.cyan,
           textColor: colors.text,
           mutedColor: colors.muted,
           onPress: openAddModel,
         }),
         show(
+          () => usableModels.length > 0,
+          () =>
+            footerButton({
+              key: "-",
+              label: "Remove model",
+              hoverKeyColor: colors.red,
+              textColor: colors.text,
+              mutedColor: colors.muted,
+              onPress: triggerRemoveModel,
+            }),
+        ),
+        show(
           () => activeTab === "profiles" && input.rows.length > 0,
           () =>
             footerButton({
               key: "i",
-              label: "profile info",
+              label: "Profile info",
               hoverKeyColor: colors.teal,
               textColor: colors.text,
               mutedColor: colors.muted,
@@ -1032,8 +1159,8 @@ export const page = (input: PageInput): JSX.Element => {
         ),
       ),
       footerButton({
-        key: "esc",
-        label: "close",
+        key: "Esc",
+        label: "Close",
         hoverKeyColor: colors.red,
         textColor: colors.text,
         mutedColor: colors.muted,
