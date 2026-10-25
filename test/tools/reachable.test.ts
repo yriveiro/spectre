@@ -19,6 +19,7 @@ const TOOLS = [
   "pr",
   "prose",
   "routing",
+  "solidjs",
   "stack",
   "worktrees",
 ];
@@ -47,6 +48,7 @@ describe("every registered tool is reachable from some skill", () => {
       (await import("../../tools/definitions/pr")).pr(ctx),
       (await import("../../tools/definitions/prose")).prose(ctx),
       (await import("../../tools/definitions/routing")).routing(ctx),
+      (await import("../../tools/definitions/solidjs")).solidjs(ctx),
       (await import("../../tools/definitions/stack")).stack(ctx),
       (await import("../../tools/definitions/worktrees")).worktrees(ctx),
     ];

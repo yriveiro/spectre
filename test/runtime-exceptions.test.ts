@@ -103,6 +103,8 @@ const SPELLED: Record<string, number> = {
   eighteen: 18,
   nineteen: 19,
   twenty: 20,
+  "twenty-one": 21,
+  "twenty-two": 22,
 };
 
 const WORDS = Object.keys(SPELLED).join("|");

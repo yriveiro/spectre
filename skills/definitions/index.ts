@@ -75,6 +75,7 @@ import { principleTypeSystemDiscipline } from "./principle-type-system-disciplin
 import { principleVerification } from "./principle-verification";
 import { ripwire } from "./ripwire";
 import { showMeYourWork } from "./show-me-your-work";
+import { solidjsBestPractices } from "./solidjs-best-practices";
 import { spectreMode } from "./spectre-mode";
 import { swarm } from "./swarm";
 import { tdd } from "./tdd";
@@ -102,6 +103,7 @@ const definitions: ReadonlyArray<Definition> = [
   typescriptBestPractices,
   effectBestPractices,
   elysiaBestPractices,
+  solidjsBestPractices,
   playbook,
   playbookAuthoringASkill,
   playbookAutonomousRun,
@@ -220,6 +222,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "pr-canvas",
   "ripwire",
   "show-me-your-work",
+  "solidjs-best-practices",
   "spectre-mode",
   "swarm",
   "tdd",

@@ -347,6 +347,8 @@ describe("the set's own prose", () => {
     // and rewrote the enumeration claim in `features/session-return.md`: 338 to 340
     // with a semicolon, then 339 once the semicolon was split and the note's own
     // passives were rewritten.
+    //
+    // The solidjs `node:path` row rewrap moved one passive onto its own line: 339 to 340.
     const out = await call(["."]);
     const byRule: Record<string, number> = {};
     for (const f of out.findings) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
@@ -376,7 +378,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 339,
+      passiveVoice: 340,
       otherRules: [],
     });
   }, 120_000);
