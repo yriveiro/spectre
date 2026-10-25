@@ -1,0 +1,7 @@
+{
+  "name": "fixture-solid-v1-wrong",
+  "private": true,
+  "dependencies": {
+    "solid-js": "1.9.17"
+  }
+}
