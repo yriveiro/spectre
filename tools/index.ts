@@ -10,6 +10,7 @@ import { pr } from "./definitions/pr";
 import { prose } from "./definitions/prose";
 import { routing } from "./definitions/routing";
 import { load } from "./definitions/routing/load";
+import { solidjs } from "./definitions/solidjs";
 import { stack } from "./definitions/stack";
 import { sessionReturn, worktrees } from "./definitions/worktrees";
 
@@ -29,6 +30,7 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
     const pages = canvases(ctx);
     const figures = anatomy(ctx.location.directory);
     const memory = brain(ctx);
+    const solid = solidjs(ctx.location.directory);
 
     // Not looped: `add` is generic, so a union of the two schemas instantiates to
     // neither and the call will not typecheck.
@@ -43,10 +45,11 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
       editor.add(pages);
       editor.add(memory);
       editor.add(figures);
+      editor.add(solid);
     });
 
     yield* Effect.logInfo("Registered tools", {
-      tools: [listed, said, route, trees, prs, opening, why, pages, memory, figures].map(
+      tools: [listed, said, route, trees, prs, opening, why, pages, memory, figures, solid].map(
         (tool) => `${tool.options?.namespace}_${tool.name}`,
       ),
     });

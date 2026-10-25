@@ -1,0 +1,11 @@
+{
+  "name": "fixture-solid-v2",
+  "private": true,
+  "dependencies": {
+    "solid-js": "2.0.0-rc.18",
+    "@solidjs/web": "2.0.0-rc.18"
+  },
+  "devDependencies": {
+    "@solidjs/vite-plugin": "3.0.0-next.51"
+  }
+}

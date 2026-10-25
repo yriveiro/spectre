@@ -1,0 +1,8 @@
+{
+  "name": "fixture-solid-v2-wrong",
+  "private": true,
+  "dependencies": {
+    "solid-js": "2.0.0-rc.18",
+    "@solidjs/web": "2.0.0-rc.18"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "fixture-solidstart-v2-on-solid-2",
+  "private": true,
+  "dependencies": {
+    "@solidjs/start": "2.1.0",
+    "solid-js": "2.0.0-rc.18",
+    "@solidjs/web": "2.0.0-rc.18"
+  }
+}

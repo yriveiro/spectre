@@ -17,5 +17,9 @@
     "allowImportingTsExtensions": true
   },
   "include": ["index.ts", "tui", "agents", "eval", "scripts", "skills", "test", "tools"],
-  "exclude": ["skills/definitions/elysia-best-practices/examples"]
+  "exclude": [
+    "skills/definitions/elysia-best-practices/examples",
+    "skills/definitions/solidjs-best-practices/examples",
+    "test/fixtures/solidjs"
+  ]
 }
