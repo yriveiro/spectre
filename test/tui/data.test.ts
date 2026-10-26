@@ -105,12 +105,29 @@ const project = async () => {
 };
 
 describe("the page reads the repository's own file", () => {
-  test("a file with no config reads as the empty draft", async () => {
+  test("a file with no config reads with the default profiles enabled", async () => {
     const at = scratch();
     await Bun.write(`${at}/.keep`, "");
     const draft = await read(at);
     expect(draft.models).toEqual([]);
-    expect(draft.profiles).toEqual([]);
+    expect(draft.profiles.map((one) => one.name)).toEqual([
+      "mechanical",
+      "search",
+      "worker",
+      "judgment",
+      "thinking",
+      "deep",
+      "refactor",
+    ]);
+    expect(draft.profiles.every((one) => one.enabled !== false)).toBe(true);
+  });
+
+  test("a file with configured profiles marks unconfigured default profiles as disabled", async () => {
+    const draft = await read(await project());
+    const enabled = draft.profiles.filter((one) => one.enabled !== false).map((one) => one.name);
+    const disabled = draft.profiles.filter((one) => one.enabled === false).map((one) => one.name);
+    expect(enabled).toEqual(["mechanical", "worker", "pinned", "lost", "empty"]);
+    expect(disabled).toEqual(["search", "judgment", "thinking", "deep", "refactor"]);
   });
 
   test("the global file is not folded into the draft", async () => {

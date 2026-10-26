@@ -214,3 +214,55 @@ export const formatRef = (ref: Model.Ref): string =>
     : `${ref.providerID}/${ref.id}#${ref.variant}`;
 
 export const DEFAULT_AGENT = "spectre";
+
+export const DEFAULT_PROFILES: Readonly<Record<string, Profile>> = {
+  mechanical: {
+    effort: "low",
+    match:
+      "Use when the task is one command to run and one output to read, and the deliverable is what it said: run the tests, read the log, report the failure. Not for finding where something lives.",
+    why: "One command, one log, and a report. Nothing to decide, so the cheapest effort runs it; a wrong answer here shows up as a failed command rather than a wrong commit.",
+  },
+  search: {
+    effort: "medium",
+    match:
+      "Use when the task is to find where something lives, with grep for a symbol, a file to read, the call sites to name, or the blast radius to list. Not for a command to run.",
+    why: "Find where something lives: grep, read, name the call sites. A missed symbol costs a second pass over the repo, so it leads above the floor and escalates to the other model.",
+  },
+  worker: {
+    effort: "high",
+    crosscheck: { effort: "high", prefer: "free" },
+    match:
+      "Use when the change is already decided and the task is to carry it out across several files: add the field, write the test, make the edits. Not for choosing between two defensible designs.",
+    why: "A change that is already decided and has to be executed across several files. The model holds one plan while editing it, so it takes a high effort rather than the floor. The free model is the last rung, so the cross-check costs nothing.",
+  },
+  judgment: {
+    effort: "high",
+    crosscheck: { effort: "high", prefer: "free" },
+    match:
+      "Use when two defensible options exist and one has to be chosen, and a wrong call is expensive to undo: which design, which of these two parsers, whether to keep the branch. Not for executing a change that is already decided.",
+    why: "Two defensible options and one has to be chosen. High effort on one family, the same level on the other as the cross-check, because a wrong call is expensive to undo and a second opinion is the cheapest way to catch one. The free model takes that second opinion.",
+  },
+  thinking: {
+    effort: "max",
+    crosscheck: { effort: "max" },
+    match:
+      "Use when one hard problem has one right answer and there is no diff to read the answer out of: prove the invariant, find the one bad input, derive the result. Not for work that spans a subsystem.",
+    why: "One hard problem where the answer has to be right and there is no diff to read the answer out of. The escalation goes to another family at its top effort, because a second family beats the same family asked twice.",
+  },
+  deep: {
+    effort: "max",
+    crosscheck: { effort: "max" },
+    match:
+      "Use when the work spans a subsystem or the whole design: an architecture decision, a cross-cutting change, a bug nobody has localized yet. Not for a single problem with a single answer.",
+    why: "Architecture, a cross-cutting design, or a bug nobody has localized yet. The task that decides everything takes the top effort on every model rather than saving on the work that matters most.",
+  },
+  refactor: {
+    effort: "high",
+    crosscheck: { effort: "max", prefer: "free" },
+    match:
+      "Use when the task is to restructure code that already works, across files, without changing behaviour: rename, move, extract, split. Not for a new behaviour.",
+    why: "Restructure code that already works, across files, without changing behaviour. It needs thinking plus breadth of reading, so it takes the second-highest effort rather than the top, and keeps the other model's second-highest in reserve for the mechanical part of the move. The free model is the last rung.",
+  },
+};
+
+export const isDefaultProfile = (name: string): boolean => Object.hasOwn(DEFAULT_PROFILES, name);

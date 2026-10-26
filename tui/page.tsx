@@ -5,6 +5,7 @@ import { type JSX, useRenderer } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import { KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
 import {
+  addProfilePrompt,
   applied,
   DEFAULT_PROVIDER,
   type Edit,
@@ -19,10 +20,13 @@ import {
   profileInfo,
   providerPicker,
   removeModelPicker,
+  removeProfilePicker,
 } from "./controls.tsx";
 import {
   type Draft,
   formatCost,
+  isCustomProfile,
+  isProfileEnabled,
   type Model,
   normalizeCost,
   type Profile,
@@ -30,9 +34,9 @@ import {
 } from "./data.ts";
 import { bindKeyboard, field, h, type Palette, palette, show } from "./render.ts";
 
-export type TabId = "profiles" | "allowlist" | "preview";
+export type TabId = "configured" | "profiles" | "allowlist" | "preview";
 
-export const TABS: ReadonlyArray<TabId> = ["profiles", "allowlist", "preview"];
+export const TABS: ReadonlyArray<TabId> = ["configured", "profiles", "allowlist", "preview"];
 
 export type ProfileRow = {
   readonly profile: Profile;
@@ -109,6 +113,15 @@ export type LayoutMetrics = {
     readonly model: number;
     readonly cost: number;
   };
+  readonly profileListColumns: {
+    readonly gutter: number;
+    readonly name: number;
+    readonly info: number;
+    readonly kind: number;
+    readonly status: number;
+    readonly summary: number;
+    readonly remove: number;
+  };
   readonly entryColumns: {
     readonly gutter: number;
     readonly index: number;
@@ -125,6 +138,7 @@ export const layoutMetrics = (input: {
   readonly terminalWidth?: number | undefined;
   readonly terminalHeight?: number | undefined;
   readonly rows: ReadonlyArray<ProfileRow>;
+  readonly profiles?: ReadonlyArray<Profile> | undefined;
   readonly models: ReadonlyArray<EntryRow>;
 }): LayoutMetrics => {
   const termWidth = input.terminalWidth ?? 116;
@@ -151,6 +165,20 @@ export const layoutMetrics = (input: {
   const pCost = Math.max(8, Math.min(14, maxProfileCost));
   const pGaps = 5;
   const pModel = Math.max(20, innerWidth - pGutter - pName - pInfo - pEffort - pCost - pGaps);
+
+  const listProfiles = input.profiles ?? input.rows.map((one) => one.profile);
+  const plGutter = 2;
+  const plInfo = 4;
+  const maxListName = listProfiles.reduce((max, one) => Math.max(max, one.name.length), 7);
+  const plName = Math.max(10, Math.min(16, maxListName + 1));
+  const plKind = 8;
+  const plStatus = 10;
+  const plRemove = 6;
+  const plGaps = 6;
+  const plSummary = Math.max(
+    16,
+    innerWidth - plGutter - plName - plInfo - plKind - plStatus - plRemove - plGaps,
+  );
 
   const eGutter = 2;
   const eIndex = 3;
@@ -193,6 +221,15 @@ export const layoutMetrics = (input: {
       effort: pEffort,
       model: pModel,
       cost: pCost,
+    },
+    profileListColumns: {
+      gutter: plGutter,
+      name: plName,
+      info: plInfo,
+      kind: plKind,
+      status: plStatus,
+      summary: plSummary,
+      remove: plRemove,
     },
     entryColumns: {
       gutter: eGutter,
@@ -420,11 +457,13 @@ const jevToggleBar = (input: {
 const tabBar = (input: {
   readonly colors: Palette;
   readonly active: TabId;
+  readonly configuredCount: number;
   readonly profileCount: number;
   readonly allowCount: number;
   readonly onSelect: (tab: TabId) => void;
 }): JSX.Element => {
   const items: ReadonlyArray<{ readonly id: TabId; readonly label: string }> = [
+    { id: "configured", label: `Configured (${input.configuredCount})` },
     { id: "profiles", label: `Profiles (${input.profileCount})` },
     { id: "allowlist", label: `Allowlist (${input.allowCount})` },
     { id: "preview", label: "Preview" },
@@ -446,7 +485,7 @@ const tabBar = (input: {
     },
     h(
       "box",
-      { flexDirection: "row", gap: 3 },
+      { flexDirection: "row", gap: 2 },
       ...items.map((item) => {
         const selected = item.id === input.active;
         return h(
@@ -470,6 +509,93 @@ const tabBar = (input: {
       }),
     ),
     h("text", { fg: input.colors.faint, wrapMode: "none" }, "[/] Tabs"),
+  );
+};
+
+const statusToggleBadge = (input: {
+  readonly colors: Palette;
+  readonly width: number;
+  readonly enabled: boolean;
+  readonly onToggle: () => void;
+}): JSX.Element => {
+  const [hovered, setHovered] = createSignal(false);
+  return h(
+    "box",
+    {
+      width: input.width,
+      flexShrink: 0,
+      flexDirection: "row",
+      backgroundColor: () => (hovered() ? input.colors.selectHoverBg : undefined),
+      onMouseOver: () => setHovered(true),
+      onMouseOut: () => setHovered(false),
+      onMouseUp: input.onToggle,
+    },
+    h(
+      "text",
+      {
+        fg: () =>
+          hovered() ? input.colors.cyan : input.enabled ? input.colors.green : input.colors.muted,
+        attributes: input.enabled ? TextAttributes.BOLD : TextAttributes.NONE,
+        wrapMode: "none",
+      },
+      input.enabled ? "[●] On" : "[ ] Off",
+    ),
+  );
+};
+
+const profileListRow = (
+  colors: Palette,
+  cols: LayoutMetrics["profileListColumns"],
+  profile: Profile,
+  selected: boolean,
+  actions: {
+    readonly toggle: () => void;
+    readonly info: () => void;
+    readonly remove: () => void;
+    readonly selectRow: () => void;
+  },
+): JSX.Element => {
+  const [hovered, setHovered] = createSignal(false);
+  const enabled = isProfileEnabled(profile);
+  const custom = isCustomProfile(profile);
+  const nameProps = {
+    width: cols.name,
+    flexShrink: 0,
+    fg: selected ? colors.cyan : enabled ? colors.text : colors.muted,
+    attributes: selected ? TextAttributes.BOLD : TextAttributes.NONE,
+    truncate: true,
+    wrapMode: "none",
+    onMouseUp: actions.toggle,
+  };
+  return h(
+    "box",
+    {
+      flexDirection: "column",
+      width: "100%",
+      backgroundColor: () => (hovered() ? colors.rowHoverBg : undefined),
+      onMouseOver: () => {
+        setHovered(true);
+        actions.selectRow();
+      },
+      onMouseOut: () => setHovered(false),
+    },
+    h(
+      "box",
+      { flexDirection: "row", columnGap: 1, width: "100%" },
+      cell(cols.gutter, () => (selected ? "▸" : " "), colors.cyan),
+      h("text", nameProps, () => profile.name),
+      infoBadge({ colors, width: cols.info, onOpen: actions.info }),
+      cell(cols.kind, () => (custom ? "custom" : "default"), custom ? colors.teal : colors.muted),
+      statusToggleBadge({ colors, width: cols.status, enabled, onToggle: actions.toggle }),
+      modelCell(
+        cols.summary,
+        () => profile.match ?? profile.why ?? "-",
+        enabled ? colors.muted : colors.disabled,
+      ),
+      custom
+        ? removeBadge({ colors, width: cols.remove, onRemove: actions.remove })
+        : cell(cols.remove, () => "-", colors.faint),
+    ),
   );
 };
 
@@ -631,6 +757,18 @@ const headerCells = {
     modelCell(cols.model, () => "Model", colors.blue),
     costCell(cols.cost, () => "Cost", colors.blue),
   ],
+  profileList: (
+    colors: Palette,
+    cols: LayoutMetrics["profileListColumns"],
+  ): ReadonlyArray<JSX.Element> => [
+    cell(cols.gutter, () => "", colors.blue),
+    cell(cols.name, () => "Profile", colors.blue),
+    cell(cols.info, () => "Info", colors.blue),
+    cell(cols.kind, () => "Kind", colors.blue),
+    cell(cols.status, () => "Status", colors.blue),
+    modelCell(cols.summary, () => "When to use", colors.blue),
+    cell(cols.remove, () => "Remove", colors.blue),
+  ],
   entries: (colors: Palette, cols: LayoutMetrics["entryColumns"]): ReadonlyArray<JSX.Element> => [
     cell(cols.gutter, () => "", colors.blue),
     cell(cols.index, () => "#", colors.blue),
@@ -657,6 +795,7 @@ const footerButton = (input: {
     {
       fg: () => (hovered() ? input.hoverKeyColor : input.textColor),
       attributes: TextAttributes.BOLD,
+      wrapMode: "none",
       onMouseOver: () => setHovered(true),
       onMouseOut: () => setHovered(false),
       onMouseUp: input.onPress,
@@ -716,6 +855,7 @@ const activeTabBody = (input: {
   readonly catalogue: ReadonlyArray<Model>;
   readonly draft: Draft;
   readonly selectedRow: () => number;
+  readonly selectedProfileListRow: () => number;
   readonly selectedEntryRow: () => number;
   readonly actions: (
     row: ProfileRow,
@@ -724,6 +864,15 @@ const activeTabBody = (input: {
     readonly effort: () => void;
     readonly pin: () => void;
     readonly info: () => void;
+    readonly selectRow: () => void;
+  };
+  readonly profileListActions: (
+    profile: Profile,
+    index: number,
+  ) => {
+    readonly toggle: () => void;
+    readonly info: () => void;
+    readonly remove: () => void;
     readonly selectRow: () => void;
   };
   readonly entryActions: (
@@ -735,6 +884,32 @@ const activeTabBody = (input: {
   };
 }): JSX.Element => {
   const { colors, theme, metrics } = input;
+  if (input.tab === "profiles") {
+    const list = h(
+      "box",
+      { flexDirection: "column", width: "100%", gap: 1 },
+      () =>
+        input.draft.profiles.map((profile, index) =>
+          profileListRow(
+            colors,
+            metrics.profileListColumns,
+            profile,
+            index === input.selectedProfileListRow(),
+            input.profileListActions(profile, index),
+          ),
+        ),
+      show(
+        () => input.draft.profiles.length === 0,
+        () => indentedLine(colors.muted, "No profiles yet"),
+      ),
+    );
+    return section(
+      colors,
+      "Enable or disable default profiles, or add and remove custom profiles.",
+      headerCells.profileList(colors, metrics.profileListColumns),
+      list,
+    );
+  }
   if (input.tab === "allowlist") {
     const entries = h(
       "box",
@@ -793,7 +968,7 @@ const ROW_DELTAS: Readonly<Record<string, number>> = { down: 1, j: 1, up: -1, k:
 const stepTab = (current: TabId, delta: number): TabId => {
   const at = TABS.indexOf(current);
   const next = ((at === -1 ? 0 : at) + delta + TABS.length) % TABS.length;
-  return TABS[next] ?? "profiles";
+  return TABS[next] ?? "configured";
 };
 
 const stepRow = (current: number, total: number, delta: number): number =>
@@ -808,6 +983,7 @@ export const dispatchModalKey = (
     readonly moveRow: (delta: number) => void;
     readonly addModel?: () => void;
     readonly removeModel?: () => void;
+    readonly toggleProfile?: () => void;
     readonly openInfo?: () => void;
   },
 ): void => {
@@ -820,6 +996,11 @@ export const dispatchModalKey = (
   if (key === "escape") {
     event.preventDefault();
     actions.close();
+    return;
+  }
+  if (key === "space" || event.sequence === " ") {
+    event.preventDefault();
+    actions.toggleProfile?.();
     return;
   }
   if (key === "+" || key === "kpplus" || event.sequence === "+" || (key === "=" && event.shift)) {
@@ -867,8 +1048,11 @@ export const page = (input: PageInput): JSX.Element => {
     typeof context.theme.surface === "function" ? context.theme.surface("dialog") : context.theme;
   const colors = palette(context.theme, theme);
   const dialog = context.ui.dialog;
-  const activeTab: TabId = input.tab ?? "profiles";
+  const activeTab: TabId = input.tab ?? "configured";
+  const configuredRows = input.rows.filter((one) => isProfileEnabled(one.profile));
+  const customProfiles = input.draft.profiles.filter(isCustomProfile);
   const [selectedRow, setSelectedRow] = createSignal(input.selectedRow ?? 0);
+  const [selectedProfileListRow, setSelectedProfileListRow] = createSignal(0);
   const [selectedEntryRow, setSelectedEntryRow] = createSignal(0);
   const jevAvailable = input.jevAvailable ?? isJevAvailable(input.draft);
   const jevEnabled =
@@ -880,7 +1064,8 @@ export const page = (input: PageInput): JSX.Element => {
   const metrics = layoutMetrics({
     terminalWidth: input.terminalWidth ?? context.renderer?.width ?? liveRenderer?.width,
     terminalHeight: input.terminalHeight ?? context.renderer?.height ?? liveRenderer?.height,
-    rows: input.rows,
+    rows: configuredRows,
+    profiles: input.draft.profiles,
     models: usableModels,
   });
 
@@ -917,8 +1102,20 @@ export const page = (input: PageInput): JSX.Element => {
     run(() => modelPicker({ dialog, draft: input.draft, models: input.catalogue }));
   };
 
+  const openAddProfile = (): void => {
+    run(() => addProfilePrompt({ dialog, draft: input.draft, models: input.catalogue }));
+  };
+
   const removeEntryByAlias = (alias: string): void => {
     input.onChange(applied(input.draft, { kind: "remove-model", alias }));
+  };
+
+  const removeCustomProfileByName = (name: string): void => {
+    input.onChange(applied(input.draft, { kind: "remove-profile", profile: name }));
+  };
+
+  const toggleProfileByName = (name: string): void => {
+    input.onChange(applied(input.draft, { kind: "toggle-profile", profile: name }));
   };
 
   const triggerRemoveModel = (): void => {
@@ -932,6 +1129,15 @@ export const page = (input: PageInput): JSX.Element => {
     run(() => removeModelPicker({ dialog, draft: input.draft, models: input.catalogue }));
   };
 
+  const triggerRemoveProfile = (): void => {
+    const selected = input.draft.profiles[selectedProfileListRow()];
+    if (selected !== undefined && isCustomProfile(selected)) {
+      removeCustomProfileByName(selected.name);
+      return;
+    }
+    run(() => removeProfilePicker({ dialog, draft: input.draft }));
+  };
+
   const openProfileInfo = (row: ProfileRow | undefined): void => {
     if (row === undefined) return;
     run(() =>
@@ -943,6 +1149,12 @@ export const page = (input: PageInput): JSX.Element => {
         models: input.catalogue,
       }),
     );
+  };
+
+  const openProfileListInfo = (profile: Profile | undefined): void => {
+    if (profile === undefined) return;
+    const matched = configuredRows.find((one) => one.profile.name === profile.name);
+    openProfileInfo({ profile, resolution: matched?.resolution });
   };
 
   const openProviderPicker = (): void => {
@@ -960,10 +1172,15 @@ export const page = (input: PageInput): JSX.Element => {
         input.onTabChange?.(stepTab(activeTab, delta));
       },
       moveRow: (delta) => {
-        if (activeTab === "profiles") {
-          const next = stepRow(selectedRow(), input.rows.length, delta);
+        if (activeTab === "configured") {
+          const next = stepRow(selectedRow(), configuredRows.length, delta);
           setSelectedRow(next);
           input.onRowChange?.(next);
+          return;
+        }
+        if (activeTab === "profiles") {
+          const next = stepRow(selectedProfileListRow(), input.draft.profiles.length, delta);
+          setSelectedProfileListRow(next);
           return;
         }
         if (activeTab === "allowlist") {
@@ -971,11 +1188,21 @@ export const page = (input: PageInput): JSX.Element => {
           setSelectedEntryRow(next);
         }
       },
-      addModel: openAddModel,
-      removeModel: triggerRemoveModel,
-      openInfo: () => {
+      addModel: activeTab === "profiles" ? openAddProfile : openAddModel,
+      removeModel: activeTab === "profiles" ? triggerRemoveProfile : triggerRemoveModel,
+      toggleProfile: () => {
         if (activeTab !== "profiles") return;
-        openProfileInfo(input.rows[selectedRow()]);
+        const target = input.draft.profiles[selectedProfileListRow()];
+        if (target !== undefined) toggleProfileByName(target.name);
+      },
+      openInfo: () => {
+        if (activeTab === "configured") {
+          openProfileInfo(configuredRows[selectedRow()]);
+          return;
+        }
+        if (activeTab === "profiles") {
+          openProfileListInfo(input.draft.profiles[selectedProfileListRow()]);
+        }
       },
     }),
   );
@@ -993,6 +1220,15 @@ export const page = (input: PageInput): JSX.Element => {
     selectRow: () => {
       setSelectedRow(index);
       input.onRowChange?.(index);
+    },
+  });
+
+  const profileListActions = (profile: Profile, index: number) => ({
+    toggle: () => toggleProfileByName(profile.name),
+    info: () => openProfileListInfo(profile),
+    remove: () => removeCustomProfileByName(profile.name),
+    selectRow: () => {
+      setSelectedProfileListRow(index);
     },
   });
 
@@ -1022,13 +1258,15 @@ export const page = (input: PageInput): JSX.Element => {
       colors,
       theme,
       metrics,
-      rows: input.rows,
+      rows: configuredRows,
       models: usableModels,
       catalogue: input.catalogue,
       draft: input.draft,
       selectedRow,
+      selectedProfileListRow,
       selectedEntryRow,
       actions,
+      profileListActions,
       entryActions,
     }),
   );
@@ -1066,7 +1304,8 @@ export const page = (input: PageInput): JSX.Element => {
         h("text", { fg: colors.teal, onMouseUp: close }, "Esc"),
       ),
       show(
-        () => input.source !== undefined || (input.rows.length === 0 && usableModels.length === 0),
+        () =>
+          input.source !== undefined || (configuredRows.length === 0 && usableModels.length === 0),
         () => field(theme, "Config", () => input.source ?? "None yet"),
       ),
       providerBar({
@@ -1096,7 +1335,8 @@ export const page = (input: PageInput): JSX.Element => {
     tabBar({
       colors,
       active: activeTab,
-      profileCount: input.rows.length,
+      configuredCount: configuredRows.length,
+      profileCount: input.draft.profiles.length,
       allowCount: usableModels.length,
       onSelect: (next) => input.onTabChange?.(next),
     }),
@@ -1116,7 +1356,7 @@ export const page = (input: PageInput): JSX.Element => {
       },
       h(
         "box",
-        { flexDirection: "row", gap: 4 },
+        { flexDirection: "row", gap: 3 },
         footerButton({
           key: "Enter",
           label: "Write it",
@@ -1125,16 +1365,59 @@ export const page = (input: PageInput): JSX.Element => {
           mutedColor: colors.muted,
           onPress: () => input.onSave(),
         }),
-        footerButton({
-          key: "+",
-          label: "Add model",
-          hoverKeyColor: colors.cyan,
-          textColor: colors.text,
-          mutedColor: colors.muted,
-          onPress: openAddModel,
-        }),
         show(
-          () => usableModels.length > 0,
+          () => activeTab === "profiles" && input.draft.profiles.length > 0,
+          () =>
+            footerButton({
+              key: "Space",
+              label: "Toggle",
+              hoverKeyColor: colors.green,
+              textColor: colors.text,
+              mutedColor: colors.muted,
+              onPress: () => {
+                const target = input.draft.profiles[selectedProfileListRow()];
+                if (target !== undefined) toggleProfileByName(target.name);
+              },
+            }),
+        ),
+        show(
+          () => activeTab === "profiles",
+          () =>
+            footerButton({
+              key: "+",
+              label: "Add profile",
+              hoverKeyColor: colors.cyan,
+              textColor: colors.text,
+              mutedColor: colors.muted,
+              onPress: openAddProfile,
+            }),
+        ),
+        show(
+          () => activeTab !== "profiles",
+          () =>
+            footerButton({
+              key: "+",
+              label: "Add model",
+              hoverKeyColor: colors.cyan,
+              textColor: colors.text,
+              mutedColor: colors.muted,
+              onPress: openAddModel,
+            }),
+        ),
+        show(
+          () => activeTab === "profiles" && customProfiles.length > 0,
+          () =>
+            footerButton({
+              key: "-",
+              label: "Remove profile",
+              hoverKeyColor: colors.red,
+              textColor: colors.text,
+              mutedColor: colors.muted,
+              onPress: triggerRemoveProfile,
+            }),
+        ),
+        show(
+          () => activeTab !== "profiles" && usableModels.length > 0,
           () =>
             footerButton({
               key: "-",
@@ -1146,7 +1429,7 @@ export const page = (input: PageInput): JSX.Element => {
             }),
         ),
         show(
-          () => activeTab === "profiles" && input.rows.length > 0,
+          () => activeTab === "configured" && configuredRows.length > 0,
           () =>
             footerButton({
               key: "i",
@@ -1154,7 +1437,19 @@ export const page = (input: PageInput): JSX.Element => {
               hoverKeyColor: colors.teal,
               textColor: colors.text,
               mutedColor: colors.muted,
-              onPress: () => openProfileInfo(input.rows[selectedRow()]),
+              onPress: () => openProfileInfo(configuredRows[selectedRow()]),
+            }),
+        ),
+        show(
+          () => activeTab === "profiles" && input.draft.profiles.length > 0,
+          () =>
+            footerButton({
+              key: "i",
+              label: "Profile info",
+              hoverKeyColor: colors.teal,
+              textColor: colors.text,
+              mutedColor: colors.muted,
+              onPress: () => openProfileListInfo(input.draft.profiles[selectedProfileListRow()]),
             }),
         ),
       ),

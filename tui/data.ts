@@ -4,7 +4,9 @@ import { Effect } from "effect";
 import {
   candidates,
   DEFAULT_AGENT,
+  DEFAULT_PROFILES,
   FILE_NAME,
+  isDefaultProfile,
   type JudgeConfig,
   known,
   loadProject,
@@ -15,6 +17,8 @@ import {
   serialise,
   writeConfig,
 } from "../tools/definitions/routing/index.ts";
+
+export { DEFAULT_PROFILES, isDefaultProfile };
 
 export type Model = {
   readonly providerID: string;
@@ -39,6 +43,7 @@ export type Profile = {
     | undefined;
   readonly agent: string;
   readonly pinned: string | undefined;
+  readonly enabled?: boolean | undefined;
 };
 
 export type Draft = {
@@ -47,6 +52,28 @@ export type Draft = {
   readonly profiles: ReadonlyArray<Profile>;
   readonly judge?: JudgeConfig | undefined;
 };
+
+export const isProfileEnabled = (profile: Profile): boolean => profile.enabled !== false;
+
+export const isCustomProfile = (profile: Profile): boolean => !isDefaultProfile(profile.name);
+
+export const configuredProfiles = (draft: Draft): ReadonlyArray<Profile> =>
+  draft.profiles.filter(isProfileEnabled);
+
+export const defaultProfiles = (enabled = true): ReadonlyArray<Profile> =>
+  Object.entries(DEFAULT_PROFILES).map(([name, entry]) => ({
+    name,
+    effort: entry.effort,
+    match: entry.match,
+    why: entry.why,
+    crosscheck:
+      entry.crosscheck === undefined
+        ? undefined
+        : { effort: entry.crosscheck.effort, prefer: entry.crosscheck.prefer },
+    agent: entry.agent ?? DEFAULT_AGENT,
+    pinned: undefined,
+    enabled,
+  }));
 
 export type Resolution = {
   readonly profile: string;
@@ -85,25 +112,39 @@ export const read = (directory: string): Promise<Draft> =>
     const models = Object.entries(found.tables.models).map(([alias, ref]) => ({ alias, ref }));
     const held = new Set(models.map((one) => one.alias));
 
+    if (!found.configuredProfiles) {
+      return {
+        provider: found.tables.provider,
+        judge: found.tables.judge,
+        models,
+        profiles: defaultProfiles(true),
+      };
+    }
+
+    const fromFile = Object.entries(found.tables.profiles).map(([name, entry]): Profile => {
+      const named = pins(entry.model);
+      return {
+        name,
+        effort: entry.effort,
+        match: entry.match,
+        why: entry.why,
+        crosscheck:
+          entry.crosscheck === undefined
+            ? undefined
+            : { effort: entry.crosscheck.effort, prefer: entry.crosscheck.prefer },
+        agent: entry.agent ?? DEFAULT_AGENT,
+        pinned: named.find((one) => held.has(one)) ?? named[0],
+        enabled: true,
+      };
+    });
+    const configuredNames = new Set(fromFile.map((one) => one.name));
+    const disabledDefaults = defaultProfiles(false).filter((one) => !configuredNames.has(one.name));
+
     return {
       provider: found.tables.provider,
       judge: found.tables.judge,
       models,
-      profiles: Object.entries(found.tables.profiles).map(([name, entry]) => {
-        const named = pins(entry.model);
-        return {
-          name,
-          effort: entry.effort,
-          match: entry.match,
-          why: entry.why,
-          crosscheck:
-            entry.crosscheck === undefined
-              ? undefined
-              : { effort: entry.crosscheck.effort, prefer: entry.crosscheck.prefer },
-          agent: entry.agent ?? DEFAULT_AGENT,
-          pinned: named.find((one) => held.has(one)) ?? named[0],
-        };
-      }),
+      profiles: [...fromFile, ...disabledDefaults],
     };
   });
 
@@ -142,7 +183,7 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
     models.map(info),
   );
 
-  return draft.profiles.map((profile): Resolution => {
+  return configuredProfiles(draft).map((profile): Resolution => {
     const found = resolveProfile(
       profile.name,
       {
@@ -204,7 +245,7 @@ const written = (draft: Draft): Parameters<typeof writeConfig>[1] => ({
   judge: draft.judge,
   models: Object.fromEntries(draft.models.map((one) => [one.alias, one.ref])),
   profiles: Object.fromEntries(
-    draft.profiles.map((one) => [
+    configuredProfiles(draft).map((one) => [
       one.name,
       {
         effort: one.effort,

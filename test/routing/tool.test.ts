@@ -243,9 +243,12 @@ describe("tools.spectre.routing", () => {
     expect(out.provider).toBe("opencode-go");
     expect(out.profiles.map((one) => one.name)).toEqual([
       "mechanical",
-      "reading",
-      "judgement",
+      "search",
+      "worker",
+      "judgment",
+      "thinking",
       "deep",
+      "refactor",
     ]);
     expect(out.models.length).toBeGreaterThan(0);
     expect(out.source).toBe(`${scratch.projectDir()}/spectre.json`);
@@ -298,12 +301,29 @@ describe("tools.spectre.routing", () => {
     expect(out.models.map((one) => one.name)).toEqual(["minimax", "muse", "kimi"]);
     expect(out.profiles.map((one) => one.name)).toEqual([
       "mechanical",
-      "reading",
-      "judgement",
+      "search",
+      "worker",
+      "judgment",
+      "thinking",
       "deep",
+      "refactor",
     ]);
     expect(out.profiles[0]?.model.ref.startsWith("opencode-go/")).toBe(true);
     expect(await Bun.file(`${scratch.projectDir()}/spectre.json`).exists()).toBe(true);
+  });
+
+  test("a config that configures models without profiles falls back to the default profiles", async () => {
+    await scratch.writeProject(JSON.stringify({ models: { light: "acme/falcon-mini" } }));
+    const out = at(await call(scratch.projectDir()), "resolved");
+
+    expect(out.profiles.map((one) => one.name)).toEqual([
+      "mechanical",
+      "search",
+      "worker",
+      "judgment",
+      "refactor",
+    ]);
+    expect(out.profiles[0]?.model.ref).toBe("acme/falcon-mini#high");
   });
 
   test("the setup answer is refused when routing is already configured", async () => {

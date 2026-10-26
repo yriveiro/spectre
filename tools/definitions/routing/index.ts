@@ -458,7 +458,12 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
         };
 
       const listed = yield* catalogue(ctx);
-      const checked = check(found.tables, listed.models, DEFAULT_AGENT, agentIds);
+      const checked = check(
+        found.configuredProfiles ? found.tables : { ...found.tables, profiles: {} },
+        listed.models,
+        DEFAULT_AGENT,
+        agentIds,
+      );
       const allowed = Object.entries(found.tables.models).map(([alias, ref]) => ({
         alias,
         ref,
@@ -480,10 +485,11 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
       if (lines.length > 0) return failed(lines);
 
       const shown: Array<typeof Profile.Type> = [];
+      const profileProblems: Array<string> = [];
       for (const [name, entry] of Object.entries(found.tables.profiles)) {
         const one = resolve(name, entry, kept.kept, DEFAULT_AGENT);
         if (one.problem !== undefined) {
-          lines.push(one.problem);
+          profileProblems.push(one.problem);
           continue;
         }
         if (one.resolution === undefined) continue;
@@ -499,6 +505,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
           excluded: one.resolution.excluded.map(notThis),
         });
       }
+      if (found.configuredProfiles || shown.length === 0) lines.push(...profileProblems);
       if (lines.length > 0) return failed(lines);
 
       // The judge is asked last, so a config with a problem never spends a
@@ -621,5 +628,5 @@ export type {
   Resolution,
   Tables,
 } from "./types";
-export { DEFAULT_AGENT, formatRef } from "./types";
+export { DEFAULT_AGENT, DEFAULT_PROFILES, formatRef, isDefaultProfile } from "./types";
 export { proposeAlias, serialise, writeConfig } from "./write";
