@@ -5,9 +5,11 @@ import { type KeyEvent, TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import {
+  DEFAULT_AGENT,
   DEFAULT_TIMEOUT_MS,
   effortOf,
   fit,
+  isDefaultProfile,
   isFree,
   KNOWN_ORDER,
   type Known,
@@ -21,6 +23,7 @@ import {
   type Draft,
   formatConfig,
   formatCost,
+  isProfileEnabled,
   type Model,
   normalizeCost,
   type Profile,
@@ -52,6 +55,19 @@ export type Edit =
     }
   | { readonly kind: "model"; readonly alias: string; readonly ref: string }
   | { readonly kind: "remove-model"; readonly alias: string }
+  | {
+      readonly kind: "toggle-profile";
+      readonly profile: string;
+      readonly enabled?: boolean | undefined;
+    }
+  | {
+      readonly kind: "add-profile";
+      readonly name: string;
+      readonly effort: string;
+      readonly match: string | undefined;
+      readonly why: string | undefined;
+    }
+  | { readonly kind: "remove-profile"; readonly profile: string }
   | { readonly kind: "judge"; readonly enabled: boolean }
   | { readonly kind: "provider"; readonly provider: string };
 
@@ -74,6 +90,39 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
           : one,
       ),
     };
+  if (edit.kind === "toggle-profile")
+    return {
+      ...draft,
+      profiles: draft.profiles.map((one) =>
+        one.name === edit.profile
+          ? { ...one, enabled: edit.enabled ?? !isProfileEnabled(one) }
+          : one,
+      ),
+    };
+  if (edit.kind === "add-profile")
+    return {
+      ...draft,
+      profiles: [
+        ...draft.profiles,
+        {
+          name: edit.name,
+          effort: edit.effort,
+          match: edit.match,
+          why: edit.why,
+          crosscheck: undefined,
+          agent: DEFAULT_AGENT,
+          pinned: undefined,
+          enabled: true,
+        },
+      ],
+    };
+  if (edit.kind === "remove-profile") {
+    if (isDefaultProfile(edit.profile)) return draft;
+    return {
+      ...draft,
+      profiles: draft.profiles.filter((one) => one.name !== edit.profile),
+    };
+  }
   if (edit.kind === "judge")
     return {
       ...draft,
@@ -1271,9 +1320,7 @@ export const pinPicker = async (input: {
   const nextAlias = chosen === "" ? undefined : chosen;
   if (nextAlias === input.profile.pinned) return undefined;
   const chosenEntry =
-    nextAlias === undefined
-      ? undefined
-      : cleanDraft.models.find((one) => one.alias === nextAlias);
+    nextAlias === undefined ? undefined : cleanDraft.models.find((one) => one.alias === nextAlias);
   const chosenModel =
     chosenEntry !== undefined && input.models !== undefined
       ? findCatalogModel(input.models, chosenEntry.ref)
@@ -1407,6 +1454,122 @@ export const removeModelPicker = async (input: {
   return { kind: "remove-model", alias };
 };
 
+const profileNameProblem = (name: string, taken: ReadonlyArray<string>): string | undefined => {
+  if (name === "") return "Type a profile name. Use lowercase letters, digits and hyphens only.";
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(name))
+    return "Use lowercase letters, digits and hyphens only. The first character is a letter or a digit.";
+  if (taken.includes(name)) return `A profile named "${name}" already exists. Choose another name.`;
+  return undefined;
+};
+
+export const profileNamePrompt = async (input: {
+  readonly dialog: Dialog;
+  readonly taken: ReadonlyArray<string>;
+}): Promise<string | undefined> => {
+  let value = "";
+
+  for (;;) {
+    const pending = input.dialog.prompt({
+      title: "The name for the custom profile",
+      description:
+        "Use lowercase letters, digits and hyphens only. The first character is a letter or a digit.",
+      placeholder: "custom-profile",
+      value,
+    });
+    input.dialog.set({ size: "large", centered: true });
+    const answer = await pending;
+    if (answer === undefined) return undefined;
+    const trimmed = answer.trim();
+
+    const problem = profileNameProblem(trimmed, input.taken);
+    if (problem === undefined) return trimmed;
+
+    value = trimmed;
+    await input.dialog.alert({ title: "The profile name is not valid", message: problem });
+  }
+};
+
+const defaultEffortForDraft = (draft: Draft, models: ReadonlyArray<Model>): string => {
+  const cleanDraft = usableDraft(draft, models);
+  for (const entry of cleanDraft.models) {
+    const model = findCatalogModel(models, entry.ref);
+    if (model !== undefined) {
+      const declared = rungsOf(model);
+      if (declared.includes("medium")) return "medium";
+      if (declared.includes("low")) return "low";
+      if (declared[0] !== undefined) return declared[0];
+    }
+  }
+  return "medium";
+};
+
+export const addProfilePrompt = async (input: {
+  readonly dialog: Dialog;
+  readonly draft: Draft;
+  readonly models: ReadonlyArray<Model>;
+}): Promise<Edit | undefined> => {
+  const taken = input.draft.profiles.map((one) => one.name);
+  const name = await profileNamePrompt({ dialog: input.dialog, taken });
+  if (name === undefined) return undefined;
+
+  const matchPending = input.dialog.prompt({
+    title: `When to use "${name}" (match)`,
+    description: "Describe the moment when this profile fits, with the nouns a prompt would carry.",
+    placeholder: "Use when the task is ...",
+    value: "",
+  });
+  input.dialog.set({ size: "large", centered: true });
+  const matchAnswer = await matchPending;
+  if (matchAnswer === undefined) return undefined;
+
+  const whyPending = input.dialog.prompt({
+    title: `Why "${name}" exists (rationale)`,
+    description: "One sentence of rationale for the human.",
+    placeholder: "Why this profile exists ...",
+    value: "",
+  });
+  input.dialog.set({ size: "large", centered: true });
+  const whyAnswer = await whyPending;
+  if (whyAnswer === undefined) return undefined;
+
+  const match = matchAnswer.trim() === "" ? undefined : matchAnswer.trim();
+  const why = whyAnswer.trim() === "" ? undefined : whyAnswer.trim();
+  return {
+    kind: "add-profile",
+    name,
+    effort: defaultEffortForDraft(input.draft, input.models),
+    match,
+    why,
+  };
+};
+
+export const removeProfilePicker = async (input: {
+  readonly dialog: Dialog;
+  readonly draft: Draft;
+}): Promise<Edit | undefined> => {
+  const custom = input.draft.profiles.filter((one) => !isDefaultProfile(one.name));
+  if (custom.length === 0) return undefined;
+
+  const options: Array<DialogSelectOption<string>> = custom.map((profile) => ({
+    title: profile.name,
+    value: profile.name,
+    description: profile.match ?? profile.why ?? `Effort: ${profile.effort ?? "-"}`,
+    footer: isProfileEnabled(profile) ? "Enabled" : "Disabled",
+  }));
+
+  const pending = input.dialog.select({
+    title: "Remove a custom profile",
+    placeholder: "Search custom profiles",
+    options,
+    search: matches,
+  });
+  input.dialog.set({ size: "large", centered: true });
+  const chosen = await pending;
+  if (chosen === undefined) return undefined;
+
+  return { kind: "remove-profile", profile: chosen };
+};
+
 export const preview = (input: {
   readonly theme: ResolvedTheme;
   readonly draft: Draft;
@@ -1456,8 +1619,10 @@ export const controls = (input: {
             effortPicker({ dialog, draft: input.draft, models: input.models, profile: one }),
           ),
       },
-      field(theme, `profiles.${one.name}.effort`, () =>
-        one.effort ?? (one.pinned === undefined ? "Not set" : `Pinned to ${one.pinned}`),
+      field(
+        theme,
+        `profiles.${one.name}.effort`,
+        () => one.effort ?? (one.pinned === undefined ? "Not set" : `Pinned to ${one.pinned}`),
       ),
     ),
   );

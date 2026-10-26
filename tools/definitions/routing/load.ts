@@ -1,7 +1,7 @@
 import { dirname, resolve } from "node:path";
 import { Effect, Schema } from "effect";
 import { configPaths, projectPath } from "./locate";
-import { Config, type File, type ProfileEntry, type Tables } from "./types";
+import { Config, DEFAULT_PROFILES, type File, type ProfileEntry, type Tables } from "./types";
 
 /**
  * Effect renders a decode failure as a sentence plus an `at [...]` chain, which
@@ -74,6 +74,7 @@ export type Loaded = {
   readonly tables: Tables;
   readonly sources: ReadonlyArray<string>;
   readonly problems: ReadonlyArray<string>;
+  readonly configuredProfiles: boolean;
 };
 
 /**
@@ -87,20 +88,31 @@ export type Loaded = {
 export const loadProject = (directory: string): Effect.Effect<Loaded> =>
   Effect.gen(function* () {
     const path = yield* projectPath(directory);
-    if (path === undefined) return { tables: emptyTables(), sources: [], problems: [] };
+    if (path === undefined)
+      return { tables: emptyTables(), sources: [], problems: [], configuredProfiles: false };
     const found = yield* read(path);
-    if (found === undefined) return { tables: emptyTables(), sources: [], problems: [] };
+    if (found === undefined)
+      return { tables: emptyTables(), sources: [], problems: [], configuredProfiles: false };
     const decoded = decode(found.path, found.text);
     if (decoded.problem !== undefined)
-      return { tables: emptyTables(), sources: [], problems: [decoded.problem] };
-    if (decoded.file === undefined) return { tables: emptyTables(), sources: [], problems: [] };
+      return {
+        tables: emptyTables(),
+        sources: [],
+        problems: [decoded.problem],
+        configuredProfiles: false,
+      };
+    if (decoded.file === undefined)
+      return { tables: emptyTables(), sources: [], problems: [], configuredProfiles: false };
+    const configuredProfiles =
+      decoded.file.profiles !== undefined && Object.keys(decoded.file.profiles).length > 0;
+    const settledProfiles = settle(decoded.file.profiles, one);
     return {
       tables: {
         provider: decoded.file.provider,
         judge: decoded.file.judge === null ? undefined : decoded.file.judge,
         setup: decoded.file.setup === undefined ? undefined : { from: found.path },
         models: settle(decoded.file.models, (value) => value),
-        profiles: settle(decoded.file.profiles, one),
+        profiles: configuredProfiles ? settledProfiles : { ...DEFAULT_PROFILES },
         dictionary:
           decoded.file.dictionary === undefined || decoded.file.dictionary === null
             ? undefined
@@ -111,6 +123,7 @@ export const loadProject = (directory: string): Effect.Effect<Loaded> =>
       },
       sources: [found.path],
       problems: [],
+      configuredProfiles,
     };
   });
 
@@ -124,6 +137,7 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
     // value standing.
     let models: Record<string, string | null> = {};
     let profiles: Record<string, ProfileEntry | null> = {};
+    let configuredProfiles = false;
     let provider: string | undefined;
     // A judge is asked for or not asked for. A file that says nothing leaves an
     // earlier file's answer standing, and a file that says `null` removes it,
@@ -148,6 +162,9 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
       sources.push(source.path);
       models = { ...models, ...read.file.models };
       profiles = { ...profiles, ...read.file.profiles };
+      if (read.file.profiles !== undefined && Object.keys(read.file.profiles).length > 0) {
+        configuredProfiles = true;
+      }
       if (read.file.provider !== undefined) provider = read.file.provider;
       if (read.file.judge !== undefined)
         judge = read.file.judge === null ? undefined : read.file.judge;
@@ -166,16 +183,22 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
       }
     }
 
+    const settledProfiles = settle(profiles, one);
+
     return {
       tables: {
         provider,
         judge,
         setup,
         models: settle(models, (value) => value),
-        profiles: settle(profiles, one),
+        profiles:
+          sources.length > 0 && !configuredProfiles && setup === undefined
+            ? { ...DEFAULT_PROFILES }
+            : settledProfiles,
         dictionary,
       },
       sources,
       problems,
+      configuredProfiles,
     };
   });

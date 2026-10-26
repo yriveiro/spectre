@@ -17,7 +17,7 @@ import {
 } from "../../tui/controls";
 import { type Draft, type Model, type Resolution, resolve as resolveDraft } from "../../tui/data";
 import { sidebarSection, subagentFooter, subagentLine } from "../../tui/index";
-import { type EntryRow, layoutMetrics, page, type TabId } from "../../tui/page";
+import { type EntryRow, layoutMetrics, type ProfileRow, page, type TabId } from "../../tui/page";
 
 const GREY = RGBA.fromInts(200, 200, 200, 255);
 const RAISED = RGBA.fromInts(40, 40, 48, 255);
@@ -157,6 +157,7 @@ const host = (answer?: string) => {
 const frame = async (input: {
   readonly answer?: string;
   readonly tab?: TabId;
+  readonly rows?: ReadonlyArray<ProfileRow>;
   readonly draft?: Draft;
   readonly models?: ReadonlyArray<EntryRow>;
   readonly catalogue?: ReadonlyArray<Model>;
@@ -176,7 +177,7 @@ const frame = async (input: {
         value: context as never,
         get children() {
           return page({
-            rows,
+            rows: input.rows ?? rows,
             models: input.models ?? entries,
             catalogue: input.catalogue ?? models,
             draft: input.draft ?? draft,
@@ -208,6 +209,7 @@ describe("the modal draws what the session would spend", () => {
     expect(drawn).toContain("Judge:");
     expect(drawn).toContain("jev-1.13-free");
     expect(drawn).toContain("(○) Disabled (no OPENCODE_KEY)");
+    expect(drawn).toContain("Configured (2)");
     expect(drawn).toContain("Profiles (2)");
     expect(drawn).toContain("Allowlist (2)");
     expect(drawn).toContain("Preview");
@@ -486,6 +488,69 @@ describe("the page changes the draft and writes it only when asked", () => {
     await setup.flush();
     expect(changes[1]?.models.map((one) => one.alias)).toEqual(["glm-flash"]);
     await setup.dispose();
+  });
+
+  test("the Profiles tab lists default and custom profiles, toggles enabled state, and adds or removes custom profiles", async () => {
+    const changes: Array<Draft> = [];
+    const { setup, asked } = await frame({
+      tab: "profiles",
+      answer: "custom-one",
+      onChange: (next) => {
+        changes.push(next);
+      },
+    });
+    const drawn = setup.captureCharFrame();
+    expect(drawn).toContain("Configured (2)");
+    expect(drawn).toContain("Profiles (2)");
+    expect(drawn).toContain("Kind");
+    expect(drawn).toContain("Status");
+    expect(drawn).toContain("When to use");
+    expect(drawn).toContain("worker");
+    expect(drawn).toContain("default");
+    expect(drawn).toContain("pinned");
+    expect(drawn).toContain("custom");
+    expect(drawn).toContain("[●] On");
+    expect(drawn).toContain("Space Toggle");
+    expect(drawn).toContain("Add profile");
+    expect(drawn).toContain("Remove profile");
+
+    setup.mockInput.pressKey(" ");
+    await setup.flush();
+    expect(changes[0]?.profiles.find((one) => one.name === "worker")?.enabled).toBe(false);
+
+    setup.mockInput.pressKey("+");
+    await setup.flush();
+    expect(asked).toContain("The name for the custom profile");
+    expect(asked).toContain('When to use "custom-one" (match)');
+    expect(asked).toContain('Why "custom-one" exists (rationale)');
+    expect(changes[1]?.profiles.map((one) => one.name)).toEqual(["worker", "pinned", "custom-one"]);
+
+    const lines = drawn.split("\n");
+    const customRow = lines.findIndex((one) => one.includes("pinned") && one.includes("✕"));
+    expect(customRow).toBeGreaterThan(-1);
+    const customLine = lines[customRow];
+    if (customLine === undefined) throw new Error("the frame has no pinned row");
+    await setup.mockMouse.click(customLine.indexOf("✕"), customRow);
+    await setup.flush();
+    expect(changes[2]?.profiles.map((one) => one.name)).toEqual(["worker"]);
+    await setup.dispose();
+
+    const toggledDraft = changes[0];
+    if (toggledDraft === undefined) throw new Error("expected toggled draft");
+    const { setup: configuredSetup } = await frame({
+      tab: "configured",
+      draft: toggledDraft,
+      rows: [
+        { profile: toggledDraft.profiles[0] ?? first, resolution: spent },
+        { profile: toggledDraft.profiles[1] ?? second, resolution: rows[1]?.resolution },
+      ],
+    });
+    const configuredDrawn = configuredSetup.captureCharFrame();
+    expect(configuredDrawn).toContain("Configured (1)");
+    expect(configuredDrawn).toContain("Profiles (2)");
+    expect(configuredDrawn).not.toContain("acme/muse-spark-1.3#high");
+    expect(configuredDrawn).toContain("pinned");
+    await configuredSetup.dispose();
   });
 
   test("the provider selector uses the same table submodal style as the effort selector", async () => {

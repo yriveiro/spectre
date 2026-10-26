@@ -5,7 +5,9 @@ import { createSignal } from "solid-js";
 import { applied, isProviderAvailable, providerPicker, usableDraft } from "./controls.tsx";
 import {
   catalogue,
+  configuredProfiles,
   type Draft,
+  defaultProfiles,
   normalizeCost,
   type Resolution,
   read,
@@ -25,7 +27,7 @@ type Editable<Value> =
 
 type MutableDraft = Editable<Draft>;
 
-const EMPTY: Draft = { provider: undefined, models: [], profiles: [] };
+const EMPTY: Draft = { provider: undefined, models: [], profiles: defaultProfiles(true) };
 
 const PAGE = "Routing";
 
@@ -43,7 +45,10 @@ const copy = (draft: Draft): MutableDraft => ({
     alias: one.alias,
     ref: one.ref,
   })),
-  profiles: (Array.isArray(draft.profiles) ? draft.profiles : []).map((one) => ({
+  profiles: (Array.isArray(draft.profiles) && draft.profiles.length > 0
+    ? draft.profiles
+    : defaultProfiles(true)
+  ).map((one) => ({
     name: one.name,
     effort: one.effort,
     match: one.match,
@@ -54,6 +59,7 @@ const copy = (draft: Draft): MutableDraft => ({
         : { effort: one.crosscheck.effort, prefer: one.crosscheck.prefer },
     agent: one.agent,
     pinned: one.pinned,
+    enabled: one.enabled,
   })),
 });
 
@@ -302,7 +308,7 @@ export default Plugin.define({
     }
 
     const draft: MutableDraft = copy(stored);
-    let activeTab: TabId = "profiles";
+    let activeTab: TabId = "configured";
     let selectedRow = 0;
 
     const [revision, setRevision] = createSignal(0);
@@ -348,9 +354,10 @@ export default Plugin.define({
     const renderModal = () => {
       const models = catalogue(listed());
       const clean = usableDraft(draft, models);
+      const active = configuredProfiles(clean);
       const found = resolve(clean, models);
 
-      const rows = clean.profiles.map((profile, atIndex) => ({
+      const rows = active.map((profile, atIndex) => ({
         profile,
         resolution: found[atIndex] ?? absent(profile.name),
       }));
@@ -430,9 +437,10 @@ export default Plugin.define({
       revision();
       const models = catalogue(listed(sessionID));
       const clean = usableDraft(draft, models);
-      if (clean.profiles.length === 0) return [];
+      const active = configuredProfiles(clean);
+      if (active.length === 0) return [];
       const found = resolve(clean, models);
-      return clean.profiles.map((profile, atIndex) => found[atIndex] ?? absent(profile.name));
+      return active.map((profile, atIndex) => found[atIndex] ?? absent(profile.name));
     };
 
     context.ui.slot({
@@ -461,7 +469,7 @@ export default Plugin.define({
           line: () =>
             subagentLine({
               session: context.data.session.get(input.sessionID),
-              profiles: draft.profiles,
+              profiles: configuredProfiles(draft),
               resolutions: resolvedRows(input.sessionID),
             }),
         }),
