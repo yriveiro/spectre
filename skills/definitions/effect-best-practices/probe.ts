@@ -15,6 +15,7 @@
  */
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { HttpClientResponse } from "effect/http";
+import { Command } from "effect/cli";
 import {
   Brand,
   Config,
@@ -113,6 +114,10 @@ const recoveredMany = getUser(id).pipe(
   Effect.catchTags({ UserNotFound: () => Effect.succeed("absent") }),
 );
 const died = Effect.orDie(recovered);
+const caught = getUser(id).pipe(
+  Effect.catch(() => Effect.succeed({ name: "anonymous" })),
+);
+const failed = Effect.fail(new UserNotFound({ userId: id }));
 
 /**
  * Phase E: build the service, compose the layer.
@@ -166,9 +171,29 @@ const forked = Effect.gen(function* () {
   yield* Effect.addFinalizer(() => Fiber.interrupt(fiber))
 });
 
+const forkedScoped = Effect.gen(function* () {
+  yield* Effect.forkScoped(work)
+});
+
+const forkedChild = Effect.gen(function* () {
+  yield* Effect.forkChild(work)
+});
+
+const forkedIn = Effect.gen(function* () {
+  const scope = yield* Scope.make()
+  yield* Effect.forkIn(work, scope)
+});
+
+const scopedExplicitly = Effect.scoped(work);
+
 const scoped = Effect.gen(function* () {
   const scope = yield* Scope.make()
   return yield* Scope.provide(scope)(Effect.succeed(1))
+});
+
+const scopedUsed = Effect.gen(function* () {
+  const scope = yield* Scope.make()
+  return yield* Scope.use(scope)(Effect.succeed(1))
 });
 
 const pipeline = ChildProcess.make`cat file.txt`.pipe(
@@ -185,8 +210,18 @@ const Port = Config.Number("PORT").pipe(Config.withDefault(3000));
 const Secret = Config.Redacted("API_KEY");
 const fromSchema = Config.schema(Schema.String, "NAME");
 const provider: ConfigProvider.ConfigProvider = ConfigProvider.fromEnv();
+const unwrapped = Config.unwrap({ port: Port, secret: Secret });
 
-const secret = Effect.map(Config.unwrap(Secret), Redacted.value);
+const secret = Effect.map(Secret, Redacted.value);
+
+declare const response: HttpClientResponse.HttpClientResponse;
+const decodedBody = HttpClientResponse.schemaBodyJson(Schema.String)(response);
+
+/**
+ * `Command` builds a command-line program, which is the distinction the body draws
+ * against a child process. It is not the process module's `ChildProcess`.
+ */
+const versionCommand = Command.make("version");
 
 /**
  * The Bun rows the body points at. `AGENTS.md` owns the table; this holds the four the body
@@ -214,6 +249,8 @@ export {
   UserNotFound,
   getUser,
   died,
+  caught,
+  failed,
   Users,
   allLayers,
   provided,
@@ -221,13 +258,21 @@ export {
   program,
   timed,
   forked,
+  forkedScoped,
+  forkedChild,
+  forkedIn,
+  scopedExplicitly,
   scoped,
+  scopedUsed,
   spawned,
   pipeline,
   Port,
   fromSchema,
   provider,
+  unwrapped,
   secret,
+  decodedBody,
+  versionCommand,
   env,
   file,
   written,

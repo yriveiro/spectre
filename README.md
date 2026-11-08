@@ -5,7 +5,7 @@ as an OpenCode plugin.
 
 ## Requirements
 
-- OpenCode `>= 2.1.1`
+- OpenCode `>= 2.2.6`
 - `experimental.todo: true` in `opencode.jsonc` when you want the skills'
   multi-step tracking. OpenCode 2.1.1 ships the `todowrite` tool behind that
   flag, and twenty playbooks open a todolist with one entry per phase. Without

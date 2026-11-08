@@ -2,7 +2,7 @@
  * The version `effect-best-practices/SKILL.md` was checked against.
  *
  * The body makes claims about one Effect build: an export exists, a call takes a type
- * parameter, a module carries a name. Every claim is a claim about `effect@4.0.1` and no
+ * parameter, a module carries a name. Every claim is a claim about `effect@4.1.0` and no
  * other version. This module is where that version is written down, so the claim has a
  * single home and a test can compare it against what is installed.
  *
@@ -16,6 +16,6 @@
  * re-read the catalog and expect the pin to move.
  */
 export const VERIFIED = {
-  opencode: "2.1.1",
-  effect: "4.0.1",
+  opencode: "2.2.6",
+  effect: "4.1.0",
 } as const;

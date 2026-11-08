@@ -55,7 +55,7 @@ Two schemas, so a declaration can be wrong in a way nothing at the call reports:
 | --------- | -------------- | ----------------------- |
 | `Schema.URL` | `{"type":"string"}` | **refused** |
 | `Schema.String` | `{"type":"string"}` | accepted |
-| `Schema.Int` | `{"type":"integer"}` | refused |
+| `Schema.Int` | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` | refused |
 | `Schema.Trim` | `{"type":"string"}` | accepted, as `"https://example.com"` |
 
 `Schema.URL` is that trap. Its Type is a `URL` **object**, not a string: a string
@@ -88,7 +88,7 @@ one transform measured, and it is why a schema is worth reading before you trust
 what arrived.
 
 You can check a declaration in this repository's own process, because that decoder
-runs on the same `effect@4.0.1` the plugin pins:
+runs on the same `effect@4.1.0` the plugin pins:
 
 ```js
 import { Schema } from "effect";
@@ -100,7 +100,7 @@ Schema.decodeUnknownOption(Schema.URL)("https://x.com")._tag; // "None" — refu
 
 The host redirects exactly two packages to its own runtime copy —
 `runtimePackages = ["effect", "@opencode/plugin"]` in
-`@opencode/plugin/dist/runtime-modules.js` at 2.1.1. `@opencode/schema` is not
+`@opencode/plugin/dist/runtime-modules.js` at 2.2.6. `@opencode/schema` is not
 one of them, so this repo's pinned copy builds the `Tool.Error` a tool throws,
 not the host. The host tests `error instanceof Tool.Error`
 (`packages/core/src/tool/runtime.ts:39`) and, when that is false, re-wraps the
@@ -233,17 +233,17 @@ rather than a type name. A script that walked for tags found nothing and reporte
 success, which is worse than having no check: a check that cannot fail.
 
 That walk is gone. `Schema.toJsonSchemaDocument` is what converts a schema now,
-and it runs in this repository's own process, on the same `effect@4.0.1`.
+and it runs in this repository's own process, on the same `effect@4.1.0`.
 So the pre-check that could not be written can be written:
 
 ```js
 import { Schema } from "effect";
 console.log(JSON.stringify(Schema.toJsonSchemaDocument(Schema.Int).schema));
-// {"type":"integer"}
+// {"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}
 ```
 
 That answers what the model sees. For what the host does with a value, run the
-same decoder the host runs, because it is the same `effect@4.0.1`:
+same decoder the host runs, because it is the same `effect@4.1.0`:
 
 ```js
 Schema.decodeUnknownOption(Schema.Int)(1)._tag;     // "Some"

@@ -1,4 +1,4 @@
-import { Message } from "@opencode/ai";
+import { Message } from "@opencode/ai/effect";
 import type { Plugin } from "@opencode/plugin/effect";
 import { AbsolutePath } from "@opencode/schema/schema";
 import { Effect, Stream } from "effect";

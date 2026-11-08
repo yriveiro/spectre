@@ -1,6 +1,6 @@
 # Effect best practices
 
-The Effect this repo ships is `effect` pinned to exactly `4.0.1` in `package.json`, and that
+The Effect this repo ships is `effect` pinned to exactly `4.1.0` in `package.json`, and that
 pin is the target every spelling below holds to.
 
 This body replaces the `effectts-skills` repo for this codebase.
@@ -39,7 +39,7 @@ together, and `/effect-align` is the routine that does it.
 ## Phase B: Model the data
 
 Default to `Schema.Struct`. Reach for `Schema.Class` only when the value carries behavior the
-shape cannot express, which means methods, `Equal`, `Hash`, or a primary key. Reach for
+shape cannot express, which means methods or a primary key. Reach for
 `Schema.TaggedClass` when the value is one arm of a union, because `_tag` is what
 `Match.valueTags` matches on.
 
@@ -110,7 +110,7 @@ One type per distinct failure reason, each carrying the fields a reader needs to
 generic error forces every handler to re-derive which failure it was holding.
 
 Recover with the tag, so the error channel stays typed. `Effect.catchTag` handles one tag and
-`Effect.catchTags` handles a set. `Effect.catchAll` erases the channel you just built, so it
+`Effect.catchTags` handles a set. `Effect.catch` erases the channel you just built, so it
 is the wrong tool inside a service.
 
 ```ts
@@ -168,9 +168,9 @@ appLayer.pipe(Layer.provideMerge(DatabaseLayer))
 Layer.mergeAll(A, B, C)
 ```
 
-`Layer.provideMerge` keeps the provider's own requirements available to the consumer, which is
-the whole difference from `provide`. The package's own note says to prefer `provide` when the
-dependency should stay private.
+`Layer.provideMerge` keeps the provider's own services in the layer's output, so the consumer
+can use them too, which is the whole difference from `provide`. The package's own note says to
+prefer `provide` when the dependency should stay private.
 
 ## Phase F: Compose the effect
 
@@ -210,7 +210,7 @@ const fiber = yield* Effect.forkDetach(work)
 yield* Effect.addFinalizer(() => Fiber.interrupt(fiber))
 ```
 
-A detached fiber whose scope closes before it finishes is the leak that finalizer prevents.
+A detached fiber still running when the enclosing scope closes is the leak that finalizer prevents.
 Never wrap a long-running child process in `Effect.scoped` and then fork the result, because
 the scope closes on the way out and the process becomes unreachable. Make the scope with
 `Scope.make`, hand it to `Scope.provide` or `Scope.use`, and fork only the collection of what
@@ -243,9 +243,10 @@ const provider = ConfigProvider.fromEnv()
 ```
 
 `Config.schema(codec, path)` builds one from a schema, which is the route to take when the
-value needs validation rather than only a type. `Config.unwrap` turns a `Config<Redacted<A>>`
-into an `Effect<Redacted<A>>`, and `Redacted.value` is the one place the secret comes out. A
-secret in a log line is the failure this prevents.
+value needs validation rather than only a type. A `Config<A>` is an `Effect<A, ConfigError>`,
+so `Effect.map(Secret, Redacted.value)` is where the secret comes out, and `Config.unwrap`
+builds one `Config` from a `Config.Wrap`, a record of `Config`s. A secret in a log line is the
+failure this prevents.
 
 For HTTP, build the client once inside the service's layer and decode every response through a
 schema. `HttpClientResponse.schemaBodyJson(Schema)` against a hand-written `JSON.parse` and a
