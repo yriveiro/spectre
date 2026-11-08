@@ -764,6 +764,7 @@ export const profileInfoModal = (input: {
     {
       flexDirection: "column",
       width: "100%",
+      height: "100%",
       border: true,
       borderStyle: "rounded",
       borderColor: colors.borderOuter,
@@ -777,13 +778,17 @@ export const profileInfoModal = (input: {
         paddingRight: 3,
         paddingTop: 1,
         paddingBottom: 1,
-        gap: 1,
         border: ["bottom"],
         borderColor: colors.border,
       },
       h(
         "box",
-        { flexDirection: "row", justifyContent: "space-between", width: "100%" },
+        {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          width: "100%",
+          paddingBottom: 1,
+        },
         h(
           "text",
           { fg: colors.cyan, attributes: TextAttributes.BOLD },
@@ -793,13 +798,23 @@ export const profileInfoModal = (input: {
       ),
       h(
         "box",
-        { flexDirection: "row", justifyContent: "space-between", width: "100%" },
+        {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          width: "100%",
+          paddingBottom: 1,
+        },
         field(dialogTheme, "Effort", () => effortText),
         field(dialogTheme, "Agent", () => profile.agent),
       ),
       h(
         "box",
-        { flexDirection: "row", justifyContent: "space-between", width: "100%" },
+        {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          width: "100%",
+          paddingBottom: 1,
+        },
         field(dialogTheme, "Selected model", () => modelText),
         field(dialogTheme, "Cost", () => costText),
       ),
@@ -810,14 +825,18 @@ export const profileInfoModal = (input: {
       ),
     ),
     h(
-      "box",
+      "scrollbox",
       {
-        flexDirection: "column",
+        width: "100%",
+        flexGrow: 1,
+        flexShrink: 1,
+        minHeight: 0,
         paddingLeft: 3,
         paddingRight: 3,
         paddingTop: 1,
         paddingBottom: 1,
-        gap: 1,
+        contentOptions: { flexDirection: "column", gap: 1, width: "100%" },
+        focused: () => false,
       },
       h(
         "box",

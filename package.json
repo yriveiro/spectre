@@ -18,7 +18,7 @@
     "tools"
   ],
   "engines": {
-    "opencode": ">=2.1.1"
+    "opencode": ">=2.2.6"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -29,24 +29,24 @@
     "d3.vendor": "bun run scripts/sync-d3.ts"
   },
   "dependencies": {
-    "@opencode/ai": "2.1.1",
-    "@opencode/plugin": "2.1.1",
-    "@opencode/schema": "2.1.1",
-    "effect": "4.0.1"
+    "@opencode/ai": "2.2.6",
+    "@opencode/plugin": "2.2.6",
+    "@opencode/schema": "2.2.6",
+    "effect": "4.1.0"
   },
   "devDependencies": {
-    "@opencode/theme": "2.1.2",
-    "@opentui/core": "0.6.6",
-    "@opentui/solid": "0.6.6",
+    "@opencode/theme": "2.2.6",
+    "@opentui/core": "0.8.1",
+    "@opentui/solid": "0.8.1",
     "@types/bun": "1.4.2",
     "@types/node": "26.6.2",
     "solid-js": "1.9.12",
     "typescript": "7.0.2"
   },
   "peerDependencies": {
-    "@opencode/theme": ">=2.1.1",
-    "@opentui/core": ">=0.6.6",
-    "@opentui/solid": ">=0.6.6",
+    "@opencode/theme": ">=2.2.6",
+    "@opentui/core": ">=0.8.1",
+    "@opentui/solid": ">=0.8.1",
     "solid-js": ">=1.9.12"
   },
   "peerDependenciesMeta": {

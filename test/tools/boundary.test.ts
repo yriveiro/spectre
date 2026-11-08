@@ -8,7 +8,7 @@ import { Schema } from "effect";
  * `packages/core/src/tool/runtime.ts:156` builds the JSON Schema separately and only
  * describes the tool.
  *
- * So these assert the two disagree, on the same `effect@4.0.1` the plugin pins.
+ * So these assert the two disagree, on the same `effect@4.1.0` the plugin pins.
  * A bump that changes either side fails here rather than in a session.
  */
 
@@ -28,7 +28,11 @@ describe("what the model is shown", () => {
   });
 
   test("Int and String describe themselves", () => {
-    expect(shown(Schema.Int as never)).toEqual({ type: "integer" });
+    expect(shown(Schema.Int as never)).toEqual({
+      type: "integer",
+      minimum: -9007199254740991,
+      maximum: 9007199254740991,
+    });
     expect(shown(Schema.String as never)).toEqual({ type: "string" });
   });
 });
