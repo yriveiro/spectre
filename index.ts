@@ -1,12 +1,6 @@
-import { Plugin } from "@opencode/plugin/effect";
-import { Effect } from "effect";
+import { defineBundle } from "./packages/core/index.ts";
 
-export default Plugin.define({
+export default defineBundle({
   id: "yriveiro.spectre",
-  effect: (ctx) =>
-    Effect.gen(function* () {
-      yield* Effect.logInfo("spectre loaded", {
-        version: ctx.app.version,
-      });
-    }),
-});
+  blocks: [],
+}).plugin;

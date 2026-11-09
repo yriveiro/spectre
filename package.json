@@ -8,16 +8,22 @@
     ".": "./index.ts"
   },
   "files": [
-    "index.ts"
+    "index.ts",
+    "packages/core/*.ts"
+  ],
+  "workspaces": [
+    "packages/*"
   ],
   "engines": {
     "opencode": ">=2.2.6"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "test": "bun test",
+    "typecheck": "tsc6 --noEmit"
   },
   "dependencies": {
     "@opencode/plugin": "2.2.6",
+    "@opencode/schema": "2.2.6",
     "effect": "4.1.0"
   },
   "devDependencies": {
