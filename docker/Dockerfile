@@ -18,6 +18,6 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 WORKDIR /workspace
 EXPOSE 4096
 HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=12 \
-  CMD curl -sS -o /dev/null http://127.0.0.1:4096/ || exit 1
+  CMD ["curl", "-sS", "-o", "/dev/null", "http://127.0.0.1:4096/"]
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["serve", "--hostname", "0.0.0.0", "--port", "4096"]
