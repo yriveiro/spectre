@@ -77,11 +77,29 @@ export const defaultProfiles = (enabled = true): ReadonlyArray<Profile> =>
 
 export type Resolution = {
   readonly profile: string;
+  readonly alias: string | undefined;
   readonly ref: string | undefined;
   readonly rung: string | undefined;
   readonly cost: string | undefined;
   readonly crosscheck: string | undefined;
   readonly problem: string | undefined;
+};
+
+export const EFFORT_DOT_LEVELS = 4;
+
+const EFFORT_DOT_FILL: Readonly<Record<string, number>> = {
+  none: 0,
+  minimal: 1,
+  low: 1,
+  medium: 2,
+  high: 3,
+  xhigh: 3,
+  max: 4,
+};
+
+export const effortDots = (rung: string | undefined): string => {
+  const filled = rung === undefined ? 0 : (EFFORT_DOT_FILL[rung] ?? 0);
+  return "●".repeat(filled) + "○".repeat(Math.max(0, EFFORT_DOT_LEVELS - filled));
 };
 
 export const formatCost = (costInput: number, costOutput: number): string =>
@@ -207,6 +225,7 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
     if (found.resolution === undefined)
       return {
         profile: profile.name,
+        alias: undefined,
         ref: undefined,
         rung: undefined,
         cost: undefined,
@@ -218,6 +237,7 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
     const crosscheck = found.resolution.crosscheck;
     return {
       profile: profile.name,
+      alias: primary.alias,
       ref: spendRef(primary),
       rung: primary.rung,
       cost: formatCost(primary.costInput, primary.costOutput),

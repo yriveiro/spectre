@@ -8,6 +8,7 @@ import {
   configuredProfiles,
   type Draft,
   defaultProfiles,
+  effortDots,
   normalizeCost,
   type Resolution,
   read,
@@ -72,17 +73,13 @@ const assignDraft = (target: MutableDraft, source: MutableDraft): void => {
 
 const absent = (name: string): Resolution => ({
   profile: name,
+  alias: undefined,
   ref: undefined,
   rung: undefined,
   cost: undefined,
   crosscheck: undefined,
   problem: "The resolver returned no row",
 });
-
-const shortRef = (ref: string): string => {
-  const slash = ref.indexOf("/");
-  return slash === -1 ? ref : ref.slice(slash + 1);
-};
 
 const summaryOf = (rows: ReadonlyArray<Resolution>, open: boolean): string => {
   if (open) return "";
@@ -101,7 +98,8 @@ const sidebarRow = (
   const errorColor = theme.text.feedback.error?.base ?? theme.text.feedback.warning.base;
   const dotColor = failed ? errorColor : (theme.text.feedback.success?.base ?? theme.text.base);
   const statusColor = failed ? errorColor : theme.text.muted;
-  const right = failed ? "Error" : row.ref === undefined ? "-" : shortRef(row.ref);
+  const aliasText = failed ? "Error" : (row.alias ?? row.ref ?? "-");
+  const dots = failed ? "" : effortDots(row.rung);
 
   return h(
     "box",
@@ -132,7 +130,16 @@ const sidebarRow = (
         wrapMode: "none",
         flexShrink: 0,
       },
-      right,
+      aliasText,
+    ),
+    h(
+      "text",
+      {
+        fg: statusColor,
+        wrapMode: "none",
+        flexShrink: 0,
+      },
+      dots,
     ),
   );
 };
@@ -236,9 +243,12 @@ export const subagentLine = (input: {
   if (ref === undefined) return undefined;
 
   const name = input.profiles[index]?.name ?? input.session.agent ?? "subagent";
+  const matched = row?.ref === ref;
+  const aliasText = matched ? (row?.alias ?? ref) : ref;
+  const dots = matched ? effortDots(row?.rung) : effortDots(input.session.model?.variant);
   const normalizedCost = normalizeCost(row?.cost);
-  const cost = normalizedCost !== undefined && row?.ref === ref ? `, ${normalizedCost}` : "";
-  return `${name} uses ${ref}${cost}`;
+  const cost = normalizedCost !== undefined && matched ? `, ${normalizedCost}` : "";
+  return `${name} ${aliasText} ${dots}${cost}`;
 };
 
 export const subagentFooter = (input: {
