@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { catalogue, read, resolve, save } from "../../tui/data";
+import { catalogue, effortDots, read, resolve, save } from "../../tui/data";
 
 const scratch = () => join(Bun.env.TMPDIR ?? "/tmp", `spectre-tui-data-${crypto.randomUUID()}`);
 
@@ -176,6 +176,7 @@ describe("the page resolves what the tool resolves", () => {
     const at = await project();
     const rows = resolve(await read(at), catalogue(models));
     const mechanical = rows.find((one) => one.profile === "mechanical");
+    expect(mechanical?.alias).toBe("deepseek-flash");
     expect(mechanical?.ref).toBe("opencode-go/deepseek-v4.1-flash#low");
     expect(mechanical?.rung).toBe("low");
     expect(mechanical?.cost).toBe("$0.15/$0.6");
@@ -202,6 +203,23 @@ describe("the page resolves what the tool resolves", () => {
     const rows = resolve(await read(at), catalogue(models));
     const empty = rows.find((one) => one.profile === "empty");
     expect(empty?.problem).toContain("states no effort and no model");
+  });
+});
+
+describe("the effort dots fit the four levels the defaults spend", () => {
+  test("low, medium, high and max each fill one more dot", () => {
+    expect(effortDots("low")).toBe("●○○○");
+    expect(effortDots("medium")).toBe("●●○○");
+    expect(effortDots("high")).toBe("●●●○");
+    expect(effortDots("max")).toBe("●●●●");
+  });
+
+  test("the ends and the neighbours collapse onto the same four dots", () => {
+    expect(effortDots("none")).toBe("○○○○");
+    expect(effortDots(undefined)).toBe("○○○○");
+    expect(effortDots("minimal")).toBe("●○○○");
+    expect(effortDots("xhigh")).toBe("●●●○");
+    expect(effortDots("turbo")).toBe("○○○○");
   });
 });
 

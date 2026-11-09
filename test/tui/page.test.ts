@@ -99,6 +99,7 @@ const draft: Draft = {
 
 const spent: Resolution = {
   profile: "worker",
+  alias: "muse",
   ref: "acme/muse-spark-1.3#high",
   rung: "high",
   cost: "$0.1/$0.2",
@@ -115,6 +116,7 @@ const rows = [
     profile: second,
     resolution: {
       profile: "pinned",
+      alias: undefined,
       ref: undefined,
       rung: undefined,
       cost: undefined,
@@ -838,6 +840,7 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
     spent,
     {
       profile: "pinned",
+      alias: undefined,
       ref: undefined,
       rung: undefined,
       cost: undefined,
@@ -870,7 +873,9 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
     expect(expanded).toContain("▼");
     expect(expanded).toContain("Routing");
     expect(expanded).toContain("worker");
-    expect(expanded).toContain("muse-spark-1.3#high");
+    expect(expanded).toContain("muse");
+    expect(expanded).toContain("●●●○");
+    expect(expanded).not.toContain("muse-spark-1.3#high");
     expect(expanded).toContain("pinned");
     expect(expanded).toContain("Error");
 
@@ -904,7 +909,8 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
 
     const collapsed = closedSetup.captureCharFrame();
     expect(collapsed).toContain("▶ Routing (1 active, 1 error)");
-    expect(collapsed).not.toContain("muse-spark-1.3#high");
+    expect(collapsed).not.toContain("muse");
+    expect(collapsed).not.toContain("●●●○");
     await closedSetup.dispose();
   });
 
@@ -933,16 +939,14 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
       profiles: draft.profiles,
       resolutions: sidebarRows,
     });
-    expect(childLine).toBe("worker uses acme/muse-spark-1.3#high, $0.1/$0.2");
+    expect(childLine).toBe("worker muse ●●●○, $0.1/$0.2");
 
     const childSetup = await testRender(
       () => subagentFooter({ theme: theme as never, line: () => childLine }),
       { width: 80, height: 2 },
     );
     await childSetup.renderOnce();
-    expect(childSetup.captureCharFrame()).toContain(
-      "Routing worker uses acme/muse-spark-1.3#high, $0.1/$0.2",
-    );
+    expect(childSetup.captureCharFrame()).toContain("Routing worker muse ●●●○, $0.1/$0.2");
     await childSetup.dispose();
   });
 });
