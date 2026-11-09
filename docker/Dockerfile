@@ -7,25 +7,16 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl git ripgrep \
   && rm -rf /var/lib/apt/lists/*
 RUN bun install -g --trust "@opencode/cli@${OPENCODE_VERSION}" \
-  && mkdir -p /opt/dist \
-  && cp "$(readlink -f /usr/local/bin/opencode)" /opt/dist/opencode \
-  && /opt/dist/opencode --version \
+  && opencode --version \
   && bun --version \
   && git --version \
   && rg --version \
   && curl --version
-COPY entrypoint.sh /opt/dist/entrypoint.sh
 
-FROM oven/bun:${BUN_VERSION}-slim
+FROM build
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl git ripgrep \
-  && rm -rf /var/lib/apt/lists/*
-
-COPY --from=build /opt/dist/opencode /usr/local/bin/opencode
-COPY --from=build /opt/dist/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh \
-  && opencode --version
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 WORKDIR /workspace
 EXPOSE 4096
