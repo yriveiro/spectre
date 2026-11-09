@@ -17,6 +17,7 @@ FROM build
 
 COPY opencode.json /root/.config/opencode/opencode.json
 COPY cli.json /root/.config/opencode/cli.json
+COPY service.json /root/.config/opencode/service.json
 
 WORKDIR /workspace
 EXPOSE 4096

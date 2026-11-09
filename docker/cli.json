@@ -1,7 +1,4 @@
 {
   "$schema": "https://opencode.ai/v2/cli.json",
-  "experimental": {
-    "new-designs": false,
-    "client-mcp": false
-  }
+  "experimental": {}
 }
