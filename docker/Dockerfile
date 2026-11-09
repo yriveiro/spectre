@@ -15,12 +15,11 @@ RUN bun install -g --trust "@opencode/cli@${OPENCODE_VERSION}" \
 
 FROM build
 
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY opencode.json /root/.config/opencode/opencode.json
 
 WORKDIR /workspace
 EXPOSE 4096
 HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=12 \
   CMD ["curl", "-sS", "-o", "/dev/null", "http://127.0.0.1:4096/"]
-ENTRYPOINT ["entrypoint.sh"]
+ENTRYPOINT ["opencode"]
 CMD ["serve", "--hostname", "0.0.0.0", "--port", "4096"]
