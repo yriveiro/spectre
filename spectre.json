@@ -1,27 +1,27 @@
 {
-  "provider": "github-copilot",
+  "provider": "opencode-go",
   "models": {
-    "argon": "github-copilot/gemini-4-argon",
-    "luna": "github-copilot/gpt-6-luna",
-    "grok47": "github-copilot/grok-4.7",
-    "haiku": "github-copilot/claude-haiku-5.5"
+    "muse13": "opencode-go/muse-spark-1.3-contributor",
+    "ds41f": "opencode-go/deepseek-v4.1-flash",
+    "iceman": "opencode-go/iceman-contributor-free",
+    "beam": "opencode-go/beam-free"
   },
   "profiles": {
     "mechanical": {
-      "effort": "low",
-      "model": "luna",
+      "effort": "none",
+      "model": "iceman",
       "match": "Use when the task is one command to run and one output to read, and the deliverable is what it said: run the tests, read the log, report the failure. Not for finding where something lives.",
       "why": "One command, one log, and a report. Nothing to decide, so the cheapest effort runs it; a wrong answer here shows up as a failed command rather than a wrong commit."
     },
     "search": {
-      "effort": "medium",
-      "model": "haiku",
+      "effort": "none",
+      "model": "iceman",
       "match": "Use when the task is to find where something lives, with grep for a symbol, a file to read, the call sites to name, or the blast radius to list. Not for a command to run.",
       "why": "Find where something lives: grep, read, name the call sites. A missed symbol costs a second pass over the repo, so it leads above the floor and escalates to the other model."
     },
     "worker": {
       "effort": "max",
-      "model": "luna",
+      "model": "beam",
       "crosscheck": {
         "effort": "high",
         "prefer": "free"
@@ -31,7 +31,7 @@
     },
     "judgment": {
       "effort": "high",
-      "model": "grok47",
+      "model": "ds41f",
       "crosscheck": {
         "effort": "high",
         "prefer": "free"
@@ -41,7 +41,7 @@
     },
     "thinking": {
       "effort": "max",
-      "model": "luna",
+      "model": "ds41f",
       "crosscheck": {
         "effort": "max"
       },
@@ -50,7 +50,7 @@
     },
     "deep": {
       "effort": "high",
-      "model": "argon",
+      "model": "ds41f",
       "crosscheck": {
         "effort": "max"
       },
@@ -58,8 +58,8 @@
       "why": "Architecture, a cross-cutting design, or a bug nobody has localized yet. The task that decides everything takes the top effort on every model rather than saving on the work that matters most."
     },
     "refactor": {
-      "effort": "xhigh",
-      "model": "grok47",
+      "effort": "max",
+      "model": "ds41f",
       "crosscheck": {
         "effort": "max",
         "prefer": "free"

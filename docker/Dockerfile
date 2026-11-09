@@ -20,9 +20,9 @@ COPY cli.json /root/.config/opencode/cli.json
 COPY service.json /root/.config/opencode/service.json
 
 WORKDIR /workspace
-EXPOSE 4096
+EXPOSE 14096
 ENV OPENCODE_SERVER_PASSWORD=opencode-test
 HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=12 \
-  CMD ["curl", "-sS", "-o", "/dev/null", "http://127.0.0.1:4096/"]
+  CMD ["curl", "-sS", "-o", "/dev/null", "http://127.0.0.1:14096/"]
 ENTRYPOINT ["opencode"]
-CMD ["serve", "--hostname", "0.0.0.0", "--port", "4096"]
+CMD ["serve", "--hostname", "0.0.0.0", "--port", "14096"]
