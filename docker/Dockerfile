@@ -1,12 +1,10 @@
 ARG BUN_VERSION=1.4.4
 ARG OPENCODE_VERSION=2.2.6
-ARG APT_DEPS="ca-certificates curl git ripgrep"
 FROM oven/bun:${BUN_VERSION}-slim AS build
 
-ARG APT_DEPS
 ARG OPENCODE_VERSION
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ${APT_DEPS} \
+  && apt-get install -y --no-install-recommends ca-certificates curl git ripgrep \
   && rm -rf /var/lib/apt/lists/*
 RUN bun install -g --trust "@opencode/cli@${OPENCODE_VERSION}" \
   && mkdir -p /opt/dist \
@@ -20,9 +18,8 @@ COPY entrypoint.sh /opt/dist/entrypoint.sh
 
 FROM oven/bun:${BUN_VERSION}-slim
 
-ARG APT_DEPS
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ${APT_DEPS} \
+  && apt-get install -y --no-install-recommends ca-certificates curl git ripgrep \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /opt/dist/opencode /usr/local/bin/opencode
