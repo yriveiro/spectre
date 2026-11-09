@@ -1,7 +1,7 @@
 ARG BUN_VERSION=1.4.4
 ARG OPENCODE_VERSION=2.2.6
 ARG APT_DEPS="ca-certificates curl git ripgrep"
-FROM oven/bun:${BUN_VERSION}-slim AS deps
+FROM oven/bun:${BUN_VERSION}-slim AS build
 
 ARG APT_DEPS
 ARG OPENCODE_VERSION
@@ -16,6 +16,7 @@ RUN bun install -g --trust "@opencode/cli@${OPENCODE_VERSION}" \
   && git --version \
   && rg --version \
   && curl --version
+COPY entrypoint.sh /opt/dist/entrypoint.sh
 
 FROM oven/bun:${BUN_VERSION}-slim
 
@@ -24,11 +25,10 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ${APT_DEPS} \
   && rm -rf /var/lib/apt/lists/*
 
-COPY --from=deps /opt/dist/opencode /usr/local/bin/opencode
-RUN opencode --version
-
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY --from=build /opt/dist/opencode /usr/local/bin/opencode
+COPY --from=build /opt/dist/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh \
+  && opencode --version
 
 WORKDIR /workspace
 EXPOSE 4096
