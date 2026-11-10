@@ -1,0 +1,7 @@
+.git
+.spectre
+node_modules
+eval/last-run.json
+eval/baseline.json
+*.log
+.DS_Store

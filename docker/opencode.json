@@ -1,0 +1,6 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "update": "disable",
+  "plugins": ["github:yriveiro/spectre"],
+  "experimental": {}
+}
