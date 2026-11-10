@@ -65,6 +65,15 @@ describe("the effect watcher reads the pin", () => {
     expect(await pinned(root)).toBeUndefined();
   });
 
+  test("it reads a dev pin when the dependency section is absent", async () => {
+    // Spectre itself declares effect as a peer plus a dev pin, so a manifest that carries
+    // only the dev section is the shape most projects have now.
+    const root = await manifest(
+      JSON.stringify({ devDependencies: { effect: "9.9.9", other: "1.0.0" } }),
+    );
+    expect(await pinned(root)).toBe("9.9.9");
+  });
+
   test("a half-written manifest is skipped rather than thrown", async () => {
     // An editor holding the buffer mid-save is the normal case here, and a throw would take
     // the watcher down for the rest of the session.

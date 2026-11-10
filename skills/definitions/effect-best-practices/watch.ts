@@ -33,8 +33,14 @@ const pinned = async (project: AbsolutePath) => {
   const file = Bun.file(join(project, PIN));
   if (!(await file.exists())) return undefined;
   try {
-    const parsed = (await file.json()) as { dependencies?: Record<string, string> };
-    return parsed.dependencies?.["effect"];
+    const parsed = (await file.json()) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    // Either section counts. A project that runs effect through a published plugin declares
+    // it as a dependency, one that only typechecks with it declares it as a dev dependency,
+    // and the drift this watches for is the same in both.
+    return parsed.devDependencies?.["effect"] ?? parsed.dependencies?.["effect"];
   } catch (cause) {
     // A half-written package.json is a normal state while an editor holds the buffer, so
     // this is a skip rather than a failure. The next change event re-reads it.

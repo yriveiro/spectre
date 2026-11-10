@@ -89,7 +89,10 @@ the model reads.
 
 ## Platform facts
 
-Every fact here comes from the tag `v2.1.1`, the version floor.
+Every fact here comes from the tag `v2.1.1`, the version floor at the time. The
+floor is now 2.2.7, and the ladder table below was re-read there. Each row cites
+the tag it comes from, so read a row as a claim about that tag, not about the
+current floor.
 
 | Fact | Source |
 | --- | --- |
@@ -103,7 +106,7 @@ Every fact here comes from the tag `v2.1.1`, the version floor.
 
 ### The ladders are ragged, and that is the shape of the problem
 
-From the `opencode-go` provider in the catalogue (`packages/core/src/models-dev/snapshot.txt` at `v2.1.1`):
+From the `opencode-go` provider in the catalogue (`packages/core/src/models-dev/snapshot.txt` at `v2.2.7`):
 
 | Model | family | cost in/out | ladder |
 | --- | --- | --- | --- |
@@ -114,7 +117,7 @@ From the `opencode-go` provider in the catalogue (`packages/core/src/models-dev/
 | `deepseek-v4-pro` | deepseek-thinking | 0.66 / 1.98 | high, max |
 | `kimi-k3` | kimi-k3 | 3 / 15 | max |
 
-Seven of the provider's thirty-four models declare no effort at all. A profile
+Eleven of the provider's thirty-seven models declare no effort at all. A profile
 that names an effort is therefore naming something only part of the catalogue
 can do, and the resolver has to say which part.
 

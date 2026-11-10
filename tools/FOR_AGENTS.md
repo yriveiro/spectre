@@ -2,8 +2,10 @@
 
 Read this before declaring or changing a tool's `input` or `output` schema. The
 sandbox boundary walks those schemas, and it walks a **small subset** of the
-Schema AST. Everything outside that subset is rejected at call time, after
-registration succeeded, and on the input and the output side alike.
+Schema AST. Everything outside that subset fails — mostly at call time, after
+registration succeeded, and on the input and the output side alike. A schema
+Effect cannot turn into JSON Schema at all fails earlier: the host builds both
+JSON Schemas while it registers the tool, so that one never registers.
 
 ## The rule
 
@@ -33,9 +35,10 @@ for it.
 | `Schema.URL` | rejected: `Expected URL` |
 
 `Int`, `Finite`, `Natural` and `NonEmptyString` were **rejected outright** at
-2.0.18, and the host honours them now (re-verified at v2.1.1 on the pinned
-`effect@4.0.1`: `decodeUnknownOption(Schema.Int)(1)` is `Some`, `(1.5)` is
-`None`, `Finite(NaN)` is `None`, `NonEmptyString("")` is `None`). A second session
+2.0.18, and the host honours them now (re-verified at v2.1.1 on `effect@4.0.1`
+and again at 2.2.7 on `effect@4.1.0`: `decodeUnknownOption(Schema.Int)(1)` is
+`Some`, `(1.5)` is `None`, `Finite(NaN)` is `None`, `NonEmptyString("")` is
+`None`). A second session
 called each one with a value it must reject — `1.5`, `NaN`, `-3`, `""` — and every
 one refused, so the boundary validates them rather than ignoring them and passing
 the value through.
@@ -55,8 +58,16 @@ Two schemas, so a declaration can be wrong in a way nothing at the call reports:
 | --------- | -------------- | ----------------------- |
 | `Schema.URL` | `{"type":"string"}` | **refused** |
 | `Schema.String` | `{"type":"string"}` | accepted |
-| `Schema.Int` | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` | refused |
+| `Schema.Int` | `{"type":"integer"}` | refused |
 | `Schema.Trim` | `{"type":"string"}` | accepted, as `"https://example.com"` |
+
+`Schema.Int` is the row to read twice. Effect emits the safe-integer bounds
+(`{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`),
+and the host strips exactly those two keys at 2.2.7
+(`packages/core/src/tool/runtime.ts:195-207`), so the model sees
+`{"type":"integer"}`. A raw `Schema.toJsonSchemaDocument` call in this repo prints
+the unstripped document, which is why the one-liner near the bottom of this file
+is not the whole answer.
 
 `Schema.URL` is that trap. Its Type is a `URL` **object**, not a string: a string
 refuses, a string with `href` or `path` refuses, and a `URL` instance decodes. The
@@ -100,23 +111,23 @@ Schema.decodeUnknownOption(Schema.URL)("https://x.com")._tag; // "None" — refu
 
 The host redirects exactly two packages to its own runtime copy —
 `runtimePackages = ["effect", "@opencode/plugin"]` in
-`@opencode/plugin/dist/runtime-modules.js` at 2.2.6. `@opencode/schema` is not
+`@opencode/plugin/dist/runtime-modules.js` at 2.2.7. `@opencode/schema` is not
 one of them, so this repo's pinned copy builds the `Tool.Error` a tool throws,
 not the host. The host tests `error instanceof Tool.Error`
-(`packages/core/src/tool/runtime.ts:39`) and, when that is false, re-wraps the
+(`packages/core/src/tool/runtime.ts:40`) and, when that is false, re-wraps the
 failure as `new Tool.Error({ message })`: the refusal text survives, `metadata`
 and `error` do not. `_tag` survives the same way (`Tool.Error` is a
 `Schema.TaggedStruct`), so `catchTag("Tool.Error")` still matches.
 
-The consequence is a pinning rule, not a code change: the three `@opencode/*`
-pins move in lockstep with `engines.opencode`, so the copy that builds the
+The consequence is a pinning rule, not a code change: the `@opencode/*` pins
+move in lockstep with `engines.opencode`, so the copy that builds the
 error never drifts more than this bump from the copy that reads it. Where the
 barrel re-exports a schema (`Agent`, `Skill`, and not `Tool`), prefer the
 barrel and ride the redirect. `Tool` and `AbsolutePath` have no barrel route in
 either version, so `@opencode/schema` stays the only import that works.
 
-**The cause of this file's history is in `runtime.ts:175` (`toJsonSchema`) at
-v2.1.1**, and it is
+**The cause of this file's history is in `runtime.ts:174` (`toJsonSchema`) at
+v2.1.1, `:175` at 2.2.7**, and it is
 why the table changed. The boundary used to walk the Effect schema AST
 itself, and on `effect@4.0.0-rc.112` that AST carries no `_tag` on the nodes a
 schema is built from, so everything past the primitives failed. It now calls
@@ -144,7 +155,7 @@ away with it.
 
 ## How `options` becomes a call path
 
-Read at tag `v2.1.1`, not inferred. A tool added through
+Read at tag `v2.2.7`, not inferred. A tool added through
 `ctx.tool.transform` lands in the **same** registry as the builtins. There is no
 separate plugin path, and the three fields in `Tool.Options` decide where it
 surfaces:
@@ -169,10 +180,11 @@ Two filters, and both are about the **caller**, not the tool:
 Wholly disabled means one shape and no other. `whollyDisabled` at
 `packages/core/src/tool.ts` is three lines: take the last rule matching the
 action, and drop the tool only when that rule is `{resource: "*", effect:
-"deny"}`. Re-read at tag `v2.1.1`, so this paragraph and the filter definition
-above are current. The schema table further up is still measured at 2.0.18 and
-has not been fully re-run (the `Int`/`Finite`/`NonEmptyString`/`URL`/`Trim`
-rows were spot re-verified at v2.1.1).
+"deny"}` (`packages/core/src/tool.ts:386-389` at 2.2.7). Re-read at tag
+`v2.2.7`, so this paragraph and the filter definition above are current. The
+schema table further up is still measured at 2.1.1 and has not been fully re-run
+at 2.2.7 (the `Int`/`Finite`/`NonEmptyString`/`URL`/`Trim` rows were spot
+re-verified at v2.1.1 and again at 2.2.7).
 
 **`options.permission` is a label, not a boundary.** It decides whether the tool
 is *offered*. It is not consulted again when the tool runs — the call path at
@@ -213,7 +225,8 @@ the one loaded. Check which copy before re-reading the declaration.
 ## Prove it with a call
 
 `bun run typecheck` cannot catch any of this. Every rejected schema above is
-valid TypeScript, and registration logs happily either way. A registration that
+valid TypeScript, and a schema that converts still logs a successful
+registration whether or not a call can reach it. A registration that
 logs is not a tool that runs. The only proof is a real call:
 
 ```js
@@ -242,8 +255,10 @@ console.log(JSON.stringify(Schema.toJsonSchemaDocument(Schema.Int).schema));
 // {"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}
 ```
 
-That answers what the model sees. For what the host does with a value, run the
-same decoder the host runs, because it is the same `effect@4.1.0`:
+That is Effect's emission, not what the model sees: the host strips those two
+bounds before it sends the schema (`packages/core/src/tool/runtime.ts:195-207` at
+2.2.7), so the model sees `{"type":"integer"}`. For what the host does with a
+value, run the same decoder the host runs, because it is the same `effect@4.1.0`:
 
 ```js
 Schema.decodeUnknownOption(Schema.Int)(1)._tag;     // "Some"
