@@ -21,7 +21,12 @@ const pinned = async () => {
   const text = await Bun.file(PIN).text();
   // `bun.lock` is not consulted: it records what resolved, not what the repo asked for, so
   // it agrees with a pin that has already moved and would hide the bump this is for.
-  return (JSON.parse(text) as { dependencies: Record<string, string> }).dependencies["effect"];
+  //
+  // The build under test is the dev pin. `effect` is a peer with a range, because that is
+  // what a published plugin must declare, and the dev entry is the exact build the typecheck
+  // and this suite resolve. Reading `peerDependencies` here would compare a range to a
+  // version and pass on a bump that moved only the range.
+  return (JSON.parse(text) as { devDependencies: Record<string, string> }).devDependencies["effect"];
 };
 
 const installed = async () => {

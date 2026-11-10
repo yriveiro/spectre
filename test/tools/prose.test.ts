@@ -349,6 +349,9 @@ describe("the set's own prose", () => {
     // passives were rewritten.
     //
     // The solidjs `node:path` row rewrap moved one passive onto its own line: 339 to 340.
+    //
+    // The 2.2.7 bump rewrote `tools/FOR_AGENTS.md:5` in active voice ("is
+    // rejected at call time" to "fails"), and the rule counts lines: 340 to 339.
     const out = await call(["."]);
     const byRule: Record<string, number> = {};
     for (const f of out.findings) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
@@ -378,7 +381,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 340,
+      passiveVoice: 339,
       otherRules: [],
     });
   }, 120_000);

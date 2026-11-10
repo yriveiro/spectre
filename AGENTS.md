@@ -10,7 +10,7 @@ once per project instance. Everything Spectre adds to OpenCode (skills, agents,
 tools, commands) is registered from inside that `effect`,
 through the domains on the plugin context.
 
-Minimum supported OpenCode version: **2.2.6**. The installed CLI is the only
+Minimum supported OpenCode version: **2.2.7**. The installed CLI is the only
 runtime. There is no build step, and TypeScript source is shipped as-is.
 
 ## Runtime: Bun first
@@ -19,9 +19,10 @@ OpenCode ships as a Bun standalone executable, so this plugin runs on Bun. **Rea
 for the Bun API first. Use a Node API only when Bun has no equivalent.**
 
 The replacements below were read off `docs/runtime/bun-apis.mdx` in the Bun
-repository and then confirmed at runtime on Bun 1.4.2 (the version OpenCode ships
-and the version this plugin runs on). Do not add a dependency for anything in
-this table.
+repository, confirmed at runtime on Bun 1.4.2, and re-probed on 1.4.4 — the
+version OpenCode ships at 2.2.7 (`packageManager` in its root `package.json` and
+`.github/workflows/release.yml`) and the version this plugin runs on. Do not add a dependency for
+anything in this table.
 
 | Reach for | Use instead |
 | --------- | ----------- |
@@ -73,7 +74,7 @@ and absent from the API table:
 
 One row above is the exception to how this table was built: **`Bun.JSONC.parse` is
 not in `docs/runtime/bun-apis.mdx`**, or in Bun's docs at `main`. Confirmed by
-probe on 1.4.2, the version OpenCode ships. It parses `//` and `/* */` comments
+probe on 1.4.2 and again on 1.4.4, the version OpenCode ships. It parses `//` and `/* */` comments
 and trailing commas. So do not add `jsonc-parser` for a config file. Re-probe it
 in the same sweep as the rest, and if a future Bun drops it, the failure is a
 `TypeError` at startup rather than a silent misparse.
@@ -114,7 +115,7 @@ Rules that follow from this:
 | Import      | Why Bun has no equivalent |
 | ----------- | ------------------------- |
 | `node:path` | `join`, `relative`, `resolve`, `basename`, `dirname`. Checked against `docs/runtime/`: the complete set of Bun path utilities is `Bun.fileURLToPath`, `Bun.pathToFileURL`, and `Bun.resolveSync`, none of which join, split, or relativize. `Bun.$`'s `dirname`/`basename` are shell binaries, not functions. Twenty-two files import it: `skills/definitions/definition.ts`, whose `SKILL.md` anchor is `join(import.meta.dir, "SKILL.md")`; `skills/definitions/effect-best-practices/watch.ts`, which joins `package.json` to the project directory on every change event to read the `effect` pin; `scripts/sync-d3.ts`, which joins the pinned bundle and its scratch copy onto a directory and takes the parent with `dirname`; `tools/definitions/comments/index.ts`, which resolves a target against the project directory and reports every hit back as a project-relative path; `tools/definitions/routing/{locate,load,write}.ts`, which join the config directory to a file name, use `basename` to name a file in an error message, and place a temporary file beside the target it replaces; `tools/definitions/brain/{ledger,inject,neuron}.ts`, which compose `.spectre/brain` under the project directory; `tools/definitions/prose/index.ts`, which resolves each target and reports it relative; `tools/definitions/canvas/store.ts`, which derives the canvas tree from the project directory; `tools/definitions/worktrees/{read,classify,return/standing}.ts`, which name directories and files; `tools/definitions/anatomy/{index,run,receipt}.ts`, which resolve a figure's build script against the project directory, report the kit's own absolute path, and store receipts outside the tree; `tools/definitions/solidjs/{audit,detect,index}.ts`, which resolve a target directory and report each result as a project-relative path; and `commands/definition.ts`, which joins each command's own folder to its `prompt.md` when a session asks for that command's prompt. |
-| `node:fs/promises` | `rename` and `mkdir`. Probed on Bun 1.4.2: `Bun.rename` is `undefined` and `Bun.mkdir` does not exist, so `Bun.file(x).writer()` can write a temporary file but nothing can move it over the target. `Bun.write` documents no atomicity, so a brain note that is renamed into place is the only way a reader never sees a half-written claim. Four files import it: `tools/definitions/canvas/store.ts`, which imports `mkdir`; `tools/definitions/brain/ledger.ts`, which imports `rename` alone; and `scripts/sync-d3.ts`, which unpacks the pinned bundle into a scratch directory and renames it into place. A fourth lands with the routing writer: `tools/definitions/routing/write.ts`, which imports `rename` alone, because the writer owns the whole file and a temp file renamed into place is the only way a reader never sees a half-written config. The brain needs no `mkdir`: `Bun.write` creates the parent directories, so the first `assert` in a project with no `.spectre` at all writes the whole tree. Measured, not inferred. |
+| `node:fs/promises` | `rename` and `mkdir`. Probed on Bun 1.4.2 and re-probed on 1.4.4: `Bun.rename` is `undefined` and `Bun.mkdir` does not exist, so `Bun.file(x).writer()` can write a temporary file but nothing can move it over the target. `Bun.write` documents no atomicity, so a brain note that is renamed into place is the only way a reader never sees a half-written claim. Four files import it: `tools/definitions/canvas/store.ts`, which imports `mkdir`; `tools/definitions/brain/ledger.ts`, which imports `rename` alone; and `scripts/sync-d3.ts`, which unpacks the pinned bundle into a scratch directory and renames it into place. A fourth lands with the routing writer: `tools/definitions/routing/write.ts`, which imports `rename` alone, because the writer owns the whole file and a temp file renamed into place is the only way a reader never sees a half-written config. The brain needs no `mkdir`: `Bun.write` creates the parent directories, so the first `assert` in a project with no `.spectre` at all writes the whole tree. Measured, not inferred. |
 
 ## Reading OpenCode's source
 
@@ -131,13 +132,19 @@ The version floor is not a guess. It is the npm dist-tag:
 curl -s https://registry.npmjs.org/@opencode/cli | grep -o '"latest":"[^"]*"'
 ```
 
-At the time of writing that is `2.2.6`, published 2026-11-06. Four fields in
-this repo carry that number and they mean different things: `engines.opencode` is
-the **floor** (`>=2.2.6`), while `@opencode/ai`, `@opencode/plugin` and
-`@opencode/schema` are **exact** pins. The exact pins are what source-reading must match, because they
-are what resolves into `node_modules` and what the plugin is handed at runtime.
-A fifth copy, the `opencode` field in `verified.ts`, is what a reader has to remember.
-Re-run the registry check before any bump.
+At the time of writing that is `2.2.7`, published 2026-11-10. The version appears
+in several places that mean different things. `engines.opencode` is the **floor**
+(`>=2.2.7`). `@opencode/ai`, `@opencode/plugin` and `@opencode/schema` are
+**exact** runtime pins, and `@opencode/client` and `@opencode/theme` are exact
+dev pins. `@opencode/theme` is also a `>=2.2.7` optional peer. The `opencode`
+field in `verified.ts` is the stamp a reader has to remember. The runtime pins and
+the dev pins are what source-reading must match, because they are what resolves
+into `node_modules`. Only the runtime pins are what the host is handed. Re-run the
+registry check before any bump.
+
+`engines.opencode` documents the floor; nothing enforces it. npm writes no
+`EBADENGINE` for an unknown engine key, and the host reads no `engines` field.
+Treat it as the tag these claims cite, not as a guard.
 
 ### The `dev` checkout is not the version we ship
 
@@ -173,24 +180,48 @@ export default Plugin.define({
 })
 ```
 
-`@opencode/plugin` is a **runtime** `dependency` of a published plugin, alongside
-`effect`. That is what the docs' Publish section prescribes. An earlier version
-of this file argued for a type-only import to avoid pulling the `@opencode/*`
-tree in at install time. That reasoning was wrong on the merits: the dependency is
-supposed to be there, and because we pin `effect` to the same exact version
-`@opencode/plugin` resolves to, the package manager dedupes them into a single
-copy. Check that dedupe still holds after any version bump:
+`effect` and `@opencode/plugin` are declared differently on purpose, and the
+difference is the one that matters. `effect` is a **peer** dependency plus a
+pinned **dev** dependency. `@opencode/plugin` is a **runtime** dependency. Both
+prescriptions live in `packages/plugin/README.md` → "Packaging And Runtime
+`effect`" at the target tag, and in the Publish section of the hosted Effect
+plugin page.
+
+The reason is the load-time redirect. OpenCode provides `effect` and
+`@opencode/plugin` — every subpath, including imports from dependencies inside a
+plugin's `node_modules` — from its own runtime, and it refuses to load a
+plugin-local copy (`packages/plugin/src/runtime.ts`, `ensurePluginRuntime`). A
+runtime dependency on `effect` therefore claims an ownership the host denies. A
+missing peer does not fail the install, so a mistake here still loads: the host
+redirect covers the bare specifier, and it refuses any path that reaches
+`node_modules/effect` inside the plugin. The failure is loud at load rather than
+silent at runtime, which is why the rule matters more than the symlink suggests.
+
+An earlier version of this file read the Publish section as prescribing both
+packages as dependencies. It prescribes `@opencode/plugin` as the dependency and
+`effect` as the peer. It also told the reader to expect one `effect` copy in
+`node_modules`, which is not a rule: `@opencode/ai`, `@opencode/plugin`,
+`@opencode/schema` and `@opencode/util` each pin `effect` as a regular dependency,
+so a consumer holding a different Effect version legitimately nests several
+copies, and the redirect makes them inert. Compare the version this repo resolves
+against the catalog instead:
 
 ```sh
-find node_modules -path '*effect/package.json' | grep -c .
+bun -p 'require("./node_modules/effect/package.json").version'          # 4.1.0
+git -C <opencode-gh> show v<our-version>:package.json \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["workspaces"]["catalog"]["effect"])'
 ```
 
-Anything above `1` means two Effect copies, which is the hazard worth worrying
-about, not the dependency count.
+The two must agree, and `devDependencies.effect` must be that string. The peer
+range is `^4.0.0`, the range the docs print, because a peer says which hosts this
+plugin can run on rather than which build we typecheck against. An exact peer
+looks safer and is not: it makes the install fail with `ERESOLVE` for any
+consumer that already holds a newer Effect patch.
 
-Prefer `Effect.gen` over `Effect.fn` here. The docs use `Effect.gen` throughout,
-and the `effect` signature is `(ctx) => Effect`, so a generator that takes `ctx`
-directly is the shape OpenCode expects.
+Prefer `Effect.gen` over `Effect.fn` here. The hosted page uses `Effect.gen`
+throughout, while the tag's own README example uses `Effect.fn`. `Plugin.define`
+accepts either: its `effect` field is `(context) => Effect.Effect<void, never, R>`,
+so this is a house preference rather than an API requirement.
 
 `tsconfig.json` sets `"types": ["node", "bun"]` deliberately. Dropping `"node"`
 to leave a tidy `["bun"]` typechecks fine until you touch a Bun API that needs
@@ -273,11 +304,12 @@ package that cannot load.
 
 ## Version pins
 
-These are exact pins, not ranges, and they are not incidental:
+The pins below are exact, with one deliberate exception, and they are not incidental:
 
-- `effect` is pinned to the exact build OpenCode ships (`4.1.0` at
-  2.2.6). The plugin's `effect` values are handed straight to OpenCode's Effect
-  runtime, so a different major/minor is a real hazard, not a style choice.
+- `effect` is a `^4.0.0` peer with an exact `4.1.0` dev pin, matching the build
+  OpenCode ships at 2.2.7. The plugin's `effect` values are handed straight to
+  OpenCode's Effect runtime, so the dev pin tracks the host build exactly, while
+  the peer range only says which hosts the plugin can run on.
 - `@opencode/plugin` tracks the OpenCode version whose plugin contract we target.
 - `@opencode/schema` is pinned to the same version, because `skills/definitions/`
   imports `AbsolutePath` from it directly rather than through the plugin barrel.
