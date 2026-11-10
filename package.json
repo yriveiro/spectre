@@ -1,5 +1,5 @@
 {
-  "name": "oc-spectre",
+  "name": "spectre",
   "version": "0.1.0",
   "description": "Spectre, a coding agent built on top of OpenCode",
   "license": "Apache-2.0",
@@ -10,26 +10,22 @@
   },
   "files": [
     "index.ts",
-    "tui",
-    "spectre.default.json",
-    "agents",
-    "commands",
-    "skills",
-    "tools"
+    "packages/core/*.ts",
+    "blocks/**",
+    "tui/**"
+  ],
+  "workspaces": [
+    "packages/*"
   ],
   "engines": {
     "opencode": ">=2.2.6"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "eval": "bun run eval/run.ts",
-    "eval:routing": "bun run eval/routing/run.ts",
-    "anatomy-kit.sync": "sh scripts/sync-anatomy-kit.sh",
-    "d3.vendor": "bun run scripts/sync-d3.ts"
+    "typecheck": "tsc6 --noEmit"
   },
   "dependencies": {
-    "@opencode/ai": "2.2.6",
+    "@opencode/client": "2.2.6",
     "@opencode/plugin": "2.2.6",
     "@opencode/schema": "2.2.6",
     "effect": "4.1.0"
@@ -38,10 +34,10 @@
     "@opencode/theme": "2.2.6",
     "@opentui/core": "0.8.1",
     "@opentui/solid": "0.8.1",
-    "@types/bun": "1.4.2",
-    "@types/node": "26.6.2",
+    "@types/bun": "1.4.3",
+    "@types/node": "24.12.2",
     "solid-js": "1.9.12",
-    "typescript": "7.0.2"
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "peerDependencies": {
     "@opencode/theme": ">=2.2.6",

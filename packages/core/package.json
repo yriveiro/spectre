@@ -1,0 +1,14 @@
+{
+  "name": "spectre-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.6",
+    "@opencode/schema": "2.2.6",
+    "effect": "4.1.0"
+  }
+}

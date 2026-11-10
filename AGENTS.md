@@ -1,391 +1,178 @@
 # AGENTS.md
 
-Working notes for anyone (human or agent) changing this repository.
+Working rules for the Spectre v2 worktree (`next`). `docs/philosophy.md` is the
+design record: read it before a change that moves a boundary. Paths without a
+prefix are in this worktree, and `main/` names the v1 worktree.
 
 ## What this repo is
 
-Spectre is an OpenCode plugin. The whole package is one entrypoint: `index.ts`
-default-exports a plugin definition (`id` + `effect`), and OpenCode calls `effect`
-once per project instance. Everything Spectre adds to OpenCode (skills, agents,
-tools, commands) is registered from inside that `effect`,
-through the domains on the plugin context.
+`spectre` is one package and one install unit: one server plugin, `yriveiro.spectre`,
+and one TUI plugin. Blocks are internal, and no block gets its own plugin id.
+`index.ts` composes the bundle, and `packages/core` is a private library that supplies
+the contract and the harness. The bundle composes the routing block today;
+each later slice adds one.
 
-Minimum supported OpenCode version: **2.2.6**. The installed CLI is the only
-runtime. There is no build step, and TypeScript source is shipped as-is.
+## Blocks and bundles
+
+A block is one capability, and a bundle is the install unit: one package, one plugin
+id, several blocks. A block carries an `id`, a `surfaces` declaration, and an `effect`
+that receives the real `Plugin.Context` (`packages/core/block.ts`). The end state has 14 blocks.
+
+- Only `index.ts` imports more than one block. It is the composition root.
+- A block imports its own folder and `blocks/shared/`, never a sibling block.
+- A cross-block value is a factory argument at the root: `routing({ agents })`,
+  `prose(dictionarySource)`. Add no field, service, or shared constant.
+- Config belongs to the capability that reads it. Routing owns `spectre.json`,
+  and `packages/core` owns no feature config.
+- A leaf two blocks need goes in `blocks/shared/`. With one consumer, it stays in that block.
+
+`defineBundle` rejects a duplicate block id, a duplicate surface in one block, and two
+blocks that declare the same tool, skill, command, or agent. The ownership check skips hooks.
+
+## The SDK seam
+
+A block registers through `ctx.tool.transform`, `ctx.skill.transform`, `ctx.command.transform`,
+`ctx.agent.transform`, and `ctx.tool.hook`, and through nothing else. There is no Spectre
+registration API, no service container, and no collector. Pass a cross-block value at the root.
+
+Transforms are lazy. The host stores the callback and replays it on the first read
+of that registry, after the plugin effect returns. A block cannot observe what it
+registered, and the bundle cannot validate against it.
+
+`Surfaces` is test-time, not a registration path (`packages/core/block.ts`). It names
+effective tool names (`spectre_routing`), skill and command names, agent ids, and the two
+tool hook names. Session hooks and event subscriptions are open sets and stay out of `Surfaces`.
+`surfaceProblems` compares the declaration against `testContext`, so a block can drift.
+
+`runBlock`, `testContext`, and `surfaceProblems` are the harness (`packages/core/harness.ts`,
+`packages/core/surface.ts`). It supports `tool`, `skill`, `command`, `agent`, and `tool.hook`.
+Any other `ctx` domain throws. Slice 0 adds `location`, `session.hook`, and
+`event.subscribe`, which worktrees, brain, and effect need before their tests run.
+
+## Failure policy
+
+Each block runs in a child scope forked from the plugin's activation scope
+(`packages/core/bundle.ts`). A typed block failure is local: the bundle closes
+that scope, discards the block's registrations, logs the failure, and runs the
+next block. A defect or an interrupt is fatal: the bundle rethrows it, and the
+plugin effect fails.
+
+Return a typed failure when the capability cannot start. Do not catch a defect,
+and do not treat an interrupt as a soft failure. A test holds both halves
+(`packages/core/test/core.test.ts`).
+
+The host reports one plugin, not one row per block. A failed block is an
+`Effect.logError` line, not host status, so do not add a plugin per block.
+
+## TUI
+
+The server `Plugin.Context` has no TUI domain. The package exposes a separate
+`./tui` entrypoint, and `tui/index.tsx` composes every TUI part into one
+`Plugin.define` with one cleanup chain. Slice 4 adds the export.
+
+A block with a TUI part keeps it in `blocks/<name>/tui/`. The server block never
+imports it, and the TUI part never imports the server tool module. Routing's
+`tui/data.ts` imports `../config/`, not `../tool.ts`, so the TUI graph does not
+load `@opencode/plugin/effect`.
+
+## Packaging
+
+The repository root is the package, and its `index.ts` is the `.` export. A local
+directory reference resolves `<dir>/index.ts`, and a `github:` spec resolves
+through `exports["."]`, so both work with no mirror.
+
+- No build step. Ship TypeScript as-is. Add no `dist`, bundler, or `prepare` script.
+- `packages/core` stays private and ships inside the root package through
+  `files`. Update `files` in the same commit that adds a runtime-read file.
+- The final slice adds the pack test. It lists every runtime-read file, including
+  `.md`, `.json`, and `.ts` (`npm pack --dry-run --json`), installs the tarball
+  in a temp directory, loads the bundle, and runs every block in `testContext`.
+
+## Platform
+
+Spectre targets OpenCode **2.2.6**. The installed SDK is the runtime. The exact
+pins are `@opencode/plugin` 2.2.6, `@opencode/schema` 2.2.6, and `effect` 4.1.0,
+and `engines.opencode` states the floor (`>=2.2.6`).
+
+Read OpenCode source at the tag, never at `dev`: `git show v2.2.6:<path>` or `git grep
+<pattern> v2.2.6 -- <path>`. A path that resolves in the `dev` checkout proves nothing
+about this plugin. `main/AGENTS.md` holds the full rule.
 
 ## Runtime: Bun first
 
-OpenCode ships as a Bun standalone executable, so this plugin runs on Bun. **Reach
-for the Bun API first. Use a Node API only when Bun has no equivalent.**
+The plugin runs on the Bun build that OpenCode ships. Reach for a Bun API first, and add
+no dependency for anything Bun does natively. This project approves two `node:*` imports:
 
-The replacements below were read off `docs/runtime/bun-apis.mdx` in the Bun
-repository and then confirmed at runtime on Bun 1.4.2 (the version OpenCode ships
-and the version this plugin runs on). Do not add a dependency for anything in
-this table.
+| Import | Why |
+| --- | --- |
+| `node:path` | Bun has no `join`, `relative`, `extname`, `basename`, or `dirname`. |
+| `node:fs/promises` | `rename` and `mkdir` have no Bun equivalent. |
 
-| Reach for | Use instead |
-| --------- | ----------- |
-| `node:fs`, `node:fs/promises` | `Bun.file`, `Bun.write`, `Bun.stdin/stdout/stderr` |
-| glob libraries (`fast-glob`, `tinyglobby`) | `Bun.Glob` |
-| `node:child_process` | `Bun.spawn`, `Bun.spawnSync`, `Bun.$` |
-| `node:os` | `Bun.env`, `Bun.main`, `Bun.version`, `Bun.revision`, `Bun.which` |
-| `node:crypto` | `Bun.password`, `Bun.hash`, `Bun.sha`, `Bun.CryptoHasher`, Web Crypto |
-| `uuid` | `Bun.randomUUIDv7` |
-| `node:zlib` | `Bun.gzipSync`/`gunzipSync`/`deflateSync`/`inflateSync`, `Bun.zstd*` |
-| `node:http`, `node:https` | `fetch`; `Bun.serve`, `Bun.listen`, `Bun.connect`, `Bun.udpSocket` to serve |
-| `node:dns` | `Bun.dns.lookup`, `Bun.dns.prefetch` |
-| `node:tls` | `fetch` / `Bun.serve` with TLS options |
-| `node:stream` | `Bun.readableStreamToText/JSON/Array/Blob/Bytes` |
-| `Buffer` | `Uint8Array`, `TextEncoder`, `Bun.ArrayBufferSink`, `Bun.allocUnsafe`, `Bun.concatArrayBuffers` |
-| `node:util` `inspect` | `Bun.inspect`, `Bun.peek`, `Bun.deepEquals`, `Bun.deepMatch` |
-| `node:timers/promises` `setTimeout` | `Bun.sleep`, `Bun.sleepSync`, `Bun.nanoseconds` |
-| `semver` | `Bun.semver` |
-| TOML parsers | `Bun.TOML.parse` |
-| JSONC parsers (`jsonc-parser`) | `Bun.JSONC.parse` |
-| `chalk`, `ansi-colors` | `Bun.color` |
-| markdown renderers | `Bun.markdown` |
-| XML parsers | `Bun.XML` |
-| `escape-html` | `Bun.escapeHTML` |
-| `string-width` | `Bun.stringWidth` |
-| line splitting | `Bun.indexOfLine` |
-| image codecs | `Bun.Image` |
-| `better-sqlite3` | `bun:sqlite`, `Bun.SQL` |
-| `ioredis` | `Bun.RedisClient`, `Bun.redis` |
-| `node:test` | `bun:test` |
-| CSRF libraries | `Bun.CSRF` |
-| cookie helpers | `Bun.Cookie`, `Bun.CookieMap` |
-| `worker_threads` | `Worker` |
-| esbuild / swc | `Bun.build`, `Bun.Transpiler` |
-| `node:path` | `import.meta.dir`, `import.meta.path`, `Bun.file().name`, `Bun.pathToFileURL`, `Bun.fileURLToPath`, `Bun.resolveSync` |
-| `process` (where avoidable) | `Bun.env`, `import.meta` |
-
-Three names look like they should exist and do not. Confirmed absent at runtime
-and absent from the API table:
-
-- **`Bun.path` does not exist.** The path helpers are `Bun.pathToFileURL`,
-  `Bun.fileURLToPath`, `Bun.resolveSync`, plus `import.meta.dir` /
-  `import.meta.path`. For real path manipulation (`join`, `relative`, `extname`)
-  Bun has no equivalent, so `node:path` is the correct answer. Bun implements it
-  fully. Use it without apology and record it as an exception below.
-- **`Bun.Blob` and `Bun.File` do not exist.** Use the standard `Blob` / `File`
-  globals, or `Bun.file()` for filesystem work. Bun's own guidance is to build on
-  the standard Web APIs rather than namespace them.
-
-One row above is the exception to how this table was built: **`Bun.JSONC.parse` is
-not in `docs/runtime/bun-apis.mdx`**, or in Bun's docs at `main`. Confirmed by
-probe on 1.4.2, the version OpenCode ships. It parses `//` and `/* */` comments
-and trailing commas. So do not add `jsonc-parser` for a config file. Re-probe it
-in the same sweep as the rest, and if a future Bun drops it, the failure is a
-`TypeError` at startup rather than a silent misparse.
-
-Two limits of that parser, both measured rather than assumed, and both the reason
-it is not a drop-in answer for a config file a human edits:
-
-- **Its `SyntaxError` does not locate the break.** The error carries `line`,
-  `column`, `originalLine` and `originalColumn`, and all four are the *same two
-  numbers* for every broken document (`line: 10, column: 19` across four files
-  with breaks on lines 1, 3, 9 and 10. Those are parser-internal state. Report
-  the message, which does name the offending token, and do not report a position.
-- **It ignores everything after the first complete value.**
-  `Bun.JSONC.parse('{"a":1} {"b":2}')` returns `{ a: 1 }` with no error. A config
-  with a stray second object parses as if it were not there, so trailing garbage
-  is not a parse failure and cannot be reported as one.
-
-Getting a line number means writing a position mapper, which is a hand-rolled
-JSONC scanner. That is a deliberate cost, not a free one. Pay it only if a
-requirement actually needs it.
-
-To re-verify after a Bun upgrade, probe by direct property access. `n in Bun`
-reports `false` for lazily-defined members and will lie to you:
-
-```sh
-bun -e 'for (const n of ["path","Blob","Glob","sleep"]) console.log(n, typeof Bun[n])'
-```
-
-Rules that follow from this:
-
-- Do not add a Node dependency for something Bun already does natively.
-- Every approved `node:*` import is a deliberate exception. Keep the list in this
-  file current, with the reason, so the next reader can tell an exception from a
-  slip.
-
-### Approved `node:*` exceptions
-
-| Import      | Why Bun has no equivalent |
-| ----------- | ------------------------- |
-| `node:path` | `join`, `relative`, `resolve`, `basename`, `dirname`. Checked against `docs/runtime/`: the complete set of Bun path utilities is `Bun.fileURLToPath`, `Bun.pathToFileURL`, and `Bun.resolveSync`, none of which join, split, or relativize. `Bun.$`'s `dirname`/`basename` are shell binaries, not functions. Twenty-two files import it: `skills/definitions/definition.ts`, whose `SKILL.md` anchor is `join(import.meta.dir, "SKILL.md")`; `skills/definitions/effect-best-practices/watch.ts`, which joins `package.json` to the project directory on every change event to read the `effect` pin; `scripts/sync-d3.ts`, which joins the pinned bundle and its scratch copy onto a directory and takes the parent with `dirname`; `tools/definitions/comments/index.ts`, which resolves a target against the project directory and reports every hit back as a project-relative path; `tools/definitions/routing/{locate,load,write}.ts`, which join the config directory to a file name, use `basename` to name a file in an error message, and place a temporary file beside the target it replaces; `tools/definitions/brain/{ledger,inject,neuron}.ts`, which compose `.spectre/brain` under the project directory; `tools/definitions/prose/index.ts`, which resolves each target and reports it relative; `tools/definitions/canvas/store.ts`, which derives the canvas tree from the project directory; `tools/definitions/worktrees/{read,classify,return/standing}.ts`, which name directories and files; `tools/definitions/anatomy/{index,run,receipt}.ts`, which resolve a figure's build script against the project directory, report the kit's own absolute path, and store receipts outside the tree; `tools/definitions/solidjs/{audit,detect,index}.ts`, which resolve a target directory and report each result as a project-relative path; and `commands/definition.ts`, which joins each command's own folder to its `prompt.md` when a session asks for that command's prompt. |
-| `node:fs/promises` | `rename` and `mkdir`. Probed on Bun 1.4.2: `Bun.rename` is `undefined` and `Bun.mkdir` does not exist, so `Bun.file(x).writer()` can write a temporary file but nothing can move it over the target. `Bun.write` documents no atomicity, so a brain note that is renamed into place is the only way a reader never sees a half-written claim. Four files import it: `tools/definitions/canvas/store.ts`, which imports `mkdir`; `tools/definitions/brain/ledger.ts`, which imports `rename` alone; and `scripts/sync-d3.ts`, which unpacks the pinned bundle into a scratch directory and renames it into place. A fourth lands with the routing writer: `tools/definitions/routing/write.ts`, which imports `rename` alone, because the writer owns the whole file and a temp file renamed into place is the only way a reader never sees a half-written config. The brain needs no `mkdir`: `Bun.write` creates the parent directories, so the first `assert` in a project with no `.spectre` at all writes the whole tree. Measured, not inferred. |
-
-## Reading OpenCode's source
-
-**Read it at the tag, never at the checkout's HEAD.** The `opencode-gh` reference
-is pinned to `dev`, and `dev` is not the version we target. Every claim about
-OpenCode's behaviour needs `git show v<our-version>:<path>`, or
-`git grep <pattern> v<our-version> -- <path>`. The answer to "does this file
-even exist for us?" is a `git ls-tree -r --name-only v<our-version> | grep …`,
-not a look at the working tree.
-
-The version floor is not a guess. It is the npm dist-tag:
-
-```sh
-curl -s https://registry.npmjs.org/@opencode/cli | grep -o '"latest":"[^"]*"'
-```
-
-At the time of writing that is `2.2.6`, published 2026-11-06. Four fields in
-this repo carry that number and they mean different things: `engines.opencode` is
-the **floor** (`>=2.2.6`), while `@opencode/ai`, `@opencode/plugin` and
-`@opencode/schema` are **exact** pins. The exact pins are what source-reading must match, because they
-are what resolves into `node_modules` and what the plugin is handed at runtime.
-A fifth copy, the `opencode` field in `verified.ts`, is what a reader has to remember.
-Re-run the registry check before any bump.
-
-### The `dev` checkout is not the version we ship
-
-`opencode-gh` is pinned to `dev`. `dev` is not the version we target, so a path
-that resolves in that working tree proves nothing about the version we ship.
-Before quoting a line number, prove the path exists at the tag:
-
-```sh
-git ls-tree -r --name-only v<our-version> | grep <path>
-```
-
-If it does not resolve at the tag, the finding is about code nobody runs. When
-`dev` and the tag disagree, the tag wins, and `AGENTS.md` plus the feature docs
-get corrected in the same change that found the error.
-
-## Writing the entrypoint
-
-Follow the official Effect plugin docs, not a local preference:
-<https://opencode.ai/v2/docs/build/plugins/effect/>. The canonical shape is a
-value import of `Plugin` from the barrel, `Plugin.define`, and an `effect` that
-is a plain function returning `Effect.gen`:
-
-```ts
-import { Plugin } from "@opencode/plugin/effect"
-import { Effect } from "effect"
-
-export default Plugin.define({
-  id: "spectre",
-  effect: (ctx) =>
-    Effect.gen(function* () {
-      // register skills, agents, tools, MCP servers, ...
-    }),
-})
-```
-
-`@opencode/plugin` is a **runtime** `dependency` of a published plugin, alongside
-`effect`. That is what the docs' Publish section prescribes. An earlier version
-of this file argued for a type-only import to avoid pulling the `@opencode/*`
-tree in at install time. That reasoning was wrong on the merits: the dependency is
-supposed to be there, and because we pin `effect` to the same exact version
-`@opencode/plugin` resolves to, the package manager dedupes them into a single
-copy. Check that dedupe still holds after any version bump:
-
-```sh
-find node_modules -path '*effect/package.json' | grep -c .
-```
-
-Anything above `1` means two Effect copies, which is the hazard worth worrying
-about, not the dependency count.
-
-Prefer `Effect.gen` over `Effect.fn` here. The docs use `Effect.gen` throughout,
-and the `effect` signature is `(ctx) => Effect`, so a generator that takes `ctx`
-directly is the shape OpenCode expects.
-
-`tsconfig.json` sets `"types": ["node", "bun"]` deliberately. Dropping `"node"`
-to leave a tidy `["bun"]` typechecks fine until you touch a Bun API that needs
-node's ambient declarations. `Bun.Blob` and the `BunFile` type both stop
-resolving. Both entries are load-bearing: `bun` supplies the Bun globals, `node`
-supplies the ambient declarations and `node:*` compatibility that Bun implements.
-
-## Every skill, tool and command definition is a folder
-
-One rule under `skills/definitions/`, `tools/definitions/` and `commands/definitions/`,
-and it has no exceptions:
-
-```
-skills/definitions/<id>/index.ts      the declaration
-skills/definitions/<id>/SKILL.md      its body
-tools/definitions/<id>/index.ts       the declaration
-commands/definitions/<id>/index.ts    the declaration
-commands/definitions/<id>/prompt.md   the prompt it hands the session
-```
-
-Agent definitions are the exception: flat files, `agents/definitions/<id>.ts`,
-matching the tree (`spectre.ts`, `sicko.ts`). Do not restructure the existing
-agents into folders. That is a migration, not a doc fix.
-
-A definition that needs one file still gets a folder with one file in it. That is
-not ceremony: a mix of `comments.ts` and a `routing/` folder in the same directory
-reads as though the second one is a different kind of thing, and the next person
-copies the wrong shape. A tool that grows past a single file adds siblings beside
-its `index.ts`. It never moves out to the repository root, because a root folder
-would be a fourth kind of surface the plugin does not have.
-
-`index.ts` is the declaration and is what the parent imports, so
-`./definitions/comments` resolves the same whether the definition is one file or
-five. Nothing above `definitions/` needs to know how many files are inside.
-
-Two consequences worth keeping:
-
-- **Nothing at the root imports a definition's internals.** `tools/index.ts`
-  imports `./definitions/routing` and gets the tool. It does not reach for
-  `routing/check`. If a second consumer ever needs the internals, that is the
-  signal the boundary is wrong, not the signal to widen the import.
-- **The `comments` self-check enumerates source folders**, so a definition that
-  moves between `agents/`, `skills/` and `tools/` breaks that test until the list
-  is updated. That is the intended failure: it catches the move instead of
-  silently scanning less than it did.
-
-## Layout and how OpenCode finds the entrypoint
-
-`index.ts` sits in the **repository root** and is the package's `.` export:
-
-```json
-"exports": { ".": "./index.ts" }
-```
-
-The root placement is what lets one file satisfy both of OpenCode's resolution
-paths, with no build step and no `dist`:
-
-| Referenced as | Resolved via | Requirement |
-| ------------- | ------------ | ----------- |
-| package / `github:` spec | `exports["./server"]`, then `exports["."]` | one of the two must exist |
-| absolute **directory** in config | `<dir>/server.*`, then `<dir>/index.*` | a root-level `index.*` or `server.*` |
-| absolute **file** in config | rejected | logs `configured plugin path must be a directory` |
-
-Moving the entrypoint to `src/index.ts` would still install from a git specifier,
-since resolution goes through the exports map and not the file location. But it
-would stop a local **directory** reference from resolving, and OpenCode drops
-unresolved directory plugins **silently** (`if (!entrypoints.server) return []`).
-Keeping `index.ts` at the root means both paths work, so local iteration needs no mirror:
-
-```json title="opencode.json"
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugins": ["/absolute/path/to/spectre"]
-}
-```
-
-Ship TypeScript source as-is. Do not introduce a `dist`, a bundler, or a `prepare`
-script: a git install runs no build, so a `dist` that is not committed is a
-package that cannot load.
-
-## Version pins
-
-These are exact pins, not ranges, and they are not incidental:
-
-- `effect` is pinned to the exact build OpenCode ships (`4.1.0` at
-  2.2.6). The plugin's `effect` values are handed straight to OpenCode's Effect
-  runtime, so a different major/minor is a real hazard, not a style choice.
-- `@opencode/plugin` tracks the OpenCode version whose plugin contract we target.
-- `@opencode/schema` is pinned to the same version, because `skills/definitions/`
-  imports `AbsolutePath` from it directly rather than through the plugin barrel.
-  Two copies of the same schema is the hazard: brand values made by one copy are
-  not interchangeable with the other.
-- Bump both together with the supported-version floor in `package.json`, then
-  prove no straggler of the old version survives anywhere:
-
-  ```sh
-  grep -rn '<old-version>' --include='*.json' --include='*.md' --include='*.ts' . \
-    | grep -v node_modules   # expect no hits
-  ```
-
-Before changing any of them, check what the target OpenCode tag actually pins
-(`packages/*/package.json` → `workspaces.catalog` at that tag). The `effect` pin
-is the one that moves least, so read it rather than assuming it tracks the release.
-
-### The `effect` pin has a body that describes it
-
-`skills/definitions/effect-best-practices/` teaches the API of one `effect`
-build, so it cannot be right for two at once. Four files hold it to the pin, and
-all four move in the same change as a bump:
-
-| File | What it holds |
-| ---- | ------------- |
-| `verified.ts` | the version the body was checked against, as one literal |
-| `probe.ts` | every symbol the body names, compiled by `bun run typecheck` |
-| `test/skills/effect-version.test.ts` | the stamp against the pin and the install |
-| `watch.ts` | a session nudge when the pin moves without the stamp |
-
-The forcing is two checks that fail for different reasons. `probe.ts` fails
-when a bump moved an export, because the compiler names the symbol. The test
-fails when a bump moved only the number. Neither covers the other, so neither is
-optional.
-
-Both checks read `VERIFIED.effect` only. Nothing compares `VERIFIED.opencode` to
-`engines.opencode`, so that field drifts silently and the stamp can name a build
-this plugin no longer targets. Reading it is a step a human has to remember.
-
-Bumping the pin is therefore three steps, in this order: move the pin, run
-`bun run typecheck` and fix what the compiler names, then move the stamp last.
-`/effect-align` is the prompt that walks the same order.
-
-Two house rules make the body readable, and both are load-bearing:
-
-- **The body names only the version installed.** It carries no history of what
-  an API used to be called. A near-miss a reader will meet is a
-  `principle-evidence` lookup, not a paragraph in a skill.
-- **`probe.ts` stays on disk and inside `tsconfig.json`'s `include`.** A probe
-  that nothing compiles is a check that cannot fail, which is the one thing this
-  arrangement is for.
+The replacement table and the probes behind these rows are in `main/AGENTS.md`.
+Any other `node:*` import is a slip.
 
 ## Checks
 
 ```sh
-bun install
 bun run typecheck
+bun test
 ```
 
-Verify a change actually loads, from a scratch project rather than this repo:
+`bun run typecheck` is `tsc6 --noEmit` over `index.ts`, `packages/**/*.ts`,
+`blocks/**/*.ts`, `blocks/**/*.tsx`, and `tui/**/*.tsx`. `bun test`
+runs `packages/core` and every block suite. A slice also runs the bundle test once slice 0 lands.
+
+Prove the entrypoint resolves from a scratch project:
 
 ```sh
 opencode plugin list
 ```
 
-`opencode plugin list` reports nothing on the first run in a fresh directory,
-because the background service has not picked up the config yet. Re-run it before
-concluding anything failed.
-
-`opencode plugin list` only proves the entrypoint resolved. To prove the `effect`
-ran, and that what it registers is what you think, start a session with the logs
-turned on and read the plugin's own log lines:
+A fresh directory can report nothing before the background service reads the
+config, so re-run it. To prove the `effect` ran, start a session with logs:
 
 ```sh
 OPENCODE_CONFIG_DIR=/tmp/empty-cfg opencode run --standalone --log-level info --print-logs \
   'reply with the single word: ok'
 ```
 
-`OPENCODE_CONFIG_DIR` does **not** achieve that on its own, which is worth knowing
-before you trust a session. Measured at 2.0.18: with the directory pointed at an
-empty folder and a scratch project listing only the checkout, `opencode plugin
-list` still reported both copies.
+`OPENCODE_CONFIG_DIR` does not unseat a global install. A `github:` copy in
+`~/.config/opencode/opencode.jsonc` can win boot order, and the local copy fails
+with `Duplicate plugin ID`. Remove that line before debugging a missing tool.
 
-```
-ID                VERSION  SOURCE
-yriveiro.spectre  local    /Users/.../spectre/index.ts
-yriveiro.spectre  3ac06f1  github:yriveiro/spectre
-```
+## Worktrees
 
-The `github:` specifier is resolved from the install cache, not from the config
-directory, so an empty `OPENCODE_CONFIG_DIR` does not unseat it. The only thing
-that does is removing the entry from the global config, which is
-`~/.config/opencode/opencode.jsonc`:
-```jsonc
-{
-  "plugins": ["github:yriveiro/spectre"]   // delete this line while developing
-}
+Never create a branch in the checkout you stand in. Isolate the work:
+
+```js
+await tools.spectre.worktrees({ action: "start", name: "v2-routing" })
 ```
 
-Until it is gone, both copies load: the first in boot order wins the id and the
-later one is marked failed with `Duplicate plugin ID`, so the installed copy wins
-silently. A published copy from before this tool existed registers no `comments`
-tool at all, so `tools.spectre.comments` is simply absent from the catalog and
-every symptom looks like a bug in the code under test. Check which copy is live
-before debugging anything.
+Only `status: "opened"` means the worktree exists. A second unit of work is a
+second worktree, including inside `next`. Do not switch branches here or edit another worktree.
 
-A log line that says a domain registered is not proof that what it registered
-runs. `opencode plugin list` resolves an entrypoint. A session proves the
-`effect`. For a tool, the proof is a call. See `tools/FOR_AGENTS.md`, which
-holds the sandbox boundary's rules for `input` and `output` schemas and the
-command that proves one.
+## Migration
+
+The migration brief defines the slice order. Four rules hold every slice:
+
+1. The tree loads and typechecks after the slice: `bun run typecheck` and the bundle test.
+2. Tests move with their subject. `blocks/<name>/test/` holds the block's suite.
+   Cross-cutting tests stay at the top level.
+3. Delete an aggregator, never port it. `tools/index.ts`, `skills/index.ts`,
+   `agents/index.ts`, and `commands/index.ts` do not exist in the end state.
+4. Only `index.ts` imports more than one block, and the final slice adds that test.
+
+The final slice also pins the pack list and runs a temp install. Do not leave a
+half-moved capability across two slices.
+
+## Comments
+
+Default to none. Fresh code carries its own meaning, so fix the code rather than
+describe it. Keep a comment only for a legal or license header, behavior forced
+from outside this repo, a `// prettier-ignore`, a public API contract, or a link
+to the issue behind a constraint.
+
+## Commits
+
+Use conventional commits: `type(scope): subject`, one commit per migration slice.
+The scope names the block or `core`, as in `feat(routing): add the routing block`.
