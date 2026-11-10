@@ -1,0 +1,263 @@
+# model-router
+
+Read the task, ask the resolver for a model, spend the ref it returned, say what you chose.
+
+## The four steps
+
+1. **Evaluate.** Read the task and work out what it actually asks for. Do this
+   before you look at any profile. A line or two: how much reading, how much
+   judgement, and what a wrong answer would cost.
+2. **Ask.** Call `tools.spectre.routing({ task: "<the task statement>" })`. The
+   `task` is the statement the judge reads. The tool reads `spectre.json` (and
+   `spectre.jsonc` when that is the file there), merges the global and project
+   files, and resolves every profile against the live catalogue.
+3. **Choose.** Read `judge` first. When it is `used`, take the row it names.
+   When it is `skipped`, take the profile whose `match` line fits your
+   evaluation. The profile's `effort` is the thinking it needs, and the resolver
+   has already turned that into one model. You do not pick a rung.
+4. **Spawn.** Call `subagent` with `model: profile.model.ref`, copied exactly,
+   variant included. Then say the choice in one line.
+
+If your evaluation already settled on a profile, pass its name:
+`routing({ profile: "refactor" })` returns that one row and puts the name in
+`asked`. A named profile is the decision, so the judge is not asked then, and
+`judge.status` is `skipped`.
+
+You need no permission. In the ordinary case there is no follow-up question either:
+the model is chosen before the work starts, so the choice is yours to make, not the
+spawned agent's. The one exception is `setup`, where the user answers once.
+
+## The judge, and the path without it
+
+The judge answers one question: which profile a task belongs to. It is
+optional. It names a profile and a probability, never a model, so the resolver
+still picks the model and the allowlist order still decides which one.
+
+Read `judge` on a `resolved` answer:
+
+```text
+judge: { status: "used", profile: "worker", confidence: 0.82 }
+judge: { status: "skipped", reason: "The config names no judge, so the profile choice is yours." }
+```
+
+- **`used`.** The judge chose. Take the row whose `name` is `judge.profile`, and
+  spend it. `confidence` is the probability the judge reported, when its arm
+  reports one. Say the number beside the choice when it is there.
+- **`skipped`.** The judge gave no profile, and `reason` says why. Take the
+  profile whose `match` line fits your evaluation. That is the path this skill
+  describes below, and the routing is no less correct for it.
+
+A skipped judge is a complete answer. The table is whole either way, and every
+row carries a model the resolver chose. Do not call the tool again to get a
+judge answer.
+
+## When nobody knows, play safe
+
+A probability below the threshold means the judge does not know which profile
+this is. Not knowing is a reason to spend **more**, not less, so the tool
+raises the row it names: `judge.escalated` is then `true` and `judge.effort`
+names the effort it was spent at. Spend that row as it is. It is the same
+profile, with more thinking behind it.
+
+The judge's other readings come with it in `judge.alternatives`, best first.
+They are the second readings of the same task, not mistakes. When the judge was
+unsure and a row you can see fits your own evaluation better, take that row
+instead and say so in one line. When nothing fits better, spend the escalated
+row.
+
+When the judge says nothing, **you** are the one who does not know, and the
+same rule is yours: if you are unsure between two profiles, take the one that
+asks for more thinking, because a task done on the wrong model costs a redo
+and a task done with too little thinking costs a wrong answer.
+
+## What a profile is for
+
+A profile has two prose fields, and only one of them routes.
+
+- `match` is the routing surface. It names the moment the profile is for, with
+  the nouns a prompt would carry, and one exclusion. Match the task against this
+  line.
+- `why` is the rationale, for the human who wrote the config. The resolver never
+  reads it. A `why` line that sounds like a better fit than `match` is not a
+  reason to pick that profile.
+
+The profile also states `effort`: how much thinking the task needs. The resolver
+reads the allowlist order and the catalogue, takes the first allowed model that
+reaches that effort, and records the rung it used. Do not second-guess the rung.
+The ref that came back is the answer.
+
+## The evaluation is about the task, not about difficulty
+
+"Difficult" is a feeling, and it drifts toward whatever sounds most serious. Look
+at what is in front of you instead: how many files or symbols the task names,
+whether the answer has to be right or only reported, and what being wrong would
+cost. Running a command and reading its log is not the work of understanding a
+subsystem, however serious the wording.
+
+Say the evaluation out loud before you call. If you cannot state it in a line, you
+do not yet know what the task is, and routing on a guess spends the wrong model.
+
+## One case is not a judgement call
+
+A literature, citation, or research task does not go on the cheap profile. A cheap
+model returns a clean, tidy bibliography whose references do not resolve, or resolve
+to a different paper. Nothing in the text looks wrong, so a human reading the answer
+cannot catch it. This is the one task where the cheap model is the wrong model, and
+it holds however simple the request reads.
+
+## The model string is a whitelist
+
+`tools.spectre.routing` returns a ref that was checked when you called it. **Use it
+exactly as returned**, variant suffix included.
+
+That ref is the whole vocabulary. The user wrote down which models they are willing
+to spend on, and it is usually shorter than what the provider offers. A model outside
+the list is not spendable here no matter how well it fits, so if nothing in the list
+fits the task, say so and ask. Do not go looking in the provider for something better.
+
+Never write a model id from memory, never assemble one from a provider you remember,
+never guess a variant. A string this tool did not return is one nobody checked. The
+subagent call fails on it, or worse, lands on a model that exists and is wrong for the
+job.
+
+This matters more than it sounds. You are choosing what the work costs. A model you
+invent is a cost nobody agreed to, and it is invisible in the result.
+
+## What the answer carries
+
+A profile row has one `model`, and that is the model to spend:
+
+```text
+{
+  name:     "worker",
+  match:    "Use when the change is already decided …",
+  effort:   "high",
+  agent:    "spectre",
+  model:    { ref: "opencode-go/deepseek-v4.1-flash#high", rung: "high", … },
+  crosscheck:        { ref: "opencode-go/minimax-m3.1-flash-free#high", … },  // optional
+  crosscheckProblem: "…",                                                     // optional
+  excluded: [ { name: "glm", ref: "…", reaches: "max", reason: "…" } ]
+}
+```
+
+- `model.ref` is the string to pass. `model.steppedUp` is true when the ladder
+  had no rung at `effort` and took `model.rung` instead, and `model.below` is the
+  rung under the one used. Say it when you explain the choice.
+- `crosscheck` is the second opinion the profile asked for, from another family,
+  at the effort the profile stated. Its `ref` is a second string to spend. Use it
+  when the task is a decision and a second family is worth the spend. Run it
+  beside the first, not instead of it.
+- `crosscheckProblem` means the profile asked for a second opinion and no allowed
+  model from another family could give one. Say it. Do not invent a second model.
+- `excluded` lists the candidates that did not qualify, with the highest rung each
+  one reaches. It explains why a model you expected is not here. It is not a menu
+  to fall back to.
+- `judge` sits on the answer, not on a row. `used` names the profile, and
+  `skipped` gives the reason and leaves the choice to you. The resolver chose
+  every `model` before the judge read the task.
+
+## The tool answers four ways, and each needs a different reply
+
+1. **`status` is `resolved`.** The `profiles` are the routing table. Read
+   `judge`: `used` names the profile to take, and `skipped` leaves the choice to
+   you. Then spawn on that row's `model.ref`.
+2. **`status` is `setup`.** No config file exists anywhere, so routing has not been
+   configured. The answer carries `provider`, the starter `models`, and the starter
+   `profiles`. Put the default on the table and ask the user once whether to start
+   from it. If yes, call `routing({ setup: "accepted" })` and route from the answer
+   it gives. If no, call `routing({ setup: "declined" })` and spawn without a model.
+   Do not write `spectre.json` by hand.
+3. **`status` is `declined`.** The user said no before, and the answer is stored in
+   `source`. Do not ask again. Leave `model` off the `subagent` call, so the agent's
+   own model runs the work. Say once that this repository routes on no model. If the
+   user wants routing later, they remove the `setup` key from that file.
+4. **`status` is `problems`.** The config is there and wrong. `problems` lists every
+   mistake, one per line, and each line names the key. Quote the lines, say routing
+   is misconfigured, then ask whether to continue on the current model. Do **not**
+   fall back to a model you remember, and do not retry with a different string.
+
+`model` is optional on the `subagent` tool, so every path spawns something.
+
+## The subagent tool
+
+| Argument | Required | What it is |
+| -------- | -------- | ---------- |
+| `agent` | yes | which spectre agent to spawn; always one spectre registers |
+| `description` | yes | a 3-5 word label for the task |
+| `prompt` | yes | the task itself |
+| `model` | no | `providerID/modelID` or `providerID/modelID#variant` |
+| `sessionID` | no | continue a previous child instead of starting one |
+| `background` | no | run without blocking the caller |
+
+`model` outranks the agent's own model and is applied before the run starts, so one
+agent serves every profile. The default is `spectre`, which is selectable in a chat
+and spawnable as a subagent, so routed work runs under the same style as the chat that
+routed it.
+
+**Every routed run is a spectre agent, and that is the point.** The config refuses any
+other agent name, so a routed subagent cannot quietly drop out of spectre mode by
+being some other agent. Take `agent` from the profile when it names one: `sicko` is a
+narrow persona for comment work and is the wrong agent for anything else. The spectre
+agents differ in persona and in chat visibility, not in permissions, so there is no
+other reason to reach for one.
+
+## Decompose, do not just delegate
+
+A task that spans several kinds of work is usually three. Evaluate each part on its
+own, then route each part separately, in parallel where they do not depend on each
+other. One call gives you every row you need:
+
+```text
+const t = await tools.spectre.routing({})
+
+subagent({ agent: t.profiles[1].agent, prompt: "find the call sites", model: t.profiles[1].model.ref })
+subagent({ agent: t.profiles[2].agent, prompt: "choose the change",     model: t.profiles[2].model.ref })
+```
+
+The rows above are examples. Take the profiles whose `match` lines fit the two parts,
+not the ones at those positions. A cheap profile is genuinely good at the mechanical
+parts: grep, read, run, report. Spending the expensive profile on that is waste.
+Spending the cheap one on the judgement is the failure above. Decomposing is how you
+get both right.
+
+## A worked example
+
+Task: *run the test suite and tell me what failed.*
+
+The evaluation comes first, and it is about the task:
+
+> One command, one log to read, and the deliverable is a report. Nothing to decide,
+> so the profile whose `match` names a command and a log.
+
+Then the menu, then the choice:
+
+```text
+const t = await tools.spectre.routing({ task: "run the test suite and tell me what failed" })
+// t.status === "resolved"
+// t.judge: { status: "used", profile: "mechanical", confidence: 0.93 }
+// t.profiles: [{ name, match, effort, agent, model: { ref, rung, … }, … }, …]
+
+const picked = t.judge.status === "used" ? t.judge.profile : "mechanical"
+const mechanical = t.profiles.find((one) => one.name === picked)
+
+subagent({
+  agent:       mechanical.agent,       // whatever the tool returned
+  description: "Run tests, report failures",
+  prompt:      "Run the test suite. Report which tests failed and why, quoting the first failing assertion. If everything passes, say so plainly.",
+  model:       mechanical.model.ref,   // copied exactly
+})
+```
+
+Then one line, out loud:
+
+> Routed to `mechanical` on `opencode-go/deepseek-v4.1-flash#low`. The judge chose
+> it at 0.93 confidence. One command and one log, no judgement needed.
+
+A skipped judge ends the same way. Replace the confidence with the reason it gave,
+and pick the profile from the `match` lines yourself:
+
+> Routed to `mechanical` on `opencode-go/deepseek-v4.1-flash#low`. The judge was
+> skipped, so I picked it from the `match` lines. One command and one log.
+
+One line because a model choice nobody hears about looks exactly like a mistake once
+it turns out to be one.

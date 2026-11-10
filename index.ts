@@ -1,6 +1,9 @@
 import { defineBundle } from "./packages/core/index.ts";
+import { routing } from "./blocks/routing/index.ts";
 
-export default defineBundle({
+export const bundle = defineBundle({
   id: "yriveiro.spectre",
-  blocks: [],
-}).plugin;
+  blocks: [routing({ agents: ["spectre"] })],
+});
+
+export default bundle.plugin;

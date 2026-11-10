@@ -6,6 +6,8 @@
     "moduleResolution": "bundler",
     "moduleDetection": "force",
     "types": ["node", "bun"],
+    "jsx": "preserve",
+    "jsxImportSource": "@opentui/solid",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
@@ -14,5 +16,11 @@
     "isolatedModules": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["index.ts", "packages/**/*.ts"]
+  "include": [
+    "index.ts",
+    "packages/**/*.ts",
+    "blocks/**/*.ts",
+    "blocks/**/*.tsx",
+    "tui/**/*.tsx"
+  ]
 }
