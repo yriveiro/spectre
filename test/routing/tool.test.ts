@@ -34,13 +34,15 @@ const call = async (
   directory: string,
   input: { profile?: string; task?: string; setup?: "accepted" | "declined" } = {},
   list?: () => Effect.Effect<unknown, unknown>,
+  session?: { readonly id: string; readonly sessions: Record<string, string> },
 ) => {
-  const run = routing(context(directory, list)).execute as unknown as (
+  const run = routing(context(directory, list, session?.sessions)).execute as unknown as (
     given: typeof input,
+    context: { readonly sessionID: string },
   ) => Effect.Effect<{
     output: Page;
   }>;
-  return (await Effect.runPromise(run(input))).output;
+  return (await Effect.runPromise(run(input, { sessionID: session?.id ?? "ses_project" }))).output;
 };
 
 /** The answer, once the test states which status it expects. */
@@ -110,6 +112,67 @@ describe("tools.spectre.routing", () => {
     expect(out.models).toEqual([{ name: "light", model: "acme/falcon-mini" }]);
     expect(out.sources).toEqual([`${scratch.projectDir()}/spectre.json`]);
     expect(out.asked).toEqual([]);
+  });
+
+  test("the config is read from the invoking session's directory, not the plugin's", async () => {
+    await scratch.writeProject(good);
+    const worktree = `${scratch.projectDir()}-worktree`;
+    await Bun.write(
+      `${worktree}/spectre.json`,
+      JSON.stringify({
+        models: { max: "acme/falcon-max" },
+        profiles: { explorer: { effort: "high" } },
+      }),
+    );
+
+    const out = at(
+      await call(scratch.projectDir(), {}, undefined, {
+        id: "ses_worktree",
+        sessions: { ses_worktree: worktree },
+      }),
+      "resolved",
+    );
+
+    expect(out.sources).toEqual([`${worktree}/spectre.json`]);
+    expect(out.profiles[0]?.model.ref).toBe("acme/falcon-max#high");
+  });
+
+  test("a session that moved reads the new directory on the next call and asks setup when it has no file", async () => {
+    await scratch.writeProject(good);
+    const sessions = { ses_live: scratch.projectDir() };
+    const before = at(
+      await call(scratch.projectDir(), {}, undefined, { id: "ses_live", sessions }),
+      "resolved",
+    );
+    expect(before.sources).toEqual([`${scratch.projectDir()}/spectre.json`]);
+
+    const moved = `${scratch.projectDir()}-moved`;
+    await Bun.write(`${moved}/.keep`, "");
+    sessions.ses_live = moved;
+    const after = at(
+      await call(scratch.projectDir(), {}, undefined, { id: "ses_live", sessions }),
+      "setup",
+    );
+    expect(after.source).toBe(`${moved}/spectre.json`);
+  });
+
+  test("a global file with no allowlist does not stop the setup question", async () => {
+    await scratch.writeGlobal(JSON.stringify({ dictionary: "words.json" }));
+    const out = at(await call(scratch.projectDir()), "setup");
+    expect(out.source).toBe(`${scratch.projectDir()}/spectre.json`);
+    expect(out.models.length).toBeGreaterThan(0);
+  });
+
+  test("a global allowlist resolves a repository with no project file", async () => {
+    await scratch.writeGlobal(
+      JSON.stringify({
+        models: { light: "acme/falcon-mini" },
+        profiles: { explorer: { effort: "high" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir()), "resolved");
+    expect(out.sources).toEqual([`${scratch.globalDir()}/spectre.json`]);
+    expect(out.profiles[0]?.model.ref).toBe("acme/falcon-mini#high");
   });
 
   test("the first qualifying candidate is spent, and a candidate under the bar reports its capacity", async () => {

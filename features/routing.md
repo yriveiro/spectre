@@ -150,6 +150,12 @@ can do, and the resolver has to say which part.
 `provider` is the default the page opens with and the default the starter set
 writes. It is not a restriction: the allowlist may mix providers.
 
+The tool reads the file from the directory the invoking session is in, on every
+call. A session that moves into a worktree reads that worktree's file on the
+next call, and a directory with no file is a repository that has not answered
+the setup question, whatever file sits in the directory the session left. The
+page follows the same rule.
+
 `crosscheck` is the second opinion, stated as a requirement rather than as a
 model id. The current ladder's third and fourth rungs were not preferences.
 They were a rule: a second family, and a free one where the free model could

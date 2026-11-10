@@ -3,7 +3,7 @@ import type { ResolvedTheme } from "@opencode/theme/tui";
 import { type KeyEvent, type RGBA, TextAttributes } from "@opentui/core";
 import { type JSX, useRenderer } from "@opentui/solid";
 import { createSignal } from "solid-js";
-import { KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
+import { FILE_NAME, KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
 import {
   addProfilePrompt,
   applied,
@@ -60,6 +60,8 @@ export type PageInput = {
   readonly onTabChange?: ((tab: TabId) => void) | undefined;
   readonly selectedRow?: number | undefined;
   readonly onRowChange?: ((row: number) => void) | undefined;
+  /** True while the directory's config is being read. */
+  readonly loading?: boolean | undefined;
   readonly jevAvailable?: boolean | undefined;
   readonly terminalWidth?: number | undefined;
   readonly terminalHeight?: number | undefined;
@@ -1303,10 +1305,25 @@ export const page = (input: PageInput): JSX.Element => {
         h("text", { fg: colors.text, attributes: TextAttributes.BOLD }, "Routing"),
         h("text", { fg: colors.teal, onMouseUp: close }, "Esc"),
       ),
+      field(theme, "Config", () => input.source ?? "None yet"),
       show(
+        () => input.loading === true,
+        () => indentedLine(colors.muted, `Reading ${input.draft.directory}…`),
+      ),
+      show(
+        () => input.loading !== true && input.source === undefined,
         () =>
-          input.source !== undefined || (configuredRows.length === 0 && usableModels.length === 0),
-        () => field(theme, "Config", () => input.source ?? "None yet"),
+          indentedLine(
+            colors.warning,
+            `No ${FILE_NAME} in ${input.draft.directory}. The page writes one when you save.`,
+          ),
+      ),
+      show(
+        () => input.draft.problems.length > 0,
+        () =>
+          h("box", { flexDirection: "column" }, () =>
+            input.draft.problems.map((one) => indentedLine(colors.red, one)),
+          ),
       ),
       providerBar({
         colors,

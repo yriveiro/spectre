@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { catalogue, effortDots, read, resolve, save } from "../../tui/data";
+import { catalogue, directoryOf, effortDots, read, resolve, save } from "../../tui/data";
 
 const scratch = () => join(Bun.env.TMPDIR ?? "/tmp", `spectre-tui-data-${crypto.randomUUID()}`);
 
@@ -105,10 +105,13 @@ const project = async () => {
 };
 
 describe("the page reads the repository's own file", () => {
-  test("a file with no config reads with the default profiles enabled", async () => {
+  test("a file with no config reads with the default profiles enabled, and says there is no file", async () => {
     const at = scratch();
     await Bun.write(`${at}/.keep`, "");
     const draft = await read(at);
+    expect(draft.directory).toBe(at);
+    expect(draft.source).toBeUndefined();
+    expect(draft.problems).toEqual([]);
     expect(draft.models).toEqual([]);
     expect(draft.profiles.map((one) => one.name)).toEqual([
       "mechanical",
@@ -171,6 +174,54 @@ describe("the page reads the repository's own file", () => {
   });
 });
 
+describe("the page reads the directory the session is in", () => {
+  const at = (directory: string) => ({ location: { directory } });
+  const sessions = { ses_main: at("/main"), ses_worktree: at("/worktree") };
+  const session = (id: string) => sessions[id as keyof typeof sessions];
+
+  test("the named session wins over the location the TUI opened in", () => {
+    expect(
+      directoryOf({
+        sessionID: "ses_worktree",
+        session,
+        route: { type: "home" },
+        location: { directory: "/main" },
+        fallback: "/",
+      }),
+    ).toBe("/worktree");
+  });
+
+  test("the route's session answers when no session is named", () => {
+    expect(
+      directoryOf({
+        session,
+        route: { type: "session", sessionID: "ses_worktree" },
+        location: { directory: "/main" },
+        fallback: "/",
+      }),
+    ).toBe("/worktree");
+  });
+
+  test("the TUI's own location is the fallback, never a guess", () => {
+    expect(
+      directoryOf({
+        session: () => undefined,
+        route: { type: "home" },
+        location: { directory: "/main" },
+        fallback: "/",
+      }),
+    ).toBe("/main");
+    expect(
+      directoryOf({
+        session: () => undefined,
+        route: { type: "home" },
+        location: undefined,
+        fallback: "/",
+      }),
+    ).toBe("/");
+  });
+});
+
 describe("the page resolves what the tool resolves", () => {
   test("a profile spends the first allowed model that meets its effort", async () => {
     const at = await project();
@@ -227,7 +278,7 @@ describe("the page writes through the writer", () => {
   test("the save keeps the keys the page does not edit, and drops the decline", async () => {
     const at = await project();
     const draft = await read(at);
-    await save(at, {
+    await save({
       ...draft,
       profiles: draft.profiles.map((one) =>
         one.name === "mechanical" ? { ...one, effort: "high" } : one,
@@ -241,11 +292,13 @@ describe("the page writes through the writer", () => {
     expect(profiles.mechanical?.effort).toBe("high");
   });
 
-  test("a file that does not decode is refused and left alone", async () => {
+  test("a file that does not decode is reported, refused, and left alone", async () => {
     const at = await project();
     await Bun.write(`${at}/spectre.json`, "{ broken");
     const draft = await read(at);
-    await expect(save(at, draft)).rejects.toThrow();
+    expect(draft.source).toBe(`${at}/spectre.json`);
+    expect(draft.problems[0]).toContain(`${at}/spectre.json`);
+    await expect(save(draft)).rejects.toThrow();
     expect(await Bun.file(`${at}/spectre.json`).text()).toBe("{ broken");
   });
 });

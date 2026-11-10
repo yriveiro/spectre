@@ -179,6 +179,11 @@ working. The writer only ever writes `spectre.json`.
 The global directory follows OpenCode's own precedence, so a user already pointing
 `OPENCODE_CONFIG_DIR` somewhere needs no second thing to remember.
 
+The tool reads the project file from the directory the session is in. A session
+moved into a worktree reads that worktree's file on the next call, and the TUI
+follows the session it renders for, so neither surface shows the models of the
+directory the session left.
+
 ### Reading it
 
 The file is JSON. The reader tolerates comments, and the writer never writes

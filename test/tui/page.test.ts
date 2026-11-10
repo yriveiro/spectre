@@ -70,6 +70,9 @@ const models: ReadonlyArray<Model> = [
 ];
 
 const draft: Draft = {
+  directory: "/tmp/project",
+  source: "/tmp/project/spectre.json",
+  problems: [],
   provider: "acme",
   models: [
     { alias: "muse", ref: "acme/muse-spark-1.3" },
@@ -171,6 +174,9 @@ const frame = async (input: {
   readonly onClose?: () => void;
   readonly onChange?: (next: Draft) => void;
   readonly onProviderChange?: (next: Draft) => void;
+  /** `null` renders the page for a directory with no file. */
+  readonly source?: string | null;
+  readonly loading?: boolean;
 }) => {
   const { asked, shownRenders, context } = host(input.answer);
   const setup = await testRender(
@@ -184,13 +190,15 @@ const frame = async (input: {
             catalogue: input.catalogue ?? models,
             draft: input.draft ?? draft,
             tab: input.tab,
+            loading: input.loading,
             jevAvailable: input.jevAvailable,
             onTabChange: input.onTabChange,
             onChange: input.onChange ?? (() => {}),
             onProviderChange: input.onProviderChange,
             onSave: input.onSave ?? (() => {}),
             onClose: input.onClose ?? (() => {}),
-            source: "/tmp/project/spectre.json",
+            source:
+              input.source === null ? undefined : (input.source ?? "/tmp/project/spectre.json"),
           });
         },
       }),
@@ -228,6 +236,34 @@ describe("the modal draws what the session would spend", () => {
     expect(drawn).toContain("Profile info");
     expect(drawn).toContain("Close");
     await setup.dispose();
+  });
+
+  test("the frame shows a reader problem and says when the directory has no file", async () => {
+    const broken = await frame({
+      draft: {
+        ...draft,
+        problems: ["/tmp/project/spectre.json: Expected a value at models"],
+      },
+    });
+    expect(broken.setup.captureCharFrame()).toContain("Expected a value at models");
+    await broken.setup.dispose();
+
+    const missing = await frame({
+      draft: { ...draft, source: undefined, problems: [] },
+      source: null,
+    });
+    expect(missing.setup.captureCharFrame()).toContain("No spectre.json in /tmp/project");
+    await missing.setup.dispose();
+
+    const reading = await frame({
+      draft: { ...draft, source: undefined, problems: [] },
+      source: null,
+      loading: true,
+    });
+    const readingFrame = reading.setup.captureCharFrame();
+    expect(readingFrame).toContain("Reading /tmp/project");
+    expect(readingFrame).not.toContain("No spectre.json in /tmp/project");
+    await reading.setup.dispose();
   });
 
   test("layoutMetrics calculates available space so model names are not trimmed in wide terminals", async () => {
@@ -940,6 +976,21 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
       resolutions: sidebarRows,
     });
     expect(childLine).toBe("worker muse ●●●○, $0.1/$0.2");
+
+    const failedRow = sidebarRows[1];
+    const failedProfile = draft.profiles[1];
+    if (failedRow === undefined || failedProfile === undefined)
+      throw new Error("the pinned row is missing");
+    const failedLine = subagentLine({
+      session: {
+        parentID: "ses_root",
+        agent: "spectre",
+        model: { providerID: "acme", id: "muse-spark-1.3", variant: "high" },
+      },
+      profiles: [failedProfile],
+      resolutions: [failedRow],
+    });
+    expect(failedLine).toBe("Error");
 
     const childSetup = await testRender(
       () => subagentFooter({ theme: theme as never, line: () => childLine }),

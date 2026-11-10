@@ -47,6 +47,12 @@ export type Profile = {
 };
 
 export type Draft = {
+  /** The directory this draft was read from. A session move makes it stale. */
+  readonly directory: string;
+  /** The file the draft was read from, or `undefined` when there is none. */
+  readonly source: string | undefined;
+  /** What the reader found wrong with the file, one line per problem. */
+  readonly problems: ReadonlyArray<string>;
   readonly provider: string | undefined;
   readonly models: ReadonlyArray<{ readonly alias: string; readonly ref: string }>;
   readonly profiles: ReadonlyArray<Profile>;
@@ -122,49 +128,89 @@ const pins = (model: ProfileEntry["model"]): ReadonlyArray<string> => {
   return typeof model === "string" ? [model] : model;
 };
 
-export const source = (directory: string): Promise<string | undefined> =>
-  Effect.runPromise(projectPath(directory));
+/** The part of a session the page reads: where the session is. */
+export type SessionAt = {
+  readonly location?: { readonly directory?: string | undefined } | undefined;
+};
 
-export const read = (directory: string): Promise<Draft> =>
-  Effect.runPromise(loadProject(directory)).then((found) => {
-    const models = Object.entries(found.tables.models).map(([alias, ref]) => ({ alias, ref }));
-    const held = new Set(models.map((one) => one.alias));
+export type RouteAt =
+  | { readonly type: "home" }
+  | { readonly type: "session"; readonly sessionID: string }
+  | { readonly type: "plugin"; readonly id: string; readonly name: string };
 
-    if (!found.configuredProfiles) {
-      return {
-        provider: found.tables.provider,
-        judge: found.tables.judge,
-        models,
-        profiles: defaultProfiles(true),
-      };
-    }
+/**
+ * The directory the config is read from: the one the session is in.
+ *
+ * The named session wins, then the session the route points at, then the
+ * location this TUI opened in. A session carries its own location and a move
+ * updates it, so this answers the new worktree on the render after the move.
+ */
+export const directoryOf = (input: {
+  readonly sessionID?: string | undefined;
+  readonly session: (sessionID: string) => SessionAt | undefined;
+  readonly route: RouteAt;
+  readonly location: { readonly directory?: string | undefined } | undefined;
+  readonly fallback: string;
+}): string => {
+  const named =
+    input.sessionID === undefined ? undefined : input.session(input.sessionID)?.location?.directory;
+  if (named !== undefined) return named;
+  const routed =
+    input.route.type === "session"
+      ? input.session(input.route.sessionID)?.location?.directory
+      : undefined;
+  return routed ?? input.location?.directory ?? input.fallback;
+};
 
-    const fromFile = Object.entries(found.tables.profiles).map(([name, entry]): Profile => {
-      const named = pins(entry.model);
-      return {
-        name,
-        effort: entry.effort,
-        match: entry.match,
-        why: entry.why,
-        crosscheck:
-          entry.crosscheck === undefined
-            ? undefined
-            : { effort: entry.crosscheck.effort, prefer: entry.crosscheck.prefer },
-        agent: entry.agent ?? DEFAULT_AGENT,
-        pinned: named.find((one) => held.has(one)) ?? named[0],
-        enabled: true,
-      };
-    });
-    const configuredNames = new Set(fromFile.map((one) => one.name));
-    const disabledDefaults = defaultProfiles(false).filter((one) => !configuredNames.has(one.name));
+export const read = async (directory: string): Promise<Draft> => {
+  // The path is read separately because a file that does not decode contributes
+  // no source, and the page still has to name the file it could not read.
+  const source = await Effect.runPromise(projectPath(directory)).catch(() => undefined);
+  const found = await Effect.runPromise(loadProject(directory));
+  const models = Object.entries(found.tables.models).map(([alias, ref]) => ({ alias, ref }));
+  const held = new Set(models.map((one) => one.alias));
 
+  if (!found.configuredProfiles) {
     return {
+      directory,
+      source,
+      problems: found.problems,
       provider: found.tables.provider,
       judge: found.tables.judge,
       models,
-      profiles: [...fromFile, ...disabledDefaults],
+      profiles: defaultProfiles(true),
+    };
+  }
+
+  const fromFile = Object.entries(found.tables.profiles).map(([name, entry]): Profile => {
+    const named = pins(entry.model);
+    return {
+      name,
+      effort: entry.effort,
+      match: entry.match,
+      why: entry.why,
+      crosscheck:
+        entry.crosscheck === undefined
+          ? undefined
+          : { effort: entry.crosscheck.effort, prefer: entry.crosscheck.prefer },
+      agent: entry.agent ?? DEFAULT_AGENT,
+      pinned: named.find((one) => held.has(one)) ?? named[0],
+      enabled: true,
     };
   });
+  const configuredNames = new Set(fromFile.map((one) => one.name));
+  const disabledDefaults = defaultProfiles(false).filter((one) => !configuredNames.has(one.name));
+
+  return {
+    directory,
+    source,
+    problems: found.problems,
+    provider: found.tables.provider,
+    judge: found.tables.judge,
+    models,
+    profiles: [...fromFile, ...disabledDefaults],
+  };
+};
 
 type Row = Model & {
   readonly status?: string;
@@ -287,8 +333,8 @@ const written = (draft: Draft): Parameters<typeof writeConfig>[1] => ({
 
 export const formatConfig = (draft: Draft): string => serialise(written(draft)).trimEnd();
 
-export const save = (directory: string, draft: Draft): Promise<void> => {
-  const path = `${directory}/${FILE_NAME}`;
+export const save = (draft: Draft): Promise<void> => {
+  const path = `${draft.directory}/${FILE_NAME}`;
   return preserved(path).then((kept) => {
     const rest = { ...kept };
     delete rest.setup;

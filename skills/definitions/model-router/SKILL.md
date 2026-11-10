@@ -9,8 +9,10 @@ Read the task, ask the resolver for a model, spend the ref it returned, say what
    judgement, and what a wrong answer would cost.
 2. **Ask.** Call `tools.spectre.routing({ task: "<the task statement>" })`. The
    `task` is the statement the judge reads. The tool reads `spectre.json` (and
-   `spectre.jsonc` when that is the file there), merges the global and project
-   files, and resolves every profile against the live catalogue.
+   `spectre.jsonc` when that is the file there) from the directory the session
+   is in, merges the global and project files, and resolves every profile
+   against the live catalogue. A session that moved into a worktree reads that
+   worktree's file on the next call.
 3. **Choose.** Read `judge` first. When it is `used`, take the row it names.
    When it is `skipped`, take the profile whose `match` line fits your
    evaluation. The profile's `effort` is the thinking it needs, and the resolver

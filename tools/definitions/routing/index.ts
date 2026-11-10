@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Integration } from "@opencode/plugin/effect";
 import type { Model } from "@opencode/schema/model";
+import type { Session } from "@opencode/schema/session";
 import type { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
 import { agentIds } from "../../../agents";
@@ -9,7 +10,7 @@ import { check } from "./check";
 import { jevJudge, SYSTEMONE_KEY_ENV } from "./jev";
 import { type Judge, lexicalJudge, surface, type Verdict } from "./judge";
 import { decode, load } from "./load";
-import { FILE_NAME } from "./locate";
+import { FILE_NAME, projectPath } from "./locate";
 import { decide } from "./policy";
 import { resolve } from "./resolve";
 import {
@@ -29,8 +30,10 @@ import { writeConfig } from "./write";
  * with no config, `declined` is the stored answer "no", and `problems` is a
  * config that cannot be routed on.
  *
- * The config is read on every call, so an edit made mid-session routes on the
- * edit. The policy is `resolve.ts`, and the validation is `check.ts`.
+ * The config is read from the invoking session's directory on every call, so an
+ * edit made mid-session routes on the edit, and a session that moved into a
+ * worktree routes on that worktree's file. The policy is `resolve.ts`, and the
+ * validation is `check.ts`.
  *
  * The judge is optional, and a `resolved` answer says which path chose the
  * profile. The judge names a profile and never a model, so it cannot change
@@ -189,6 +192,26 @@ What comes back, by \`status\`:
 The allowlist is the whole vocabulary. A ref that is not in \`models\` is not spendable on a spectre subagent, however many models the provider offers. Never write a model id from memory. If nothing here fits, say so and ask.
 
 A profile states what a task needs in \`effort\` and when to reach for it in \`match\`. The resolver reads the allowlist order and the live catalogue. It never reads \`why\`, which is the rationale for the human.`;
+
+/**
+ * The directory the config is read from: the one the invoking session is in.
+ *
+ * A session carries its own location and `session.move` updates it, so a session
+ * moved into a worktree reads that worktree's file. `ctx.location` is the
+ * location the plugin loaded with, and it is the fallback only: reading it after
+ * a move would read the file of the directory the session left.
+ */
+const sessionDirectory = (
+  ctx: Plugin.Context,
+  sessionID: Session.ID | undefined,
+): Effect.Effect<string> =>
+  Effect.gen(function* () {
+    if (sessionID === undefined) return ctx.location.directory;
+    const session = yield* ctx.session
+      .get({ sessionID })
+      .pipe(Effect.catchCause(() => Effect.succeed(undefined)));
+    return session?.location.directory ?? ctx.location.directory;
+  });
 
 const catalogue = (ctx: Plugin.Context) =>
   ctx.model.list().pipe(
@@ -411,9 +434,12 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
     pinned: true,
     permission: "read",
   },
-  execute: (input) =>
+  execute: (input, context) =>
     Effect.gen(function* () {
-      const directory = ctx.location.directory;
+      // The session owns the directory. A project session that moved into a
+      // worktree reads that worktree's config on the next call, which is the
+      // call that routes the next task.
+      const directory = yield* sessionDirectory(ctx, context.sessionID);
       const path = `${directory}/${FILE_NAME}`;
 
       // The setup action writes one file and then answers from what it wrote.
@@ -431,8 +457,16 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
 
       const found = yield* load(directory);
 
-      // No file anywhere: the repository has not answered the setup question.
-      if (found.sources.length === 0) {
+      // No routing config: the project has no file, and the files that do
+      // exist, such as a global dictionary, set no allowlist and no profiles.
+      // A project file is an answer even when it is an empty one, so only its
+      // absence asks the setup question.
+      const unconfigured =
+        (yield* projectPath(directory)) === undefined &&
+        found.tables.setup === undefined &&
+        Object.keys(found.tables.models).length === 0 &&
+        !found.configuredProfiles;
+      if (unconfigured) {
         const set = yield* starter;
         if (set.problem !== undefined) return failed([set.problem]);
         if (set.file === undefined) return failed([`${path}: the starter set could not be read`]);
