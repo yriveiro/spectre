@@ -75,12 +75,12 @@ choice, with a reason attached**.
 
 ## Config surface
 
-Two keys. Neither builds an agent. This is spectre's own config and it is not
+Three keys. None of them builds an agent. This is spectre's own config and it is not
 OpenCode's: `opencode.jsonc` only loads the plugin.
 
-- **`models`.** The spend whitelist. An alias, and the ref to spend. Every model
-  string the resolver may emit is one of these. The order is the preference
-  order: the first entry that fits is the one that is spent.
+- **`models` and `priority`.** The allowlist: an alias, and the ref to spend.
+  `priority` names the order: the first entry that fits is the one that is
+  spent. The order of the `models` object is a readable map, not the policy.
 - **`profiles`.** The router's vocabulary. A name, the effort it asks for, the
   moment it serves, and the reason, so a choice is legible rather than
   arbitrary.
@@ -91,6 +91,7 @@ OpenCode's: `opencode.jsonc` only loads the plugin.
     "muse":    "opencode-go/muse-spark-1.3-contributor",
     "minimax": "opencode-go/minimax-m3.1-flash-free"
   },
+  "priority": ["muse", "minimax"],
 
   "profiles": {
     "search": {

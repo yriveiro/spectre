@@ -13,10 +13,9 @@ import { Schema } from "effect";
 /** One model, or several in order of preference. */
 const ModelNames = Schema.Union([Schema.String, Schema.Array(Schema.String)]);
 
-/** The second opinion: the effort it is asked for, and how it is chosen. */
+/** The second opinion: the effort it is asked for. */
 const Crosscheck = Schema.Struct({
   effort: Schema.optional(Schema.String),
-  prefer: Schema.optional(Schema.Literals(["free"])),
 });
 export type Crosscheck = typeof Crosscheck.Type;
 
@@ -86,6 +85,11 @@ export const Config = Schema.Struct({
   /** The default provider the page opens with, and the starter set. */
   provider: Schema.optional(Schema.String),
   models: Schema.optional(Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Null]))),
+  /**
+   * The allowlist in priority order, highest first. The resolver reads this
+   * list, never the order the `models` object happens to have in the file.
+   */
+  priority: Schema.optional(Schema.Array(Schema.String)),
   profiles: Schema.optional(Schema.Record(Schema.String, Schema.Union([Profile, Schema.Null]))),
   /**
    * The judge, when the file asks for one. `null` says no, and it removes a
@@ -125,6 +129,8 @@ export type Tables = {
    */
   readonly setup?: { readonly from: string } | undefined;
   readonly models: Readonly<Record<string, string>>;
+  /** The allowlist in priority order, or absent when the file states none. */
+  readonly priority: ReadonlyArray<string> | undefined;
   readonly profiles: Readonly<Record<string, Profile>>;
   /** The configured path, resolved against the config file that set it, or absent. */
   readonly dictionary?: { readonly path: string; readonly from: string };
@@ -230,17 +236,17 @@ export const DEFAULT_PROFILES: Readonly<Record<string, Profile>> = {
   },
   worker: {
     effort: "high",
-    crosscheck: { effort: "high", prefer: "free" },
+    crosscheck: { effort: "high" },
     match:
       "Use when the change is already decided and the task is to carry it out across several files: add the field, write the test, make the edits. Not for choosing between two defensible designs.",
-    why: "A change that is already decided and has to be executed across several files. The model holds one plan while editing it, so it takes a high effort rather than the floor. The free model is the last rung, so the cross-check costs nothing.",
+    why: "A change that is already decided and has to be executed across several files. The model holds one plan while editing it, so it takes a high effort rather than the floor. A second family at the same effort gives a second opinion on the change.",
   },
   judgment: {
     effort: "high",
-    crosscheck: { effort: "high", prefer: "free" },
+    crosscheck: { effort: "high" },
     match:
       "Use when two defensible options exist and one has to be chosen, and a wrong call is expensive to undo: which design, which of these two parsers, whether to keep the branch. Not for executing a change that is already decided.",
-    why: "Two defensible options and one has to be chosen. High effort on one family, the same level on the other as the cross-check, because a wrong call is expensive to undo and a second opinion is the cheapest way to catch one. The free model takes that second opinion.",
+    why: "Two defensible options and one has to be chosen. High effort on one family, the same level on the other as the cross-check, because a wrong call is expensive to undo and a second opinion is the cheapest way to catch one. The second opinion comes from another family at the same effort.",
   },
   thinking: {
     effort: "max",
@@ -258,10 +264,10 @@ export const DEFAULT_PROFILES: Readonly<Record<string, Profile>> = {
   },
   refactor: {
     effort: "high",
-    crosscheck: { effort: "max", prefer: "free" },
+    crosscheck: { effort: "max" },
     match:
       "Use when the task is to restructure code that already works, across files, without changing behaviour: rename, move, extract, split. Not for a new behaviour.",
-    why: "Restructure code that already works, across files, without changing behaviour. It needs thinking plus breadth of reading, so it takes the second-highest effort rather than the top, and keeps the other model's second-highest in reserve for the mechanical part of the move. The free model is the last rung.",
+    why: "Restructure code that already works, across files, without changing behaviour. It needs thinking plus breadth of reading, so it takes the second-highest effort rather than the top, and keeps the other model's second-highest in reserve for the mechanical part of the move. The second opinion comes from another family at the top effort.",
   },
 };
 

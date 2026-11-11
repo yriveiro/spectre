@@ -47,6 +47,7 @@ export type ProfileRow = {
 export type EntryRow = {
   readonly alias: string;
   readonly ref: string;
+  readonly priority: number;
   readonly model: Model | undefined;
   readonly problem?: string | undefined;
 };
@@ -130,12 +131,13 @@ export type LayoutMetrics = {
   };
   readonly entryColumns: {
     readonly gutter: number;
-    readonly index: number;
+    readonly priority: number;
     readonly alias: number;
     readonly family: number;
     readonly rungs: number;
     readonly model: number;
     readonly cost: number;
+    readonly move: number;
     readonly remove: number;
   };
 };
@@ -187,7 +189,8 @@ export const layoutMetrics = (input: {
   );
 
   const eGutter = 2;
-  const eIndex = 3;
+  const ePriority = 8;
+  const eMove = 4;
   const eRemove = 6;
   const maxAlias = input.models.reduce((max, one) => Math.max(max, one.alias.length), 5);
   const eAlias = Math.max(8, Math.min(16, maxAlias + 1));
@@ -211,10 +214,10 @@ export const layoutMetrics = (input: {
     return Math.max(max, text.length);
   }, 4);
   const eCost = Math.max(6, Math.min(12, maxEntryCost));
-  const eGaps = 7;
+  const eGaps = 8;
   const eModel = Math.max(
     18,
-    innerWidth - eGutter - eIndex - eAlias - eFamily - eRungs - eCost - eRemove - eGaps,
+    innerWidth - eGutter - ePriority - eAlias - eFamily - eRungs - eCost - eMove - eRemove - eGaps,
   );
 
   return {
@@ -239,12 +242,13 @@ export const layoutMetrics = (input: {
     },
     entryColumns: {
       gutter: eGutter,
-      index: eIndex,
+      priority: ePriority,
       alias: eAlias,
       family: eFamily,
       rungs: eRungs,
       model: eModel,
       cost: eCost,
+      move: eMove,
       remove: eRemove,
     },
   };
@@ -393,6 +397,25 @@ const removeBadge = (input: {
     ),
   );
 };
+
+const moveBadges = (input: {
+  readonly colors: Palette;
+  readonly width: number;
+  readonly onUp: () => void;
+  readonly onDown: () => void;
+}): JSX.Element =>
+  h(
+    "box",
+    {
+      width: input.width,
+      flexShrink: 0,
+      flexDirection: "row",
+      justifyContent: "center",
+      columnGap: 1,
+    },
+    h("text", { fg: input.colors.muted, wrapMode: "none", onMouseUp: input.onUp }, "↑"),
+    h("text", { fg: input.colors.muted, wrapMode: "none", onMouseUp: input.onDown }, "↓"),
+  );
 
 const providerBar = (input: {
   readonly colors: Palette;
@@ -631,13 +654,11 @@ const profileRow = (
     readonly effort: () => void;
     readonly pin: () => void;
     readonly crosscheck: () => void;
-    readonly prefer: () => void;
     readonly info: () => void;
     readonly selectRow: () => void;
   },
 ): JSX.Element => {
   const profile = row.profile;
-  const crosscheck = profile.crosscheck;
   const [hovered, setHovered] = createSignal(false);
   const costText = normalizeCost(row.resolution?.cost) ?? "-";
   const costTone = isExpensiveCost(costText) ? colors.yellow : colors.muted;
@@ -707,20 +728,7 @@ const profileRow = (
         value: crosscheckValue(row),
         onOpen: actions.crosscheck,
       }),
-      h("box", { width: cols.effort, flexShrink: 0 }),
       h("box", { flexGrow: 1 }),
-      crosscheck === undefined
-        ? null
-        : h(
-            "text",
-            {
-              fg: crosscheck.prefer === "free" ? colors.green : colors.muted,
-              flexShrink: 0,
-              wrapMode: "none",
-              onMouseUp: actions.prefer,
-            },
-            crosscheck.prefer === "free" ? "(●) free" : "(○) free",
-          ),
     ),
     show(
       () => row.resolution?.crosscheckProblem !== undefined,
@@ -737,9 +745,10 @@ const entryRow = (
   colors: Palette,
   cols: LayoutMetrics["entryColumns"],
   row: EntryRow,
-  index: number,
   selected: boolean,
   actions: {
+    readonly up: () => void;
+    readonly down: () => void;
     readonly remove: () => void;
     readonly selectRow: () => void;
   },
@@ -762,7 +771,7 @@ const entryRow = (
       "box",
       { flexDirection: "row", columnGap: 1, width: "100%" },
       cell(cols.gutter, () => (selected ? "▸" : " "), colors.cyan),
-      cell(cols.index, () => String(index + 1), colors.faint),
+      cell(cols.priority, () => String(row.priority), colors.faint),
       cell(cols.alias, () => row.alias, selected ? colors.cyan : colors.text),
       cell(cols.family, () => model?.family ?? "-", colors.text),
       cell(
@@ -776,6 +785,7 @@ const entryRow = (
         () => (model === undefined ? "-" : formatCost(model.costInput, model.costOutput)),
         colors.muted,
       ),
+      moveBadges({ colors, width: cols.move, onUp: actions.up, onDown: actions.down }),
       removeBadge({ colors, width: cols.remove, onRemove: actions.remove }),
     ),
   );
@@ -833,12 +843,13 @@ const headerCells = {
   ],
   entries: (colors: Palette, cols: LayoutMetrics["entryColumns"]): ReadonlyArray<JSX.Element> => [
     cell(cols.gutter, () => "", colors.blue),
-    cell(cols.index, () => "#", colors.blue),
+    cell(cols.priority, () => "Priority", colors.blue),
     cell(cols.alias, () => "Alias", colors.blue),
     cell(cols.family, () => "Family", colors.blue),
     cell(cols.rungs, () => "Rungs", colors.blue),
     modelCell(cols.model, () => "Model", colors.blue),
     costCell(cols.cost, () => "Cost", colors.blue),
+    cell(cols.move, () => "", colors.blue),
     cell(cols.remove, () => "Remove", colors.blue),
   ],
 };
@@ -926,7 +937,6 @@ const activeTabBody = (input: {
     readonly effort: () => void;
     readonly pin: () => void;
     readonly crosscheck: () => void;
-    readonly prefer: () => void;
     readonly info: () => void;
     readonly selectRow: () => void;
   };
@@ -943,6 +953,8 @@ const activeTabBody = (input: {
     row: EntryRow,
     index: number,
   ) => {
+    readonly up: () => void;
+    readonly down: () => void;
     readonly remove: () => void;
     readonly selectRow: () => void;
   };
@@ -984,7 +996,6 @@ const activeTabBody = (input: {
             colors,
             metrics.entryColumns,
             row,
-            index,
             index === input.selectedEntryRow(),
             input.entryActions(row, index),
           ),
@@ -996,7 +1007,7 @@ const activeTabBody = (input: {
     );
     return section(
       colors,
-      "The resolver reads the entries from the top and spends the first model that fits.",
+      "Priority is the explicit order. The resolver spends the first model that fits, from the top. K/J or the arrows move the selected entry.",
       headerCells.entries(colors, metrics.entryColumns),
       entries,
     );
@@ -1044,6 +1055,7 @@ export const dispatchModalKey = (
     readonly close: () => void;
     readonly moveTab: (delta: number) => void;
     readonly moveRow: (delta: number) => void;
+    readonly moveModel?: (delta: -1 | 1) => void;
     readonly addModel?: () => void;
     readonly removeModel?: () => void;
     readonly toggleProfile?: () => void;
@@ -1092,6 +1104,16 @@ export const dispatchModalKey = (
   if (tabDelta !== undefined) {
     event.preventDefault();
     actions.moveTab(tabDelta);
+    return;
+  }
+  if (key === "K" || (key === "k" && event.shift)) {
+    event.preventDefault();
+    actions.moveModel?.(-1);
+    return;
+  }
+  if (key === "J" || (key === "j" && event.shift)) {
+    event.preventDefault();
+    actions.moveModel?.(1);
     return;
   }
   const rowDelta = ROW_DELTAS[key];
@@ -1251,6 +1273,12 @@ export const page = (input: PageInput): JSX.Element => {
           setSelectedEntryRow(next);
         }
       },
+      moveModel: (delta) => {
+        if (activeTab !== "allowlist") return;
+        const row = usableModels[selectedEntryRow()];
+        if (row !== undefined)
+          input.onChange(applied(input.draft, { kind: "move-model", alias: row.alias, delta }));
+      },
       addModel: activeTab === "profiles" ? openAddProfile : openAddModel,
       removeModel: activeTab === "profiles" ? triggerRemoveProfile : triggerRemoveModel,
       toggleProfile: () => {
@@ -1288,20 +1316,6 @@ export const page = (input: PageInput): JSX.Element => {
           profile: row.profile,
         }),
       ),
-    prefer: () => {
-      const current = row.profile.crosscheck;
-      if (current === undefined) return;
-      input.onChange(
-        applied(input.draft, {
-          kind: "crosscheck",
-          profile: row.profile.name,
-          crosscheck: {
-            effort: current.effort,
-            prefer: current.prefer === "free" ? undefined : "free",
-          },
-        }),
-      );
-    },
     info: () => openProfileInfo(row),
     selectRow: () => {
       setSelectedRow(index);
@@ -1319,6 +1333,10 @@ export const page = (input: PageInput): JSX.Element => {
   });
 
   const entryActions = (row: EntryRow, index: number) => ({
+    up: () =>
+      input.onChange(applied(input.draft, { kind: "move-model", alias: row.alias, delta: -1 })),
+    down: () =>
+      input.onChange(applied(input.draft, { kind: "move-model", alias: row.alias, delta: 1 })),
     remove: () => removeEntryByAlias(row.alias),
     selectRow: () => {
       setSelectedEntryRow(index);

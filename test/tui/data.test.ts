@@ -98,9 +98,10 @@ const config = {
     dead: "opencode-go/kimi-k3",
     ghost: "opencode-go/ghost",
   },
+  priority: ["no-tools", "deepseek-flash", "minimax", "muse", "glm-flash", "dead", "ghost"],
   profiles: {
     mechanical: { effort: "low", match: "one command", why: "cheap" },
-    worker: { effort: "high", crosscheck: { effort: "high", prefer: "free" }, agent: "sicko" },
+    worker: { effort: "high", crosscheck: { effort: "high" }, agent: "sicko" },
     pinned: { model: ["ghost", "glm-flash"] },
     lost: { effort: "xhigh" },
     empty: { match: "nothing" },
@@ -164,7 +165,7 @@ describe("the page reads the repository's own file", () => {
     }
   });
 
-  test("the allowlist keeps the order the file lists", async () => {
+  test("the allowlist keeps the priority order", async () => {
     const draft = await read(await project());
     expect(draft.models.map((one) => one.alias)).toEqual([
       "no-tools",
@@ -175,6 +176,36 @@ describe("the page reads the repository's own file", () => {
       "dead",
       "ghost",
     ]);
+  });
+
+  test("the allowlist reads priority, not the order of the models object", async () => {
+    const at = scratch();
+    await Bun.write(
+      `${at}/spectre.json`,
+      JSON.stringify({
+        models: { first: "opencode-go/deepseek-v4.1-flash", second: "opencode-go/glm-5.3-flash" },
+        priority: ["second", "first"],
+      }),
+    );
+    const draft = await read(at);
+    expect(draft.models.map((one) => [one.alias, one.priority])).toEqual([
+      ["second", 1],
+      ["first", 2],
+    ]);
+  });
+
+  test("a save writes the priority order the page shows", async () => {
+    const at = await project();
+    const draft = await read(at);
+    const moved = {
+      ...draft,
+      models: [...draft.models].reverse().map((one, index) => ({ ...one, priority: index + 1 })),
+    };
+    await save(moved);
+    const written = (await Bun.file(`${at}/spectre.json`).json()) as {
+      priority: ReadonlyArray<string>;
+    };
+    expect(written.priority).toEqual(moved.models.map((one) => one.alias));
   });
 
   test("a profile with no effort and no pin says so", async () => {
@@ -246,7 +277,7 @@ describe("the page resolves what the tool resolves", () => {
     expect(mechanical?.cost).toBe("$0.15/$0.6");
   });
 
-  test("a second opinion comes from another family, and the free one when it is asked for", async () => {
+  test("a second opinion comes from the first different family in the priority order", async () => {
     const at = await project();
     const rows = resolve(await read(at), catalogue(models));
     const worker = rows.find((one) => one.profile === "worker");
@@ -254,7 +285,7 @@ describe("the page resolves what the tool resolves", () => {
     expect(worker?.crosscheck).toContain("minimax");
   });
 
-  test("the crosscheck choices read the same rule, mark the configured one, and follow prefer free", async () => {
+  test("the crosscheck choices read the same rule and mark the configured one", async () => {
     const draft = await read(await project());
     const worker = draft.profiles.find((one) => one.name === "worker");
     const mechanical = draft.profiles.find((one) => one.name === "mechanical");
@@ -270,9 +301,9 @@ describe("the page resolves what the tool resolves", () => {
     expect(byLabel.get("high")?.resolved).toContain("minimax");
 
     // A second opinion needs another family, and a single-model allowlist has none.
-    const narrow = {
+    const narrow: Draft = {
       ...draft,
-      models: [{ alias: "deep", ref: "opencode-go/deepseek-v4.1-flash" }],
+      models: [{ alias: "deep", ref: "opencode-go/deepseek-v4.1-flash", priority: 1 }],
     };
     const unreachable = crosscheckOptionsFor(narrow, catalogue(models), worker).find(
       (one) => one.label === "high",
@@ -288,27 +319,19 @@ describe("the page resolves what the tool resolves", () => {
     const paidFirst: Draft = {
       ...draft,
       models: [
-        { alias: "deep", ref: "opencode-go/deepseek-v4.1-flash" },
-        { alias: "glm", ref: "opencode-go/glm-5.3-flash" },
-        { alias: "minimax", ref: "opencode-go/minimax-m3.1-flash-free" },
-      ],
-      profiles: [
-        { ...worker, crosscheck: { effort: "high", prefer: undefined } },
-        { ...worker, name: "free", crosscheck: { effort: "high", prefer: "free" } },
+        { alias: "deep", ref: "opencode-go/deepseek-v4.1-flash", priority: 1 },
+        { alias: "glm", ref: "opencode-go/glm-5.3-flash", priority: 2 },
+        { alias: "minimax", ref: "opencode-go/minimax-m3.1-flash-free", priority: 3 },
       ],
     };
-    const first = paidFirst.profiles[0];
-    const second = paidFirst.profiles[1];
-    if (first === undefined || second === undefined)
-      throw new Error("the trial profiles are missing");
+    const first = paidFirst.profiles.find((one) => one.name === "worker");
+    if (first === undefined) throw new Error("the trial profile is missing");
     const paid = crosscheckOptionsFor(paidFirst, catalogue(models), first);
-    const free = crosscheckOptionsFor(paidFirst, catalogue(models), second);
     expect(paid.find((one) => one.label === "high")?.resolved).toContain("glm");
-    expect(free.find((one) => one.label === "high")?.resolved).toContain("minimax");
 
     const custom: Profile = {
       ...worker,
-      crosscheck: { effort: "turbo", prefer: "free" },
+      crosscheck: { effort: "turbo" },
     };
     const turbo = crosscheckOptionsFor(draft, catalogue(models), custom).find(
       (one) => one.label === "turbo",

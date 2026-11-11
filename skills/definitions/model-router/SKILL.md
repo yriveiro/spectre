@@ -84,9 +84,9 @@ A profile has two prose fields, and only one of them routes.
   reason to pick that profile.
 
 The profile also states `effort`: how much thinking the task needs. The resolver
-reads the allowlist order and the catalogue, takes the first allowed model that
-reaches that effort, and records the rung it used. Do not second-guess the rung.
-The ref that came back is the answer.
+reads the `priority` order and the catalogue, takes the first allowed model
+that reaches that effort, and records the rung it used. Do not second-guess
+the rung. The ref that came back is the answer.
 
 ## The evaluation is about the task, not about difficulty
 
@@ -107,23 +107,28 @@ to a different paper. Nothing in the text looks wrong, so a human reading the an
 cannot catch it. This is the one task where the cheap model is the wrong model, and
 it holds however simple the request reads.
 
-## The model string is a whitelist
+## The model string is an allowlist
 
 `tools.spectre.routing` returns a ref that was checked when you called it. **Use it
 exactly as returned**, variant suffix included.
 
 That ref is the whole vocabulary. The user wrote down which models they are willing
 to spend on, and it is usually shorter than what the provider offers. A model outside
-the list is not spendable here no matter how well it fits, so if nothing in the list
-fits the task, say so and ask. Do not go looking in the provider for something better.
+the list is not in this vocabulary, so if nothing in the list fits the task, say so
+and ask. Do not go looking in the provider for something better.
 
 Never write a model id from memory, never assemble one from a provider you remember,
-never guess a variant. A string this tool did not return is one nobody checked. The
-subagent call fails on it, or worse, lands on a model that exists and is wrong for the
-job.
+never guess a variant. A string this tool did not return is one nobody checked.
+Nothing enforces the allowlist at the subagent boundary, so the call can run a model
+outside it.
 
 This matters more than it sounds. You are choosing what the work costs. A model you
 invent is a cost nobody agreed to, and it is invisible in the result.
+
+The order itself is `priority` in `spectre.json`, never the order the `models`
+object happens to have. Call `tools.spectre.routing_model_preference({})` when
+you need the order, its priority numbers, or the catalogue facts behind each
+model. The `models` array on a `resolved` answer is already in that order.
 
 ## What the answer carries
 
@@ -145,10 +150,11 @@ A profile row has one `model`, and that is the model to spend:
 - `model.ref` is the string to pass. `model.steppedUp` is true when the ladder
   had no rung at `effort` and took `model.rung` instead, and `model.below` is the
   rung under the one used. Say it when you explain the choice.
-- `crosscheck` is the second opinion the profile asked for, from another family,
-  at the effort the profile stated. Its `ref` is a second string to spend. Use it
-  when the task is a decision and a second family is worth the spend. Run it
-  beside the first, not instead of it.
+- `crosscheck` is the second opinion the profile asked for: the first model in
+  `priority` whose catalogue family differs from the primary's, at the
+  crosscheck's effort, or the profile's effort when it states none. Its `ref`
+  is a second string to spend. Use it when the task is a decision and a second
+  family is worth the spend. Run it beside the first, not instead of it.
 - `crosscheckProblem` means the profile asked for a second opinion and no allowed
   model from another family could give one. Say it. Do not invent a second model.
 - `excluded` lists the candidates that did not qualify, with the highest rung each

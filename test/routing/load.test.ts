@@ -239,6 +239,37 @@ describe("the provider", () => {
   });
 });
 
+describe("the priority order", () => {
+  test("a file's priority is carried into the tables", async () => {
+    await scratch.writeProject(
+      JSON.stringify({ models: { a: "acme/falcon-mini" }, priority: ["a"] }),
+    );
+    const found = await run(scratch.projectDir());
+    expect(found.tables.priority).toEqual(["a"]);
+  });
+
+  test("a later file replaces the order whole", async () => {
+    await scratch.writeGlobal(
+      JSON.stringify({
+        models: { a: "acme/falcon-mini", b: "acme/falcon-max" },
+        priority: ["a", "b"],
+      }),
+    );
+    await scratch.writeProject(JSON.stringify({ priority: ["b", "a"] }));
+    const found = await run(scratch.projectDir());
+    expect(found.tables.priority).toEqual(["b", "a"]);
+  });
+
+  test("a key nobody wrote leaves the earlier order standing", async () => {
+    await scratch.writeGlobal(
+      JSON.stringify({ models: { a: "acme/falcon-mini" }, priority: ["a"] }),
+    );
+    await scratch.writeProject(JSON.stringify({ provider: "opencode-go" }));
+    const found = await run(scratch.projectDir());
+    expect(found.tables.priority).toEqual(["a"]);
+  });
+});
+
 describe("the dictionary path", () => {
   test("absent means the lexical half is off, and that is not a problem", async () => {
     await scratch.writeProject(JSON.stringify({ models: { light: "acme/falcon-mini" } }));

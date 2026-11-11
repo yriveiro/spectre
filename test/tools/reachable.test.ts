@@ -8,8 +8,9 @@ import { load } from "../../skills/definitions/index";
  * that way: correct, tested, and unreachable from anything a reader would load.
  *
  * Matched with a boundary, not `includes`: `worktree` is a prefix of `worktrees`,
- * so a substring check would report the mutating tool reachable off the back of
- * a read-only mention — a test that cannot fail.
+ * and `routing` is a prefix of `routing_model_preference`, so a substring check
+ * would report the shorter tool reachable off the back of a mention of the
+ * longer one — a test that cannot fail.
  */
 const TOOLS = [
   "brain",
@@ -19,6 +20,7 @@ const TOOLS = [
   "pr",
   "prose",
   "routing",
+  "routing_model_preference",
   "solidjs",
   "stack",
   "worktrees",
@@ -30,7 +32,7 @@ describe("every registered tool is reachable from some skill", () => {
     const corpus = skills.map((one) => `${one.description}\n${one.content}`).join("\n");
 
     const unreachable = TOOLS.filter(
-      (tool) => !new RegExp(`tools\\.spectre\\.${tool}(?![A-Za-z0-9])`).test(corpus),
+      (tool) => !new RegExp(`tools\\.spectre\\.${tool}(?![A-Za-z0-9_])`).test(corpus),
     );
 
     expect(unreachable).toEqual([]);
@@ -48,6 +50,7 @@ describe("every registered tool is reachable from some skill", () => {
       (await import("../../tools/definitions/pr")).pr(ctx),
       (await import("../../tools/definitions/prose")).prose(ctx),
       (await import("../../tools/definitions/routing")).routing(ctx),
+      (await import("../../tools/definitions/routing")).routingModelPreference(ctx),
       (await import("../../tools/definitions/solidjs")).solidjs(ctx),
       (await import("../../tools/definitions/stack")).stack(ctx),
       (await import("../../tools/definitions/worktrees")).worktrees(ctx),

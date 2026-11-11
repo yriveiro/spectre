@@ -76,8 +76,8 @@ const draft: Draft = {
   problems: [],
   provider: "acme",
   models: [
-    { alias: "muse", ref: "acme/muse-spark-1.3" },
-    { alias: "glm-flash", ref: "acme/glm-5.3-flash" },
+    { alias: "muse", ref: "acme/muse-spark-1.3", priority: 1 },
+    { alias: "glm-flash", ref: "acme/glm-5.3-flash", priority: 2 },
   ],
   profiles: [
     {
@@ -133,8 +133,8 @@ const rows = [
 ];
 
 const entries: ReadonlyArray<EntryRow> = [
-  { alias: "muse", ref: "acme/muse-spark-1.3", model: models[0] },
-  { alias: "glm-flash", ref: "acme/glm-5.3-flash", model: models[1] },
+  { alias: "muse", ref: "acme/muse-spark-1.3", priority: 1, model: models[0] },
+  { alias: "glm-flash", ref: "acme/glm-5.3-flash", priority: 2, model: models[1] },
 ];
 
 const host = (answer?: string) => {
@@ -284,12 +284,11 @@ describe("the modal draws what the session would spend", () => {
     await setup.dispose();
   });
 
-  test("the crosscheck is nested under the profile, and the free toggle edits the draft", async () => {
-    const changes: Array<Draft> = [];
+  test("the crosscheck is nested under the profile", async () => {
     const configured: Draft = {
       ...draft,
       profiles: draft.profiles.map((one, at) =>
-        at === 0 ? { ...one, crosscheck: { effort: "high", prefer: undefined } } : one,
+        at === 0 ? { ...one, crosscheck: { effort: "high" } } : one,
       ),
     };
     const firstRow = rows[0];
@@ -306,9 +305,6 @@ describe("the modal draws what the session would spend", () => {
         },
         rows[1] ?? firstRow,
       ],
-      onChange: (next) => {
-        changes.push(next);
-      },
     });
     const lines = setup.captureCharFrame().split("\n");
     const nameLine = lines.findIndex((one) => one.includes("worker"));
@@ -321,15 +317,12 @@ describe("the modal draws what the session would spend", () => {
     expect(cross.indexOf("↳")).toBeGreaterThan(-1);
     expect(cross.indexOf("↳")).toBeLessThan(cross.indexOf("acme/glm-5.3-flash#high"));
     expect(cross.indexOf("acme/glm-5.3-flash#high")).toBe(name.indexOf("acme/muse-spark-1.3#high"));
-    expect(cross).toContain("(○) free");
+    expect(cross).not.toContain("free");
 
     const header = lines.find((one) => one.includes("Info") && one.includes("Profile"));
     if (header === undefined) throw new Error("the frame has no header row");
     expect(header.indexOf("Info")).toBeLessThan(header.indexOf("Profile"));
 
-    await setup.mockMouse.click(cross.indexOf("(○) free"), crossLine);
-    await setup.flush();
-    expect(changes[0]?.profiles[0]?.crosscheck).toEqual({ effort: "high", prefer: "free" });
     await setup.dispose();
   });
 
@@ -451,10 +444,11 @@ describe("the modal draws what the session would spend", () => {
 
     const mixedEntries: ReadonlyArray<EntryRow> = [
       ...entries,
-      { alias: "ghost", ref: "opencode-go/ghost", model: undefined },
+      { alias: "ghost", ref: "opencode-go/ghost", priority: 3, model: undefined },
       {
         alias: "other",
         ref: "other/model-1",
+        priority: 4,
         model: {
           providerID: "other",
           id: "model-1",
@@ -524,8 +518,8 @@ describe("the modal draws what the session would spend", () => {
       ...draft,
       models: [
         ...draft.models,
-        { alias: "foreign", ref: "other-provider/foreign" },
-        { alias: "missing", ref: "acme/missing-model" },
+        { alias: "foreign", ref: "other-provider/foreign", priority: 3 },
+        { alias: "missing", ref: "acme/missing-model", priority: 4 },
       ],
     };
     const cleaned = usableDraft(dirtyDraft, mixedCatalog);
@@ -592,6 +586,30 @@ describe("the page changes the draft and writes it only when asked", () => {
     setup.mockInput.pressKey("-");
     await setup.flush();
     expect(changes[1]?.models.map((one) => one.alias)).toEqual(["glm-flash"]);
+    await setup.dispose();
+  });
+
+  test("the allowlist shows priority and moves a model with the arrows", async () => {
+    const changes: Array<Draft> = [];
+    const { setup } = await frame({
+      tab: "allowlist",
+      onChange: (next) => {
+        changes.push(next);
+      },
+    });
+    const drawn = setup.captureCharFrame();
+    expect(drawn).toContain("Priority");
+    const lines = drawn.split("\n");
+    const row = lines.findIndex((one) => one.includes("glm-flash") && one.includes("↑"));
+    expect(row).toBeGreaterThan(-1);
+    const line = lines[row];
+    if (line === undefined) throw new Error("the frame has no glm-flash row");
+    await setup.mockMouse.click(line.indexOf("↑"), row);
+    await setup.flush();
+    expect(changes[0]?.models.map((one) => [one.alias, one.priority])).toEqual([
+      ["glm-flash", 1],
+      ["muse", 2],
+    ]);
     await setup.dispose();
   });
 
@@ -923,7 +941,7 @@ describe("the page changes the draft and writes it only when asked", () => {
     });
   });
 
-  test("the crosscheck picker sets the effort, toggles prefer free, and turns the second opinion off", async () => {
+  test("the crosscheck picker sets the effort and turns the second opinion off", async () => {
     const target = draft.profiles[0];
     if (target === undefined) throw new Error("the worker profile is missing");
 
@@ -954,7 +972,7 @@ describe("the page changes the draft and writes it only when asked", () => {
     const firstFrame = first.setup.captureCharFrame();
     expect(firstFrame).toContain('The crosscheck for "worker"');
     expect(firstFrame).toContain("Profile effort");
-    expect(firstFrame).toContain("Prefer free: Off");
+    expect(firstFrame).not.toContain("Prefer free");
     const highLine = firstFrame.split("\n").findIndex((one) => /\bhigh\s+available/.test(one));
     expect(highLine).toBeGreaterThan(-1);
     await first.setup.mockMouse.click(6, highLine);
@@ -962,31 +980,14 @@ describe("the page changes the draft and writes it only when asked", () => {
     expect(await first.pending).toEqual({
       kind: "crosscheck",
       profile: "worker",
-      crosscheck: { effort: "high", prefer: undefined },
+      crosscheck: { effort: "high" },
     });
     await first.setup.dispose();
-
-    const second = await open(target);
-    second.setup.mockInput.pressKey("f");
-    await second.setup.flush();
-    const secondHigh = second.setup
-      .captureCharFrame()
-      .split("\n")
-      .findIndex((one) => /\bhigh\s+available/.test(one));
-    expect(secondHigh).toBeGreaterThan(-1);
-    await second.setup.mockMouse.click(6, secondHigh);
-    await second.setup.flush();
-    expect(await second.pending).toEqual({
-      kind: "crosscheck",
-      profile: "worker",
-      crosscheck: { effort: "high", prefer: "free" },
-    });
-    await second.setup.dispose();
 
     const configured = applied(draft, {
       kind: "crosscheck",
       profile: "worker",
-      crosscheck: { effort: "high", prefer: "free" },
+      crosscheck: { effort: "high" },
     });
     const worker = configured.profiles[0];
     if (worker === undefined) throw new Error("the configured worker profile is missing");

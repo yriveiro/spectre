@@ -3,7 +3,7 @@ import type { Dialog, DialogSelectOption } from "@opencode/plugin/tui/context";
 import type { ResolvedTheme } from "@opencode/theme/tui";
 import { type KeyEvent, TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
-import { createMemo, createSignal } from "solid-js";
+import { createSignal } from "solid-js";
 import {
   DEFAULT_AGENT,
   DEFAULT_TIMEOUT_MS,
@@ -58,6 +58,11 @@ export type Edit =
     }
   | { readonly kind: "model"; readonly alias: string; readonly ref: string }
   | { readonly kind: "remove-model"; readonly alias: string }
+  | {
+      readonly kind: "move-model";
+      readonly alias: string;
+      readonly delta: -1 | 1;
+    }
   | {
       readonly kind: "toggle-profile";
       readonly profile: string;
@@ -158,7 +163,7 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
     return {
       ...draft,
       provider: edit.provider,
-      models,
+      models: models.map((one, index) => ({ ...one, priority: index + 1 })),
       profiles: draft.profiles.map((one) =>
         one.pinned !== undefined && !held.has(one.pinned) ? { ...one, pinned: undefined } : one,
       ),
@@ -167,13 +172,34 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
   if (edit.kind === "remove-model") {
     return {
       ...draft,
-      models: draft.models.filter((one) => one.alias !== edit.alias),
+      models: draft.models
+        .filter((one) => one.alias !== edit.alias)
+        .map((one, index) => ({ ...one, priority: index + 1 })),
       profiles: draft.profiles.map((one) =>
         one.pinned === edit.alias ? { ...one, pinned: undefined } : one,
       ),
     };
   }
-  return { ...draft, models: [...draft.models, { alias: edit.alias, ref: edit.ref }] };
+  if (edit.kind === "move-model") {
+    const at = draft.models.findIndex((one) => one.alias === edit.alias);
+    const to = at + edit.delta;
+    if (at === -1 || to < 0 || to >= draft.models.length) return draft;
+    const models = [...draft.models];
+    const [moved] = models.splice(at, 1);
+    if (moved === undefined) return draft;
+    models.splice(to, 0, moved);
+    return {
+      ...draft,
+      models: models.map((one, index) => ({ ...one, priority: index + 1 })),
+    };
+  }
+  return {
+    ...draft,
+    models: [
+      ...draft.models,
+      { alias: edit.alias, ref: edit.ref, priority: draft.models.length + 1 },
+    ],
+  };
 };
 
 const refOf = (one: Model): string => `${one.providerID}/${one.id}`;
@@ -745,7 +771,7 @@ export const crosscheckModal = (input: {
   readonly profile: Profile;
   readonly draft: Draft;
   readonly models: ReadonlyArray<Model>;
-  readonly onSelect: (choice: CrosscheckChoice, preferFree: boolean) => void;
+  readonly onSelect: (choice: CrosscheckChoice) => void;
   readonly onCancel: () => void;
 }): JSX.Element => {
   const context = usePlugin();
@@ -753,28 +779,12 @@ export const crosscheckModal = (input: {
     typeof context.theme.surface === "function" ? context.theme.surface("dialog") : context.theme;
   const colors = palette(context.theme, dialogTheme);
   const selected = selectedModelFor(input.draft, input.models, input.profile);
-  const [preferFree, setPreferFree] = createSignal(input.profile.crosscheck?.prefer === "free");
 
-  /**
-   * The same profile with the preference the footer currently shows. The
-   * preference changes which model qualifies, so the preview follows the toggle.
-   */
-  const withPreference = (prefer: boolean): Profile => {
-    const crosscheck = input.profile.crosscheck;
-    if (crosscheck === undefined) return input.profile;
-    return {
-      ...input.profile,
-      crosscheck: { ...crosscheck, prefer: prefer ? "free" : undefined },
-    };
-  };
-
-  const rows = createMemo(() =>
-    crosscheckOptionsFor(input.draft, input.models, withPreference(preferFree())),
-  );
+  const rows = crosscheckOptionsFor(input.draft, input.models, input.profile);
   const enabledIndices = (): ReadonlyArray<number> =>
-    rows().flatMap((row, idx) => (row.available ? [idx] : []));
+    rows.flatMap((row, idx) => (row.available ? [idx] : []));
   const initialIndex = (() => {
-    const currentIdx = rows().findIndex((row) => row.current && row.available);
+    const currentIdx = rows.findIndex((row) => row.current && row.available);
     if (currentIdx !== -1) return currentIdx;
     return enabledIndices()[0] ?? 0;
   })();
@@ -791,7 +801,7 @@ export const crosscheckModal = (input: {
   };
 
   const choose = (row: CrosscheckOption | undefined): void => {
-    if (row?.available) input.onSelect(row.choice, preferFree());
+    if (row?.available) input.onSelect(row.choice);
   };
 
   bindKeyboard(context.renderer, (event: KeyEvent) => {
@@ -808,16 +818,10 @@ export const crosscheckModal = (input: {
       stepFocus(-1);
       return;
     }
-    if ((key === "f" || event.sequence === "f") && !event.ctrl && !event.meta && !event.super) {
-      event.preventDefault();
-      event.stopPropagation();
-      setPreferFree(!preferFree());
-      return;
-    }
     if (key === "return" || key === "enter") {
       event.preventDefault();
       event.stopPropagation();
-      choose(rows()[focusedIndex()]);
+      choose(rows[focusedIndex()]);
       return;
     }
     if (key === "escape") {
@@ -869,22 +873,10 @@ export const crosscheckModal = (input: {
         "box",
         {
           flexDirection: "row",
-          justifyContent: "space-between",
           width: "100%",
           paddingTop: 1,
         },
         field(dialogTheme, "Primary", () => primaryText),
-        h(
-          "text",
-          {
-            fg: colors.blue,
-            truncate: true,
-            wrapMode: "none",
-            onMouseUp: () => setPreferFree(!preferFree()),
-          },
-          "Prefer free: ",
-          () => (preferFree() ? "On" : "Off"),
-        ),
       ),
     ),
     h(
@@ -917,7 +909,7 @@ export const crosscheckModal = (input: {
         ),
       ),
       () =>
-        rows().map((row, index) => {
+        rows.map((row, index) => {
           const [hovered, setHovered] = createSignal(false);
           const isFocused = () => focusedIndex() === index;
           const marker = () => {
@@ -1021,12 +1013,6 @@ export const crosscheckModal = (input: {
           "Enter ",
           h("span", { style: { fg: colors.muted } }, "Select crosscheck"),
         ),
-        h(
-          "text",
-          { fg: colors.text, attributes: TextAttributes.BOLD },
-          "f ",
-          h("span", { style: { fg: colors.muted } }, "Prefer free"),
-        ),
       ),
       h(
         "text",
@@ -1058,18 +1044,14 @@ export const crosscheckPicker = async (input: {
           profile: input.profile,
           draft: input.draft,
           models: input.models,
-          onSelect: (choice, preferFree) => {
+          onSelect: (choice) => {
             const crosscheck: Profile["crosscheck"] =
-              choice.kind === "off"
-                ? undefined
-                : { effort: choice.effort, prefer: preferFree ? "free" : undefined };
+              choice.kind === "off" ? undefined : { effort: choice.effort };
             const held = input.profile.crosscheck;
             const unchanged =
               crosscheck === undefined
                 ? held === undefined
-                : held !== undefined &&
-                  held.effort === crosscheck.effort &&
-                  held.prefer === crosscheck.prefer;
+                : held !== undefined && held.effort === crosscheck.effort;
             finish(
               unchanged
                 ? undefined
@@ -1104,7 +1086,7 @@ export const profileInfoModal = (input: {
   const crosscheckConfig =
     profile.crosscheck === undefined
       ? "None"
-      : `${profile.crosscheck.effort ?? profile.effort ?? "default"}${profile.crosscheck.prefer === "free" ? " (prefer free)" : ""}`;
+      : (profile.crosscheck.effort ?? profile.effort ?? "default");
   const costText = normalizeCost(resolution?.cost) ?? "-";
 
   bindKeyboard(context.renderer, (event: KeyEvent) => {

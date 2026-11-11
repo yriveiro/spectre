@@ -1,5 +1,6 @@
 import { Model } from "@opencode/schema/model";
 import { effortOf, fit, ladderOf } from "./effort";
+import { priorityOf } from "./order";
 import { formatRef, type Tables } from "./types";
 
 export type Row = { name: string; model: string };
@@ -55,7 +56,10 @@ export const check = (
   const known = new Map<string, Model.Info>();
   const models: Array<Row> = [];
 
-  for (const [name, raw] of Object.entries(tables.models)) {
+  const ordered = priorityOf(tables.models, tables.priority);
+  problems.push(...ordered.problems);
+
+  for (const { alias: name, ref: raw } of ordered.ranked) {
     if (!ALIAS.test(name)) {
       problems.push(
         `models.${name}: "${name}" is not an alias the standard allows. The charset is ^[a-z0-9][a-z0-9-]*$`,

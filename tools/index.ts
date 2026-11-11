@@ -8,7 +8,7 @@ import { comments } from "./definitions/comments";
 import { historyTool } from "./definitions/history";
 import { pr } from "./definitions/pr";
 import { prose } from "./definitions/prose";
-import { routing } from "./definitions/routing";
+import { routing, routingModelPreference } from "./definitions/routing";
 import { load } from "./definitions/routing/load";
 import { solidjs } from "./definitions/solidjs";
 import { stack } from "./definitions/stack";
@@ -23,6 +23,7 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
     const listed = comments(ctx.location.directory);
     const said = prose(ctx.location.directory, configured.tables.dictionary?.path);
     const route = routing(ctx);
+    const preference = routingModelPreference(ctx);
     const trees = worktrees(ctx);
     const prs = stack(ctx.location.directory);
     const opening = pr(ctx);
@@ -38,6 +39,7 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
       editor.add(listed);
       editor.add(said);
       editor.add(route);
+      editor.add(preference);
       editor.add(trees);
       editor.add(prs);
       editor.add(opening);
@@ -49,9 +51,20 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
     });
 
     yield* Effect.logInfo("Registered tools", {
-      tools: [listed, said, route, trees, prs, opening, why, pages, memory, figures, solid].map(
-        (tool) => `${tool.options?.namespace}_${tool.name}`,
-      ),
+      tools: [
+        listed,
+        said,
+        route,
+        preference,
+        trees,
+        prs,
+        opening,
+        why,
+        pages,
+        memory,
+        figures,
+        solid,
+      ].map((tool) => `${tool.options?.namespace}_${tool.name}`),
     });
 
     // A figure is held back from the reader until its geometry has been proved.

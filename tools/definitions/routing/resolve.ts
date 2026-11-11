@@ -1,4 +1,4 @@
-import { isFree, ladder } from "./catalogue";
+import { ladder } from "./catalogue";
 import { type Effort, effortOf, type Fit, fit, type Ladder, ladderOf } from "./effort";
 import type { Candidate, Excluded, Pick, ProfileEntry, Resolution } from "./types";
 
@@ -91,15 +91,11 @@ export const pick = (
  */
 const spent = (candidate: Candidate, got: Fit | undefined, pinned: boolean): Pick => {
   if (pinned)
-    return pick(
-      candidate,
-      candidate.pinned ?? (got?.kind === "rung" ? got.at.name : undefined),
-      {
-        pinned: true,
-        steppedUp: false,
-        below: undefined,
-      },
-    );
+    return pick(candidate, candidate.pinned ?? (got?.kind === "rung" ? got.at.name : undefined), {
+      pinned: true,
+      steppedUp: false,
+      below: undefined,
+    });
   if (got === undefined || got.kind !== "rung")
     return pick(candidate, undefined, { pinned: false, steppedUp: false, below: undefined });
   return pick(candidate, got.at.name, {
@@ -146,18 +142,13 @@ const rowsFor = (
   }));
 
 /**
- * The crosscheck: the first candidate whose catalogue family differs from the
- * primary's, and never the first whose alias differs.
- *
- * `prefer: "free"` takes the first zero-cost one that qualifies. It falls back
- * to the first qualifying one, because a preference that found nothing is not a
- * filter.
+ * The crosscheck: the first candidate in the priority order whose catalogue
+ * family differs from the primary's, and never the first whose alias differs.
  */
 const crossOf = (
   rows: ReadonlyArray<Row>,
   primary: Candidate,
   crossWant: Effort,
-  prefer: "free" | undefined,
 ): Row | undefined => {
   const family = primary.model.family;
   // A second opinion needs two stated families. A row whose catalogue gives no
@@ -165,15 +156,13 @@ const crossOf = (
   // read it as a different one.
   if (family === undefined) return undefined;
 
-  const eligible = rows.filter((one) => {
+  return rows.find((one) => {
     if (one.cross === undefined) return false;
     if (one.candidate === primary) return false;
     const theirs = one.candidate.model.family;
     if (theirs === undefined || theirs === family) return false;
     return qualifies(one.cross, crossWant);
   });
-  const free = eligible.find((one) => isFree(one.candidate.model));
-  return prefer === "free" ? (free ?? eligible[0]) : eligible[0];
 };
 
 /**
@@ -251,9 +240,8 @@ const spentBy = (
 });
 
 /**
- * One profile, resolved. The crosscheck is the first candidate whose
- * catalogue family differs from the primary's, and `prefer: "free"` takes the
- * first zero-cost one.
+ * One profile, resolved. The crosscheck is the first candidate in the priority
+ * order whose catalogue family differs from the primary's.
  */
 export const resolve = (
   profile: string,
@@ -296,10 +284,7 @@ export const resolve = (
         ? rungFor(pinned, effortOf(entry.effort))
         : undefined;
     const rows = rowsFor(candidates, undefined, crossWant);
-    const crossRow =
-      crossWant === undefined
-        ? undefined
-        : crossOf(rows, pinned, crossWant, entry.crosscheck?.prefer);
+    const crossRow = crossWant === undefined ? undefined : crossOf(rows, pinned, crossWant);
     return spentBy(
       profile,
       agent,
@@ -337,10 +322,7 @@ export const resolve = (
     };
   }
 
-  const crossRow =
-    crossWant === undefined
-      ? undefined
-      : crossOf(rows, chosen.candidate, crossWant, entry.crosscheck?.prefer);
+  const crossRow = crossWant === undefined ? undefined : crossOf(rows, chosen.candidate, crossWant);
 
   return spentBy(
     profile,

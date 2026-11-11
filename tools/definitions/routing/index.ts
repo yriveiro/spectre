@@ -1,16 +1,16 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Integration } from "@opencode/plugin/effect";
-import type { Model } from "@opencode/schema/model";
-import type { Session } from "@opencode/schema/session";
 import type { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
 import { agentIds } from "../../../agents";
 import { candidates } from "./catalogue";
 import { check } from "./check";
+import { hostCatalogue, sessionDirectory } from "./host";
 import { jevJudge, SYSTEMONE_KEY_ENV } from "./jev";
 import { type Judge, lexicalJudge, surface, type Verdict } from "./judge";
 import { decode, load } from "./load";
 import { FILE_NAME, projectPath } from "./locate";
+import { priorityOf } from "./order";
 import { decide } from "./policy";
 import { resolve } from "./resolve";
 import {
@@ -57,7 +57,12 @@ const Input = Schema.Struct({
   }),
 });
 
-const Row = Schema.Struct({ name: Schema.String, model: Schema.String });
+const Row = Schema.Struct({
+  name: Schema.String,
+  model: Schema.String,
+  /** The one-based place in the explicit model priority. */
+  priority: Schema.Number,
+});
 
 /** A model the resolver spent, and the facts behind the choice. */
 const Spent = Schema.Struct({
@@ -184,53 +189,31 @@ Pass \`task\` when you want the judge to choose the profile: \`routing({ task: "
 
 What comes back, by \`status\`:
 
-- \`resolved\`: \`profiles\` has one row per profile. \`model\` is the model to spend: \`ref\` is the full string to pass, rung included, and \`rung\` is the level it names. \`pinned\` says the allowlist named the variant, \`steppedUp\` says the ladder had no rung at the requirement and stepped up, \`below\` is the rung under it, and \`family\`, \`rungs\` and \`cost\` describe the model. \`crosscheck\` is the second opinion when the profile asks for one, and \`crosscheckProblem\` says why a declared second opinion found none. \`excluded\` lists the candidates that did not qualify, each with the highest rung it reaches. \`models\` is the allowlist, \`sources\` the config files that were read, and \`asked\` the profile names you asked for. \`judge\` says which path chose the profile: \`used\` carries the \`profile\` it chose and the \`confidence\` when its arm reports one, and \`skipped\` carries the \`reason\` it gave none.
+- \`resolved\`: \`profiles\` has one row per profile. \`model\` is the model to spend: \`ref\` is the full string to pass, rung included, and \`rung\` is the level it names. \`pinned\` says the allowlist named the variant, \`steppedUp\` says the ladder had no rung at the requirement and stepped up, \`below\` is the rung under it, and \`family\`, \`rungs\` and \`cost\` describe the model. \`crosscheck\` is the second opinion when the profile asks for one, and \`crosscheckProblem\` says why a declared second opinion found none. \`excluded\` lists the candidates that did not qualify, each with the highest rung it reaches. \`models\` is the allowlist in priority order, each row carrying its \`priority\`, \`sources\` the config files that were read, and \`asked\` the profile names you asked for. \`judge\` says which path chose the profile: \`used\` carries the \`profile\` it chose and the \`confidence\` when its arm reports one, and \`skipped\` carries the \`reason\` it gave none.
 - \`setup\`: the repository has no config. \`provider\`, \`models\` and \`profiles\` are the starter set on the table. Ask the user once, then call this tool again with \`setup: "accepted"\` or \`setup: "declined"\`. Do not write a config by hand.
 - \`declined\`: the user already said no. Do not ask again. Spawn without \`model\`, and the agent's own model runs the work.
 - \`problems\`: the config is wrong. Every mistake is on its own line and names the key. Quote it, say routing is misconfigured, and ask whether to continue on the current model. Do not substitute a model you remember.
 
-The allowlist is the whole vocabulary. A ref that is not in \`models\` is not spendable on a spectre subagent, however many models the provider offers. Never write a model id from memory. If nothing here fits, say so and ask.
+The allowlist is the whole vocabulary. \`priority\` states the order the resolver reads, and the page can reorder it. A ref that is not in \`models\` is not returned by this tool, and nothing checks the allowlist at the subagent boundary: a ref you write yourself is one nobody checked. Never write a model id from memory. If nothing here fits, say so and ask.
 
-A profile states what a task needs in \`effort\` and when to reach for it in \`match\`. The resolver reads the allowlist order and the live catalogue. It never reads \`why\`, which is the rationale for the human.`;
+A profile states what a task needs in \`effort\` and when to reach for it in \`match\`. The resolver reads the \`priority\` order and the live catalogue. It never reads \`why\`, which is the rationale for the human.`;
 
-/**
- * The directory the config is read from: the one the invoking session is in.
- *
- * A session carries its own location and `session.move` updates it, so a session
- * moved into a worktree reads that worktree's file. The plugin's location is not
- * a fallback: it is the location the plugin loaded with, so reading it after a
- * move would read the file of the directory the session left. When the session
- * cannot be read, the tool answers a problem instead.
- */
-const sessionDirectory = (
-  ctx: Plugin.Context,
-  sessionID: Session.ID,
-): Effect.Effect<string | undefined> =>
-  Effect.gen(function* () {
-    const session = yield* ctx.session
-      .get({ sessionID })
-      .pipe(Effect.catch(() => Effect.succeed(undefined)));
-    return session?.location.directory;
-  });
-
-const catalogue = (ctx: Plugin.Context) =>
-  ctx.model.list().pipe(
-    Effect.map((out) => ({ models: out.data, problem: undefined }) as const),
-    Effect.catch(() =>
-      Effect.succeed({
-        models: [] as ReadonlyArray<Model.Info>,
-        problem: `the model catalogue could not be read, so no model was checked`,
-      } as const),
-    ),
-  );
-
-/** The allowlist as rows, in the order the config lists it. */
+/** The allowlist as rows, in the explicit priority order. */
 const rows = (
   record: Readonly<Record<string, string | null>> | undefined,
-): ReadonlyArray<typeof Row.Type> =>
-  Object.entries(record ?? {}).flatMap(([name, model]) =>
-    model === null ? [] : [{ name, model }],
+  priority: ReadonlyArray<string> | undefined,
+): ReadonlyArray<typeof Row.Type> => {
+  const models = Object.fromEntries(
+    Object.entries(record ?? {}).flatMap(([name, model]) =>
+      model === null ? [] : [[name, model]],
+    ),
   );
+  return priorityOf(models, priority).ranked.map((one) => ({
+    name: one.alias,
+    model: one.ref,
+    priority: one.priority,
+  }));
+};
 
 /** The starter profiles as a reader needs them on the table. */
 const starterProfiles = (
@@ -479,7 +462,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
           output: {
             status: "setup",
             provider: set.file.provider,
-            models: rows(set.file.models),
+            models: rows(set.file.models, set.file.priority),
             profiles: starterProfiles(set.file.profiles),
             source: path,
           },
@@ -496,18 +479,20 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
           },
         };
 
-      const listed = yield* catalogue(ctx);
+      const listed = yield* hostCatalogue(ctx);
       const checked = check(
         found.configuredProfiles ? found.tables : { ...found.tables, profiles: {} },
         listed.models,
         DEFAULT_AGENT,
         agentIds,
       );
-      const allowed = Object.entries(found.tables.models).map(([alias, ref]) => ({
-        alias,
-        ref,
+      const ordered = priorityOf(found.tables.models, found.tables.priority);
+      const allowed = ordered.ranked.map((one) => ({
+        alias: one.alias,
+        ref: one.ref,
         pinned: undefined,
       }));
+      const rankOf = new Map(ordered.ranked.map((one) => [one.alias, one.priority]));
       const kept = candidates(allowed, listed.models);
 
       // Every problem is collected before the answer is built, because one bad
@@ -623,7 +608,11 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
           status: "resolved",
           profiles:
             input.profile === undefined ? table : table.filter((one) => one.name === input.profile),
-          models: kept.kept.map((one) => ({ name: one.alias, model: one.ref })),
+          models: kept.kept.map((one) => ({
+            name: one.alias,
+            model: one.ref,
+            priority: rankOf.get(one.alias) ?? 0,
+          })),
           sources: [...found.sources],
           asked: input.profile === undefined ? [] : [input.profile],
           judge: judgement,
@@ -651,8 +640,11 @@ export type { Description, Judge, Verdict } from "./judge";
 export { lexicalJudge, rank, surface } from "./judge";
 export { load, loadProject } from "./load";
 export { FILE_NAME, LEGACY_NAME, projectPath } from "./locate";
+export type { Ordered, Ranked } from "./order";
+export { priorityOf } from "./order";
 export type { Choice } from "./policy";
 export { decide, oneStepUp, PLAY_SAFE } from "./policy";
+export { routingModelPreference } from "./preference";
 export { resolve as resolveProfile } from "./resolve";
 export type {
   Allowed,

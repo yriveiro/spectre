@@ -65,9 +65,14 @@ const FAMILIES: ReadonlyArray<Thin> = [
 ];
 
 const good = JSON.stringify({
-  models: { light: "acme/falcon-mini" },
+  ...allow({ light: "acme/falcon-mini" }),
   profiles: { explorer: { effort: "high", match: "one named file", why: "w" } },
 });
+
+/** The models and their explicit priority, in the order the object lists them. */
+function allow(models: Record<string, string>) {
+  return { models, priority: Object.keys(models) };
+}
 
 /**
  * Two profiles one word apart, and the judge the config asks for. The lexical
@@ -75,7 +80,7 @@ const good = JSON.stringify({
  */
 const withJudge = (judge: Record<string, string>): string =>
   JSON.stringify({
-    models: { light: "acme/falcon-mini" },
+    ...allow({ light: "acme/falcon-mini" }),
     profiles: {
       explorer: { effort: "high", match: "Use when one named file has to be read" },
       designer: { effort: "high", match: "Use when a design decision spans several files" },
@@ -110,7 +115,7 @@ describe("tools.spectre.routing", () => {
       },
       excluded: [],
     });
-    expect(out.models).toEqual([{ name: "light", model: "acme/falcon-mini" }]);
+    expect(out.models).toEqual([{ name: "light", model: "acme/falcon-mini", priority: 1 }]);
     expect(out.sources).toEqual([`${scratch.projectDir()}/spectre.json`]);
     expect(out.asked).toEqual([]);
   });
@@ -121,7 +126,7 @@ describe("tools.spectre.routing", () => {
     await Bun.write(
       `${worktree}/spectre.json`,
       JSON.stringify({
-        models: { max: "acme/falcon-max" },
+        ...allow({ max: "acme/falcon-max" }),
         profiles: { explorer: { effort: "high" } },
       }),
     );
@@ -177,7 +182,7 @@ describe("tools.spectre.routing", () => {
   test("a global allowlist resolves a repository with no project file", async () => {
     await scratch.writeGlobal(
       JSON.stringify({
-        models: { light: "acme/falcon-mini" },
+        ...allow({ light: "acme/falcon-mini" }),
         profiles: { explorer: { effort: "high" } },
       }),
     );
@@ -189,7 +194,7 @@ describe("tools.spectre.routing", () => {
   test("the first qualifying candidate is spent, and a candidate under the bar reports its capacity", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini", tiny: "acme/falcon-low" },
+        ...allow({ light: "acme/falcon-mini", tiny: "acme/falcon-low" }),
         profiles: { work: { effort: "high", match: "w" } },
       }),
     );
@@ -207,10 +212,38 @@ describe("tools.spectre.routing", () => {
     ]);
   });
 
+  test("the priority array wins over the order of the models object", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini", other: "acme/falcon-max" }),
+        priority: ["other", "light"],
+        profiles: { work: { effort: "high", match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir(), {}, listOf(FAMILIES)), "resolved");
+
+    expect(out.profiles[0]?.model.ref).toBe("acme/falcon-max#high");
+    expect(out.models.map((one) => [one.name, one.priority])).toEqual([
+      ["other", 1],
+      ["light", 2],
+    ]);
+  });
+
+  test("a config with no priority order is a problem", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        models: { light: "acme/falcon-mini" },
+        profiles: { work: { effort: "high", match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir()), "problems");
+    expect(out.problems).toContain("priority: states no priority order");
+  });
+
   test("a model with no thinking control is excluded, not silently dropped", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini", plain: "opencode/gpt-5" },
+        ...allow({ light: "acme/falcon-mini", plain: "opencode/gpt-5" }),
         profiles: { work: { effort: "high", match: "w" } },
       }),
     );
@@ -230,7 +263,7 @@ describe("tools.spectre.routing", () => {
   test("a pin skips the requirement and keeps the variant in the ref", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini#high" },
+        ...allow({ light: "acme/falcon-mini#high" }),
         profiles: { pinned: { model: "light", match: "w" } },
       }),
     );
@@ -247,7 +280,7 @@ describe("tools.spectre.routing", () => {
   test("a crosscheck from another family is returned beside the primary", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini", other: "acme/falcon-max" },
+        ...allow({ light: "acme/falcon-mini", other: "acme/falcon-max" }),
         profiles: { judged: { effort: "high", crosscheck: { effort: "high" }, match: "w" } },
       }),
     );
@@ -260,7 +293,7 @@ describe("tools.spectre.routing", () => {
   test("a crosscheck keeps a variant the allowlist pinned, without a second suffix", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini", other: "acme/falcon-max#high" },
+        ...allow({ light: "acme/falcon-mini", other: "acme/falcon-max#high" }),
         profiles: { judged: { effort: "high", crosscheck: { effort: "high" }, match: "w" } },
       }),
     );
@@ -273,7 +306,7 @@ describe("tools.spectre.routing", () => {
   test("a declared crosscheck that finds no other family says so", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini", other: "acme/falcon-max" },
+        ...allow({ light: "acme/falcon-mini", other: "acme/falcon-max" }),
         profiles: { judged: { effort: "high", crosscheck: { effort: "high" }, match: "w" } },
       }),
     );
@@ -287,7 +320,7 @@ describe("tools.spectre.routing", () => {
   });
 
   test("a ref the catalogue does not have is a problem that names its key", async () => {
-    await scratch.writeProject(JSON.stringify({ models: { ghost: "acme/falcon-ghost" } }));
+    await scratch.writeProject(JSON.stringify({ ...allow({ ghost: "acme/falcon-ghost" }) }));
     const out = at(await call(scratch.projectDir()), "problems");
 
     expect(out.problems).toContain("models.ghost");
@@ -295,7 +328,7 @@ describe("tools.spectre.routing", () => {
 
   test("problems from reading and from checking arrive together, one per line", async () => {
     await scratch.writeProject("{ broken");
-    await scratch.writeGlobal(JSON.stringify({ models: { ghost: "acme/falcon-ghost" } }));
+    await scratch.writeGlobal(JSON.stringify({ ...allow({ ghost: "acme/falcon-ghost" }) }));
     const out = at(await call(scratch.projectDir()), "problems");
     const lines = out.problems.split("\n");
 
@@ -305,7 +338,7 @@ describe("tools.spectre.routing", () => {
   });
 
   test("a config with no models at all is a problem, not a silent empty table", async () => {
-    await scratch.writeProject(JSON.stringify({ models: {} }));
+    await scratch.writeProject(JSON.stringify({ ...allow({}) }));
     const out = at(await call(scratch.projectDir()), "problems");
 
     expect(out.problems).toContain("models is empty");
@@ -387,7 +420,7 @@ describe("tools.spectre.routing", () => {
   });
 
   test("a config that configures models without profiles falls back to the default profiles", async () => {
-    await scratch.writeProject(JSON.stringify({ models: { light: "acme/falcon-mini" } }));
+    await scratch.writeProject(JSON.stringify({ ...allow({ light: "acme/falcon-mini" }) }));
     const out = at(await call(scratch.projectDir()), "resolved");
 
     expect(out.profiles.map((one) => one.name)).toEqual([
@@ -411,7 +444,7 @@ describe("tools.spectre.routing", () => {
   test("naming one profile returns that row, and says it was asked for", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini" },
+        ...allow({ light: "acme/falcon-mini" }),
         profiles: {
           explorer: { effort: "high", match: "w" },
           reviewer: { effort: "high", match: "w" },

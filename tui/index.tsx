@@ -55,6 +55,7 @@ const copy = (draft: Draft): MutableDraft => ({
   models: (Array.isArray(draft.models) ? draft.models : []).map((one) => ({
     alias: one.alias,
     ref: one.ref,
+    priority: one.priority,
   })),
   profiles: (Array.isArray(draft.profiles) && draft.profiles.length > 0
     ? draft.profiles
@@ -64,10 +65,7 @@ const copy = (draft: Draft): MutableDraft => ({
     effort: one.effort,
     match: one.match,
     why: one.why,
-    crosscheck:
-      one.crosscheck === undefined
-        ? undefined
-        : { effort: one.crosscheck.effort, prefer: one.crosscheck.prefer },
+    crosscheck: one.crosscheck === undefined ? undefined : { effort: one.crosscheck.effort },
     agent: one.agent,
     pinned: one.pinned,
     enabled: one.enabled,
@@ -462,7 +460,7 @@ export default Plugin.define({
           const head = `${two.providerID}/${two.id}`;
           return one.ref === head || one.ref.startsWith(`${head}#`);
         });
-        return { alias: one.alias, ref: one.ref, model };
+        return { alias: one.alias, ref: one.ref, priority: one.priority, model };
       });
 
       return page({

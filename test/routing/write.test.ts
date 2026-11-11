@@ -68,11 +68,16 @@ describe("serialise", () => {
     expect(Object.keys(JSON.parse(serialise(withSchema)))).toEqual(["$schema", "models"]);
   });
 
-  test("the order inside models is the order the user wrote", () => {
+  test("the order inside models is preserved as a readable map", () => {
     const preference: File = {
       models: { deepseek: "opencode-go/deepseek-v4.1-flash", glm: "opencode-go/glm-5.3-flash" },
     };
     expect(Object.keys(JSON.parse(serialise(preference)).models)).toEqual(["deepseek", "glm"]);
+  });
+
+  test("priority is written between models and profiles", () => {
+    const ranked: File = { models: { glm: "opencode-go/glm-5.3-flash" }, priority: ["glm"] };
+    expect(Object.keys(JSON.parse(serialise(ranked)))).toEqual(["models", "priority"]);
   });
 
   test("a null, which removes an inherited entry, is written and not dropped", () => {

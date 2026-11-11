@@ -13,6 +13,7 @@ import {
   known,
   loadProject,
   type ProfileEntry,
+  priorityOf,
   projectPath,
   resolveProfile,
   type Pick as Spent,
@@ -40,9 +41,7 @@ export type Profile = {
   readonly effort: string | undefined;
   readonly match: string | undefined;
   readonly why: string | undefined;
-  readonly crosscheck:
-    | { readonly effort: string | undefined; readonly prefer: "free" | undefined }
-    | undefined;
+  readonly crosscheck: { readonly effort: string | undefined } | undefined;
   readonly agent: string;
   readonly pinned: string | undefined;
   readonly enabled?: boolean | undefined;
@@ -56,7 +55,11 @@ export type Draft = {
   /** What the reader found wrong with the file, one line per problem. */
   readonly problems: ReadonlyArray<string>;
   readonly provider: string | undefined;
-  readonly models: ReadonlyArray<{ readonly alias: string; readonly ref: string }>;
+  readonly models: ReadonlyArray<{
+    readonly alias: string;
+    readonly ref: string;
+    readonly priority: number;
+  }>;
   readonly profiles: ReadonlyArray<Profile>;
   readonly judge?: JudgeConfig | undefined;
 };
@@ -74,10 +77,7 @@ export const defaultProfiles = (enabled = true): ReadonlyArray<Profile> =>
     effort: entry.effort,
     match: entry.match,
     why: entry.why,
-    crosscheck:
-      entry.crosscheck === undefined
-        ? undefined
-        : { effort: entry.crosscheck.effort, prefer: entry.crosscheck.prefer },
+    crosscheck: entry.crosscheck === undefined ? undefined : { effort: entry.crosscheck.effort },
     agent: entry.agent ?? DEFAULT_AGENT,
     pinned: undefined,
     enabled,
@@ -164,14 +164,19 @@ export const read = async (directory: string): Promise<Draft> => {
   // no source, and the page still has to name the file it could not read.
   const source = await Effect.runPromise(projectPath(directory)).catch(() => undefined);
   const found = await Effect.runPromise(loadProject(directory));
-  const models = Object.entries(found.tables.models).map(([alias, ref]) => ({ alias, ref }));
+  const ordered = priorityOf(found.tables.models, found.tables.priority);
+  const models = ordered.ranked.map((one) => ({
+    alias: one.alias,
+    ref: one.ref,
+    priority: one.priority,
+  }));
   const held = new Set(models.map((one) => one.alias));
 
   if (!found.configuredProfiles) {
     return {
       directory,
       source,
-      problems: found.problems,
+      problems: [...found.problems, ...ordered.problems],
       provider: found.tables.provider,
       judge: found.tables.judge,
       models,
@@ -186,10 +191,7 @@ export const read = async (directory: string): Promise<Draft> => {
       effort: entry.effort,
       match: entry.match,
       why: entry.why,
-      crosscheck:
-        entry.crosscheck === undefined
-          ? undefined
-          : { effort: entry.crosscheck.effort, prefer: entry.crosscheck.prefer },
+      crosscheck: entry.crosscheck === undefined ? undefined : { effort: entry.crosscheck.effort },
       agent: entry.agent ?? DEFAULT_AGENT,
       pinned: named.find((one) => held.has(one)) ?? named[0],
       enabled: true,
@@ -201,7 +203,7 @@ export const read = async (directory: string): Promise<Draft> => {
   return {
     directory,
     source,
-    problems: found.problems,
+    problems: [...found.problems, ...ordered.problems],
     provider: found.tables.provider,
     judge: found.tables.judge,
     models,
@@ -255,7 +257,6 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
             ? undefined
             : {
                 effort: profile.crosscheck.effort,
-                prefer: profile.crosscheck.prefer,
               },
         match: profile.match,
         why: profile.why,
@@ -344,7 +345,7 @@ export const crosscheckOptionsFor = (
       {
         effort: profile.effort,
         model: profile.pinned === undefined ? undefined : [profile.pinned],
-        crosscheck: { effort, prefer: profile.crosscheck?.prefer },
+        crosscheck: { effort },
         match: profile.match,
         why: profile.why,
         agent: profile.agent,
@@ -424,6 +425,7 @@ const written = (draft: Draft): Parameters<typeof writeConfig>[1] => ({
   provider: draft.provider,
   judge: draft.judge,
   models: Object.fromEntries(draft.models.map((one) => [one.alias, one.ref])),
+  priority: draft.models.map((one) => one.alias),
   profiles: Object.fromEntries(
     configuredProfiles(draft).map((one) => [
       one.name,
@@ -435,7 +437,6 @@ const written = (draft: Draft): Parameters<typeof writeConfig>[1] => ({
             ? undefined
             : {
                 effort: one.crosscheck.effort,
-                prefer: one.crosscheck.prefer,
               },
         match: one.match,
         why: one.why,
