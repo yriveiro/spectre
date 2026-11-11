@@ -34,13 +34,16 @@ const call = async (
   directory: string,
   input: { profile?: string; task?: string; setup?: "accepted" | "declined" } = {},
   list?: () => Effect.Effect<unknown, unknown>,
+  session?: { readonly id: string; readonly sessions: Record<string, string> },
 ) => {
-  const run = routing(context(directory, list)).execute as unknown as (
+  const sessions = session?.sessions ?? { ses_project: directory };
+  const run = routing(context(directory, list, sessions)).execute as unknown as (
     given: typeof input,
+    context: { readonly sessionID: string },
   ) => Effect.Effect<{
     output: Page;
   }>;
-  return (await Effect.runPromise(run(input))).output;
+  return (await Effect.runPromise(run(input, { sessionID: session?.id ?? "ses_project" }))).output;
 };
 
 /** The answer, once the test states which status it expects. */
@@ -61,10 +64,20 @@ const FAMILIES: ReadonlyArray<Thin> = [
   { providerID: "acme", id: "falcon-max", family: "raptor", variants: [{ id: "high" }] },
 ];
 
+const THREE_FAMILIES: ReadonlyArray<Thin> = [
+  ...FAMILIES,
+  { providerID: "acme", id: "falcon-third", family: "third", variants: [{ id: "high" }] },
+];
+
 const good = JSON.stringify({
-  models: { light: "acme/falcon-mini" },
+  ...allow({ light: "acme/falcon-mini" }),
   profiles: { explorer: { effort: "high", match: "one named file", why: "w" } },
 });
+
+/** The models and their explicit priority, in the order the object lists them. */
+function allow(models: Record<string, string>) {
+  return { models, priority: Object.keys(models) };
+}
 
 /**
  * Two profiles one word apart, and the judge the config asks for. The lexical
@@ -72,7 +85,7 @@ const good = JSON.stringify({
  */
 const withJudge = (judge: Record<string, string>): string =>
   JSON.stringify({
-    models: { light: "acme/falcon-mini" },
+    ...allow({ light: "acme/falcon-mini" }),
     profiles: {
       explorer: { effort: "high", match: "Use when one named file has to be read" },
       designer: { effort: "high", match: "Use when a design decision spans several files" },
@@ -107,15 +120,98 @@ describe("tools.spectre.routing", () => {
       },
       excluded: [],
     });
-    expect(out.models).toEqual([{ name: "light", model: "acme/falcon-mini" }]);
+    expect(out.models).toEqual([
+      {
+        name: "light",
+        model: "acme/falcon-mini",
+        priority: 1,
+        family: undefined,
+        rungs: ["none", "high"],
+        cost: { input: 0, output: 0 },
+      },
+    ]);
+    expect(out.crosscheck).toMatchObject([
+      { name: "light", model: "acme/falcon-mini", priority: 1 },
+    ]);
     expect(out.sources).toEqual([`${scratch.projectDir()}/spectre.json`]);
     expect(out.asked).toEqual([]);
+  });
+
+  test("the config is read from the invoking session's directory, not the plugin's", async () => {
+    await scratch.writeProject(good);
+    const worktree = `${scratch.projectDir()}-worktree`;
+    await Bun.write(
+      `${worktree}/spectre.json`,
+      JSON.stringify({
+        ...allow({ max: "acme/falcon-max" }),
+        profiles: { explorer: { effort: "high" } },
+      }),
+    );
+
+    const out = at(
+      await call(scratch.projectDir(), {}, undefined, {
+        id: "ses_worktree",
+        sessions: { ses_worktree: worktree },
+      }),
+      "resolved",
+    );
+
+    expect(out.sources).toEqual([`${worktree}/spectre.json`]);
+    expect(out.profiles[0]?.model.ref).toBe("acme/falcon-max#high");
+  });
+
+  test("a session that moved reads the new directory on the next call and asks setup when it has no file", async () => {
+    await scratch.writeProject(good);
+    const sessions = { ses_live: scratch.projectDir() };
+    const before = at(
+      await call(scratch.projectDir(), {}, undefined, { id: "ses_live", sessions }),
+      "resolved",
+    );
+    expect(before.sources).toEqual([`${scratch.projectDir()}/spectre.json`]);
+
+    const moved = `${scratch.projectDir()}-moved`;
+    await Bun.write(`${moved}/.keep`, "");
+    sessions.ses_live = moved;
+    const after = at(
+      await call(scratch.projectDir(), {}, undefined, { id: "ses_live", sessions }),
+      "setup",
+    );
+    expect(after.source).toBe(`${moved}/spectre.json`);
+  });
+
+  test("a session that cannot be read is a problem, not the plugin's directory", async () => {
+    await scratch.writeProject(good);
+    const out = at(
+      await call(scratch.projectDir(), {}, undefined, { id: "ses_missing", sessions: {} }),
+      "problems",
+    );
+    expect(out.problems).toContain("ses_missing");
+    expect(out.problems).toContain("could not be read");
+  });
+
+  test("a global file with no allowlist does not stop the setup question", async () => {
+    await scratch.writeGlobal(JSON.stringify({ dictionary: "words.json" }));
+    const out = at(await call(scratch.projectDir()), "setup");
+    expect(out.source).toBe(`${scratch.projectDir()}/spectre.json`);
+    expect(out.models.length).toBeGreaterThan(0);
+  });
+
+  test("a global allowlist resolves a repository with no project file", async () => {
+    await scratch.writeGlobal(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini" }),
+        profiles: { explorer: { effort: "high" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir()), "resolved");
+    expect(out.sources).toEqual([`${scratch.globalDir()}/spectre.json`]);
+    expect(out.profiles[0]?.model.ref).toBe("acme/falcon-mini#high");
   });
 
   test("the first qualifying candidate is spent, and a candidate under the bar reports its capacity", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini", tiny: "acme/falcon-low" },
+        ...allow({ light: "acme/falcon-mini", tiny: "acme/falcon-low" }),
         profiles: { work: { effort: "high", match: "w" } },
       }),
     );
@@ -133,10 +229,70 @@ describe("tools.spectre.routing", () => {
     ]);
   });
 
+  test("the priority array wins over the order of the models object", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini", other: "acme/falcon-max" }),
+        priority: ["other", "light"],
+        profiles: { work: { effort: "high", match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir(), {}, listOf(FAMILIES)), "resolved");
+
+    expect(out.profiles[0]?.model.ref).toBe("acme/falcon-max#high");
+    expect(out.models.map((one) => [one.name, one.priority])).toEqual([
+      ["other", 1],
+      ["light", 2],
+    ]);
+  });
+
+  test("a config with no priority order is a problem", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        models: { light: "acme/falcon-mini" },
+        profiles: { work: { effort: "high", match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir()), "problems");
+    expect(out.problems).toContain("priority: states no priority order");
+    expect(out.models).toBeUndefined();
+    expect(out.crosscheck).toBeUndefined();
+  });
+
+  test("a profile problem does not hide a valid model and crosscheck order", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini", other: "acme/falcon-max" }),
+        crosscheck: ["other"],
+        profiles: { broken: { effort: "impossible", match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir(), {}, listOf(FAMILIES)), "problems");
+
+    expect(out.problems).toContain("profiles.broken.effort");
+    expect(out.models?.map((one) => one.name)).toEqual(["light", "other"]);
+    expect(out.crosscheck?.map((one) => one.name)).toEqual(["other"]);
+  });
+
+  test("an allowlist problem does not carry an order", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini", ghost: "acme/falcon-ghost" }),
+        crosscheck: ["light"],
+        profiles: { work: { effort: "high", match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir()), "problems");
+
+    expect(out.problems).toContain("models.ghost");
+    expect(out.models).toBeUndefined();
+    expect(out.crosscheck).toBeUndefined();
+  });
+
   test("a model with no thinking control is excluded, not silently dropped", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini", plain: "opencode/gpt-5" },
+        ...allow({ light: "acme/falcon-mini", plain: "opencode/gpt-5" }),
         profiles: { work: { effort: "high", match: "w" } },
       }),
     );
@@ -156,7 +312,7 @@ describe("tools.spectre.routing", () => {
   test("a pin skips the requirement and keeps the variant in the ref", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini#high" },
+        ...allow({ light: "acme/falcon-mini#high" }),
         profiles: { pinned: { model: "light", match: "w" } },
       }),
     );
@@ -170,10 +326,26 @@ describe("tools.spectre.routing", () => {
     });
   });
 
+  test("an allowlist variant is not a profile pin", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini#high" }),
+        profiles: { plain: { effort: "high", match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir(), {}, listOf(FAMILIES)), "resolved");
+
+    expect(out.profiles[0]?.model).toMatchObject({
+      ref: "acme/falcon-mini#high",
+      rung: "high",
+      pinned: false,
+    });
+  });
+
   test("a crosscheck from another family is returned beside the primary", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini", other: "acme/falcon-max" },
+        ...allow({ light: "acme/falcon-mini", other: "acme/falcon-max" }),
         profiles: { judged: { effort: "high", crosscheck: { effort: "high" }, match: "w" } },
       }),
     );
@@ -186,7 +358,7 @@ describe("tools.spectre.routing", () => {
   test("a crosscheck keeps a variant the allowlist pinned, without a second suffix", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini", other: "acme/falcon-max#high" },
+        ...allow({ light: "acme/falcon-mini", other: "acme/falcon-max#high" }),
         profiles: { judged: { effort: "high", crosscheck: { effort: "high" }, match: "w" } },
       }),
     );
@@ -194,12 +366,13 @@ describe("tools.spectre.routing", () => {
 
     expect(out.profiles[0]?.crosscheck?.ref).toBe("acme/falcon-max#high");
     expect(out.profiles[0]?.crosscheck?.rung).toBe("high");
+    expect(out.profiles[0]?.crosscheck?.pinned).toBe(false);
   });
 
   test("a declared crosscheck that finds no other family says so", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini", other: "acme/falcon-max" },
+        ...allow({ light: "acme/falcon-mini", other: "acme/falcon-max" }),
         profiles: { judged: { effort: "high", crosscheck: { effort: "high" }, match: "w" } },
       }),
     );
@@ -208,12 +381,64 @@ describe("tools.spectre.routing", () => {
 
     expect(out.profiles[0]?.crosscheck).toBeUndefined();
     expect(out.profiles[0]?.crosscheckProblem).toContain(
-      "found no allowed model from another family",
+      "found no model in the crosscheck list from another family",
     );
   });
 
+  test("the crosscheck list wins over the allowlist order", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({
+          light: "acme/falcon-mini",
+          other: "acme/falcon-max",
+          third: "acme/falcon-third",
+        }),
+        crosscheck: ["third", "other"],
+        profiles: { judged: { effort: "high", crosscheck: { effort: "high" }, match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir(), {}, listOf(THREE_FAMILIES)), "resolved");
+
+    expect(out.profiles[0]?.model.ref).toBe("acme/falcon-mini#high");
+    expect(out.profiles[0]?.crosscheck?.ref).toBe("acme/falcon-third#high");
+    expect(out.crosscheck.map((one) => one.name)).toEqual(["third", "other"]);
+    // The array is the fallback order. `priority` is the allowlist place, so
+    // the two orders stay distinct and each field keeps one meaning.
+    expect(out.crosscheck.map((one) => [one.name, one.priority])).toEqual([
+      ["third", 3],
+      ["other", 2],
+    ]);
+  });
+
+  test("a crosscheck alias that is not in the allowlist is a problem", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini" }),
+        crosscheck: ["ghost"],
+        profiles: { judged: { effort: "high", crosscheck: { effort: "high" }, match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir(), {}, listOf(FAMILIES)), "problems");
+    expect(out.problems).toContain('crosscheck: "ghost" is not a model in models');
+    expect(out.models?.map((one) => one.name)).toEqual(["light"]);
+    expect(out.crosscheck).toBeUndefined();
+  });
+
+  test("an empty crosscheck list leaves a declared second opinion unavailable", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini", other: "acme/falcon-max" }),
+        crosscheck: [],
+        profiles: { judged: { effort: "high", crosscheck: { effort: "high" }, match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir(), {}, listOf(FAMILIES)), "resolved");
+    expect(out.profiles[0]?.crosscheck).toBeUndefined();
+    expect(out.profiles[0]?.crosscheckProblem).toContain("crosscheck list is empty");
+  });
+
   test("a ref the catalogue does not have is a problem that names its key", async () => {
-    await scratch.writeProject(JSON.stringify({ models: { ghost: "acme/falcon-ghost" } }));
+    await scratch.writeProject(JSON.stringify({ ...allow({ ghost: "acme/falcon-ghost" }) }));
     const out = at(await call(scratch.projectDir()), "problems");
 
     expect(out.problems).toContain("models.ghost");
@@ -221,7 +446,7 @@ describe("tools.spectre.routing", () => {
 
   test("problems from reading and from checking arrive together, one per line", async () => {
     await scratch.writeProject("{ broken");
-    await scratch.writeGlobal(JSON.stringify({ models: { ghost: "acme/falcon-ghost" } }));
+    await scratch.writeGlobal(JSON.stringify({ ...allow({ ghost: "acme/falcon-ghost" }) }));
     const out = at(await call(scratch.projectDir()), "problems");
     const lines = out.problems.split("\n");
 
@@ -231,7 +456,7 @@ describe("tools.spectre.routing", () => {
   });
 
   test("a config with no models at all is a problem, not a silent empty table", async () => {
-    await scratch.writeProject(JSON.stringify({ models: {} }));
+    await scratch.writeProject(JSON.stringify({ ...allow({}) }));
     const out = at(await call(scratch.projectDir()), "problems");
 
     expect(out.problems).toContain("models is empty");
@@ -313,7 +538,7 @@ describe("tools.spectre.routing", () => {
   });
 
   test("a config that configures models without profiles falls back to the default profiles", async () => {
-    await scratch.writeProject(JSON.stringify({ models: { light: "acme/falcon-mini" } }));
+    await scratch.writeProject(JSON.stringify({ ...allow({ light: "acme/falcon-mini" }) }));
     const out = at(await call(scratch.projectDir()), "resolved");
 
     expect(out.profiles.map((one) => one.name)).toEqual([
@@ -337,7 +562,7 @@ describe("tools.spectre.routing", () => {
   test("naming one profile returns that row, and says it was asked for", async () => {
     await scratch.writeProject(
       JSON.stringify({
-        models: { light: "acme/falcon-mini" },
+        ...allow({ light: "acme/falcon-mini" }),
         profiles: {
           explorer: { effort: "high", match: "w" },
           reviewer: { effort: "high", match: "w" },

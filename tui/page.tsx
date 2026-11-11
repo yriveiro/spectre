@@ -3,10 +3,11 @@ import type { ResolvedTheme } from "@opencode/theme/tui";
 import { type KeyEvent, type RGBA, TextAttributes } from "@opentui/core";
 import { type JSX, useRenderer } from "@opentui/solid";
 import { createSignal } from "solid-js";
-import { KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
+import { FILE_NAME, KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
 import {
   addProfilePrompt,
   applied,
+  crosscheckPicker,
   DEFAULT_PROVIDER,
   type Edit,
   effortPicker,
@@ -34,9 +35,15 @@ import {
 } from "./data.ts";
 import { bindKeyboard, field, h, type Palette, palette, show } from "./render.ts";
 
-export type TabId = "configured" | "profiles" | "allowlist" | "preview";
+export type TabId = "configured" | "profiles" | "allowlist" | "crosscheck" | "preview";
 
-export const TABS: ReadonlyArray<TabId> = ["configured", "profiles", "allowlist", "preview"];
+export const TABS: ReadonlyArray<TabId> = [
+  "configured",
+  "profiles",
+  "allowlist",
+  "crosscheck",
+  "preview",
+];
 
 export type ProfileRow = {
   readonly profile: Profile;
@@ -46,6 +53,7 @@ export type ProfileRow = {
 export type EntryRow = {
   readonly alias: string;
   readonly ref: string;
+  readonly priority: number;
   readonly model: Model | undefined;
   readonly problem?: string | undefined;
 };
@@ -60,6 +68,8 @@ export type PageInput = {
   readonly onTabChange?: ((tab: TabId) => void) | undefined;
   readonly selectedRow?: number | undefined;
   readonly onRowChange?: ((row: number) => void) | undefined;
+  /** True while the directory's config is being read. */
+  readonly loading?: boolean | undefined;
   readonly jevAvailable?: boolean | undefined;
   readonly terminalWidth?: number | undefined;
   readonly terminalHeight?: number | undefined;
@@ -100,7 +110,37 @@ export const usableEntryRows = (
     return true;
   });
 
+export type CrosscheckRow = EntryRow & {
+  readonly enabled: boolean;
+  /** The fallback position for an enabled row; absent when the row is off. */
+  readonly order: number | undefined;
+};
+
+/**
+ * The crosscheck tab: enabled rows in fallback order, then every other
+ * allowlist row in allowlist order. A model that is not in the allowlist is
+ * not a row.
+ */
+export const crosscheckRows = (
+  models: ReadonlyArray<EntryRow>,
+  enabled: ReadonlyArray<string>,
+): ReadonlyArray<CrosscheckRow> => {
+  const held = new Set(enabled);
+  const byAlias = new Map(models.map((one) => [one.alias, one]));
+  const on = enabled.flatMap((alias) => {
+    const row = byAlias.get(alias);
+    return row === undefined ? [] : [{ ...row, enabled: true, order: 0 }];
+  });
+  const off = models
+    .filter((one) => !held.has(one.alias))
+    .map((one) => ({ ...one, enabled: false, order: undefined }));
+  return [...on.map((one, index) => ({ ...one, order: index + 1 })), ...off];
+};
+
 const INDENT = 2;
+
+/** The widest a compact select grows before its value truncates. */
+const COMPACT_SELECT_MAX_WIDTH = 64;
 
 export type LayoutMetrics = {
   readonly modalWidth: number;
@@ -124,12 +164,13 @@ export type LayoutMetrics = {
   };
   readonly entryColumns: {
     readonly gutter: number;
-    readonly index: number;
+    readonly priority: number;
     readonly alias: number;
     readonly family: number;
     readonly rungs: number;
     readonly model: number;
     readonly cost: number;
+    readonly move: number;
     readonly remove: number;
   };
 };
@@ -181,8 +222,9 @@ export const layoutMetrics = (input: {
   );
 
   const eGutter = 2;
-  const eIndex = 3;
-  const eRemove = 6;
+  const ePriority = 8;
+  const eMove = 4;
+  const eRemove = 10;
   const maxAlias = input.models.reduce((max, one) => Math.max(max, one.alias.length), 5);
   const eAlias = Math.max(8, Math.min(16, maxAlias + 1));
 
@@ -205,10 +247,10 @@ export const layoutMetrics = (input: {
     return Math.max(max, text.length);
   }, 4);
   const eCost = Math.max(6, Math.min(12, maxEntryCost));
-  const eGaps = 7;
+  const eGaps = 8;
   const eModel = Math.max(
     18,
-    innerWidth - eGutter - eIndex - eAlias - eFamily - eRungs - eCost - eRemove - eGaps,
+    innerWidth - eGutter - ePriority - eAlias - eFamily - eRungs - eCost - eMove - eRemove - eGaps,
   );
 
   return {
@@ -233,12 +275,13 @@ export const layoutMetrics = (input: {
     },
     entryColumns: {
       gutter: eGutter,
-      index: eIndex,
+      priority: ePriority,
       alias: eAlias,
       family: eFamily,
       rungs: eRungs,
       model: eModel,
       cost: eCost,
+      move: eMove,
       remove: eRemove,
     },
   };
@@ -277,6 +320,8 @@ const selectControl = (input: {
   readonly colors: Palette;
   readonly width?: number;
   readonly flexGrow?: number;
+  /** Size to the value, keeping the chevron beside it instead of at the column edge. */
+  readonly compact?: boolean;
   readonly value: string;
   readonly tone?: RGBA | undefined;
   readonly onOpen: () => void;
@@ -287,12 +332,13 @@ const selectControl = (input: {
     "box",
     {
       width: input.width,
+      maxWidth: input.compact === true ? COMPACT_SELECT_MAX_WIDTH : undefined,
       flexGrow: input.flexGrow,
-      flexShrink: input.flexGrow !== undefined ? 1 : 0,
+      flexShrink: input.flexGrow !== undefined || input.compact === true ? 1 : 0,
       flexBasis: input.flexGrow !== undefined && input.width === undefined ? 0 : undefined,
       minWidth: input.flexGrow !== undefined ? 0 : undefined,
       flexDirection: "row",
-      justifyContent: "space-between",
+      justifyContent: input.compact === true ? "flex-start" : "space-between",
       paddingLeft: 1,
       paddingRight: 1,
       backgroundColor: () => (hovered() ? input.colors.selectHoverBg : input.colors.insetBg),
@@ -304,9 +350,9 @@ const selectControl = (input: {
       "text",
       {
         fg: () => (hovered() ? input.colors.cyan : baseTone),
-        flexGrow: 1,
+        flexGrow: input.compact === true ? 0 : 1,
         flexShrink: 1,
-        flexBasis: 0,
+        flexBasis: input.compact === true ? undefined : 0,
         minWidth: 0,
         truncate: true,
         wrapMode: "none",
@@ -385,6 +431,25 @@ const removeBadge = (input: {
   );
 };
 
+const moveBadges = (input: {
+  readonly colors: Palette;
+  readonly width: number;
+  readonly onUp: () => void;
+  readonly onDown: () => void;
+}): JSX.Element =>
+  h(
+    "box",
+    {
+      width: input.width,
+      flexShrink: 0,
+      flexDirection: "row",
+      justifyContent: "center",
+      columnGap: 1,
+    },
+    h("text", { fg: input.colors.muted, wrapMode: "none", onMouseUp: input.onUp }, "↑"),
+    h("text", { fg: input.colors.muted, wrapMode: "none", onMouseUp: input.onDown }, "↓"),
+  );
+
 const providerBar = (input: {
   readonly colors: Palette;
   readonly provider: string | undefined;
@@ -460,12 +525,14 @@ const tabBar = (input: {
   readonly configuredCount: number;
   readonly profileCount: number;
   readonly allowCount: number;
+  readonly crosscheckCount: number;
   readonly onSelect: (tab: TabId) => void;
 }): JSX.Element => {
   const items: ReadonlyArray<{ readonly id: TabId; readonly label: string }> = [
     { id: "configured", label: `Configured (${input.configuredCount})` },
     { id: "profiles", label: `Profiles (${input.profileCount})` },
     { id: "allowlist", label: `Allowlist (${input.allowCount})` },
+    { id: "crosscheck", label: `Crosscheck (${input.crosscheckCount})` },
     { id: "preview", label: "Preview" },
   ];
 
@@ -485,7 +552,7 @@ const tabBar = (input: {
     },
     h(
       "box",
-      { flexDirection: "row", gap: 2 },
+      { flexDirection: "row", gap: 2, flexShrink: 0 },
       ...items.map((item) => {
         const selected = item.id === input.active;
         return h(
@@ -508,7 +575,6 @@ const tabBar = (input: {
         );
       }),
     ),
-    h("text", { fg: input.colors.faint, wrapMode: "none" }, "[/] Tabs"),
   );
 };
 
@@ -583,8 +649,8 @@ const profileListRow = (
       "box",
       { flexDirection: "row", columnGap: 1, width: "100%" },
       cell(cols.gutter, () => (selected ? "▸" : " "), colors.cyan),
-      h("text", nameProps, () => profile.name),
       infoBadge({ colors, width: cols.info, onOpen: actions.info }),
+      h("text", nameProps, () => profile.name),
       cell(cols.kind, () => (custom ? "custom" : "default"), custom ? colors.teal : colors.muted),
       statusToggleBadge({ colors, width: cols.status, enabled, onToggle: actions.toggle }),
       modelCell(
@@ -599,15 +665,29 @@ const profileListRow = (
   );
 };
 
+/**
+ * What the crosscheck control says. The resolved model is the answer a session
+ * spends. A configured crosscheck that found none names the requirement it
+ * asked for, so "no model" is not mistaken for "off".
+ */
+const crosscheckValue = (row: ProfileRow): string => {
+  const configured = row.profile.crosscheck;
+  if (configured === undefined) return "None";
+  const resolved = row.resolution?.crosscheck;
+  if (resolved !== undefined) return resolved;
+  const want = configured.effort ?? "profile effort";
+  return `No model (${want})`;
+};
+
 const profileRow = (
   colors: Palette,
-  theme: ResolvedTheme,
   cols: LayoutMetrics["profileColumns"],
   row: ProfileRow,
   selected: boolean,
   actions: {
     readonly effort: () => void;
     readonly pin: () => void;
+    readonly crosscheck: () => void;
     readonly info: () => void;
     readonly selectRow: () => void;
   },
@@ -643,9 +723,8 @@ const profileRow = (
       "box",
       { flexDirection: "row", columnGap: 1, width: "100%" },
       cell(cols.gutter, () => (selected ? "▸" : " "), colors.cyan),
-      h("text", nameProps, () => profile.name),
       infoBadge({ colors, width: cols.info, onOpen: actions.info }),
-      selectControl({ colors, width: cols.effort, value: effort, onOpen: actions.effort }),
+      h("text", nameProps, () => profile.name),
       selectControl({
         colors,
         width: cols.model,
@@ -653,16 +732,41 @@ const profileRow = (
         value: ref,
         onOpen: actions.pin,
       }),
+      selectControl({ colors, width: cols.effort, value: effort, onOpen: actions.effort }),
       costCell(cols.cost, () => costText, costTone),
     ),
+    h(
+      "box",
+      {
+        flexDirection: "row",
+        alignItems: "center",
+        width: "100%",
+        columnGap: 1,
+        paddingRight: 1,
+      },
+      h(
+        "box",
+        {
+          // The label is right-aligned so the select starts at the Model
+          // column whatever width the Profile column takes.
+          width: cols.gutter + cols.info + cols.name + 2,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "flex-end",
+        },
+        h("text", { fg: colors.blue, wrapMode: "none" }, "↳ crosscheck:"),
+      ),
+      selectControl({
+        colors,
+        compact: true,
+        value: crosscheckValue(row),
+        onOpen: actions.crosscheck,
+      }),
+      h("box", { flexGrow: 1 }),
+    ),
     show(
-      () => row.resolution !== undefined && row.resolution.crosscheck !== undefined,
-      () =>
-        h(
-          "box",
-          { paddingLeft: INDENT, paddingRight: 1 },
-          field(theme, "Crosscheck", () => row.resolution?.crosscheck ?? ""),
-        ),
+      () => row.resolution?.crosscheckProblem !== undefined,
+      () => indentedLine(colors.warning, row.resolution?.crosscheckProblem ?? ""),
     ),
     show(
       () => row.resolution !== undefined && row.resolution.problem !== undefined,
@@ -675,10 +779,15 @@ const entryRow = (
   colors: Palette,
   cols: LayoutMetrics["entryColumns"],
   row: EntryRow,
-  index: number,
   selected: boolean,
+  mode: "allowlist" | "crosscheck",
+  order: number | undefined,
   actions: {
-    readonly remove: () => void;
+    readonly enabled?: boolean;
+    readonly up?: (() => void) | undefined;
+    readonly down?: (() => void) | undefined;
+    readonly toggle?: (() => void) | undefined;
+    readonly remove?: (() => void) | undefined;
     readonly selectRow: () => void;
   },
 ): JSX.Element => {
@@ -700,7 +809,7 @@ const entryRow = (
       "box",
       { flexDirection: "row", columnGap: 1, width: "100%" },
       cell(cols.gutter, () => (selected ? "▸" : " "), colors.cyan),
-      cell(cols.index, () => String(index + 1), colors.faint),
+      cell(cols.priority, () => (order === undefined ? "-" : String(order)), colors.faint),
       cell(cols.alias, () => row.alias, selected ? colors.cyan : colors.text),
       cell(cols.family, () => model?.family ?? "-", colors.text),
       cell(
@@ -714,7 +823,26 @@ const entryRow = (
         () => (model === undefined ? "-" : formatCost(model.costInput, model.costOutput)),
         colors.muted,
       ),
-      removeBadge({ colors, width: cols.remove, onRemove: actions.remove }),
+      mode === "crosscheck" && actions.enabled !== true
+        ? cell(cols.move, () => "", colors.faint)
+        : moveBadges({
+            colors,
+            width: cols.move,
+            onUp: actions.up ?? (() => {}),
+            onDown: actions.down ?? (() => {}),
+          }),
+      mode === "crosscheck"
+        ? statusToggleBadge({
+            colors,
+            width: cols.remove,
+            enabled: actions.enabled ?? false,
+            onToggle: actions.toggle ?? (() => {}),
+          })
+        : removeBadge({
+            colors,
+            width: cols.remove,
+            onRemove: actions.remove ?? (() => {}),
+          }),
     ),
   );
 };
@@ -751,10 +879,10 @@ const headerCells = {
     cols: LayoutMetrics["profileColumns"],
   ): ReadonlyArray<JSX.Element> => [
     cell(cols.gutter, () => "", colors.blue),
-    cell(cols.name, () => "Profile", colors.blue),
     cell(cols.info, () => "Info", colors.blue),
-    cell(cols.effort, () => "Effort", colors.blue),
+    cell(cols.name, () => "Profile", colors.blue),
     modelCell(cols.model, () => "Model", colors.blue),
+    cell(cols.effort, () => "Effort", colors.blue),
     costCell(cols.cost, () => "Cost", colors.blue),
   ],
   profileList: (
@@ -762,22 +890,27 @@ const headerCells = {
     cols: LayoutMetrics["profileListColumns"],
   ): ReadonlyArray<JSX.Element> => [
     cell(cols.gutter, () => "", colors.blue),
-    cell(cols.name, () => "Profile", colors.blue),
     cell(cols.info, () => "Info", colors.blue),
+    cell(cols.name, () => "Profile", colors.blue),
     cell(cols.kind, () => "Kind", colors.blue),
     cell(cols.status, () => "Status", colors.blue),
     modelCell(cols.summary, () => "When to use", colors.blue),
     cell(cols.remove, () => "Remove", colors.blue),
   ],
-  entries: (colors: Palette, cols: LayoutMetrics["entryColumns"]): ReadonlyArray<JSX.Element> => [
+  entries: (
+    colors: Palette,
+    cols: LayoutMetrics["entryColumns"],
+    mode: "allowlist" | "crosscheck",
+  ): ReadonlyArray<JSX.Element> => [
     cell(cols.gutter, () => "", colors.blue),
-    cell(cols.index, () => "#", colors.blue),
+    cell(cols.priority, () => "Priority", colors.blue),
     cell(cols.alias, () => "Alias", colors.blue),
     cell(cols.family, () => "Family", colors.blue),
     cell(cols.rungs, () => "Rungs", colors.blue),
     modelCell(cols.model, () => "Model", colors.blue),
     costCell(cols.cost, () => "Cost", colors.blue),
-    cell(cols.remove, () => "Remove", colors.blue),
+    cell(cols.move, () => "", colors.blue),
+    cell(cols.remove, () => (mode === "crosscheck" ? "Crosscheck" : "Remove"), colors.blue),
   ],
 };
 
@@ -857,12 +990,15 @@ const activeTabBody = (input: {
   readonly selectedRow: () => number;
   readonly selectedProfileListRow: () => number;
   readonly selectedEntryRow: () => number;
+  readonly selectedCrosscheckRow: () => number;
+  readonly crosscheckRows: ReadonlyArray<CrosscheckRow>;
   readonly actions: (
     row: ProfileRow,
     index: number,
   ) => {
     readonly effort: () => void;
     readonly pin: () => void;
+    readonly crosscheck: () => void;
     readonly info: () => void;
     readonly selectRow: () => void;
   };
@@ -879,7 +1015,19 @@ const activeTabBody = (input: {
     row: EntryRow,
     index: number,
   ) => {
+    readonly up: () => void;
+    readonly down: () => void;
     readonly remove: () => void;
+    readonly selectRow: () => void;
+  };
+  readonly crosscheckActions: (
+    row: CrosscheckRow,
+    index: number,
+  ) => {
+    readonly enabled: boolean;
+    readonly up: (() => void) | undefined;
+    readonly down: (() => void) | undefined;
+    readonly toggle: () => void;
     readonly selectRow: () => void;
   };
 }): JSX.Element => {
@@ -920,8 +1068,9 @@ const activeTabBody = (input: {
             colors,
             metrics.entryColumns,
             row,
-            index,
             index === input.selectedEntryRow(),
+            "allowlist",
+            row.priority,
             input.entryActions(row, index),
           ),
         ),
@@ -932,8 +1081,36 @@ const activeTabBody = (input: {
     );
     return section(
       colors,
-      "The resolver reads the entries from the top and spends the first model that fits.",
-      headerCells.entries(colors, metrics.entryColumns),
+      "Priority is the explicit order. The resolver spends the first model that fits, from the top. K/J or the arrows move the selected entry.",
+      headerCells.entries(colors, metrics.entryColumns, "allowlist"),
+      entries,
+    );
+  }
+  if (input.tab === "crosscheck") {
+    const entries = h(
+      "box",
+      { flexDirection: "column", width: "100%", gap: 1 },
+      () =>
+        input.crosscheckRows.map((row, index) =>
+          entryRow(
+            colors,
+            metrics.entryColumns,
+            row,
+            index === input.selectedCrosscheckRow(),
+            "crosscheck",
+            row.order,
+            input.crosscheckActions(row, index),
+          ),
+        ),
+      show(
+        () => input.crosscheckRows.length === 0,
+        () => indentedLine(colors.muted, "No models in the allowlist yet"),
+      ),
+    );
+    return section(
+      colors,
+      "The resolver tries the enabled models in this order and takes the first from another family that meets the crosscheck effort. Space toggles, K/J or the arrows move.",
+      headerCells.entries(colors, metrics.entryColumns, "crosscheck"),
       entries,
     );
   }
@@ -947,7 +1124,6 @@ const activeTabBody = (input: {
       input.rows.map((row, index) =>
         profileRow(
           colors,
-          theme,
           metrics.profileColumns,
           row,
           index === input.selectedRow(),
@@ -981,6 +1157,7 @@ export const dispatchModalKey = (
     readonly close: () => void;
     readonly moveTab: (delta: number) => void;
     readonly moveRow: (delta: number) => void;
+    readonly moveModel?: (delta: -1 | 1) => void;
     readonly addModel?: () => void;
     readonly removeModel?: () => void;
     readonly toggleProfile?: () => void;
@@ -1031,6 +1208,16 @@ export const dispatchModalKey = (
     actions.moveTab(tabDelta);
     return;
   }
+  if (key === "K" || (key === "k" && event.shift)) {
+    event.preventDefault();
+    actions.moveModel?.(-1);
+    return;
+  }
+  if (key === "J" || (key === "j" && event.shift)) {
+    event.preventDefault();
+    actions.moveModel?.(1);
+    return;
+  }
   const rowDelta = ROW_DELTAS[key];
   if (rowDelta !== undefined) actions.moveRow(rowDelta);
 };
@@ -1054,12 +1241,14 @@ export const page = (input: PageInput): JSX.Element => {
   const [selectedRow, setSelectedRow] = createSignal(input.selectedRow ?? 0);
   const [selectedProfileListRow, setSelectedProfileListRow] = createSignal(0);
   const [selectedEntryRow, setSelectedEntryRow] = createSignal(0);
+  const [selectedCrosscheckRow, setSelectedCrosscheckRow] = createSignal(0);
   const jevAvailable = input.jevAvailable ?? isJevAvailable(input.draft);
   const jevEnabled =
     jevAvailable && input.draft.judge !== undefined && input.draft.judge.kind !== "lexical";
   const jevModel = input.draft.judge?.model ?? JEV_MODEL;
   const providerAvailable = isProviderAvailable(input.draft.provider, input.catalogue);
   const usableModels = usableEntryRows(input.models, input.draft.provider);
+  const crosscheckList = crosscheckRows(usableModels, input.draft.crosscheck);
 
   const metrics = layoutMetrics({
     terminalWidth: input.terminalWidth ?? context.renderer?.width ?? liveRenderer?.width,
@@ -1161,6 +1350,19 @@ export const page = (input: PageInput): JSX.Element => {
     run(() => providerPicker({ dialog, draft: input.draft, models: input.catalogue }));
   };
 
+  const toggleSelected = (): void => {
+    if (activeTab === "profiles") {
+      const target = input.draft.profiles[selectedProfileListRow()];
+      if (target !== undefined) toggleProfileByName(target.name);
+      return;
+    }
+    if (activeTab === "crosscheck") {
+      const row = crosscheckList[selectedCrosscheckRow()];
+      if (row !== undefined)
+        input.onChange(applied(input.draft, { kind: "toggle-crosscheck", alias: row.alias }));
+    }
+  };
+
   bindKeyboard(context.renderer, (event: KeyEvent) =>
     dispatchModalKey(event, {
       saveAndClose: () => {
@@ -1186,15 +1388,41 @@ export const page = (input: PageInput): JSX.Element => {
         if (activeTab === "allowlist") {
           const next = stepRow(selectedEntryRow(), usableModels.length, delta);
           setSelectedEntryRow(next);
+          return;
+        }
+        if (activeTab === "crosscheck") {
+          const next = stepRow(selectedCrosscheckRow(), crosscheckList.length, delta);
+          setSelectedCrosscheckRow(next);
         }
       },
-      addModel: activeTab === "profiles" ? openAddProfile : openAddModel,
-      removeModel: activeTab === "profiles" ? triggerRemoveProfile : triggerRemoveModel,
-      toggleProfile: () => {
-        if (activeTab !== "profiles") return;
-        const target = input.draft.profiles[selectedProfileListRow()];
-        if (target !== undefined) toggleProfileByName(target.name);
+      moveModel: (delta) => {
+        if (activeTab === "allowlist") {
+          const row = usableModels[selectedEntryRow()];
+          if (row !== undefined)
+            input.onChange(applied(input.draft, { kind: "move-model", alias: row.alias, delta }));
+          return;
+        }
+        if (activeTab === "crosscheck") {
+          const row = crosscheckList[selectedCrosscheckRow()];
+          if (row?.enabled === true)
+            input.onChange(
+              applied(input.draft, { kind: "move-crosscheck", alias: row.alias, delta }),
+            );
+        }
       },
+      addModel:
+        activeTab === "profiles"
+          ? openAddProfile
+          : activeTab === "crosscheck"
+            ? undefined
+            : openAddModel,
+      removeModel:
+        activeTab === "profiles"
+          ? triggerRemoveProfile
+          : activeTab === "crosscheck"
+            ? undefined
+            : triggerRemoveModel,
+      toggleProfile: toggleSelected,
       openInfo: () => {
         if (activeTab === "configured") {
           openProfileInfo(configuredRows[selectedRow()]);
@@ -1216,6 +1444,15 @@ export const page = (input: PageInput): JSX.Element => {
       run(() =>
         pinPicker({ dialog, draft: input.draft, models: input.catalogue, profile: row.profile }),
       ),
+    crosscheck: () =>
+      run(() =>
+        crosscheckPicker({
+          dialog,
+          draft: input.draft,
+          models: input.catalogue,
+          profile: row.profile,
+        }),
+      ),
     info: () => openProfileInfo(row),
     selectRow: () => {
       setSelectedRow(index);
@@ -1233,9 +1470,34 @@ export const page = (input: PageInput): JSX.Element => {
   });
 
   const entryActions = (row: EntryRow, index: number) => ({
+    up: () =>
+      input.onChange(applied(input.draft, { kind: "move-model", alias: row.alias, delta: -1 })),
+    down: () =>
+      input.onChange(applied(input.draft, { kind: "move-model", alias: row.alias, delta: 1 })),
     remove: () => removeEntryByAlias(row.alias),
     selectRow: () => {
       setSelectedEntryRow(index);
+    },
+  });
+
+  const crosscheckActions = (row: CrosscheckRow, index: number) => ({
+    enabled: row.enabled,
+    toggle: () =>
+      input.onChange(applied(input.draft, { kind: "toggle-crosscheck", alias: row.alias })),
+    up: row.enabled
+      ? () =>
+          input.onChange(
+            applied(input.draft, { kind: "move-crosscheck", alias: row.alias, delta: -1 }),
+          )
+      : undefined,
+    down: row.enabled
+      ? () =>
+          input.onChange(
+            applied(input.draft, { kind: "move-crosscheck", alias: row.alias, delta: 1 }),
+          )
+      : undefined,
+    selectRow: () => {
+      setSelectedCrosscheckRow(index);
     },
   });
 
@@ -1265,9 +1527,12 @@ export const page = (input: PageInput): JSX.Element => {
       selectedRow,
       selectedProfileListRow,
       selectedEntryRow,
+      selectedCrosscheckRow,
+      crosscheckRows: crosscheckList,
       actions,
       profileListActions,
       entryActions,
+      crosscheckActions,
     }),
   );
 
@@ -1303,10 +1568,25 @@ export const page = (input: PageInput): JSX.Element => {
         h("text", { fg: colors.text, attributes: TextAttributes.BOLD }, "Routing"),
         h("text", { fg: colors.teal, onMouseUp: close }, "Esc"),
       ),
+      field(theme, "Config", () => input.source ?? "None yet"),
       show(
+        () => input.loading === true,
+        () => indentedLine(colors.muted, `Reading ${input.draft.directory}…`),
+      ),
+      show(
+        () => input.loading !== true && input.source === undefined,
         () =>
-          input.source !== undefined || (configuredRows.length === 0 && usableModels.length === 0),
-        () => field(theme, "Config", () => input.source ?? "None yet"),
+          indentedLine(
+            colors.warning,
+            `No ${FILE_NAME} in ${input.draft.directory}. The page writes one when you save.`,
+          ),
+      ),
+      show(
+        () => input.draft.problems.length > 0,
+        () =>
+          h("box", { flexDirection: "column" }, () =>
+            input.draft.problems.map((one) => indentedLine(colors.red, one)),
+          ),
       ),
       providerBar({
         colors,
@@ -1338,6 +1618,7 @@ export const page = (input: PageInput): JSX.Element => {
       configuredCount: configuredRows.length,
       profileCount: input.draft.profiles.length,
       allowCount: usableModels.length,
+      crosscheckCount: crosscheckList.filter((one) => one.enabled).length,
       onSelect: (next) => input.onTabChange?.(next),
     }),
     body,
@@ -1366,18 +1647,15 @@ export const page = (input: PageInput): JSX.Element => {
           onPress: () => input.onSave(),
         }),
         show(
-          () => activeTab === "profiles" && input.draft.profiles.length > 0,
+          () => activeTab === "profiles" || activeTab === "crosscheck",
           () =>
             footerButton({
               key: "Space",
-              label: "Toggle",
+              label: activeTab === "crosscheck" ? "Toggle crosscheck" : "Toggle",
               hoverKeyColor: colors.green,
               textColor: colors.text,
               mutedColor: colors.muted,
-              onPress: () => {
-                const target = input.draft.profiles[selectedProfileListRow()];
-                if (target !== undefined) toggleProfileByName(target.name);
-              },
+              onPress: toggleSelected,
             }),
         ),
         show(
@@ -1393,7 +1671,7 @@ export const page = (input: PageInput): JSX.Element => {
             }),
         ),
         show(
-          () => activeTab !== "profiles",
+          () => activeTab === "allowlist" || activeTab === "configured",
           () =>
             footerButton({
               key: "+",
@@ -1417,7 +1695,8 @@ export const page = (input: PageInput): JSX.Element => {
             }),
         ),
         show(
-          () => activeTab !== "profiles" && usableModels.length > 0,
+          () =>
+            (activeTab === "allowlist" || activeTab === "configured") && usableModels.length > 0,
           () =>
             footerButton({
               key: "-",

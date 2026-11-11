@@ -18,13 +18,22 @@ import type { File, Known } from "./types";
  *
  * The top-level keys are written in one order, whatever order the object
  * carries them in, so two writes of the same config differ by nothing. Inside
- * `models` the user's own order is kept, because that order is the preference
- * order the resolver reads.
+ * `models` the user's own order is kept as a readable map, and `priority`
+ * states the order the resolver actually reads.
  */
 export const serialise = (config: File): string => {
   const ordered: Record<string, unknown> = {};
   if (config.$schema !== undefined) ordered.$schema = config.$schema;
-  for (const key of ["provider", "models", "profiles", "judge", "dictionary", "setup"] as const)
+  for (const key of [
+    "provider",
+    "models",
+    "priority",
+    "crosscheck",
+    "profiles",
+    "judge",
+    "dictionary",
+    "setup",
+  ] as const)
     if (config[key] !== undefined) ordered[key] = config[key];
   return `${JSON.stringify(ordered, null, 2)}\n`;
 };

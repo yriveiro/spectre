@@ -37,6 +37,8 @@ const tables = (
   provider: undefined,
   judge: undefined,
   models,
+  priority: Object.keys(models),
+  crosscheck: undefined,
   profiles: Object.fromEntries(
     Object.entries(profiles).map(([name, entry]) => [
       name,
@@ -51,6 +53,14 @@ const run = (given: Tables, models: ReadonlyArray<Model.Info> = catalogue) =>
   check(given, models, "spectre", AGENTS);
 
 describe("check", () => {
+  test("the priority order is checked against the allowlist", () => {
+    const found = run({ ...tables({ light: "acme/falcon-mini" }), priority: ["ghost"] });
+    expect(found.problems).toContain('priority: "ghost" is not a model in models. Names: light');
+    expect(found.problems).toContain(
+      'priority: "light" is missing. Every model needs a place in the order.',
+    );
+  });
+
   test("a ref that exists becomes a row, with no variant suffix", () => {
     const found = run(tables({ light: "acme/falcon-mini" }));
     expect(found.problems).toEqual([]);

@@ -75,12 +75,14 @@ choice, with a reason attached**.
 
 ## Config surface
 
-Two keys. Neither builds an agent. This is spectre's own config and it is not
+Four keys. None of them builds an agent. This is spectre's own config and it is not
 OpenCode's: `opencode.jsonc` only loads the plugin.
 
-- **`models`.** The spend whitelist. An alias, and the ref to spend. Every model
-  string the resolver may emit is one of these. The order is the preference
-  order: the first entry that fits is the one that is spent.
+- **`models` and `priority`.** The allowlist: an alias, and the ref to spend.
+  `priority` names the order: the first entry that fits is the one that is
+  spent. The order of the `models` object is a readable map, not the policy.
+- **`crosscheck`.** The allowlist models that may serve a second opinion, in
+  fallback order. A model that is absent is off.
 - **`profiles`.** The router's vocabulary. A name, the effort it asks for, the
   moment it serves, and the reason, so a choice is legible rather than
   arbitrary.
@@ -91,6 +93,8 @@ OpenCode's: `opencode.jsonc` only loads the plugin.
     "muse":    "opencode-go/muse-spark-1.3-contributor",
     "minimax": "opencode-go/minimax-m3.1-flash-free"
   },
+  "priority": ["muse", "minimax"],
+  "crosscheck": ["muse", "minimax"],
 
   "profiles": {
     "search": {
@@ -178,6 +182,11 @@ working. The writer only ever writes `spectre.json`.
 
 The global directory follows OpenCode's own precedence, so a user already pointing
 `OPENCODE_CONFIG_DIR` somewhere needs no second thing to remember.
+
+The tool reads the project file from the directory the session is in. A session
+moved into a worktree reads that worktree's file on the next call, and the TUI
+follows the session it renders for, so neither surface shows the models of the
+directory the session left.
 
 ### Reading it
 
@@ -291,10 +300,10 @@ The skill then says in one line which profile it picked and why. One line,
 because a model choice nobody hears about looks exactly like a mistake once it
 turns out to be one.
 
-**The model string is a whitelist, not a guess.** The skill carries the exact
-strings the check produced, so it picks a *name* from the config and emits the
-string that name maps to. It never assembles an ID. The profile states the
-effort, and the resolver turns that effort into a string.
+**The model string is a whitelist, not a guess.** The tool returns the exact
+string the check produced, so the skill picks a *name* from the config and spends
+the string that name maps to. It never assembles an ID. The profile states the
+effort, or pins a model, and the resolver turns that into a string.
 
 **The allowlist is the whole vocabulary.** The models in `spectre.json` are what
 this user allows themselves to spend, and that list is usually far shorter than
@@ -302,11 +311,11 @@ what the provider offers. The tool never widens it, and a model outside it is no
 spendable on a spectre subagent however well it fits. When nothing in the list
 fits, the skill says so and asks rather than reaching outside.
 
-**A pin may name several models, in order of preference.** Take the first that
-fits, and go to a later one only when the task is plainly harder, saying that is
-what happened. The order is a preference order, not a menu to maximise from:
-taking the last entry every time spends money the user said not to spend and makes
-the earlier entries pointless.
+**A profile may pin several models, in order of preference.** The resolver spends
+the first pinned alias the session can use. The order is a preference order, not a
+menu to maximise from: taking a later entry every time spends money the user said
+not to spend and makes the earlier entries pointless. A pin that names no allowed
+model is a problem, not a reason to choose another.
 
 **Open:** is matching `match` against the task worth more than always taking the first
 profile and escalating only when something looks hard? A router that is often wrong is

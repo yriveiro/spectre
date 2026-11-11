@@ -44,8 +44,27 @@ export const useScratch = () => {
   };
 };
 
+/**
+ * The directories the fake sessions are in. A test mutates the record between
+ * two calls to move a session, which is what `session.move` does to the row.
+ */
+export type Sessions = Record<string, string>;
+
 export const context = (
   directory: string,
   list: () => Effect.Effect<unknown, unknown> = () =>
     Effect.succeed({ location: {}, data: CATALOGUE }),
-) => ({ location: { directory }, model: { list } }) as unknown as Plugin.Context;
+  sessions: Sessions = {},
+) =>
+  ({
+    location: { directory },
+    model: { list },
+    session: {
+      get: ({ sessionID }: { readonly sessionID: string }) => {
+        const at = sessions[sessionID];
+        return at === undefined
+          ? Effect.fail(new Error(`no session ${sessionID}`))
+          : Effect.succeed({ id: sessionID, location: { directory: at } });
+      },
+    },
+  }) as unknown as Plugin.Context;

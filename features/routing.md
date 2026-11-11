@@ -62,11 +62,12 @@ the model reads.
 - **R2. The effort scale is the full range the models support.** It is read
   from the catalogue on every call, not hardcoded. A profile may name a level
   only some models reach, and that is information, not an error.
-- **R3. The allowlist stays the user's.** `models` keeps its entries, and
-  their **order is the preference order**: the first entry that fits is the
-  one that is spent. The report states the cost beside each candidate and never uses
-  to reorder, because the current file's policy is deliberate — the paid
-  families lead, and the free model is the last rung.
+- **R3. The allowlist stays the user's, and its order is explicit.** `models`
+  keeps its entries, and `priority` names the order. The first entry in
+  `priority` that fits is the one that is spent. The page can reorder the
+  list, so the order is a decision rather than the order in which the user
+  added models. The report states the cost beside each candidate and never uses
+  it to reorder.
 - **R4. An alias names a model, never a policy.** Aliases are standardized
   (below) and a rename changes nothing about routing, because the cross-check
   rule reads the catalogue's `family`, not the alias.
@@ -78,7 +79,12 @@ the model reads.
   table, and the session writes the answer down so it never asks again.
 - **R7. The terminal can configure it.** A page lists the profiles, the
   allowlist and the live catalogue, and every choice is a dialog over the
-  catalogue.
+  catalogue. The allowlist tab shows each model's priority and moves a model
+  up or down. The crosscheck tab lists the allowlist models with a toggle and
+  the same reorder controls. The enabled models, in order, are the crosscheck
+  fallback. A profile row carries its crosscheck as a control: off, the
+  profile's own effort, or a named effort. A configured crosscheck that no
+  model in the fallback can serve shows its reason beside the row.
 - **R8. The resolver reports what it chose and what it could not reach.** A
   profile that asks for an effort no allowed model reaches is a problem, and
   a model that had to step up to meet one says so.
@@ -86,6 +92,18 @@ the model reads.
   that is absent, disabled in the config, unreachable, or too slow must not
   stop a delegation. The work still gets done, with the agent's own judgement
   in the judge's place, and the report says which path ran.
+- **R10. The preference order is readable.** The routing answer carries every
+  allowed model with its priority, family, rungs and cost, and the crosscheck
+  fallback order, so a session can read what the resolver will consider from
+  one call. A `problems` answer carries the same arrays when the models and the
+  priority are valid, so a broken profile does not hide the order.
+- **R11. A crosscheck is a review.** A profile that carries a crosscheck runs
+  the primary, then the crosscheck on the result. The reviewer returns concrete
+  challenges with evidence. The session that routed the work is the judge. It
+  accepts a challenge only when the evidence supports it, and it sends accepted
+  challenges back to the primary for one revision. The routing `judge` names a
+  profile and does not review results. The path and the reviewer prompt are in
+  `skills/definitions/model-router/references/routing-flow.md`.
 
 ## Platform facts
 
@@ -132,12 +150,14 @@ can do, and the resolver has to say which part.
     "muse":           "opencode-go/muse-spark-1.3-contributor",
     "minimax":        "opencode-go/minimax-m3.1-flash-free"
   },
+  "priority": ["glm-flash", "deepseek-flash", "muse", "minimax"],
+  "crosscheck": ["glm-flash", "deepseek-flash", "muse", "minimax"],
   "profiles": {
     "mechanical": { "effort": "low", "match": "Use when …", "why": "…" },
     "search":     { "effort": "medium", "match": "Use when …", "why": "…" },
-    "worker":     { "effort": "high", "crosscheck": { "effort": "high", "prefer": "free" },
+    "worker":     { "effort": "high", "crosscheck": { "effort": "high" },
                     "match": "Use when …", "why": "…" },
-    "judgment":   { "effort": "high", "crosscheck": { "effort": "high", "prefer": "free" },
+    "judgment":   { "effort": "high", "crosscheck": { "effort": "high" },
                     "match": "Use when …", "why": "…" },
     "thinking":   { "effort": "max", "match": "Use when …", "why": "…" },
     "deep":       { "effort": "max", "match": "Use when …", "why": "…" },
@@ -150,21 +170,30 @@ can do, and the resolver has to say which part.
 `provider` is the default the page opens with and the default the starter set
 writes. It is not a restriction: the allowlist may mix providers.
 
+The tool reads the file from the directory the invoking session is in, on every
+call. A session that moves into a worktree reads that worktree's file on the
+next call, and a directory with no file is a repository that has not answered
+the setup question, whatever file sits in the directory the session left. The
+page follows the same rule. `tools.spectre.routing` returns the allowlist order
+with the catalogue facts behind each model, and the crosscheck order.
+
 `crosscheck` is the second opinion, stated as a requirement rather than as a
 model id. The current ladder's third and fourth rungs were not preferences.
-They were a rule: a second family, and a free one where the free model could
-do it.
+They were a rule: a second family, taken from the crosscheck fallback list.
+That list names the allowlist models that may serve a second opinion, in the
+order the resolver tries them. A model that is absent is off.
 
 ### Field rules
 
 | Key | Rule |
 | --- | --- |
-| `models` | An alias and a ref. The alias is `^[a-z0-9][a-z0-9-]*$`. The order is the preference order. |
+| `models` | An alias and a ref. The alias is `^[a-z0-9][a-z0-9-]*$`. The object order is not read. |
 | `models[*]` | `"providerID/modelID"`. A variant may be pinned here; it is then the only rung the model is asked for. |
+| `priority` | Every alias in `models`, once, in the order the resolver reads. The first entry that fits is spent. |
+| `crosscheck` | An optional subset of `models`, once each, in fallback order. A model that is absent cannot serve a second opinion. |
 | `profiles[*].effort` | An effort name from the catalogue. Not a closed enum: the range is read per call. |
 | `profiles[*].model` | Optional. A pin. It wins over `effort`. |
 | `profiles[*].crosscheck.effort` | Optional. The effort the second opinion is asked for. |
-| `profiles[*].crosscheck.prefer` | Optional. `"free"` takes a zero-cost candidate where one qualifies. |
 | `profiles[*].match` | The routing surface: the moment, with the nouns a prompt would carry, and one exclusion. |
 | `profiles[*].why` | The rationale, for the human. Never read by the resolver. |
 | `profiles[*].agent` | Optional. Must be a spectre agent. Defaults to `spectre`. |
@@ -209,20 +238,21 @@ The alias names a model, so it cannot carry an effort.
 
 ```
 resolve(profile, allowlist, catalogue):
-  1. candidates ← allowlist entries, in file order, that resolve in the
+  1. candidates ← allowlist entries, in priority order, that resolve in the
      catalogue, are enabled, are not deprecated, and can call tools
   2. rung(m)    ← the lowest rung of m's ladder at or above profile.effort
                   (exact match only for a name outside the known order;
                    a model with no ladder qualifies only for "none")
-  3. primary    ← the FIRST candidate that qualifies        ← the user's order
-  4. crosscheck ← the first candidate whose catalogue family differs from the
-                  primary's; prefer "free" takes the first zero-cost one
+  3. primary    ← the FIRST candidate that qualifies        ← the priority order
+  4. crosscheck ← the first candidate in `crosscheck` order whose catalogue
+                  family differs from the primary's and meets the crosscheck
+                  effort; an absent list reads the whole allowlist, an empty
+                  list has no candidate
   5. report     ← the ref, the ladder, the gap when there was one, the cost
 ```
 
-Raising the effort raises the money by itself, because "the cheapest model
-that can do *E*" moves to a pricier model as *E* rises. That is what makes a
-later policy possible: spend more where the judgement is unsure.
+Raising the effort moves the choice to a model that can serve it. That is what
+makes a later policy possible: spend more where the judgement is unsure.
 
 ## The architecture
 
@@ -298,12 +328,14 @@ tools/definitions/routing/
   types.ts      the config schema and the tool output union. Schemas only.
   locate.ts     which files, in which order.
   load.ts       read, tolerate comments, merge whole entries.
+  order.ts      the explicit allowlist order and its problems.
   effort.ts     the effort rule. Pure, and it knows no module below it.
   catalogue.ts  what a Model.Info means: family, ladder, cost, capacity.
   resolve.ts    the selection policy and the report.
-  check.ts      validation against the catalogue.
+  check.ts      validation against the catalogue and the order.
+  host.ts       the session directory and the catalogue read.
   write.ts      writing the config, and the alias proposal.
-  index.ts      the tool declaration, the setup outcome, the public barrel.
+  index.ts      the tool declarations, the setup outcome, the public barrel.
 
 tui.tsx         the page, at the repository root, exported as "./tui".
 ```
@@ -370,10 +402,11 @@ opposite loses that argument. A hook would end the argument.
 - **The effort is checked at call time, not at decode time.** A cost on every
   call, bought as forward compatibility with a provider that invents a name
   tomorrow.
-- **One allowlist order, and today the order is per profile.** The current
-  file leads with GLM for the two cheap profiles and with DeepSeek for the
-  five harder ones. A single order cannot carry both, so one of them changes.
-  The choice is the user's, and it is an open question below.
+- **One allowlist order, and the file states it in `priority`.** The page can
+  reorder that list. Which family leads is the user's policy call, and the
+  order is explicit rather than the order in which the user added the models.
+  A separate `crosscheck` list names the models that may serve a second
+  opinion, in its own fallback order.
 - **The tool withholds the whole table on any problem.** One good row is lost
   to a broken one, bought as never routing onto a broken row.
 
@@ -392,15 +425,16 @@ The routing path has two steps, and they are not the same kind of step.
 | **Which model** — the resolution | the resolver, always | the resolver, always |
 
 The judge sits at the first step only. The second step is mechanical: the
-allowlist order, the effort rule and the catalogue. A judge that is absent
-changes who answers the first question and changes nothing about the second.
+allowlist, the priority order, the effort rule, any pin and the catalogue. A
+judge that is absent changes who answers the first question and changes nothing
+about the second.
 
 That is the whole design rule: **the judge never names a model.** It names a
 profile and a probability, both drawn from a list the user wrote. A judge that
 said "spend it on this model" would be a second resolver, and two resolvers
-disagree. The policy may raise the effort when the probability is low, and
-the resolver still picks the model, and the allowlist order still decides
-which one.
+disagree. The policy may raise the effort when the probability is low. The
+resolver still picks the model, through the allowlist, the priority order and
+any pin.
 
 ### The switch
 
@@ -648,9 +682,9 @@ and a task done with too little thinking costs a wrong answer.
 
 1. **What does `none` mean** — the floor of a model, or an exact request for
    a model with an off switch? The two readings disagree about one word.
-2. **Which family leads the allowlist.** One order has to serve every
-   profile, and today the order is per profile. This is the user's policy
-   call, not a design one.
+2. **Which family leads the priority order.** One order serves every profile,
+   and the page lets the user reorder it. This is the user's policy call, not
+   a design one.
 3. **The page picker scope** — the union of every rung in the catalogue, with
    a count of how many allowed models reach each, or a model first and the
    rungs derived from it.

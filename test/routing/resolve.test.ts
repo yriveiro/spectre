@@ -504,7 +504,7 @@ describe("resolve: the pin", () => {
   test("a crosscheck with no effort reads the profile's own", () => {
     const found = resolve(
       "worker",
-      { effort: "high", crosscheck: { prefer: "free" } },
+      { effort: "high", crosscheck: {} },
       kept([
         allow("glm", "opencode-go/glm-5.3-flash"),
         allow("free", "opencode-go/minimax-m3.1-flash-free"),
@@ -559,10 +559,10 @@ describe("resolve: the crosscheck", () => {
     expect(found.resolution?.excluded).toEqual(found.excluded);
   });
 
-  test("prefer free takes the zero-cost one that qualifies", () => {
+  test("the crosscheck takes the first different family in the priority order, never the cheaper one", () => {
     const found = resolve(
       "worker",
-      { effort: "high", crosscheck: { effort: "high", prefer: "free" } },
+      { effort: "high", crosscheck: { effort: "high" } },
       kept([
         allow("glm", "opencode-go/glm-5.3-flash"),
         allow("deep", "opencode-go/deepseek-v4.1-flash"),
@@ -571,22 +571,36 @@ describe("resolve: the crosscheck", () => {
       "spectre",
     );
     expect(found.resolution?.primary.alias).toBe("glm");
-    expect(found.resolution?.crosscheck?.alias).toBe("free");
-    expect(found.resolution?.crosscheck?.costInput).toBe(0);
+    expect(found.resolution?.crosscheck?.alias).toBe("deep");
+    expect(found.resolution?.crosscheck?.costInput).toBe(0.15);
   });
 
-  test("prefer free is a preference, so a paid family serves when no free one reaches", () => {
+  test("the crosscheck follows its own fallback list, not the allowlist order", () => {
     const found = resolve(
       "worker",
-      { effort: "high", crosscheck: { effort: "high", prefer: "free" } },
+      { effort: "high", crosscheck: { effort: "high" } },
       kept([
-        allow("muse", "opencode-go/muse-spark-1.3-contributor"),
-        allow("kimi", "opencode-go/kimi-k3"),
+        allow("glm", "opencode-go/glm-5.3-flash"),
+        allow("deep", "opencode-go/deepseek-v4.1-flash"),
+        allow("free", "opencode-go/minimax-m3.1-flash-free"),
       ]),
       "spectre",
+      ["free", "deep"],
     );
-    expect(found.resolution?.primary.alias).toBe("muse");
-    expect(found.resolution?.crosscheck?.alias).toBe("kimi");
+    expect(found.resolution?.primary.alias).toBe("glm");
+    expect(found.resolution?.crosscheck?.alias).toBe("free");
+  });
+
+  test("an empty crosscheck list leaves the second opinion unavailable", () => {
+    const found = resolve(
+      "worker",
+      { effort: "high", crosscheck: { effort: "high" } },
+      kept([allow("glm", "opencode-go/glm-5.3-flash")]),
+      "spectre",
+      [],
+    );
+    expect(found.resolution?.crosscheck).toBeUndefined();
+    expect(found.resolution?.crosscheckProblem).toContain("crosscheck list is empty");
   });
 
   test("the crosscheck reads the whole allowlist, not the candidates after the primary", () => {

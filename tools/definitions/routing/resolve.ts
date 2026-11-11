@@ -1,4 +1,4 @@
-import { isFree, ladder } from "./catalogue";
+import { ladder } from "./catalogue";
 import { type Effort, effortOf, type Fit, fit, type Ladder, ladderOf } from "./effort";
 import type { Candidate, Excluded, Pick, ProfileEntry, Resolution } from "./types";
 
@@ -91,15 +91,11 @@ export const pick = (
  */
 const spent = (candidate: Candidate, got: Fit | undefined, pinned: boolean): Pick => {
   if (pinned)
-    return pick(
-      candidate,
-      candidate.pinned ?? (got?.kind === "rung" ? got.at.name : undefined),
-      {
-        pinned: true,
-        steppedUp: false,
-        below: undefined,
-      },
-    );
+    return pick(candidate, candidate.pinned ?? (got?.kind === "rung" ? got.at.name : undefined), {
+      pinned: true,
+      steppedUp: false,
+      below: undefined,
+    });
   if (got === undefined || got.kind !== "rung")
     return pick(candidate, undefined, { pinned: false, steppedUp: false, below: undefined });
   return pick(candidate, got.at.name, {
@@ -146,18 +142,16 @@ const rowsFor = (
   }));
 
 /**
- * The crosscheck: the first candidate whose catalogue family differs from the
- * primary's, and never the first whose alias differs.
- *
- * `prefer: "free"` takes the first zero-cost one that qualifies. It falls back
- * to the first qualifying one, because a preference that found nothing is not a
- * filter.
+ * The crosscheck: the first model in the crosscheck fallback order whose
+ * catalogue family differs from the primary's, and never the first whose
+ * alias differs. With no list, every allowed model is a candidate in
+ * allowlist order; an empty list has no candidate.
  */
 const crossOf = (
   rows: ReadonlyArray<Row>,
   primary: Candidate,
   crossWant: Effort,
-  prefer: "free" | undefined,
+  crosscheck: ReadonlyArray<string> | undefined,
 ): Row | undefined => {
   const family = primary.model.family;
   // A second opinion needs two stated families. A row whose catalogue gives no
@@ -165,15 +159,20 @@ const crossOf = (
   // read it as a different one.
   if (family === undefined) return undefined;
 
-  const eligible = rows.filter((one) => {
-    if (one.cross === undefined) return false;
-    if (one.candidate === primary) return false;
+  const byAlias = new Map(rows.map((one) => [one.candidate.alias, one]));
+  const order = crosscheck ?? rows.map((one) => one.candidate.alias);
+
+  for (const alias of order) {
+    const one = byAlias.get(alias);
+    if (one === undefined) continue;
+    if (one.cross === undefined) continue;
+    if (one.candidate === primary) continue;
     const theirs = one.candidate.model.family;
-    if (theirs === undefined || theirs === family) return false;
-    return qualifies(one.cross, crossWant);
-  });
-  const free = eligible.find((one) => isFree(one.candidate.model));
-  return prefer === "free" ? (free ?? eligible[0]) : eligible[0];
+    if (theirs === undefined || theirs === family) continue;
+    if (!qualifies(one.cross, crossWant)) continue;
+    return one;
+  }
+  return undefined;
 };
 
 /**
@@ -191,8 +190,10 @@ const excludedBy = (
   want: Effort | undefined,
   crossWant: Effort | undefined,
   crossRow: Row | undefined,
+  crosscheck: ReadonlyArray<string> | undefined,
 ): ReadonlyArray<Excluded> => {
   const excluded: Array<Excluded> = [];
+  const listed = crosscheck === undefined ? undefined : new Set(crosscheck);
 
   for (const one of rows) {
     if (one.candidate === primary || one.candidate === crossRow?.candidate) continue;
@@ -206,6 +207,9 @@ const excludedBy = (
     }
 
     if (crossWant === undefined || primary === undefined) continue;
+    // A model the reader turned off for the crosscheck is not a candidate for
+    // that role, so it is not reported as one that failed it.
+    if (listed !== undefined && !listed.has(one.candidate.alias)) continue;
     const family = primary.model.family;
     const theirs = one.candidate.model.family;
     // The same rule the crosscheck reads: two stated families that differ.
@@ -227,6 +231,7 @@ const spentBy = (
   crossRow: Row | undefined,
   excluded: ReadonlyArray<Excluded>,
   crossWant: Effort | undefined,
+  crosscheck: ReadonlyArray<string> | undefined,
 ): {
   readonly resolution: Resolution | undefined;
   readonly excluded: ReadonlyArray<Excluded>;
@@ -243,7 +248,9 @@ const spentBy = (
     crosscheckProblem:
       crossWant === undefined || crossRow !== undefined
         ? undefined
-        : `the crosscheck at "${crossWant.name}" found no allowed model from another family.`,
+        : crosscheck !== undefined && crosscheck.length === 0
+          ? "the crosscheck list is empty, so no second opinion can be asked."
+          : `the crosscheck at "${crossWant.name}" found no model in the crosscheck list from another family.`,
     excluded,
   },
   excluded,
@@ -251,15 +258,15 @@ const spentBy = (
 });
 
 /**
- * One profile, resolved. The crosscheck is the first candidate whose
- * catalogue family differs from the primary's, and `prefer: "free"` takes the
- * first zero-cost one.
+ * One profile, resolved. The crosscheck is the first model in the crosscheck
+ * fallback order whose catalogue family differs from the primary's.
  */
 export const resolve = (
   profile: string,
   entry: ProfileEntry,
   candidates: ReadonlyArray<Candidate>,
   defaultAgent: string,
+  crosscheck?: ReadonlyArray<string>,
 ): {
   readonly resolution: Resolution | undefined;
   readonly excluded: ReadonlyArray<Excluded>;
@@ -297,16 +304,15 @@ export const resolve = (
         : undefined;
     const rows = rowsFor(candidates, undefined, crossWant);
     const crossRow =
-      crossWant === undefined
-        ? undefined
-        : crossOf(rows, pinned, crossWant, entry.crosscheck?.prefer);
+      crossWant === undefined ? undefined : crossOf(rows, pinned, crossWant, crosscheck);
     return spentBy(
       profile,
       agent,
       spent(pinned, pinnedGot, true),
       crossRow,
-      excludedBy(rows, pinned, undefined, crossWant, crossRow),
+      excludedBy(rows, pinned, undefined, crossWant, crossRow, crosscheck),
       crossWant,
+      crosscheck,
     );
   }
 
@@ -332,22 +338,21 @@ export const resolve = (
     const verb = want.kind === "known" ? "reaches" : "declares";
     return {
       resolution: undefined,
-      excluded: excludedBy(rows, undefined, want, crossWant, undefined),
+      excluded: excludedBy(rows, undefined, want, crossWant, undefined, crosscheck),
       problem: `profiles.${profile}.effort: no allowed model ${verb} "${want.name}". Highest rungs: ${capacity.join(", ") || "none"}.`,
     };
   }
 
   const crossRow =
-    crossWant === undefined
-      ? undefined
-      : crossOf(rows, chosen.candidate, crossWant, entry.crosscheck?.prefer);
+    crossWant === undefined ? undefined : crossOf(rows, chosen.candidate, crossWant, crosscheck);
 
   return spentBy(
     profile,
     agent,
     spent(chosen.candidate, chosen.got, false),
     crossRow,
-    excludedBy(rows, chosen.candidate, want, crossWant, crossRow),
+    excludedBy(rows, chosen.candidate, want, crossWant, crossRow, crosscheck),
     crossWant,
+    crosscheck,
   );
 };

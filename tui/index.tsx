@@ -2,19 +2,20 @@ import { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
 import { createSignal } from "solid-js";
+import { FILE_NAME } from "../tools/definitions/routing/index.ts";
 import { applied, isProviderAvailable, providerPicker, usableDraft } from "./controls.tsx";
 import {
   catalogue,
   configuredProfiles,
   type Draft,
   defaultProfiles,
+  directoryOf,
   effortDots,
   normalizeCost,
   type Resolution,
   read,
   resolve,
   save,
-  source as sourceOf,
 } from "./data.ts";
 import { page, type TabId } from "./page.tsx";
 import { h, show } from "./render.ts";
@@ -28,24 +29,36 @@ type Editable<Value> =
 
 type MutableDraft = Editable<Draft>;
 
-const EMPTY: Draft = { provider: undefined, models: [], profiles: defaultProfiles(true) };
-
 const PAGE = "Routing";
 
-const DRAFT = "draft";
-const SOURCE = "source";
 const VIEW = "view";
 
 const message = (problem: unknown): string =>
   problem instanceof Error ? problem.message : String(problem);
 
+/** The state of a directory with no config yet, or one that is still loading. */
+const empty = (directory: string): Draft => ({
+  directory,
+  source: undefined,
+  problems: [],
+  provider: undefined,
+  models: [],
+  crosscheck: [],
+  profiles: defaultProfiles(true),
+});
+
 const copy = (draft: Draft): MutableDraft => ({
+  directory: draft.directory,
+  source: draft.source,
+  problems: [...draft.problems],
   provider: draft.provider,
   judge: draft.judge === undefined ? undefined : { ...draft.judge },
   models: (Array.isArray(draft.models) ? draft.models : []).map((one) => ({
     alias: one.alias,
     ref: one.ref,
+    priority: one.priority,
   })),
+  crosscheck: [...(Array.isArray(draft.crosscheck) ? draft.crosscheck : [])],
   profiles: (Array.isArray(draft.profiles) && draft.profiles.length > 0
     ? draft.profiles
     : defaultProfiles(true)
@@ -54,10 +67,7 @@ const copy = (draft: Draft): MutableDraft => ({
     effort: one.effort,
     match: one.match,
     why: one.why,
-    crosscheck:
-      one.crosscheck === undefined
-        ? undefined
-        : { effort: one.crosscheck.effort, prefer: one.crosscheck.prefer },
+    crosscheck: one.crosscheck === undefined ? undefined : { effort: one.crosscheck.effort },
     agent: one.agent,
     pinned: one.pinned,
     enabled: one.enabled,
@@ -65,9 +75,13 @@ const copy = (draft: Draft): MutableDraft => ({
 });
 
 const assignDraft = (target: MutableDraft, source: MutableDraft): void => {
+  target.directory = source.directory;
+  target.source = source.source;
+  target.problems = [...source.problems];
   target.provider = source.provider;
   target.judge = source.judge;
   target.models = source.models;
+  target.crosscheck = source.crosscheck;
   target.profiles = source.profiles;
 };
 
@@ -78,6 +92,7 @@ const absent = (name: string): Resolution => ({
   rung: undefined,
   cost: undefined,
   crosscheck: undefined,
+  crosscheckProblem: undefined,
   problem: "The resolver returned no row",
 });
 
@@ -239,6 +254,9 @@ export const subagentLine = (input: {
     input.session.agent,
   );
   const row = input.resolutions[index];
+  // A profile that did not resolve has no model to show. Reporting the model
+  // the child inherited would name the parent's choice as this profile's.
+  if (row?.problem !== undefined) return "Error";
   const ref = sessionRef ?? row?.ref;
   if (ref === undefined) return undefined;
 
@@ -284,44 +302,105 @@ export const opener = (open: () => void) => ({
 export default Plugin.define({
   id: "spectre.routing",
   setup: async (context) => {
-    const directory = context.location?.directory ?? Bun.env.PWD ?? ".";
-
-    const [stored, setStored] = context.storage.store<MutableDraft>(DRAFT, {
-      initial: { provider: undefined, models: [], profiles: [] },
-    });
-    const [source, setSource] = context.storage.store(SOURCE, {
-      initial: { directory, seeded: false },
-    });
+    const defaultDirectory = context.data.location.default().directory;
+    const initial = context.location?.directory ?? defaultDirectory;
 
     const [view, setView] = context.storage.store(VIEW, {
       initial: { open: true },
     });
     const [open, setOpen] = createSignal(view.open ?? true);
 
-    const at = await sourceOf(directory).catch(() => undefined);
-
-    if (at !== undefined || !source.seeded || source.directory !== directory) {
-      const found = await read(directory).catch((problem: unknown) => {
-        context.ui.toast.show({
-          title: "Routing",
-          message: `The config could not be read: ${message(problem)}`,
-          variant: "error",
-        });
-        return EMPTY;
-      });
-      const next = copy(found);
-      await setStored((held) => assignDraft(held, next));
-      await setSource((held) => {
-        held.directory = directory;
-        held.seeded = true;
-      });
-    }
-
-    const draft: MutableDraft = copy(stored);
-    let activeTab: TabId = "configured";
-    let selectedRow = 0;
+    // Drafts read in this generation, keyed by directory. A TUI that renders
+    // two sessions in two worktrees must not re-read a file on every render,
+    // and must never answer with the other directory's models.
+    const cache = new Map<string, Draft>();
+    let current: string | undefined;
+    let draft: MutableDraft = copy(empty(initial));
+    let loading: string | undefined;
+    let inflight: Promise<void> | undefined;
+    let modalOpen = false;
 
     const [revision, setRevision] = createSignal(0);
+
+    /** Make one directory's draft the active one, keeping the edits of the last. */
+    const adopt = (next: Draft, notify = true): void => {
+      if (current !== undefined && current === draft.directory) cache.set(current, copy(draft));
+      draft = copy(next);
+      current = next.directory;
+      if (notify) setRevision((value) => value + 1);
+    };
+
+    /** The session the modal was opened over, when the route is one. */
+    const routeSession = (): string | undefined => {
+      const route = context.ui.router.current();
+      return route.type === "session" ? route.sessionID : undefined;
+    };
+
+    /** The session's directory, or the TUI's own default location when no session is open. */
+    const directoryFor = (sessionID?: string): string =>
+      directoryOf({
+        sessionID,
+        session: (id) => context.data.session.get(id),
+        route: context.ui.router.current(),
+        location: context.location,
+        fallback: defaultDirectory,
+      });
+
+    /** Read one directory into the cache, once. A second caller joins the read. */
+    const ensure = async (target: string): Promise<void> => {
+      if (current === target) return;
+      const cached = cache.get(target);
+      if (cached !== undefined) {
+        adopt(cached);
+        return;
+      }
+      if (loading === target && inflight !== undefined) return inflight;
+      loading = target;
+      inflight = read(target)
+        .then((found) => {
+          // Cache it even when a later read has taken over: the directory was
+          // read, and the next render for it must not read it again.
+          cache.set(target, found);
+          if (loading !== target) return;
+          loading = undefined;
+          adopt(found);
+          if (modalOpen) showModal();
+        })
+        .catch((problem: unknown) => {
+          // The previous directory's models are not this directory's answer.
+          const blank = empty(target);
+          cache.set(target, blank);
+          if (loading !== target) return;
+          loading = undefined;
+          adopt(blank);
+          context.ui.toast.show({
+            title: "Routing",
+            message: `The config could not be read: ${message(problem)}`,
+            variant: "error",
+          });
+        });
+      return inflight;
+    };
+
+    /**
+     * The draft for this session's directory. A directory the page has not read
+     * is loaded now, and the render after the load shows it. Until then this
+     * returns an empty draft, never another directory's models.
+     */
+    const hold = (sessionID?: string): Draft => {
+      const target = directoryFor(sessionID);
+      if (current === target) return draft;
+      const cached = cache.get(target);
+      if (cached !== undefined) {
+        adopt(cached, false);
+        return draft;
+      }
+      void ensure(target);
+      return empty(target);
+    };
+
+    let activeTab: TabId = "configured";
+    let selectedRow = 0;
 
     const listed = (sessionID?: string) => {
       const location =
@@ -334,10 +413,16 @@ export default Plugin.define({
       const models = catalogue(listed());
       const next = copy(usableDraft(draft, models));
       assignDraft(draft, next);
-      await setStored((held) => assignDraft(held, next)).catch(() => undefined);
       setRevision((value) => value + 1);
       try {
-        await save(directory, next);
+        await save(next);
+        // The writer decoded the whole file before it wrote, and the canonical
+        // name is the one the reader takes next. The read problems described
+        // the file that is now gone.
+        draft.source = `${next.directory}/${FILE_NAME}`;
+        draft.problems = [];
+        cache.set(next.directory, copy(draft));
+        setRevision((value) => value + 1);
         context.ui.toast.show({
           title: "Routing",
           message: "The config was written",
@@ -362,8 +447,9 @@ export default Plugin.define({
     };
 
     const renderModal = () => {
-      const models = catalogue(listed());
-      const clean = usableDraft(draft, models);
+      const target = directoryFor(routeSession());
+      const models = catalogue(listed(routeSession()));
+      const clean = usableDraft(hold(routeSession()), models);
       const active = configuredProfiles(clean);
       const found = resolve(clean, models);
 
@@ -377,7 +463,7 @@ export default Plugin.define({
           const head = `${two.providerID}/${two.id}`;
           return one.ref === head || one.ref.startsWith(`${head}#`);
         });
-        return { alias: one.alias, ref: one.ref, model };
+        return { alias: one.alias, ref: one.ref, priority: one.priority, model };
       });
 
       return page({
@@ -387,6 +473,7 @@ export default Plugin.define({
         draft: clean,
         tab: activeTab,
         selectedRow,
+        loading: loading === target,
         onRowChange: (next) => {
           selectedRow = next;
         },
@@ -408,17 +495,32 @@ export default Plugin.define({
           context.ui.dialog.clear();
         },
         onClose: () => context.ui.dialog.clear(),
-        source: at,
+        source: clean.source,
       });
     };
 
+    let modalGeneration = 0;
+
     const showModal = (): void => {
-      context.ui.dialog.show(() => renderModal());
+      modalOpen = true;
+      // Replacing a shown dialog calls the previous close callback. The
+      // generation keeps the new dialog from being marked closed by it.
+      const generation = ++modalGeneration;
+      context.ui.dialog.show(
+        () => renderModal(),
+        () => {
+          if (generation === modalGeneration) modalOpen = false;
+        },
+      );
       context.ui.dialog.set({ size: "xlarge", centered: true });
     };
 
-    const openModal = (): void => {
-      const models = catalogue(listed());
+    const openModal = async (): Promise<void> => {
+      // The session may have moved since the draft was read. Read the new
+      // directory before the modal decides whether a provider is available, so
+      // the page never offers a choice over the directory the session left.
+      await ensure(directoryFor(routeSession()));
+      const models = catalogue(listed(routeSession()));
       if (!isProviderAvailable(draft.provider, models)) {
         void providerPicker({
           dialog: context.ui.dialog,
@@ -445,8 +547,15 @@ export default Plugin.define({
 
     const resolvedRows = (sessionID: string): ReadonlyArray<Resolution> => {
       revision();
+      // A directory still being read has no answer yet. Hiding the section for
+      // that frame is honest; seven error rows would not be.
+      const target = directoryFor(sessionID);
+      if (current !== target && !cache.has(target)) {
+        void ensure(target);
+        return [];
+      }
       const models = catalogue(listed(sessionID));
-      const clean = usableDraft(draft, models);
+      const clean = usableDraft(hold(sessionID), models);
       const active = configuredProfiles(clean);
       if (active.length === 0) return [];
       const found = resolve(clean, models);
@@ -479,7 +588,7 @@ export default Plugin.define({
           line: () =>
             subagentLine({
               session: context.data.session.get(input.sessionID),
-              profiles: configuredProfiles(draft),
+              profiles: configuredProfiles(hold(input.sessionID)),
               resolutions: resolvedRows(input.sessionID),
             }),
         }),

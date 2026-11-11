@@ -20,6 +20,9 @@ import {
   SYSTEMONE_KEY_ENV,
 } from "../tools/definitions/routing/index.ts";
 import {
+  type CrosscheckChoice,
+  type CrosscheckOption,
+  crosscheckOptionsFor,
   type Draft,
   formatConfig,
   formatCost,
@@ -56,6 +59,21 @@ export type Edit =
   | { readonly kind: "model"; readonly alias: string; readonly ref: string }
   | { readonly kind: "remove-model"; readonly alias: string }
   | {
+      readonly kind: "move-model";
+      readonly alias: string;
+      readonly delta: -1 | 1;
+    }
+  | {
+      readonly kind: "toggle-crosscheck";
+      readonly alias: string;
+      readonly enabled?: boolean | undefined;
+    }
+  | {
+      readonly kind: "move-crosscheck";
+      readonly alias: string;
+      readonly delta: -1 | 1;
+    }
+  | {
       readonly kind: "toggle-profile";
       readonly profile: string;
       readonly enabled?: boolean | undefined;
@@ -68,6 +86,11 @@ export type Edit =
       readonly why: string | undefined;
     }
   | { readonly kind: "remove-profile"; readonly profile: string }
+  | {
+      readonly kind: "crosscheck";
+      readonly profile: string;
+      readonly crosscheck: Profile["crosscheck"];
+    }
   | { readonly kind: "judge"; readonly enabled: boolean }
   | { readonly kind: "provider"; readonly provider: string };
 
@@ -123,6 +146,13 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
       profiles: draft.profiles.filter((one) => one.name !== edit.profile),
     };
   }
+  if (edit.kind === "crosscheck")
+    return {
+      ...draft,
+      profiles: draft.profiles.map((one) =>
+        one.name === edit.profile ? { ...one, crosscheck: edit.crosscheck } : one,
+      ),
+    };
   if (edit.kind === "judge")
     return {
       ...draft,
@@ -143,7 +173,8 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
     return {
       ...draft,
       provider: edit.provider,
-      models,
+      models: models.map((one, index) => ({ ...one, priority: index + 1 })),
+      crosscheck: draft.crosscheck.filter((alias) => held.has(alias)),
       profiles: draft.profiles.map((one) =>
         one.pinned !== undefined && !held.has(one.pinned) ? { ...one, pinned: undefined } : one,
       ),
@@ -152,13 +183,59 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
   if (edit.kind === "remove-model") {
     return {
       ...draft,
-      models: draft.models.filter((one) => one.alias !== edit.alias),
+      models: draft.models
+        .filter((one) => one.alias !== edit.alias)
+        .map((one, index) => ({ ...one, priority: index + 1 })),
+      crosscheck: draft.crosscheck.filter((alias) => alias !== edit.alias),
       profiles: draft.profiles.map((one) =>
         one.pinned === edit.alias ? { ...one, pinned: undefined } : one,
       ),
     };
   }
-  return { ...draft, models: [...draft.models, { alias: edit.alias, ref: edit.ref }] };
+  if (edit.kind === "move-model") {
+    const at = draft.models.findIndex((one) => one.alias === edit.alias);
+    const to = at + edit.delta;
+    if (at === -1 || to < 0 || to >= draft.models.length) return draft;
+    const models = [...draft.models];
+    const [moved] = models.splice(at, 1);
+    if (moved === undefined) return draft;
+    models.splice(to, 0, moved);
+    return {
+      ...draft,
+      models: models.map((one, index) => ({ ...one, priority: index + 1 })),
+    };
+  }
+  if (edit.kind === "toggle-crosscheck") {
+    const on = draft.crosscheck.includes(edit.alias);
+    const enabled = edit.enabled ?? !on;
+    if (enabled === on) return draft;
+    return {
+      ...draft,
+      crosscheck: enabled
+        ? [...draft.crosscheck, edit.alias]
+        : draft.crosscheck.filter((alias) => alias !== edit.alias),
+    };
+  }
+  if (edit.kind === "move-crosscheck") {
+    const at = draft.crosscheck.indexOf(edit.alias);
+    const to = at + edit.delta;
+    if (at === -1 || to < 0 || to >= draft.crosscheck.length) return draft;
+    const crosscheck = [...draft.crosscheck];
+    const [moved] = crosscheck.splice(at, 1);
+    if (moved === undefined) return draft;
+    crosscheck.splice(to, 0, moved);
+    return { ...draft, crosscheck };
+  }
+  return {
+    ...draft,
+    models: [
+      ...draft.models,
+      { alias: edit.alias, ref: edit.ref, priority: draft.models.length + 1 },
+    ],
+    crosscheck: draft.crosscheck.includes(edit.alias)
+      ? draft.crosscheck
+      : [...draft.crosscheck, edit.alias],
+  };
 };
 
 const refOf = (one: Model): string => `${one.providerID}/${one.id}`;
@@ -249,13 +326,20 @@ export const usableDraft = (draft: Draft, catalogue: ReadonlyArray<Model>): Draf
     return true;
   });
   const held = new Set(models.map((one) => one.alias));
+  const crosscheck = draft.crosscheck.filter((alias) => held.has(alias));
   const hasInvalidPin =
     catalogue.length > 0 &&
     draft.profiles.some((one) => one.pinned !== undefined && !held.has(one.pinned));
-  if (models.length === draft.models.length && !hasInvalidPin) return draft;
+  if (
+    models.length === draft.models.length &&
+    crosscheck.length === draft.crosscheck.length &&
+    !hasInvalidPin
+  )
+    return draft;
   return {
     ...draft,
     models,
+    crosscheck,
     profiles: draft.profiles.map((one) =>
       one.pinned !== undefined && !held.has(one.pinned) ? { ...one, pinned: undefined } : one,
     ),
@@ -726,6 +810,304 @@ export const effortPicker = async (input: {
     input.dialog.set({ size: "large", centered: true });
   });
 
+export const crosscheckModal = (input: {
+  readonly profile: Profile;
+  readonly draft: Draft;
+  readonly models: ReadonlyArray<Model>;
+  readonly onSelect: (choice: CrosscheckChoice) => void;
+  readonly onCancel: () => void;
+}): JSX.Element => {
+  const context = usePlugin();
+  const dialogTheme =
+    typeof context.theme.surface === "function" ? context.theme.surface("dialog") : context.theme;
+  const colors = palette(context.theme, dialogTheme);
+  const selected = selectedModelFor(input.draft, input.models, input.profile);
+
+  const rows = crosscheckOptionsFor(input.draft, input.models, input.profile);
+  const enabledIndices = (): ReadonlyArray<number> =>
+    rows.flatMap((row, idx) => (row.available ? [idx] : []));
+  const initialIndex = (() => {
+    const currentIdx = rows.findIndex((row) => row.current && row.available);
+    if (currentIdx !== -1) return currentIdx;
+    return enabledIndices()[0] ?? 0;
+  })();
+
+  const [focusedIndex, setFocusedIndex] = createSignal(initialIndex);
+
+  const stepFocus = (delta: number): void => {
+    const indices = enabledIndices();
+    if (indices.length === 0) return;
+    const currentPos = indices.indexOf(focusedIndex());
+    const nextPos = currentPos === -1 ? 0 : (currentPos + delta + indices.length) % indices.length;
+    const target = indices[nextPos];
+    if (target !== undefined) setFocusedIndex(target);
+  };
+
+  const choose = (row: CrosscheckOption | undefined): void => {
+    if (row?.available) input.onSelect(row.choice);
+  };
+
+  bindKeyboard(context.renderer, (event: KeyEvent) => {
+    const key = event.name || event.sequence || "";
+    if (key === "down" || key === "j") {
+      event.preventDefault();
+      event.stopPropagation();
+      stepFocus(1);
+      return;
+    }
+    if (key === "up" || key === "k") {
+      event.preventDefault();
+      event.stopPropagation();
+      stepFocus(-1);
+      return;
+    }
+    if (key === "return" || key === "enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      choose(rows[focusedIndex()]);
+      return;
+    }
+    if (key === "escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      input.onCancel();
+    }
+  });
+
+  const primaryText =
+    selected?.model !== undefined
+      ? `${selected.alias} (${refOf(selected.model)})`
+      : (selected?.ref ?? "No model selected");
+
+  return h(
+    "box",
+    {
+      flexDirection: "column",
+      width: "100%",
+      border: true,
+      borderStyle: "rounded",
+      borderColor: colors.borderOuter,
+      backgroundColor: colors.modalBg,
+    },
+    h(
+      "box",
+      {
+        flexDirection: "column",
+        width: "100%",
+        flexShrink: 0,
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
+        border: ["bottom"],
+        borderColor: colors.border,
+      },
+      h(
+        "box",
+        { flexDirection: "row", justifyContent: "space-between", width: "100%" },
+        h(
+          "text",
+          { fg: colors.text, attributes: TextAttributes.BOLD },
+          `The crosscheck for "${input.profile.name}"`,
+        ),
+        h("text", { fg: colors.teal, onMouseUp: input.onCancel }, "Esc"),
+      ),
+      h(
+        "box",
+        {
+          flexDirection: "row",
+          width: "100%",
+          paddingTop: 1,
+        },
+        field(dialogTheme, "Primary", () => primaryText),
+      ),
+    ),
+    h(
+      "box",
+      {
+        flexDirection: "column",
+        width: "100%",
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
+      },
+      h(
+        "box",
+        {
+          flexDirection: "row",
+          width: "100%",
+          columnGap: 2,
+          paddingBottom: 1,
+          border: ["bottom"],
+          borderColor: colors.border,
+        },
+        h("text", { width: 3, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, ""),
+        h("text", { width: 16, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, "Crosscheck"),
+        h("text", { width: 12, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, "Status"),
+        h(
+          "text",
+          { width: 36, flexGrow: 1, flexShrink: 1, minWidth: 0, fg: colors.blue, wrapMode: "none" },
+          "Resolves to",
+        ),
+      ),
+      () =>
+        rows.map((row, index) => {
+          const [hovered, setHovered] = createSignal(false);
+          const isFocused = () => focusedIndex() === index;
+          const marker = () => {
+            if (row.current && isFocused()) return "▸●";
+            if (row.current) return " ●";
+            if (isFocused()) return "▸ ";
+            return "  ";
+          };
+          const nameColor = () => {
+            if (!row.available) return colors.disabled;
+            if (isFocused() || hovered()) return colors.cyan;
+            return colors.green;
+          };
+          const detailColor = () => {
+            if (!row.available) return colors.disabled;
+            if (isFocused() || hovered()) return colors.text;
+            return colors.teal;
+          };
+
+          return h(
+            "box",
+            {
+              flexDirection: "row",
+              width: "100%",
+              columnGap: 2,
+              backgroundColor: () =>
+                row.available && (isFocused() || hovered()) ? colors.rowHoverBg : undefined,
+              onMouseOver: () => {
+                setHovered(true);
+                if (row.available) setFocusedIndex(index);
+              },
+              onMouseOut: () => setHovered(false),
+              onMouseUp: () => choose(row),
+            },
+            h(
+              "text",
+              {
+                width: 3,
+                flexShrink: 0,
+                fg: () => (row.available ? colors.cyan : colors.disabled),
+                wrapMode: "none",
+              },
+              marker,
+            ),
+            h(
+              "text",
+              {
+                width: 16,
+                flexShrink: 0,
+                fg: nameColor,
+                attributes: row.available ? TextAttributes.BOLD : TextAttributes.DIM,
+                wrapMode: "none",
+              },
+              row.label,
+            ),
+            h(
+              "text",
+              {
+                width: 12,
+                flexShrink: 0,
+                fg: () => (row.available ? colors.green : colors.disabled),
+                wrapMode: "none",
+              },
+              row.available ? "available" : "disabled",
+            ),
+            h(
+              "text",
+              {
+                width: 36,
+                flexGrow: 1,
+                flexShrink: 1,
+                minWidth: 0,
+                fg: detailColor,
+                truncate: true,
+                wrapMode: "none",
+              },
+              row.available ? (row.resolved ?? "No second opinion") : row.reason,
+            ),
+          );
+        }),
+    ),
+    h(
+      "box",
+      {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        backgroundColor: colors.insetBg,
+        border: ["top"],
+        borderColor: colors.border,
+        paddingLeft: 3,
+        paddingRight: 3,
+        paddingTop: 1,
+        paddingBottom: 1,
+      },
+      h(
+        "box",
+        { flexDirection: "row", gap: 3 },
+        h(
+          "text",
+          { fg: colors.text, attributes: TextAttributes.BOLD },
+          "Enter ",
+          h("span", { style: { fg: colors.muted } }, "Select crosscheck"),
+        ),
+      ),
+      h(
+        "text",
+        { fg: colors.text, attributes: TextAttributes.BOLD, onMouseUp: input.onCancel },
+        "Esc ",
+        h("span", { style: { fg: colors.muted } }, "Back"),
+      ),
+    ),
+  );
+};
+
+export const crosscheckPicker = async (input: {
+  readonly dialog: Dialog;
+  readonly draft: Draft;
+  readonly models: ReadonlyArray<Model>;
+  readonly profile: Profile;
+}): Promise<Edit | undefined> =>
+  new Promise<Edit | undefined>((resolve) => {
+    let settled = false;
+    const finish = (value: Edit | undefined): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+
+    input.dialog.show(
+      () =>
+        crosscheckModal({
+          profile: input.profile,
+          draft: input.draft,
+          models: input.models,
+          onSelect: (choice) => {
+            const crosscheck: Profile["crosscheck"] =
+              choice.kind === "off" ? undefined : { effort: choice.effort };
+            const held = input.profile.crosscheck;
+            const unchanged =
+              crosscheck === undefined
+                ? held === undefined
+                : held !== undefined && held.effort === crosscheck.effort;
+            finish(
+              unchanged
+                ? undefined
+                : { kind: "crosscheck", profile: input.profile.name, crosscheck },
+            );
+          },
+          onCancel: () => finish(undefined),
+        }),
+      () => finish(undefined),
+    );
+    input.dialog.set({ size: "large", centered: true });
+  });
+
 export const profileInfoModal = (input: {
   readonly profile: Profile;
   readonly resolution: Resolution | undefined;
@@ -747,7 +1129,7 @@ export const profileInfoModal = (input: {
   const crosscheckConfig =
     profile.crosscheck === undefined
       ? "None"
-      : `${profile.crosscheck.effort ?? profile.effort ?? "default"}${profile.crosscheck.prefer === "free" ? " (prefer free)" : ""}`;
+      : (profile.crosscheck.effort ?? profile.effort ?? "default");
   const costText = normalizeCost(resolution?.cost) ?? "-";
 
   bindKeyboard(context.renderer, (event: KeyEvent) => {

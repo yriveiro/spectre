@@ -1,18 +1,20 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Integration } from "@opencode/plugin/effect";
-import type { Model } from "@opencode/schema/model";
 import type { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
 import { agentIds } from "../../../agents";
 import { candidates } from "./catalogue";
 import { check } from "./check";
+import { hostCatalogue, sessionDirectory } from "./host";
 import { jevJudge, SYSTEMONE_KEY_ENV } from "./jev";
 import { type Judge, lexicalJudge, surface, type Verdict } from "./judge";
 import { decode, load } from "./load";
-import { FILE_NAME } from "./locate";
+import { FILE_NAME, projectPath } from "./locate";
+import { crosscheckOf, priorityOf } from "./order";
 import { decide } from "./policy";
 import { resolve } from "./resolve";
 import {
+  type Candidate,
   DEFAULT_AGENT,
   type Excluded as ExcludedRow,
   type File,
@@ -29,8 +31,10 @@ import { writeConfig } from "./write";
  * with no config, `declined` is the stored answer "no", and `problems` is a
  * config that cannot be routed on.
  *
- * The config is read on every call, so an edit made mid-session routes on the
- * edit. The policy is `resolve.ts`, and the validation is `check.ts`.
+ * The config is read from the invoking session's directory on every call, so an
+ * edit made mid-session routes on the edit, and a session that moved into a
+ * worktree routes on that worktree's file. The policy is `resolve.ts`, and the
+ * validation is `check.ts`.
  *
  * The judge is optional, and a `resolved` answer says which path chose the
  * profile. The judge names a profile and never a model, so it cannot change
@@ -54,12 +58,24 @@ const Input = Schema.Struct({
   }),
 });
 
-const Row = Schema.Struct({ name: Schema.String, model: Schema.String });
+const Row = Schema.Struct({
+  name: Schema.String,
+  model: Schema.String,
+  /** The one-based place in the explicit model priority. */
+  priority: Schema.Number,
+  /** The catalogue family, when the row came from the live catalogue. */
+  family: Schema.optional(Schema.String),
+  /** The effort rungs the model declares, in catalogue order. */
+  rungs: Schema.optional(Schema.Array(Schema.String)),
+  /** What the model costs, per million tokens. */
+  cost: Schema.optional(Schema.Struct({ input: Schema.Number, output: Schema.Number })),
+});
 
 /** A model the resolver spent, and the facts behind the choice. */
 const Spent = Schema.Struct({
   ref: Schema.String,
   rung: Schema.optional(Schema.String),
+  /** True when the profile named this model with a `model` pin. */
   pinned: Schema.Boolean,
   steppedUp: Schema.Boolean,
   below: Schema.optional(Schema.String),
@@ -130,8 +146,13 @@ const Judged = Schema.Union([
 const Resolved = Schema.Struct({
   status: Schema.Literals(["resolved"]),
   profiles: Schema.Array(Profile),
-  /** The spendable allowlist, in the order the config lists it. */
+  /** The spendable allowlist, in `priority` order. */
   models: Schema.Array(Row),
+  /**
+   * The models that may serve a crosscheck, in fallback order. Each row's
+   * `priority` is its place in the allowlist, not its place here.
+   */
+  crosscheck: Schema.Array(Row),
   sources: Schema.Array(Schema.String),
   /** The names the caller asked for. Empty on a whole-table call. */
   asked: Schema.Array(Schema.String),
@@ -163,6 +184,13 @@ const Problems = Schema.Struct({
   status: Schema.Literals(["problems"]),
   /** Every problem, one per line, each naming the key that is wrong. */
   problems: Schema.String,
+  /**
+   * The allowlist order, when the models themselves are valid and a profile
+   * or agent is the only problem. The order is still what the resolver reads.
+   */
+  models: Schema.optional(Schema.Array(Row)),
+  /** The crosscheck fallback order, when the crosscheck list is valid too. */
+  crosscheck: Schema.optional(Schema.Array(Row)),
 });
 
 const Output = Schema.Union([Resolved, Setup, Declined, Problems]);
@@ -181,33 +209,31 @@ Pass \`task\` when you want the judge to choose the profile: \`routing({ task: "
 
 What comes back, by \`status\`:
 
-- \`resolved\`: \`profiles\` has one row per profile. \`model\` is the model to spend: \`ref\` is the full string to pass, rung included, and \`rung\` is the level it names. \`pinned\` says the allowlist named the variant, \`steppedUp\` says the ladder had no rung at the requirement and stepped up, \`below\` is the rung under it, and \`family\`, \`rungs\` and \`cost\` describe the model. \`crosscheck\` is the second opinion when the profile asks for one, and \`crosscheckProblem\` says why a declared second opinion found none. \`excluded\` lists the candidates that did not qualify, each with the highest rung it reaches. \`models\` is the allowlist, \`sources\` the config files that were read, and \`asked\` the profile names you asked for. \`judge\` says which path chose the profile: \`used\` carries the \`profile\` it chose and the \`confidence\` when its arm reports one, and \`skipped\` carries the \`reason\` it gave none.
+- \`resolved\`: \`profiles\` has one row per profile. \`model\` is the model to spend: \`ref\` is the full string to pass, rung included, and \`rung\` is the level it names. \`pinned\` says the profile named this model with a \`model\` pin, \`steppedUp\` says the ladder had no rung at the requirement and stepped up, \`below\` is the rung under it, and \`family\`, \`rungs\` and \`cost\` describe the model. \`crosscheck\` is the second opinion when the profile asks for one, and \`crosscheckProblem\` says why a declared second opinion found none. \`excluded\` lists the candidates that did not qualify, each with the highest rung it reaches. \`models\` is the allowlist in priority order, each row carrying its \`priority\`, \`family\`, \`rungs\` and \`cost\`; the answer's \`crosscheck\` array is the crosscheck fallback order. \`sources\` names the config files that were read, and \`asked\` the profile names you asked for. \`judge\` says which path chose the profile: \`used\` carries the \`profile\` it chose and the \`confidence\` when its arm reports one, and \`skipped\` carries the \`reason\` it gave none.
 - \`setup\`: the repository has no config. \`provider\`, \`models\` and \`profiles\` are the starter set on the table. Ask the user once, then call this tool again with \`setup: "accepted"\` or \`setup: "declined"\`. Do not write a config by hand.
 - \`declined\`: the user already said no. Do not ask again. Spawn without \`model\`, and the agent's own model runs the work.
-- \`problems\`: the config is wrong. Every mistake is on its own line and names the key. Quote it, say routing is misconfigured, and ask whether to continue on the current model. Do not substitute a model you remember.
+- \`problems\`: the config is wrong. Every mistake is on its own line and names the key. Quote it, say routing is misconfigured, and ask whether to continue on the current model. When the models and the priority order are themselves valid, the answer also carries \`models\` in the same shape as \`resolved\`. It carries \`crosscheck\` too when the crosscheck list is valid. Read the order while you fix the profile. Do not substitute a model you remember.
 
-The allowlist is the whole vocabulary. A ref that is not in \`models\` is not spendable on a spectre subagent, however many models the provider offers. Never write a model id from memory. If nothing here fits, say so and ask.
+The allowlist is the whole vocabulary. \`priority\` states the order the resolver reads, and the page can reorder it. The \`crosscheck\` list states which models may serve a second opinion, in fallback order; a profile's crosscheck takes the first model in that list from another family. A ref that is not in \`models\` is not returned by this tool, and nothing checks the allowlist at the subagent boundary: a ref you write yourself is one nobody checked. Never write a model id from memory. If nothing here fits, say so and ask.
 
-A profile states what a task needs in \`effort\` and when to reach for it in \`match\`. The resolver reads the allowlist order and the live catalogue. It never reads \`why\`, which is the rationale for the human.`;
+A profile states what a task needs in \`effort\` and when to reach for it in \`match\`. The resolver reads the \`priority\` order and the live catalogue. It never reads \`why\`, which is the rationale for the human.`;
 
-const catalogue = (ctx: Plugin.Context) =>
-  ctx.model.list().pipe(
-    Effect.map((out) => ({ models: out.data, problem: undefined }) as const),
-    Effect.catchCause(() =>
-      Effect.succeed({
-        models: [] as ReadonlyArray<Model.Info>,
-        problem: `the model catalogue could not be read, so no model was checked`,
-      } as const),
-    ),
-  );
-
-/** The allowlist as rows, in the order the config lists it. */
+/** The allowlist as rows, in the explicit priority order. */
 const rows = (
   record: Readonly<Record<string, string | null>> | undefined,
-): ReadonlyArray<typeof Row.Type> =>
-  Object.entries(record ?? {}).flatMap(([name, model]) =>
-    model === null ? [] : [{ name, model }],
+  priority: ReadonlyArray<string> | undefined,
+): ReadonlyArray<typeof Row.Type> => {
+  const models = Object.fromEntries(
+    Object.entries(record ?? {}).flatMap(([name, model]) =>
+      model === null ? [] : [[name, model]],
+    ),
   );
+  return priorityOf(models, priority).ranked.map((one) => ({
+    name: one.alias,
+    model: one.ref,
+    priority: one.priority,
+  }));
+};
 
 /** The starter profiles as a reader needs them on the table. */
 const starterProfiles = (
@@ -315,11 +341,11 @@ const consoleKey = (ctx: Plugin.Context): Effect.Effect<string | undefined> =>
     if (integration === undefined) return undefined;
     const connection = yield* integration.connection
       .active(Integration.ID.make("opencode"))
-      .pipe(Effect.catchCause(() => Effect.succeed(undefined)));
+      .pipe(Effect.catch(() => Effect.succeed(undefined)));
     if (connection === undefined) return undefined;
     const value = yield* integration.connection
       .resolve(connection)
-      .pipe(Effect.catchCause(() => Effect.succeed(undefined)));
+      .pipe(Effect.catch(() => Effect.succeed(undefined)));
     if (value === null || typeof value !== "object") return undefined;
     const key = (value as { readonly key?: unknown }).key;
     return typeof key === "string" ? key : undefined;
@@ -358,8 +384,17 @@ const ask = (
     return judged(verdict);
   });
 
-const failed = (lines: ReadonlyArray<string>): { output: Page } => ({
-  output: { status: "problems", problems: lines.join("\n") },
+const failed = (
+  lines: ReadonlyArray<string>,
+  models?: ReadonlyArray<typeof Row.Type>,
+  crosscheck?: ReadonlyArray<typeof Row.Type>,
+): { output: Page } => ({
+  output: {
+    status: "problems",
+    problems: lines.join("\n"),
+    ...(models === undefined ? {} : { models }),
+    ...(crosscheck === undefined ? {} : { crosscheck }),
+  },
 });
 
 type Starter = { readonly file?: File; readonly problem?: string };
@@ -411,9 +446,17 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
     pinned: true,
     permission: "read",
   },
-  execute: (input) =>
+  execute: (input, context) =>
     Effect.gen(function* () {
-      const directory = ctx.location.directory;
+      // The session owns the directory. A project session that moved into a
+      // worktree reads that worktree's config on the next call, which is the
+      // call that routes the next task. A session that cannot be read is a
+      // problem, not a reason to read the plugin's directory.
+      const directory = yield* sessionDirectory(ctx, context.sessionID);
+      if (directory === undefined)
+        return failed([
+          `the session ${context.sessionID} could not be read, so the directory that holds its ${FILE_NAME} is unknown`,
+        ]);
       const path = `${directory}/${FILE_NAME}`;
 
       // The setup action writes one file and then answers from what it wrote.
@@ -431,8 +474,16 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
 
       const found = yield* load(directory);
 
-      // No file anywhere: the repository has not answered the setup question.
-      if (found.sources.length === 0) {
+      // No routing config: the project has no file, and the files that do
+      // exist, such as a global dictionary, set no allowlist and no profiles.
+      // A project file is an answer even when it is an empty one, so only its
+      // absence asks the setup question.
+      const unconfigured =
+        (yield* projectPath(directory)) === undefined &&
+        found.tables.setup === undefined &&
+        Object.keys(found.tables.models).length === 0 &&
+        !found.configuredProfiles;
+      if (unconfigured) {
         const set = yield* starter;
         if (set.problem !== undefined) return failed([set.problem]);
         if (set.file === undefined) return failed([`${path}: the starter set could not be read`]);
@@ -440,7 +491,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
           output: {
             status: "setup",
             provider: set.file.provider,
-            models: rows(set.file.models),
+            models: rows(set.file.models, set.file.priority),
             profiles: starterProfiles(set.file.profiles),
             source: path,
           },
@@ -457,24 +508,68 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
           },
         };
 
-      const listed = yield* catalogue(ctx);
+      const listed = yield* hostCatalogue(ctx);
       const checked = check(
         found.configuredProfiles ? found.tables : { ...found.tables, profiles: {} },
         listed.models,
         DEFAULT_AGENT,
         agentIds,
       );
-      const allowed = Object.entries(found.tables.models).map(([alias, ref]) => ({
-        alias,
-        ref,
+      const ordered = priorityOf(found.tables.models, found.tables.priority);
+      const allowed = ordered.ranked.map((one) => ({
+        alias: one.alias,
+        ref: one.ref,
         pinned: undefined,
       }));
+      const rankOf = new Map(ordered.ranked.map((one) => [one.alias, one.priority]));
       const kept = candidates(allowed, listed.models);
 
+      const asRow = (one: Candidate, priority: number): typeof Row.Type => ({
+        name: one.alias,
+        model: one.ref,
+        priority,
+        family: one.model.family,
+        rungs: [...one.model.rungs],
+        cost: { input: one.model.costInput, output: one.model.costOutput },
+      });
+      const modelRows = kept.kept.map((one) => asRow(one, rankOf.get(one.alias) ?? 0));
+      const crosscheckOrder = crosscheckOf(
+        found.tables.models,
+        found.tables.crosscheck,
+        ordered.ranked.map((one) => one.alias),
+      );
+      const byAlias = new Map(kept.kept.map((one) => [one.alias, one]));
+      // The array carries the fallback order. The row's `priority` stays the
+      // model's place in the allowlist, so `priority` means one thing in both
+      // arrays and a reader never has to ask which order it names.
+      const crosscheckRows = crosscheckOrder.listed.flatMap((alias) => {
+        const one = byAlias.get(alias);
+        return one === undefined ? [] : [asRow(one, rankOf.get(alias) ?? 0)];
+      });
+
+      // A profile or agent problem does not make the model order wrong. When
+      // every model and the priority order are valid, a problems answer still
+      // carries the order, so a reader can see what the resolver will read
+      // while fixing the profile.
+      const modelsValid =
+        found.problems.length === 0 &&
+        listed.problem === undefined &&
+        ordered.problems.length === 0 &&
+        checked.models.length === Object.keys(found.tables.models).length &&
+        kept.missing.length === 0 &&
+        allowed.length > 0;
+      const crosscheckValid = modelsValid && crosscheckOrder.problems.length === 0;
+      const failedWithOrder = (lines: ReadonlyArray<string>): { output: Page } =>
+        failed(
+          lines,
+          modelsValid ? modelRows : undefined,
+          crosscheckValid ? crosscheckRows : undefined,
+        );
+
       // Every problem is collected before the answer is built, because one bad
-      // row withholds the whole table. The problems from `candidates` are only
-      // added when `check` found none: the two report the same bad ref, and one
-      // line per mistake is the rule.
+      // row withholds the whole profile table. The problems from `candidates`
+      // are only added when `check` found none: the two report the same bad
+      // ref, and one line per mistake is the rule.
       const lines = [...found.problems];
       if (listed.problem !== undefined) lines.push(listed.problem);
       lines.push(...checked.problems);
@@ -482,12 +577,12 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
         lines.push(...kept.missing.map((one) => `models.${one.alias}: ${one.reason}`));
       if (lines.length === 0 && allowed.length === 0)
         lines.push(`${FILE_NAME}: models is empty, so no model routes`);
-      if (lines.length > 0) return failed(lines);
+      if (lines.length > 0) return failedWithOrder(lines);
 
       const shown: Array<typeof Profile.Type> = [];
       const profileProblems: Array<string> = [];
       for (const [name, entry] of Object.entries(found.tables.profiles)) {
-        const one = resolve(name, entry, kept.kept, DEFAULT_AGENT);
+        const one = resolve(name, entry, kept.kept, DEFAULT_AGENT, found.tables.crosscheck);
         if (one.problem !== undefined) {
           profileProblems.push(one.problem);
           continue;
@@ -506,7 +601,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
         });
       }
       if (found.configuredProfiles || shown.length === 0) lines.push(...profileProblems);
-      if (lines.length > 0) return failed(lines);
+      if (lines.length > 0) return failedWithOrder(lines);
 
       // The judge is asked last, so a config with a problem never spends a
       // request.
@@ -541,6 +636,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
             { ...entry, effort: choice.effort },
             kept.kept,
             DEFAULT_AGENT,
+            found.tables.crosscheck,
           );
           if (one.problem === undefined && one.resolution !== undefined) {
             const row = {
@@ -584,7 +680,8 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
           status: "resolved",
           profiles:
             input.profile === undefined ? table : table.filter((one) => one.name === input.profile),
-          models: kept.kept.map((one) => ({ name: one.alias, model: one.ref })),
+          models: modelRows,
+          crosscheck: crosscheckRows,
           sources: [...found.sources],
           asked: input.profile === undefined ? [] : [input.profile],
           judge: judgement,
@@ -612,6 +709,8 @@ export type { Description, Judge, Verdict } from "./judge";
 export { lexicalJudge, rank, surface } from "./judge";
 export { load, loadProject } from "./load";
 export { FILE_NAME, LEGACY_NAME, projectPath } from "./locate";
+export type { CrosscheckOrder, Ordered, Ranked } from "./order";
+export { crosscheckOf, priorityOf } from "./order";
 export type { Choice } from "./policy";
 export { decide, oneStepUp, PLAY_SAFE } from "./policy";
 export { resolve as resolveProfile } from "./resolve";

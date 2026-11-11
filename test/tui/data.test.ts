@@ -1,6 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { catalogue, effortDots, read, resolve, save } from "../../tui/data";
+import { AbsolutePath } from "@opencode/schema";
+import {
+  catalogue,
+  crosscheckOptionsFor,
+  type Draft,
+  directoryOf,
+  effortDots,
+  type Profile,
+  read,
+  resolve,
+  save,
+} from "../../tui/data";
 
 const scratch = () => join(Bun.env.TMPDIR ?? "/tmp", `spectre-tui-data-${crypto.randomUUID()}`);
 
@@ -87,9 +98,11 @@ const config = {
     dead: "opencode-go/kimi-k3",
     ghost: "opencode-go/ghost",
   },
+  priority: ["no-tools", "deepseek-flash", "minimax", "muse", "glm-flash", "dead", "ghost"],
+  crosscheck: ["deepseek-flash", "minimax", "muse", "glm-flash"],
   profiles: {
     mechanical: { effort: "low", match: "one command", why: "cheap" },
-    worker: { effort: "high", crosscheck: { effort: "high", prefer: "free" }, agent: "sicko" },
+    worker: { effort: "high", crosscheck: { effort: "high" }, agent: "sicko" },
     pinned: { model: ["ghost", "glm-flash"] },
     lost: { effort: "xhigh" },
     empty: { match: "nothing" },
@@ -105,10 +118,13 @@ const project = async () => {
 };
 
 describe("the page reads the repository's own file", () => {
-  test("a file with no config reads with the default profiles enabled", async () => {
+  test("a file with no config reads with the default profiles enabled, and says there is no file", async () => {
     const at = scratch();
     await Bun.write(`${at}/.keep`, "");
     const draft = await read(at);
+    expect(draft.directory).toBe(at);
+    expect(draft.source).toBeUndefined();
+    expect(draft.problems).toEqual([]);
     expect(draft.models).toEqual([]);
     expect(draft.profiles.map((one) => one.name)).toEqual([
       "mechanical",
@@ -150,7 +166,7 @@ describe("the page reads the repository's own file", () => {
     }
   });
 
-  test("the allowlist keeps the order the file lists", async () => {
+  test("the allowlist keeps the priority order", async () => {
     const draft = await read(await project());
     expect(draft.models.map((one) => one.alias)).toEqual([
       "no-tools",
@@ -163,11 +179,131 @@ describe("the page reads the repository's own file", () => {
     ]);
   });
 
+  test("the allowlist reads priority, not the order of the models object", async () => {
+    const at = scratch();
+    await Bun.write(
+      `${at}/spectre.json`,
+      JSON.stringify({
+        models: { first: "opencode-go/deepseek-v4.1-flash", second: "opencode-go/glm-5.3-flash" },
+        priority: ["second", "first"],
+      }),
+    );
+    const draft = await read(at);
+    expect(draft.models.map((one) => [one.alias, one.priority])).toEqual([
+      ["second", 1],
+      ["first", 2],
+    ]);
+  });
+
+  test("a save writes the priority order the page shows", async () => {
+    const at = await project();
+    const draft = await read(at);
+    const moved = {
+      ...draft,
+      models: [...draft.models].reverse().map((one, index) => ({ ...one, priority: index + 1 })),
+    };
+    await save(moved);
+    const written = (await Bun.file(`${at}/spectre.json`).json()) as {
+      priority: ReadonlyArray<string>;
+    };
+    expect(written.priority).toEqual(moved.models.map((one) => one.alias));
+  });
+
+  test("the crosscheck order is read as its own list and saved", async () => {
+    const at = await project();
+    const draft = await read(at);
+    expect(draft.crosscheck).toEqual(["deepseek-flash", "minimax", "muse", "glm-flash"]);
+
+    await save({ ...draft, crosscheck: ["glm-flash", "muse"] });
+    const written = (await Bun.file(`${at}/spectre.json`).json()) as {
+      crosscheck: ReadonlyArray<string>;
+    };
+    expect(written.crosscheck).toEqual(["glm-flash", "muse"]);
+  });
+
+  test("a file with no crosscheck list offers every model in priority order", async () => {
+    const at = scratch();
+    await Bun.write(
+      `${at}/spectre.json`,
+      JSON.stringify({
+        models: { first: "opencode-go/deepseek-v4.1-flash", second: "opencode-go/glm-5.3-flash" },
+        priority: ["second", "first"],
+      }),
+    );
+    const draft = await read(at);
+    expect(draft.crosscheck).toEqual(["second", "first"]);
+  });
+
+  test("a crosscheck alias that is not in the allowlist is a problem, not a row", async () => {
+    const at = scratch();
+    await Bun.write(
+      `${at}/spectre.json`,
+      JSON.stringify({
+        models: { first: "opencode-go/deepseek-v4.1-flash" },
+        priority: ["first"],
+        crosscheck: ["ghost"],
+      }),
+    );
+    const draft = await read(at);
+    expect(draft.crosscheck).toEqual([]);
+    expect(draft.problems.join("\n")).toContain('crosscheck: "ghost" is not a model');
+  });
+
   test("a profile with no effort and no pin says so", async () => {
     const draft = await read(await project());
     const empty = draft.profiles.find((one) => one.name === "empty");
     expect(empty?.effort).toBeUndefined();
     expect(empty?.pinned).toBeUndefined();
+  });
+});
+
+describe("the page reads the directory the session is in", () => {
+  const at = (directory: string) => ({
+    location: { directory: AbsolutePath.make(directory) },
+  });
+  const sessions = { ses_main: at("/main"), ses_worktree: at("/worktree") };
+  const session = (id: string) => sessions[id as keyof typeof sessions];
+
+  test("the named session wins over the location the TUI opened in", () => {
+    expect(
+      directoryOf({
+        sessionID: "ses_worktree",
+        session,
+        route: { type: "home" },
+        location: { directory: "/main" },
+        fallback: "/",
+      }),
+    ).toBe("/worktree");
+  });
+
+  test("the route's session answers when no session is named", () => {
+    expect(
+      directoryOf({
+        session,
+        route: { type: "session", sessionID: "ses_worktree" },
+        location: { directory: "/main" },
+        fallback: "/",
+      }),
+    ).toBe("/worktree");
+  });
+
+  test("the TUI's own location is the fallback, never a guess", () => {
+    expect(
+      directoryOf({
+        session: () => undefined,
+        route: { type: "home" },
+        location: { directory: "/main" },
+        fallback: "/",
+      }),
+    ).toBe("/main");
+    expect(
+      directoryOf({
+        session: () => undefined,
+        route: { type: "home" },
+        location: undefined,
+        fallback: "/",
+      }),
+    ).toBe("/");
   });
 });
 
@@ -182,12 +318,70 @@ describe("the page resolves what the tool resolves", () => {
     expect(mechanical?.cost).toBe("$0.15/$0.6");
   });
 
-  test("a second opinion comes from another family, and the free one when it is asked for", async () => {
+  test("a second opinion comes from the first different family in the priority order", async () => {
     const at = await project();
     const rows = resolve(await read(at), catalogue(models));
     const worker = rows.find((one) => one.profile === "worker");
     expect(worker?.ref).toBe("opencode-go/deepseek-v4.1-flash#high");
     expect(worker?.crosscheck).toContain("minimax");
+  });
+
+  test("the crosscheck choices read the same rule and mark the configured one", async () => {
+    const draft = await read(await project());
+    const worker = draft.profiles.find((one) => one.name === "worker");
+    const mechanical = draft.profiles.find((one) => one.name === "mechanical");
+    if (worker === undefined || mechanical === undefined)
+      throw new Error("the fixture has no worker and mechanical profiles");
+
+    const listed = crosscheckOptionsFor(draft, catalogue(models), worker);
+    const byLabel = new Map(listed.map((one) => [one.label, one]));
+
+    expect(byLabel.get("Off")?.available).toBe(true);
+    expect(byLabel.get("Off")?.current).toBe(false);
+    expect(byLabel.get("high")?.current).toBe(true);
+    expect(byLabel.get("high")?.resolved).toContain("minimax");
+
+    // A second opinion needs another family, and a single-model allowlist has none.
+    const narrow: Draft = {
+      ...draft,
+      models: [{ alias: "deep", ref: "opencode-go/deepseek-v4.1-flash", priority: 1 }],
+    };
+    const unreachable = crosscheckOptionsFor(narrow, catalogue(models), worker).find(
+      (one) => one.label === "high",
+    );
+    expect(unreachable?.available).toBe(false);
+    expect(unreachable?.reason).toContain(
+      "found no model in the crosscheck list from another family",
+    );
+
+    const off = crosscheckOptionsFor(draft, catalogue(models), mechanical).find(
+      (one) => one.label === "Off",
+    );
+    expect(off?.current).toBe(true);
+
+    const paidFirst: Draft = {
+      ...draft,
+      models: [
+        { alias: "deep", ref: "opencode-go/deepseek-v4.1-flash", priority: 1 },
+        { alias: "glm", ref: "opencode-go/glm-5.3-flash", priority: 2 },
+        { alias: "minimax", ref: "opencode-go/minimax-m3.1-flash-free", priority: 3 },
+      ],
+      crosscheck: ["deep", "glm", "minimax"],
+    };
+    const first = paidFirst.profiles.find((one) => one.name === "worker");
+    if (first === undefined) throw new Error("the trial profile is missing");
+    const paid = crosscheckOptionsFor(paidFirst, catalogue(models), first);
+    expect(paid.find((one) => one.label === "high")?.resolved).toContain("glm");
+
+    const custom: Profile = {
+      ...worker,
+      crosscheck: { effort: "turbo" },
+    };
+    const turbo = crosscheckOptionsFor(draft, catalogue(models), custom).find(
+      (one) => one.label === "turbo",
+    );
+    expect(turbo?.current).toBe(true);
+    expect(turbo?.available).toBe(false);
   });
 
   test("a pin the allowlist does not hold is a problem, not a guess", async () => {
@@ -227,7 +421,7 @@ describe("the page writes through the writer", () => {
   test("the save keeps the keys the page does not edit, and drops the decline", async () => {
     const at = await project();
     const draft = await read(at);
-    await save(at, {
+    await save({
       ...draft,
       profiles: draft.profiles.map((one) =>
         one.name === "mechanical" ? { ...one, effort: "high" } : one,
@@ -241,11 +435,13 @@ describe("the page writes through the writer", () => {
     expect(profiles.mechanical?.effort).toBe("high");
   });
 
-  test("a file that does not decode is refused and left alone", async () => {
+  test("a file that does not decode is reported, refused, and left alone", async () => {
     const at = await project();
     await Bun.write(`${at}/spectre.json`, "{ broken");
     const draft = await read(at);
-    await expect(save(at, draft)).rejects.toThrow();
+    expect(draft.source).toBe(`${at}/spectre.json`);
+    expect(draft.problems[0]).toContain(`${at}/spectre.json`);
+    await expect(save(draft)).rejects.toThrow();
     expect(await Bun.file(`${at}/spectre.json`).text()).toBe("{ broken");
   });
 });

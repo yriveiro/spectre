@@ -67,6 +67,8 @@ const emptyTables = (): Tables => ({
   provider: undefined,
   judge: undefined,
   models: {},
+  priority: undefined,
+  crosscheck: undefined,
   profiles: {},
 });
 
@@ -112,6 +114,8 @@ export const loadProject = (directory: string): Effect.Effect<Loaded> =>
         judge: decoded.file.judge === null ? undefined : decoded.file.judge,
         setup: decoded.file.setup === undefined ? undefined : { from: found.path },
         models: settle(decoded.file.models, (value) => value),
+        priority: decoded.file.priority,
+        crosscheck: decoded.file.crosscheck,
         profiles: configuredProfiles ? settledProfiles : { ...DEFAULT_PROFILES },
         dictionary:
           decoded.file.dictionary === undefined || decoded.file.dictionary === null
@@ -136,6 +140,8 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
     // overwrites the key it removes. Dropping it first would leave the earlier
     // value standing.
     let models: Record<string, string | null> = {};
+    let priority: ReadonlyArray<string> | undefined;
+    let crosscheck: ReadonlyArray<string> | undefined;
     let profiles: Record<string, ProfileEntry | null> = {};
     let configuredProfiles = false;
     let provider: string | undefined;
@@ -161,6 +167,11 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
       if (read.file === undefined) continue;
       sources.push(source.path);
       models = { ...models, ...read.file.models };
+      // The priority list is a whole value. A later file that states one
+      // replaces the earlier order, and a file that says nothing leaves it
+      // standing, the same rule `provider` and `judge` follow.
+      if (read.file.priority !== undefined) priority = [...read.file.priority];
+      if (read.file.crosscheck !== undefined) crosscheck = [...read.file.crosscheck];
       profiles = { ...profiles, ...read.file.profiles };
       if (read.file.profiles !== undefined && Object.keys(read.file.profiles).length > 0) {
         configuredProfiles = true;
@@ -191,6 +202,8 @@ export const load = (directory: string): Effect.Effect<Loaded> =>
         judge,
         setup,
         models: settle(models, (value) => value),
+        priority,
+        crosscheck,
         profiles:
           sources.length > 0 && !configuredProfiles && setup === undefined
             ? { ...DEFAULT_PROFILES }

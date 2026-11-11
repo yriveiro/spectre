@@ -7,9 +7,9 @@ import { load } from "../../skills/definitions/index";
  * `pinned: true` entry in a budgeted catalogue is not free. `worktrees` shipped
  * that way: correct, tested, and unreachable from anything a reader would load.
  *
- * Matched with a boundary, not `includes`: `worktree` is a prefix of `worktrees`,
- * so a substring check would report the mutating tool reachable off the back of
- * a read-only mention — a test that cannot fail.
+ * Matched with a boundary, not `includes`: a tool name that is a prefix of
+ * another would report the shorter tool reachable off the back of a mention of
+ * the longer one — a test that cannot fail.
  */
 const TOOLS = [
   "brain",
@@ -30,7 +30,7 @@ describe("every registered tool is reachable from some skill", () => {
     const corpus = skills.map((one) => `${one.description}\n${one.content}`).join("\n");
 
     const unreachable = TOOLS.filter(
-      (tool) => !new RegExp(`tools\\.spectre\\.${tool}(?![A-Za-z0-9])`).test(corpus),
+      (tool) => !new RegExp(`tools\\.spectre\\.${tool}(?![A-Za-z0-9_])`).test(corpus),
     );
 
     expect(unreachable).toEqual([]);

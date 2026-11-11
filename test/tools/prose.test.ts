@@ -212,9 +212,14 @@ describe("the tool", () => {
     const seen: Array<string> = [];
     const walk = (node: unknown, depth = 0): void => {
       if (depth > 8 || node === null || typeof node !== "object") return;
-      if (Array.isArray(node)) return node.forEach((one) => walk(one, depth + 1));
+      if (Array.isArray(node)) {
+        node.forEach((one) => {
+          walk(one, depth + 1);
+        });
+        return;
+      }
       const record = node as Record<string, unknown>;
-      const tag = record["toString"] ?? record["_tag"];
+      const tag = record.toString ?? record._tag;
       if (typeof tag === "string" && rejected.includes(tag)) seen.push(tag);
       for (const value of Object.values(record)) walk(value, depth + 1);
     };
@@ -352,11 +357,15 @@ describe("the set's own prose", () => {
     //
     // The 2.2.7 bump rewrote `tools/FOR_AGENTS.md:5` in active voice ("is
     // rejected at call time" to "fails"), and the rule counts lines: 340 to 339.
+    //
+    // The `model-router` audit moved its reference material into `references/`
+    // and rewrote the body in active voice, so the one passive line in that
+    // skill is gone: 339 to 338.
     const out = await call(["."]);
     const byRule: Record<string, number> = {};
     for (const f of out.findings) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
     expect({
-      semicolons: byRule["semicolon"] ?? 0,
+      semicolons: byRule.semicolon ?? 0,
       phrasalVerbs: byRule["phrasal-verb"] ?? 0,
       presentPerfect: byRule["present-perfect"] ?? 0,
       longSentences: byRule["long-sentence"] ?? 0,
@@ -381,7 +390,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 339,
+      passiveVoice: 338,
       otherRules: [],
     });
   }, 120_000);
