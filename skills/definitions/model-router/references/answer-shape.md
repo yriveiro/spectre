@@ -51,7 +51,7 @@ A named call puts the name in `asked`. A call that names a profile the config do
 | --- | --- |
 | `ref` | The string to pass to `subagent`. It includes the variant, when the model has one. |
 | `rung` | The effort rung the resolver asked for, when it asked for one. |
-| `pinned` | True when the profile named this model with a `model` pin. |
+| `pinned` | True when the profile named this model with a `model` pin, or named it in `crosscheck.model`. |
 | `steppedUp` | True when the ladder had no rung at the requirement and the resolver took a higher one. |
 | `below` | The highest rung under the one used, when the ladder holds one. |
 | `family` | The catalogue family, when the catalogue states one. |
@@ -67,7 +67,7 @@ The field appears when the profile asks for a second opinion and the resolver fi
 - `the crosscheck list is empty, so no second opinion can be asked.`
 - `the crosscheck at "<effort>" found no model in the crosscheck list from another family.`
 
-The second text also appears when the catalogue states no family for the primary or for every candidate, because the resolver cannot prove a difference. An absent top-level `crosscheck` list makes every allowed model a candidate. An empty list makes none.
+The second text also appears when the catalogue states no family for the primary or for every candidate, because the resolver cannot prove a difference. An absent top-level `crosscheck` list makes every allowed model a candidate. An empty list makes none. A profile that pins its crosscheck with `crosscheck.model` spends that model and reports no problem. The pin wins over the effort, the list and the family rule.
 
 ### `excluded`
 

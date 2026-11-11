@@ -46,7 +46,9 @@ A profile has two prose fields, and only one of them routes.
 
 A profile states an `effort`, a pinned `model`, or both. The pin wins. The resolver spends the first pinned alias the session can use. Without a pin, the resolver reads the `priority` order and the catalogue. It takes the first allowed model that meets the requirement and records the rung it used. Do not second-guess the rung. The ref that came back is the answer.
 
-A profile may also ask for a second opinion. Its `crosscheck` field names the effort for that opinion, and the profile's own effort applies when it names none. The top-level `crosscheck` list names the models that may serve it, in fallback order. The resolver reads that list in order. It skips a model when any of these is true:
+A profile may also ask for a second opinion. Its `crosscheck` field names the effort for that opinion, and the profile's own effort applies when it names none. The field may also name a `model`. That pin wins over the fallback list, the family rule and the effort, the same precedence a profile's own `model` pin has.
+
+Without a pin, the top-level `crosscheck` list names the models that may serve it, in fallback order, and the resolver reads that list in order. It skips a model when any of these is true:
 
 - The model is not in the allowlist.
 - The model is the primary.

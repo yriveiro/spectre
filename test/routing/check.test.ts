@@ -31,7 +31,13 @@ const tables = (
   models: Record<string, string>,
   profiles: Record<
     string,
-    { model?: string | string[]; effort?: string; why?: string; agent?: string }
+    {
+      model?: string | string[];
+      effort?: string;
+      why?: string;
+      agent?: string;
+      crosscheck?: { effort?: string; model?: string | string[] };
+    }
   > = {},
 ): Tables => ({
   provider: undefined,
@@ -297,6 +303,35 @@ describe("check", () => {
     const found = run(tables({ light: "nope" }, { explorer: { model: "light", why: "w" } }));
     expect(found.problems).toHaveLength(1);
     expect(found.problems[0]).toContain("models.light");
+  });
+
+  test("a crosscheck naming a model that is not a name is reported with the names", () => {
+    const found = run(
+      tables(
+        { light: "acme/falcon-mini" },
+        {
+          explorer: { effort: "high", crosscheck: { effort: "high", model: "heavy" }, why: "w" },
+        },
+      ),
+    );
+    expect(found.profiles).toEqual([]);
+    expect(found.problems[0]).toContain(
+      'profiles.explorer.crosscheck.model: "heavy" is not a name',
+    );
+    expect(found.problems[0]).toContain("Names: light");
+  });
+
+  test("a crosscheck pinned to a model in the allowlist passes the check", () => {
+    const found = run(
+      tables(
+        { light: "acme/falcon-mini", heavy: "acme/falcon-max" },
+        {
+          explorer: { effort: "high", crosscheck: { effort: "high", model: "heavy" }, why: "w" },
+        },
+      ),
+    );
+    expect(found.problems).toEqual([]);
+    expect(found.profiles.map((one) => one.name)).toEqual(["explorer"]);
   });
 
   test("a profile with no agent is given the default", () => {

@@ -591,6 +591,75 @@ describe("resolve: the crosscheck", () => {
     expect(found.resolution?.crosscheck?.alias).toBe("free");
   });
 
+  test("a crosscheck pin wins over the fallback list and the family rule", () => {
+    const found = resolve(
+      "worker",
+      { effort: "high", crosscheck: { effort: "high", model: "free" } },
+      kept([
+        allow("glm", "opencode-go/glm-5.3-flash"),
+        allow("deep", "opencode-go/deepseek-v4.1-flash"),
+        allow("free", "opencode-go/minimax-m3.1-flash-free"),
+      ]),
+      "spectre",
+      ["deep"],
+    );
+    expect(found.resolution?.primary.alias).toBe("glm");
+    expect(found.resolution?.crosscheck?.alias).toBe("free");
+    expect(found.resolution?.crosscheck?.pinned).toBe(true);
+  });
+
+  test("a pinned crosscheck is not excluded under the primary requirement", () => {
+    const found = resolve(
+      "thinking",
+      { effort: "high", crosscheck: { effort: "low", model: "low" } },
+      kept([allow("glm", "opencode-go/glm-5.3-flash"), allow("low", "acme/falcon-low")]),
+      "spectre",
+    );
+    expect(found.resolution?.primary.alias).toBe("glm");
+    expect(found.resolution?.crosscheck?.alias).toBe("low");
+    expect(found.excluded.map((one) => one.alias)).toEqual([]);
+  });
+
+  test("a crosscheck pin may name the primary's own family", () => {
+    const found = resolve(
+      "worker",
+      { effort: "high", crosscheck: { effort: "high", model: "glm-two" } },
+      kept([
+        allow("glm", "opencode-go/glm-5.3-flash"),
+        allow("glm-two", "opencode-go/glm-5.3-flash"),
+      ]),
+      "spectre",
+    );
+    expect(found.resolution?.crosscheck?.alias).toBe("glm-two");
+    expect(found.resolution?.crosscheck?.pinned).toBe(true);
+  });
+
+  test("a pinned crosscheck is spent when the profile states no effort", () => {
+    const found = resolve(
+      "worker",
+      { model: "glm", crosscheck: { model: "deep" } },
+      kept([
+        allow("glm", "opencode-go/glm-5.3-flash"),
+        allow("deep", "opencode-go/deepseek-v4.1-flash"),
+      ]),
+      "spectre",
+    );
+    expect(found.resolution?.primary.alias).toBe("glm");
+    expect(found.resolution?.crosscheck?.alias).toBe("deep");
+    expect(found.resolution?.crosscheck?.rung).toBeUndefined();
+  });
+
+  test("a crosscheck pin the allowlist does not hold is a problem", () => {
+    const found = resolve(
+      "worker",
+      { effort: "high", crosscheck: { effort: "high", model: "ghost" } },
+      kept([allow("glm", "opencode-go/glm-5.3-flash")]),
+      "spectre",
+    );
+    expect(found.resolution).toBeUndefined();
+    expect(found.problem).toContain('profiles.worker.crosscheck.model: "ghost"');
+  });
+
   test("an empty crosscheck list leaves the second opinion unavailable", () => {
     const found = resolve(
       "worker",

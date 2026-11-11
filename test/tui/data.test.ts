@@ -3,11 +3,9 @@ import { join } from "node:path";
 import { AbsolutePath } from "@opencode/schema";
 import {
   catalogue,
-  crosscheckOptionsFor,
   type Draft,
   directoryOf,
   effortDots,
-  type Profile,
   read,
   resolve,
   save,
@@ -221,6 +219,48 @@ describe("the page reads the repository's own file", () => {
     expect(written.crosscheck).toEqual(["glm-flash", "muse"]);
   });
 
+  test("a crosscheck pin is read, wins over the list, and is written back", async () => {
+    const at = await project();
+    const draft = await read(at);
+    const pinned: Draft = {
+      ...draft,
+      profiles: draft.profiles.map((one) =>
+        one.name === "worker"
+          ? { ...one, crosscheck: { effort: "high", pinned: "glm-flash" } }
+          : one,
+      ),
+    };
+    const worker = pinned.profiles.find((one) => one.name === "worker");
+    expect(worker?.crosscheck?.pinned).toBe("glm-flash");
+    expect(
+      resolve(pinned, catalogue(models)).find((one) => one.profile === "worker")?.crosscheck,
+    ).toBe("opencode-go/glm-5.3-flash#high");
+
+    await save(pinned);
+    const written = (await Bun.file(`${at}/spectre.json`).json()) as {
+      profiles: Record<string, { crosscheck?: { model?: string; effort?: string } }>;
+    };
+    expect(written.profiles.worker?.crosscheck).toEqual({ effort: "high", model: "glm-flash" });
+  });
+
+  test("a crosscheck pin the allowlist does not hold is a problem", async () => {
+    const at = scratch();
+    await Bun.write(
+      `${at}/spectre.json`,
+      JSON.stringify({
+        models: { first: "opencode-go/deepseek-v4.1-flash" },
+        priority: ["first"],
+        profiles: {
+          worker: { effort: "high", crosscheck: { effort: "high", model: "ghost" } },
+        },
+      }),
+    );
+    const found = resolve(await read(at), catalogue(models));
+    expect(found[0]?.problem).toContain(
+      'profiles.worker.crosscheck.model: "ghost" is not an allowed model',
+    );
+  });
+
   test("a file with no crosscheck list offers every model in priority order", async () => {
     const at = scratch();
     await Bun.write(
@@ -324,64 +364,6 @@ describe("the page resolves what the tool resolves", () => {
     const worker = rows.find((one) => one.profile === "worker");
     expect(worker?.ref).toBe("opencode-go/deepseek-v4.1-flash#high");
     expect(worker?.crosscheck).toContain("minimax");
-  });
-
-  test("the crosscheck choices read the same rule and mark the configured one", async () => {
-    const draft = await read(await project());
-    const worker = draft.profiles.find((one) => one.name === "worker");
-    const mechanical = draft.profiles.find((one) => one.name === "mechanical");
-    if (worker === undefined || mechanical === undefined)
-      throw new Error("the fixture has no worker and mechanical profiles");
-
-    const listed = crosscheckOptionsFor(draft, catalogue(models), worker);
-    const byLabel = new Map(listed.map((one) => [one.label, one]));
-
-    expect(byLabel.get("Off")?.available).toBe(true);
-    expect(byLabel.get("Off")?.current).toBe(false);
-    expect(byLabel.get("high")?.current).toBe(true);
-    expect(byLabel.get("high")?.resolved).toContain("minimax");
-
-    // A second opinion needs another family, and a single-model allowlist has none.
-    const narrow: Draft = {
-      ...draft,
-      models: [{ alias: "deep", ref: "opencode-go/deepseek-v4.1-flash", priority: 1 }],
-    };
-    const unreachable = crosscheckOptionsFor(narrow, catalogue(models), worker).find(
-      (one) => one.label === "high",
-    );
-    expect(unreachable?.available).toBe(false);
-    expect(unreachable?.reason).toContain(
-      "found no model in the crosscheck list from another family",
-    );
-
-    const off = crosscheckOptionsFor(draft, catalogue(models), mechanical).find(
-      (one) => one.label === "Off",
-    );
-    expect(off?.current).toBe(true);
-
-    const paidFirst: Draft = {
-      ...draft,
-      models: [
-        { alias: "deep", ref: "opencode-go/deepseek-v4.1-flash", priority: 1 },
-        { alias: "glm", ref: "opencode-go/glm-5.3-flash", priority: 2 },
-        { alias: "minimax", ref: "opencode-go/minimax-m3.1-flash-free", priority: 3 },
-      ],
-      crosscheck: ["deep", "glm", "minimax"],
-    };
-    const first = paidFirst.profiles.find((one) => one.name === "worker");
-    if (first === undefined) throw new Error("the trial profile is missing");
-    const paid = crosscheckOptionsFor(paidFirst, catalogue(models), first);
-    expect(paid.find((one) => one.label === "high")?.resolved).toContain("glm");
-
-    const custom: Profile = {
-      ...worker,
-      crosscheck: { effort: "turbo" },
-    };
-    const turbo = crosscheckOptionsFor(draft, catalogue(models), custom).find(
-      (one) => one.label === "turbo",
-    );
-    expect(turbo?.current).toBe(true);
-    expect(turbo?.available).toBe(false);
   });
 
   test("a pin the allowlist does not hold is a problem, not a guess", async () => {

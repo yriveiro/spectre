@@ -1,6 +1,13 @@
 import { ladder } from "./catalogue";
 import { type Effort, effortOf, type Fit, fit, type Ladder, ladderOf } from "./effort";
-import type { Candidate, Excluded, Pick, ProfileEntry, Resolution } from "./types";
+import {
+  type Candidate,
+  type Excluded,
+  modelNames,
+  type Pick,
+  type ProfileEntry,
+  type Resolution,
+} from "./types";
 
 /**
  * The selection policy, and the report it produces.
@@ -116,12 +123,6 @@ const excludedRow = (candidate: Candidate, got: Fit, why: string): Excluded => (
   reaches: reaches(got),
 });
 
-/** The pin names as a list, whether the caller read the file or the tables. */
-const names = (model: ProfileEntry["model"]): ReadonlyArray<string> => {
-  if (model === undefined) return [];
-  return typeof model === "string" ? [model] : model;
-};
-
 /** One candidate, and what it was asked for under each requirement. */
 type Row = {
   readonly candidate: Candidate;
@@ -223,15 +224,59 @@ const excludedBy = (
   return excluded;
 };
 
+/**
+ * The second opinion, and why it is absent.
+ *
+ * A crosscheck is stated as a requirement, and a pin overrides it the same way
+ * a profile's `model` pin overrides its `effort`: the named model is spent
+ * whatever the fallback order and the family rule would have said.
+ */
+type Cross = {
+  readonly pick: Pick | undefined;
+  /** The row that was spent, so it is never reported as excluded under another role. */
+  readonly row: Row | undefined;
+  readonly problem: string | undefined;
+};
+
+const noCross: Cross = { pick: undefined, row: undefined, problem: undefined };
+
+/** Why a declared crosscheck found no model. */
+const crossProblem = (want: Effort, crosscheck: ReadonlyArray<string> | undefined): string =>
+  crosscheck !== undefined && crosscheck.length === 0
+    ? "the crosscheck list is empty, so no second opinion can be asked."
+    : `the crosscheck at "${want.name}" found no model in the crosscheck list from another family.`;
+
+/**
+ * The second opinion. A pin wins over the fallback list, the family rule and
+ * the effort. Without a pin it is the first model in the crosscheck order
+ * whose catalogue family differs from the primary's and meets the requirement.
+ */
+const crossFor = (
+  rows: ReadonlyArray<Row>,
+  primary: Candidate,
+  want: Effort | undefined,
+  crosscheck: ReadonlyArray<string> | undefined,
+  pinned: Candidate | undefined,
+): Cross => {
+  if (pinned !== undefined) {
+    const got = want === undefined ? undefined : rungFor(pinned, want);
+    const row = rows.find((one) => one.candidate === pinned);
+    return { pick: spent(pinned, got, true), row, problem: undefined };
+  }
+  if (want === undefined) return noCross;
+  const row = crossOf(rows, primary, want, crosscheck);
+  if (row === undefined || row.cross === undefined)
+    return { pick: undefined, row: undefined, problem: crossProblem(want, crosscheck) };
+  return { pick: spent(row.candidate, row.cross, false), row, problem: undefined };
+};
+
 /** The answer once a model was spent. */
 const spentBy = (
   profile: string,
   agent: string,
   primary: Pick,
-  crossRow: Row | undefined,
+  cross: Cross,
   excluded: ReadonlyArray<Excluded>,
-  crossWant: Effort | undefined,
-  crosscheck: ReadonlyArray<string> | undefined,
 ): {
   readonly resolution: Resolution | undefined;
   readonly excluded: ReadonlyArray<Excluded>;
@@ -241,16 +286,8 @@ const spentBy = (
     profile,
     agent,
     primary,
-    crosscheck:
-      crossRow === undefined || crossRow.cross === undefined
-        ? undefined
-        : spent(crossRow.candidate, crossRow.cross, false),
-    crosscheckProblem:
-      crossWant === undefined || crossRow !== undefined
-        ? undefined
-        : crosscheck !== undefined && crosscheck.length === 0
-          ? "the crosscheck list is empty, so no second opinion can be asked."
-          : `the crosscheck at "${crossWant.name}" found no model in the crosscheck list from another family.`,
+    crosscheck: cross.pick,
+    crosscheckProblem: cross.problem,
     excluded,
   },
   excluded,
@@ -273,7 +310,7 @@ export const resolve = (
   readonly problem: string | undefined;
 } => {
   const agent = entry.agent ?? defaultAgent;
-  const pins = names(entry.model);
+  const pins = modelNames(entry.model);
 
   // A pin skips the requirement. The first pinned name the allowlist holds is
   // the one spent, so a pin list keeps the preference order the old file gave
@@ -297,22 +334,41 @@ export const resolve = (
     entry.crosscheck === undefined ? undefined : (entry.crosscheck.effort ?? entry.effort);
   const crossWant = crossName === undefined ? undefined : effortOf(crossName);
 
+  // A crosscheck pin wins over the fallback list and the family rule, so the
+  // first pinned name the allowlist holds is the second opinion.
+  const crossPins = entry.crosscheck === undefined ? [] : modelNames(entry.crosscheck.model);
+  let crossPinned: Candidate | undefined;
+  for (const name of crossPins) {
+    crossPinned = candidates.find((one) => one.alias === name);
+    if (crossPinned !== undefined) break;
+  }
+  if (crossPins.length > 0 && crossPinned === undefined)
+    return {
+      resolution: undefined,
+      excluded: [],
+      problem: `profiles.${profile}.crosscheck.model: "${crossPins[0]}" is not an allowed model in this session, so the pin cannot be resolved.`,
+    };
+
   if (pinned !== undefined) {
     const pinnedGot =
       entry.effort !== undefined && pinned.model.rungs.includes(entry.effort)
         ? rungFor(pinned, effortOf(entry.effort))
         : undefined;
     const rows = rowsFor(candidates, undefined, crossWant);
-    const crossRow =
-      crossWant === undefined ? undefined : crossOf(rows, pinned, crossWant, crosscheck);
+    const cross = crossFor(rows, pinned, crossWant, crosscheck, crossPinned);
     return spentBy(
       profile,
       agent,
       spent(pinned, pinnedGot, true),
-      crossRow,
-      excludedBy(rows, pinned, undefined, crossWant, crossRow, crosscheck),
-      crossWant,
-      crosscheck,
+      cross,
+      excludedBy(
+        rows,
+        pinned,
+        undefined,
+        crossPinned === undefined ? crossWant : undefined,
+        cross.row,
+        crosscheck,
+      ),
     );
   }
 
@@ -338,21 +394,31 @@ export const resolve = (
     const verb = want.kind === "known" ? "reaches" : "declares";
     return {
       resolution: undefined,
-      excluded: excludedBy(rows, undefined, want, crossWant, undefined, crosscheck),
+      excluded: excludedBy(
+        rows,
+        undefined,
+        want,
+        crossPinned === undefined ? crossWant : undefined,
+        undefined,
+        crosscheck,
+      ),
       problem: `profiles.${profile}.effort: no allowed model ${verb} "${want.name}". Highest rungs: ${capacity.join(", ") || "none"}.`,
     };
   }
 
-  const crossRow =
-    crossWant === undefined ? undefined : crossOf(rows, chosen.candidate, crossWant, crosscheck);
-
+  const cross = crossFor(rows, chosen.candidate, crossWant, crosscheck, crossPinned);
   return spentBy(
     profile,
     agent,
     spent(chosen.candidate, chosen.got, false),
-    crossRow,
-    excludedBy(rows, chosen.candidate, want, crossWant, crossRow, crosscheck),
-    crossWant,
-    crosscheck,
+    cross,
+    excludedBy(
+      rows,
+      chosen.candidate,
+      want,
+      crossPinned === undefined ? crossWant : undefined,
+      cross.row,
+      crosscheck,
+    ),
   );
 };
