@@ -75,6 +75,7 @@ const Row = Schema.Struct({
 const Spent = Schema.Struct({
   ref: Schema.String,
   rung: Schema.optional(Schema.String),
+  /** True when the profile named this model with a `model` pin. */
   pinned: Schema.Boolean,
   steppedUp: Schema.Boolean,
   below: Schema.optional(Schema.String),
@@ -145,9 +146,12 @@ const Judged = Schema.Union([
 const Resolved = Schema.Struct({
   status: Schema.Literals(["resolved"]),
   profiles: Schema.Array(Profile),
-  /** The spendable allowlist, in the order the config lists it. */
+  /** The spendable allowlist, in `priority` order. */
   models: Schema.Array(Row),
-  /** The models that may serve a crosscheck, in fallback order. */
+  /**
+   * The models that may serve a crosscheck, in fallback order. Each row's
+   * `priority` is its place in the allowlist, not its place here.
+   */
   crosscheck: Schema.Array(Row),
   sources: Schema.Array(Schema.String),
   /** The names the caller asked for. Empty on a whole-table call. */
@@ -205,10 +209,10 @@ Pass \`task\` when you want the judge to choose the profile: \`routing({ task: "
 
 What comes back, by \`status\`:
 
-- \`resolved\`: \`profiles\` has one row per profile. \`model\` is the model to spend: \`ref\` is the full string to pass, rung included, and \`rung\` is the level it names. \`pinned\` says the allowlist named the variant, \`steppedUp\` says the ladder had no rung at the requirement and stepped up, \`below\` is the rung under it, and \`family\`, \`rungs\` and \`cost\` describe the model. \`crosscheck\` is the second opinion when the profile asks for one, and \`crosscheckProblem\` says why a declared second opinion found none. \`excluded\` lists the candidates that did not qualify, each with the highest rung it reaches. \`models\` is the allowlist in priority order, each row carrying its \`priority\`, \`family\`, \`rungs\` and \`cost\`; the answer's \`crosscheck\` array is the crosscheck fallback order. \`sources\` names the config files that were read, and \`asked\` the profile names you asked for. \`judge\` says which path chose the profile: \`used\` carries the \`profile\` it chose and the \`confidence\` when its arm reports one, and \`skipped\` carries the \`reason\` it gave none.
+- \`resolved\`: \`profiles\` has one row per profile. \`model\` is the model to spend: \`ref\` is the full string to pass, rung included, and \`rung\` is the level it names. \`pinned\` says the profile named this model with a \`model\` pin, \`steppedUp\` says the ladder had no rung at the requirement and stepped up, \`below\` is the rung under it, and \`family\`, \`rungs\` and \`cost\` describe the model. \`crosscheck\` is the second opinion when the profile asks for one, and \`crosscheckProblem\` says why a declared second opinion found none. \`excluded\` lists the candidates that did not qualify, each with the highest rung it reaches. \`models\` is the allowlist in priority order, each row carrying its \`priority\`, \`family\`, \`rungs\` and \`cost\`; the answer's \`crosscheck\` array is the crosscheck fallback order. \`sources\` names the config files that were read, and \`asked\` the profile names you asked for. \`judge\` says which path chose the profile: \`used\` carries the \`profile\` it chose and the \`confidence\` when its arm reports one, and \`skipped\` carries the \`reason\` it gave none.
 - \`setup\`: the repository has no config. \`provider\`, \`models\` and \`profiles\` are the starter set on the table. Ask the user once, then call this tool again with \`setup: "accepted"\` or \`setup: "declined"\`. Do not write a config by hand.
 - \`declined\`: the user already said no. Do not ask again. Spawn without \`model\`, and the agent's own model runs the work.
-- \`problems\`: the config is wrong. Every mistake is on its own line and names the key. Quote it, say routing is misconfigured, and ask whether to continue on the current model. When the models and the priority order are themselves valid, the answer also carries \`models\` and \`crosscheck\` in the same shape as \`resolved\`, so you can read the order while you fix the profile. Do not substitute a model you remember.
+- \`problems\`: the config is wrong. Every mistake is on its own line and names the key. Quote it, say routing is misconfigured, and ask whether to continue on the current model. When the models and the priority order are themselves valid, the answer also carries \`models\` in the same shape as \`resolved\`. It carries \`crosscheck\` too when the crosscheck list is valid. Read the order while you fix the profile. Do not substitute a model you remember.
 
 The allowlist is the whole vocabulary. \`priority\` states the order the resolver reads, and the page can reorder it. The \`crosscheck\` list states which models may serve a second opinion, in fallback order; a profile's crosscheck takes the first model in that list from another family. A ref that is not in \`models\` is not returned by this tool, and nothing checks the allowlist at the subagent boundary: a ref you write yourself is one nobody checked. Never write a model id from memory. If nothing here fits, say so and ask.
 
@@ -535,9 +539,12 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
         ordered.ranked.map((one) => one.alias),
       );
       const byAlias = new Map(kept.kept.map((one) => [one.alias, one]));
-      const crosscheckRows = crosscheckOrder.listed.flatMap((alias, at) => {
+      // The array carries the fallback order. The row's `priority` stays the
+      // model's place in the allowlist, so `priority` means one thing in both
+      // arrays and a reader never has to ask which order it names.
+      const crosscheckRows = crosscheckOrder.listed.flatMap((alias) => {
         const one = byAlias.get(alias);
-        return one === undefined ? [] : [asRow(one, at + 1)];
+        return one === undefined ? [] : [asRow(one, rankOf.get(alias) ?? 0)];
       });
 
       // A profile or agent problem does not make the model order wrong. When

@@ -418,15 +418,16 @@ The routing path has two steps, and they are not the same kind of step.
 | **Which model** — the resolution | the resolver, always | the resolver, always |
 
 The judge sits at the first step only. The second step is mechanical: the
-priority order, the effort rule and the catalogue. A judge that is absent
-changes who answers the first question and changes nothing about the second.
+allowlist, the priority order, the effort rule, any pin and the catalogue. A
+judge that is absent changes who answers the first question and changes nothing
+about the second.
 
 That is the whole design rule: **the judge never names a model.** It names a
 profile and a probability, both drawn from a list the user wrote. A judge that
 said "spend it on this model" would be a second resolver, and two resolvers
-disagree. The policy may raise the effort when the probability is low, and
-the resolver still picks the model, and the priority order still decides
-which one.
+disagree. The policy may raise the effort when the probability is low. The
+resolver still picks the model, through the allowlist, the priority order and
+any pin.
 
 ### The switch
 

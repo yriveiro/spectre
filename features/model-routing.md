@@ -300,10 +300,10 @@ The skill then says in one line which profile it picked and why. One line,
 because a model choice nobody hears about looks exactly like a mistake once it
 turns out to be one.
 
-**The model string is a whitelist, not a guess.** The skill carries the exact
-strings the check produced, so it picks a *name* from the config and emits the
-string that name maps to. It never assembles an ID. The profile states the
-effort, and the resolver turns that effort into a string.
+**The model string is a whitelist, not a guess.** The tool returns the exact
+string the check produced, so the skill picks a *name* from the config and spends
+the string that name maps to. It never assembles an ID. The profile states the
+effort, or pins a model, and the resolver turns that into a string.
 
 **The allowlist is the whole vocabulary.** The models in `spectre.json` are what
 this user allows themselves to spend, and that list is usually far shorter than
@@ -311,11 +311,11 @@ what the provider offers. The tool never widens it, and a model outside it is no
 spendable on a spectre subagent however well it fits. When nothing in the list
 fits, the skill says so and asks rather than reaching outside.
 
-**A pin may name several models, in order of preference.** Take the first that
-fits, and go to a later one only when the task is plainly harder, saying that is
-what happened. The order is a preference order, not a menu to maximise from:
-taking the last entry every time spends money the user said not to spend and makes
-the earlier entries pointless.
+**A profile may pin several models, in order of preference.** The resolver spends
+the first pinned alias the session can use. The order is a preference order, not a
+menu to maximise from: taking a later entry every time spends money the user said
+not to spend and makes the earlier entries pointless. A pin that names no allowed
+model is a problem, not a reason to choose another.
 
 **Open:** is matching `match` against the task worth more than always taking the first
 profile and escalating only when something looks hard? A router that is often wrong is

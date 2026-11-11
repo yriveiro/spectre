@@ -326,6 +326,22 @@ describe("tools.spectre.routing", () => {
     });
   });
 
+  test("an allowlist variant is not a profile pin", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini#high" }),
+        profiles: { plain: { effort: "high", match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir(), {}, listOf(FAMILIES)), "resolved");
+
+    expect(out.profiles[0]?.model).toMatchObject({
+      ref: "acme/falcon-mini#high",
+      rung: "high",
+      pinned: false,
+    });
+  });
+
   test("a crosscheck from another family is returned beside the primary", async () => {
     await scratch.writeProject(
       JSON.stringify({
@@ -350,6 +366,7 @@ describe("tools.spectre.routing", () => {
 
     expect(out.profiles[0]?.crosscheck?.ref).toBe("acme/falcon-max#high");
     expect(out.profiles[0]?.crosscheck?.rung).toBe("high");
+    expect(out.profiles[0]?.crosscheck?.pinned).toBe(false);
   });
 
   test("a declared crosscheck that finds no other family says so", async () => {
@@ -385,6 +402,12 @@ describe("tools.spectre.routing", () => {
     expect(out.profiles[0]?.model.ref).toBe("acme/falcon-mini#high");
     expect(out.profiles[0]?.crosscheck?.ref).toBe("acme/falcon-third#high");
     expect(out.crosscheck.map((one) => one.name)).toEqual(["third", "other"]);
+    // The array is the fallback order. `priority` is the allowlist place, so
+    // the two orders stay distinct and each field keeps one meaning.
+    expect(out.crosscheck.map((one) => [one.name, one.priority])).toEqual([
+      ["third", 3],
+      ["other", 2],
+    ]);
   });
 
   test("a crosscheck alias that is not in the allowlist is a problem", async () => {
