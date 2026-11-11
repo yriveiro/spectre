@@ -2,7 +2,9 @@ import { ensureImage, start, type Running } from "./docker";
 import { startLive, type Live } from "./live";
 import { startMock, type Mock } from "./mock";
 import { assertScenario, observed, readFiles, subagentCalls, type Observed } from "./observe";
-import { findScenario, listScenarios, type Scenario } from "./scenario";
+import { preparePlugin } from "./plugin";
+import { findScenario, listScenarios, type Scenario, type WorkspacePath } from "./scenario";
+import { resolveIn } from "./workspace";
 
 const args = Bun.argv.slice(2);
 const flagged = (name: string) => args.some((arg) => arg === `--${name}`);
@@ -44,18 +46,19 @@ const runOne = async (scenario: Scenario, mode: Mode): Promise<Result> => {
   const workspace = `${directory}/workspace`;
   const configDir = `${directory}/config`;
   await Bun.write(`${workspace}/.keep`, "");
+  const pluginDir = await preparePlugin(directory, mode);
 
   for (const [path, content] of Object.entries(scenario.setup))
-    await Bun.write(`${workspace}/${path}`, content);
+    await Bun.write(resolveIn(workspace, path as WorkspacePath), content);
 
   let mock: Mock | undefined;
   let server: Running | Live | undefined;
   try {
     if (live) {
-      server = await startLive({ workspace, configDir, model: LIVE_MODEL });
+      server = await startLive({ directory, configDir, pluginDir, model: LIVE_MODEL });
     } else {
       mock = startMock(scenario);
-      server = await start({ workspace, configDir, mockBaseURL: mock.baseURL });
+      server = await start({ workspace, configDir, pluginDir, mockBaseURL: mock.baseURL });
     }
     const client = server.client;
     const model = live ? parseRef(LIVE_MODEL) : { providerID: "mock", id: "resume" };

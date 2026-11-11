@@ -105,6 +105,9 @@ const SPELLED: Record<string, number> = {
   twenty: 20,
   "twenty-one": 21,
   "twenty-two": 22,
+  "twenty-three": 23,
+  "twenty-four": 24,
+  "twenty-five": 25,
 };
 
 const WORDS = Object.keys(SPELLED).join("|");

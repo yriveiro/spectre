@@ -1,3 +1,5 @@
+import { isAbsolute, resolve } from "node:path";
+
 /**
  * A resume scenario is a small, scripted conversation. The fixture is the source
  * of truth for what the model does and what the harness expects. The golden is
@@ -8,7 +10,17 @@
  * follows the skill: the first turn delegates, the second continues the child.
  * A live model run uses the same prompts and expectations with the script
  * ignored.
+ *
+ * A fixture path is parsed here, not at the sink. `WorkspacePath` is the only
+ * shape the rest of the harness accepts, and the parser refuses an absolute
+ * path or one that climbs out before a run starts.
  */
+
+declare const workspacePathBrand: unique symbol;
+export type WorkspacePath = string & { readonly [workspacePathBrand]: true };
+
+const WORKSPACE_ROOT = "/__spectre_eval_workspace__";
+const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export type MockStep = {
   /** Which side of the subagent boundary answers. The system prompt decides. */
@@ -24,7 +36,7 @@ export type MockStep = {
 export type Scenario = {
   readonly id: string;
   readonly description: string;
-  readonly setup: Readonly<Record<string, string>>;
+  readonly setup: Readonly<Record<WorkspacePath, string>>;
   readonly turns: ReadonlyArray<{ readonly prompt: string }>;
   readonly mock: ReadonlyArray<MockStep>;
   readonly expect: {
@@ -32,7 +44,7 @@ export type Scenario = {
     /** True when call 2 continues call 1's child. False when it starts a new one. */
     readonly continuesFirstChild: boolean;
     readonly childSessions: number;
-    readonly files: Readonly<Record<string, string>>;
+    readonly files: Readonly<Record<WorkspacePath, string>>;
   };
 };
 
@@ -50,11 +62,29 @@ const number = (value: unknown, path: string): number => {
   return value;
 };
 
-const strings = (value: unknown, path: string): Readonly<Record<string, string>> => {
+const workspacePath = (value: unknown, path: string): WorkspacePath => {
+  const text = string(value, path);
+  if (text.includes("\0")) throw new Error(`${path}: expected a path without a NUL byte`);
+  if (isAbsolute(text)) throw new Error(`${path}: expected a path relative to the workspace`);
+  if (text.split("/").some((part) => part === ".."))
+    throw new Error(`${path}: expected a path inside the workspace`);
+  const resolved = resolve(WORKSPACE_ROOT, text);
+  if (!resolved.startsWith(`${WORKSPACE_ROOT}/`))
+    throw new Error(`${path}: expected a path inside the workspace`);
+  return text as WorkspacePath;
+};
+
+const workspacePaths = (
+  value: unknown,
+  path: string,
+): Readonly<Record<WorkspacePath, string>> => {
   if (!record(value)) throw new Error(`${path}: expected an object of strings`);
   return Object.fromEntries(
-    Object.entries(value).map(([key, one]) => [key, string(one, `${path}.${key}`)]),
-  );
+    Object.entries(value).map(([key, one]) => {
+      const at = `${path}.${key}`;
+      return [workspacePath(key, at), string(one, at)];
+    }),
+  ) as Readonly<Record<WorkspacePath, string>>;
 };
 
 export const parseScenario = (raw: unknown, path: string): Scenario => {
@@ -92,11 +122,14 @@ export const parseScenario = (raw: unknown, path: string): Scenario => {
     };
   });
 
+  const id = string(raw.id, `${path}.id`);
+  if (!ID.test(id)) throw new Error(`${path}.id: expected a lowercase slug of 1-64 characters`);
+
   const expect = raw.expect;
   return {
-    id: string(raw.id, `${path}.id`),
+    id,
     description: string(raw.description, `${path}.description`),
-    setup: raw.setup === undefined ? {} : strings(raw.setup, `${path}.setup`),
+    setup: raw.setup === undefined ? {} : workspacePaths(raw.setup, `${path}.setup`),
     turns,
     mock,
     expect: {
@@ -110,7 +143,7 @@ export const parseScenario = (raw: unknown, path: string): Scenario => {
                 throw new Error(`${path}.expect.continuesFirstChild: expected a boolean`);
               })(),
       childSessions: number(expect.childSessions, `${path}.expect.childSessions`),
-      files: strings(expect.files, `${path}.expect.files`),
+      files: workspacePaths(expect.files, `${path}.expect.files`),
     },
   };
 };

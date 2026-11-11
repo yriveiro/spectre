@@ -1,5 +1,6 @@
 import type { Message, Part } from "../opencode";
-import type { Scenario } from "./scenario";
+import type { Scenario, WorkspacePath } from "./scenario";
+import { readIn } from "./workspace";
 
 type ToolState = {
   readonly status?: string;
@@ -86,16 +87,17 @@ export const subagentCalls = (messages: ReadonlyArray<Message>): ReadonlyArray<S
   return calls.toSorted((a, b) => a.at - b.at || a.order - b.order).map((one) => one.call);
 };
 
-/** Read the files the fixture names, trimmed at the end so a trailing newline is not a finding. */
+/**
+ * Read the files the fixture names, trimmed at the end so a trailing newline is
+ * not a finding. The path has already passed the fixture parser; `readIn`
+ * resolves a symlink and refuses one that leaves the workspace.
+ */
 export const readFiles = async (
   workspace: string,
-  expected: Readonly<Record<string, string>>,
+  expected: Readonly<Record<WorkspacePath, string>>,
 ): Promise<Readonly<Record<string, string>>> => {
   const files: Record<string, string> = {};
-  for (const key of Object.keys(expected)) {
-    const file = Bun.file(`${workspace}/${key}`);
-    files[key] = (await file.exists()) ? (await file.text()).trimEnd() : "";
-  }
+  for (const key of Object.keys(expected) as WorkspacePath[]) files[key] = await readIn(workspace, key);
   return files;
 };
 

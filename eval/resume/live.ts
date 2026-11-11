@@ -1,7 +1,4 @@
 import { Opencode } from "../opencode";
-import { REPO } from "./docker";
-
-const PASSWORD = "spectre-eval";
 
 export type Live = {
   readonly client: Opencode;
@@ -10,30 +7,43 @@ export type Live = {
   readonly stop: () => Promise<void>;
 };
 
+const LISTENING = /server listening on http:\/\/127\.0\.0\.1:(\d+)/;
+
 /**
  * The Console-managed providers do not cross into the Docker container, but they
  * work in a host server. This mode starts that server with a temporary config
- * directory that names this checkout and nothing else, so the global config's
- * published plugin cannot win the id. The auth and the data directory stay the
- * host's, which is what makes the model reachable.
+ * directory that names the plugin's publish set and nothing else, so the global
+ * config's published plugin cannot win the id. The auth and the data directory
+ * stay the host's, which is what makes the model reachable.
+ *
+ * Project config discovery is off. A fixture writes into `workspace/`, and the
+ * server's working directory is the run directory; even a config there is data
+ * the model may read, not project config the server loads. A run directory is
+ * created fresh under `.runs/`, so no ancestor carries fixture files.
+ *
+ * The port is ephemeral unless `SPECTRE_EVAL_LIVE_PORT` names one, and the
+ * password is generated per run.
  */
 export const startLive = async (input: {
-  readonly workspace: string;
+  readonly directory: string;
   readonly configDir: string;
+  readonly pluginDir: string;
   readonly model: string;
 }): Promise<Live> => {
   await Bun.write(
     `${input.configDir}/opencode.json`,
-    `${JSON.stringify({ update: "disable", plugins: [REPO], experimental: {} }, null, 2)}\n`,
+    `${JSON.stringify({ update: "disable", plugins: [input.pluginDir], experimental: {} }, null, 2)}\n`,
   );
 
-  const port = Number(Bun.env.SPECTRE_EVAL_LIVE_PORT ?? 14099);
-  const proc = Bun.spawn(["opencode", "serve", "--port", String(port), "--log-level", "info", "--print-logs"], {
-    cwd: input.workspace,
+  const password = crypto.randomUUID();
+  const port = Bun.env.SPECTRE_EVAL_LIVE_PORT ?? "0";
+  const proc = Bun.spawn(["opencode", "serve", "--port", port, "--log-level", "info", "--print-logs"], {
+    cwd: input.directory,
     env: {
       ...Bun.env,
       OPENCODE_CONFIG_DIR: input.configDir,
-      OPENCODE_SERVER_PASSWORD: PASSWORD,
+      OPENCODE_CONFIG_PROJECT_DISABLE: "1",
+      OPENCODE_SERVER_PASSWORD: password,
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -51,7 +61,28 @@ export const startLive = async (input: {
   };
   const pumps = Promise.all([pump(proc.stdout), pump(proc.stderr)]);
 
-  const client = new Opencode(input.workspace, `http://127.0.0.1:${port}`, PASSWORD);
+  const stop = async () => {
+    proc.kill();
+    await Promise.race([pumps, Bun.sleep(2000)]);
+  };
+
+  const abort = async (why: string): Promise<never> => {
+    await stop();
+    throw new Error(`${why}\n${seen}`);
+  };
+
+  let assigned: number | undefined;
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const match = seen.match(LISTENING);
+    if (match?.[1] !== undefined) {
+      assigned = Number(match[1]);
+      break;
+    }
+    await Bun.sleep(100);
+  }
+  if (assigned === undefined) return abort("the live server did not start");
+
+  const client = new Opencode(input.directory, `http://127.0.0.1:${assigned}`, password);
   let models: Awaited<ReturnType<Opencode["models"]>> | undefined;
   let failure: unknown;
   for (let attempt = 0; attempt < 60; attempt++) {
@@ -63,13 +94,10 @@ export const startLive = async (input: {
       await Bun.sleep(300);
     }
   }
-  if (models === undefined) {
-    proc.kill();
-    await pumps;
-    throw new Error(
-      `the live server did not answer: ${failure instanceof Error ? failure.message : String(failure)}\n${seen}`,
+  if (models === undefined)
+    return abort(
+      `the live server did not answer: ${failure instanceof Error ? failure.message : String(failure)}`,
     );
-  }
 
   const [providerID, rest] = input.model.split("/");
   const [id, variant] = (rest ?? "").split("#");
@@ -79,21 +107,15 @@ export const startLive = async (input: {
       model.id === id &&
       (variant === undefined || (model.variants ?? []).some((one) => one.id === variant)),
   );
-  if (!known) {
-    proc.kill();
-    await pumps;
-    throw new Error(
+  if (!known)
+    return abort(
       `the live model "${input.model}" is not in the catalogue. Providers: ${[...new Set(models.map((model) => model.providerID))].join(", ")}`,
     );
-  }
 
   return {
     client,
     model: input.model,
     logs: async () => seen,
-    stop: async () => {
-      proc.kill();
-      await Promise.race([pumps, Bun.sleep(2000)]);
-    },
+    stop,
   };
 };

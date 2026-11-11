@@ -5,6 +5,8 @@ export type Mock = {
   /** The base URL the container reaches, through `host.docker.internal`. */
   readonly baseURL: string;
   readonly port: number;
+  /** The path segment every request must carry. Generated per run. */
+  readonly token: string;
   readonly stop: () => void;
 };
 
@@ -74,14 +76,18 @@ const completion = (value: string) => ({
  * next scripted move.
  */
 export const startMock = (scenario: Scenario, port = 0): Mock => {
+  const token = crypto.randomUUID();
+  const prefix = `/${token}/v1`;
   const server = Bun.serve({
     port,
     hostname: "0.0.0.0",
     async fetch(req) {
       const url = new URL(req.url);
-      if (url.pathname === "/v1/models")
+      if (!url.pathname.startsWith(prefix)) return new Response("not found", { status: 404 });
+      const route = url.pathname.slice(prefix.length);
+      if (route === "/models")
         return Response.json({ object: "list", data: [{ id: "resume", object: "model" }] });
-      if (url.pathname !== "/v1/chat/completions") return new Response("not found", { status: 404 });
+      if (route !== "/chat/completions") return new Response("not found", { status: 404 });
 
       const body = (await req.json()) as {
         readonly messages?: ReadonlyArray<Message>;
@@ -111,8 +117,9 @@ export const startMock = (scenario: Scenario, port = 0): Mock => {
   if (assigned === undefined) throw new Error("the mock server bound no TCP port");
 
   return {
-    baseURL: `http://host.docker.internal:${assigned}`,
+    baseURL: `http://host.docker.internal:${assigned}/${token}`,
     port: assigned,
+    token,
     stop: () => server.stop(true),
   };
 };
