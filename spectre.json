@@ -7,22 +7,22 @@
     "ds41f": "opencode-go/deepseek-v4.1-flash"
   },
   "priority": ["muse13", "iceman", "beam", "ds41f"],
-  "crosscheck": ["muse13", "iceman", "beam", "ds41f"],
+  "crosscheck": ["muse13", "beam", "ds41f"],
   "profiles": {
     "mechanical": {
-      "effort": "max",
+      "effort": "low",
       "model": "beam",
       "match": "Use when the task is one command to run and one output to read, and the deliverable is what it said: run the tests, read the log, report the failure. Not for finding where something lives.",
       "why": "One command, one log, and a report. Nothing to decide, so the cheapest effort runs it; a wrong answer here shows up as a failed command rather than a wrong commit."
     },
     "search": {
-      "effort": "max",
+      "effort": "medium",
       "model": "beam",
       "match": "Use when the task is to find where something lives, with grep for a symbol, a file to read, the call sites to name, or the blast radius to list. Not for a command to run.",
-      "why": "Find where something lives: grep, read, name the call sites. A missed symbol costs a second pass over the repo, so it leads above the floor and escalates to the other model."
+      "why": "Find where something lives: grep, read, name the call sites. A missed symbol costs a second pass over the repo, so it uses more thinking than the floor."
     },
     "worker": {
-      "effort": "xhigh",
+      "effort": "high",
       "model": "muse13",
       "crosscheck": {
         "effort": "high"
@@ -49,7 +49,7 @@
       "why": "One hard problem where the answer has to be right and there is no diff to read the answer out of. The escalation goes to another family at its top effort, because a second family beats the same family asked twice."
     },
     "deep": {
-      "effort": "high",
+      "effort": "max",
       "model": "ds41f",
       "crosscheck": {
         "effort": "max"
@@ -64,12 +64,14 @@
         "effort": "max"
       },
       "match": "Use when the task is to restructure code that already works, across files, without changing behaviour: rename, move, extract, split. Not for a new behaviour.",
-      "why": "Restructure code that already works, across files, without changing behaviour. It needs thinking plus breadth of reading, so it takes the second-highest effort rather than the top, and keeps the other model's second-highest in reserve for the mechanical part of the move. The second opinion comes from another family at the top effort."
+      "why": "Restructure code that already works, across files, without changing behaviour. It needs thinking plus breadth of reading, so it takes the second-highest effort rather than the top. The second opinion comes from another family at the top effort."
     }
   },
   "judge": {
     "kind": "jev",
+    "endpoint": "https://opencode.ai/inference/systemone/v1/systemone",
     "model": "jev-1.13-free",
+    "key": "OPENCODE_API_KEY",
     "timeout": 5000
   },
   "dictionary": "/Users/yriveiro/Dump/asd-ste100-dictionary.json"
