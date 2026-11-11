@@ -7,10 +7,9 @@ import { load } from "../../skills/definitions/index";
  * `pinned: true` entry in a budgeted catalogue is not free. `worktrees` shipped
  * that way: correct, tested, and unreachable from anything a reader would load.
  *
- * Matched with a boundary, not `includes`: `worktree` is a prefix of `worktrees`,
- * and `routing` is a prefix of `routing_model_preference`, so a substring check
- * would report the shorter tool reachable off the back of a mention of the
- * longer one — a test that cannot fail.
+ * Matched with a boundary, not `includes`: a tool name that is a prefix of
+ * another would report the shorter tool reachable off the back of a mention of
+ * the longer one — a test that cannot fail.
  */
 const TOOLS = [
   "brain",
@@ -20,7 +19,6 @@ const TOOLS = [
   "pr",
   "prose",
   "routing",
-  "routing_model_preference",
   "solidjs",
   "stack",
   "worktrees",
@@ -50,7 +48,6 @@ describe("every registered tool is reachable from some skill", () => {
       (await import("../../tools/definitions/pr")).pr(ctx),
       (await import("../../tools/definitions/prose")).prose(ctx),
       (await import("../../tools/definitions/routing")).routing(ctx),
-      (await import("../../tools/definitions/routing")).routingModelPreference(ctx),
       (await import("../../tools/definitions/solidjs")).solidjs(ctx),
       (await import("../../tools/definitions/stack")).stack(ctx),
       (await import("../../tools/definitions/worktrees")).worktrees(ctx),

@@ -10,10 +10,11 @@ import { jevJudge, SYSTEMONE_KEY_ENV } from "./jev";
 import { type Judge, lexicalJudge, surface, type Verdict } from "./judge";
 import { decode, load } from "./load";
 import { FILE_NAME, projectPath } from "./locate";
-import { priorityOf } from "./order";
+import { crosscheckOf, priorityOf } from "./order";
 import { decide } from "./policy";
 import { resolve } from "./resolve";
 import {
+  type Candidate,
   DEFAULT_AGENT,
   type Excluded as ExcludedRow,
   type File,
@@ -62,6 +63,12 @@ const Row = Schema.Struct({
   model: Schema.String,
   /** The one-based place in the explicit model priority. */
   priority: Schema.Number,
+  /** The catalogue family, when the row came from the live catalogue. */
+  family: Schema.optional(Schema.String),
+  /** The effort rungs the model declares, in catalogue order. */
+  rungs: Schema.optional(Schema.Array(Schema.String)),
+  /** What the model costs, per million tokens. */
+  cost: Schema.optional(Schema.Struct({ input: Schema.Number, output: Schema.Number })),
 });
 
 /** A model the resolver spent, and the facts behind the choice. */
@@ -140,6 +147,8 @@ const Resolved = Schema.Struct({
   profiles: Schema.Array(Profile),
   /** The spendable allowlist, in the order the config lists it. */
   models: Schema.Array(Row),
+  /** The models that may serve a crosscheck, in fallback order. */
+  crosscheck: Schema.Array(Row),
   sources: Schema.Array(Schema.String),
   /** The names the caller asked for. Empty on a whole-table call. */
   asked: Schema.Array(Schema.String),
@@ -189,7 +198,7 @@ Pass \`task\` when you want the judge to choose the profile: \`routing({ task: "
 
 What comes back, by \`status\`:
 
-- \`resolved\`: \`profiles\` has one row per profile. \`model\` is the model to spend: \`ref\` is the full string to pass, rung included, and \`rung\` is the level it names. \`pinned\` says the allowlist named the variant, \`steppedUp\` says the ladder had no rung at the requirement and stepped up, \`below\` is the rung under it, and \`family\`, \`rungs\` and \`cost\` describe the model. \`crosscheck\` is the second opinion when the profile asks for one, and \`crosscheckProblem\` says why a declared second opinion found none. \`excluded\` lists the candidates that did not qualify, each with the highest rung it reaches. \`models\` is the allowlist in priority order, each row carrying its \`priority\`, \`sources\` the config files that were read, and \`asked\` the profile names you asked for. \`judge\` says which path chose the profile: \`used\` carries the \`profile\` it chose and the \`confidence\` when its arm reports one, and \`skipped\` carries the \`reason\` it gave none.
+- \`resolved\`: \`profiles\` has one row per profile. \`model\` is the model to spend: \`ref\` is the full string to pass, rung included, and \`rung\` is the level it names. \`pinned\` says the allowlist named the variant, \`steppedUp\` says the ladder had no rung at the requirement and stepped up, \`below\` is the rung under it, and \`family\`, \`rungs\` and \`cost\` describe the model. \`crosscheck\` is the second opinion when the profile asks for one, and \`crosscheckProblem\` says why a declared second opinion found none. \`excluded\` lists the candidates that did not qualify, each with the highest rung it reaches. \`models\` is the allowlist in priority order, each row carrying its \`priority\`, \`family\`, \`rungs\` and \`cost\`; the answer's \`crosscheck\` array is the crosscheck fallback order. \`sources\` names the config files that were read, and \`asked\` the profile names you asked for. \`judge\` says which path chose the profile: \`used\` carries the \`profile\` it chose and the \`confidence\` when its arm reports one, and \`skipped\` carries the \`reason\` it gave none.
 - \`setup\`: the repository has no config. \`provider\`, \`models\` and \`profiles\` are the starter set on the table. Ask the user once, then call this tool again with \`setup: "accepted"\` or \`setup: "declined"\`. Do not write a config by hand.
 - \`declined\`: the user already said no. Do not ask again. Spawn without \`model\`, and the agent's own model runs the work.
 - \`problems\`: the config is wrong. Every mistake is on its own line and names the key. Quote it, say routing is misconfigured, and ask whether to continue on the current model. Do not substitute a model you remember.
@@ -495,6 +504,26 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
       const rankOf = new Map(ordered.ranked.map((one) => [one.alias, one.priority]));
       const kept = candidates(allowed, listed.models);
 
+      const asRow = (one: Candidate, priority: number): typeof Row.Type => ({
+        name: one.alias,
+        model: one.ref,
+        priority,
+        family: one.model.family,
+        rungs: [...one.model.rungs],
+        cost: { input: one.model.costInput, output: one.model.costOutput },
+      });
+      const modelRows = kept.kept.map((one) => asRow(one, rankOf.get(one.alias) ?? 0));
+      const crosscheckOrder = crosscheckOf(
+        found.tables.models,
+        found.tables.crosscheck,
+        ordered.ranked.map((one) => one.alias),
+      );
+      const byAlias = new Map(kept.kept.map((one) => [one.alias, one]));
+      const crosscheckRows = crosscheckOrder.listed.flatMap((alias, at) => {
+        const one = byAlias.get(alias);
+        return one === undefined ? [] : [asRow(one, at + 1)];
+      });
+
       // Every problem is collected before the answer is built, because one bad
       // row withholds the whole table. The problems from `candidates` are only
       // added when `check` found none: the two report the same bad ref, and one
@@ -609,11 +638,8 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
           status: "resolved",
           profiles:
             input.profile === undefined ? table : table.filter((one) => one.name === input.profile),
-          models: kept.kept.map((one) => ({
-            name: one.alias,
-            model: one.ref,
-            priority: rankOf.get(one.alias) ?? 0,
-          })),
+          models: modelRows,
+          crosscheck: crosscheckRows,
           sources: [...found.sources],
           asked: input.profile === undefined ? [] : [input.profile],
           judge: judgement,
@@ -645,7 +671,6 @@ export type { CrosscheckOrder, Ordered, Ranked } from "./order";
 export { crosscheckOf, priorityOf } from "./order";
 export type { Choice } from "./policy";
 export { decide, oneStepUp, PLAY_SAFE } from "./policy";
-export { routingModelPreference } from "./preference";
 export { resolve as resolveProfile } from "./resolve";
 export type {
   Allowed,

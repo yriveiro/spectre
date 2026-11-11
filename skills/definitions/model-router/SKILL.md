@@ -127,9 +127,9 @@ invent is a cost nobody agreed to, and it is invisible in the result.
 
 The order itself is `priority` in `spectre.json`, never the order the `models`
 object happens to have. The crosscheck has its own `crosscheck` fallback list.
-Call `tools.spectre.routing_model_preference({})` when you need either order,
-their priority numbers, or the catalogue facts behind each model. The `models`
-array on a `resolved` answer is already in the allowlist order.
+Call `tools.spectre.routing({})` when you need either order: the `models` and
+`crosscheck` arrays on a `resolved` answer carry both, with the catalogue facts
+behind each model.
 
 ## What the answer carries
 

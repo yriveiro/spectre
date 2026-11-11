@@ -120,7 +120,19 @@ describe("tools.spectre.routing", () => {
       },
       excluded: [],
     });
-    expect(out.models).toEqual([{ name: "light", model: "acme/falcon-mini", priority: 1 }]);
+    expect(out.models).toEqual([
+      {
+        name: "light",
+        model: "acme/falcon-mini",
+        priority: 1,
+        family: undefined,
+        rungs: ["none", "high"],
+        cost: { input: 0, output: 0 },
+      },
+    ]);
+    expect(out.crosscheck).toMatchObject([
+      { name: "light", model: "acme/falcon-mini", priority: 1 },
+    ]);
     expect(out.sources).toEqual([`${scratch.projectDir()}/spectre.json`]);
     expect(out.asked).toEqual([]);
   });
@@ -340,6 +352,7 @@ describe("tools.spectre.routing", () => {
 
     expect(out.profiles[0]?.model.ref).toBe("acme/falcon-mini#high");
     expect(out.profiles[0]?.crosscheck?.ref).toBe("acme/falcon-third#high");
+    expect(out.crosscheck.map((one) => one.name)).toEqual(["third", "other"]);
   });
 
   test("a crosscheck alias that is not in the allowlist is a problem", async () => {

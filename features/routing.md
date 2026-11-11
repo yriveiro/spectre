@@ -92,10 +92,10 @@ the model reads.
   that is absent, disabled in the config, unreachable, or too slow must not
   stop a delegation. The work still gets done, with the agent's own judgement
   in the judge's place, and the report says which path ran.
-- **R10. The preference order is readable.** One tool returns every allowed
-  model with its priority, family, rungs and cost, and the crosscheck fallback
-  order, so a session can ask what the resolver will read without resolving a
-  profile.
+- **R10. The preference order is readable.** The routing answer carries every
+  allowed model with its priority, family, rungs and cost, and the crosscheck
+  fallback order, so a session can read what the resolver will consider from
+  one call.
 
 ## Platform facts
 
@@ -166,8 +166,8 @@ The tool reads the file from the directory the invoking session is in, on every
 call. A session that moves into a worktree reads that worktree's file on the
 next call, and a directory with no file is a repository that has not answered
 the setup question, whatever file sits in the directory the session left. The
-page follows the same rule. `tools.spectre.routing_model_preference` returns
-the order with the catalogue facts behind each model.
+page follows the same rule. `tools.spectre.routing` returns the allowlist order
+with the catalogue facts behind each model, and the crosscheck order.
 
 `crosscheck` is the second opinion, stated as a requirement rather than as a
 model id. The current ladder's third and fourth rungs were not preferences.
@@ -326,7 +326,6 @@ tools/definitions/routing/
   resolve.ts    the selection policy and the report.
   check.ts      validation against the catalogue and the order.
   host.ts       the session directory and the catalogue read.
-  preference.ts  the `routing_model_preference` tool.
   write.ts      writing the config, and the alias proposal.
   index.ts      the tool declarations, the setup outcome, the public barrel.
 
