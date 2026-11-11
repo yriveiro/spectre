@@ -255,6 +255,38 @@ describe("tools.spectre.routing", () => {
     );
     const out = at(await call(scratch.projectDir()), "problems");
     expect(out.problems).toContain("priority: states no priority order");
+    expect(out.models).toBeUndefined();
+    expect(out.crosscheck).toBeUndefined();
+  });
+
+  test("a profile problem does not hide a valid model and crosscheck order", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini", other: "acme/falcon-max" }),
+        crosscheck: ["other"],
+        profiles: { broken: { effort: "impossible", match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir(), {}, listOf(FAMILIES)), "problems");
+
+    expect(out.problems).toContain("profiles.broken.effort");
+    expect(out.models?.map((one) => one.name)).toEqual(["light", "other"]);
+    expect(out.crosscheck?.map((one) => one.name)).toEqual(["other"]);
+  });
+
+  test("an allowlist problem does not carry an order", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini", ghost: "acme/falcon-ghost" }),
+        crosscheck: ["light"],
+        profiles: { work: { effort: "high", match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir()), "problems");
+
+    expect(out.problems).toContain("models.ghost");
+    expect(out.models).toBeUndefined();
+    expect(out.crosscheck).toBeUndefined();
   });
 
   test("a model with no thinking control is excluded, not silently dropped", async () => {
@@ -365,6 +397,8 @@ describe("tools.spectre.routing", () => {
     );
     const out = at(await call(scratch.projectDir(), {}, listOf(FAMILIES)), "problems");
     expect(out.problems).toContain('crosscheck: "ghost" is not a model in models');
+    expect(out.models?.map((one) => one.name)).toEqual(["light"]);
+    expect(out.crosscheck).toBeUndefined();
   });
 
   test("an empty crosscheck list leaves a declared second opinion unavailable", async () => {

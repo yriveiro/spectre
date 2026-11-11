@@ -180,6 +180,13 @@ const Problems = Schema.Struct({
   status: Schema.Literals(["problems"]),
   /** Every problem, one per line, each naming the key that is wrong. */
   problems: Schema.String,
+  /**
+   * The allowlist order, when the models themselves are valid and a profile
+   * or agent is the only problem. The order is still what the resolver reads.
+   */
+  models: Schema.optional(Schema.Array(Row)),
+  /** The crosscheck fallback order, when the crosscheck list is valid too. */
+  crosscheck: Schema.optional(Schema.Array(Row)),
 });
 
 const Output = Schema.Union([Resolved, Setup, Declined, Problems]);
@@ -201,7 +208,7 @@ What comes back, by \`status\`:
 - \`resolved\`: \`profiles\` has one row per profile. \`model\` is the model to spend: \`ref\` is the full string to pass, rung included, and \`rung\` is the level it names. \`pinned\` says the allowlist named the variant, \`steppedUp\` says the ladder had no rung at the requirement and stepped up, \`below\` is the rung under it, and \`family\`, \`rungs\` and \`cost\` describe the model. \`crosscheck\` is the second opinion when the profile asks for one, and \`crosscheckProblem\` says why a declared second opinion found none. \`excluded\` lists the candidates that did not qualify, each with the highest rung it reaches. \`models\` is the allowlist in priority order, each row carrying its \`priority\`, \`family\`, \`rungs\` and \`cost\`; the answer's \`crosscheck\` array is the crosscheck fallback order. \`sources\` names the config files that were read, and \`asked\` the profile names you asked for. \`judge\` says which path chose the profile: \`used\` carries the \`profile\` it chose and the \`confidence\` when its arm reports one, and \`skipped\` carries the \`reason\` it gave none.
 - \`setup\`: the repository has no config. \`provider\`, \`models\` and \`profiles\` are the starter set on the table. Ask the user once, then call this tool again with \`setup: "accepted"\` or \`setup: "declined"\`. Do not write a config by hand.
 - \`declined\`: the user already said no. Do not ask again. Spawn without \`model\`, and the agent's own model runs the work.
-- \`problems\`: the config is wrong. Every mistake is on its own line and names the key. Quote it, say routing is misconfigured, and ask whether to continue on the current model. Do not substitute a model you remember.
+- \`problems\`: the config is wrong. Every mistake is on its own line and names the key. Quote it, say routing is misconfigured, and ask whether to continue on the current model. When the models and the priority order are themselves valid, the answer also carries \`models\` and \`crosscheck\` in the same shape as \`resolved\`, so you can read the order while you fix the profile. Do not substitute a model you remember.
 
 The allowlist is the whole vocabulary. \`priority\` states the order the resolver reads, and the page can reorder it. The \`crosscheck\` list states which models may serve a second opinion, in fallback order; a profile's crosscheck takes the first model in that list from another family. A ref that is not in \`models\` is not returned by this tool, and nothing checks the allowlist at the subagent boundary: a ref you write yourself is one nobody checked. Never write a model id from memory. If nothing here fits, say so and ask.
 
@@ -373,8 +380,17 @@ const ask = (
     return judged(verdict);
   });
 
-const failed = (lines: ReadonlyArray<string>): { output: Page } => ({
-  output: { status: "problems", problems: lines.join("\n") },
+const failed = (
+  lines: ReadonlyArray<string>,
+  models?: ReadonlyArray<typeof Row.Type>,
+  crosscheck?: ReadonlyArray<typeof Row.Type>,
+): { output: Page } => ({
+  output: {
+    status: "problems",
+    problems: lines.join("\n"),
+    ...(models === undefined ? {} : { models }),
+    ...(crosscheck === undefined ? {} : { crosscheck }),
+  },
 });
 
 type Starter = { readonly file?: File; readonly problem?: string };
@@ -524,10 +540,29 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
         return one === undefined ? [] : [asRow(one, at + 1)];
       });
 
+      // A profile or agent problem does not make the model order wrong. When
+      // every model and the priority order are valid, a problems answer still
+      // carries the order, so a reader can see what the resolver will read
+      // while fixing the profile.
+      const modelsValid =
+        found.problems.length === 0 &&
+        listed.problem === undefined &&
+        ordered.problems.length === 0 &&
+        checked.models.length === Object.keys(found.tables.models).length &&
+        kept.missing.length === 0 &&
+        allowed.length > 0;
+      const crosscheckValid = modelsValid && crosscheckOrder.problems.length === 0;
+      const failedWithOrder = (lines: ReadonlyArray<string>): { output: Page } =>
+        failed(
+          lines,
+          modelsValid ? modelRows : undefined,
+          crosscheckValid ? crosscheckRows : undefined,
+        );
+
       // Every problem is collected before the answer is built, because one bad
-      // row withholds the whole table. The problems from `candidates` are only
-      // added when `check` found none: the two report the same bad ref, and one
-      // line per mistake is the rule.
+      // row withholds the whole profile table. The problems from `candidates`
+      // are only added when `check` found none: the two report the same bad
+      // ref, and one line per mistake is the rule.
       const lines = [...found.problems];
       if (listed.problem !== undefined) lines.push(listed.problem);
       lines.push(...checked.problems);
@@ -535,7 +570,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
         lines.push(...kept.missing.map((one) => `models.${one.alias}: ${one.reason}`));
       if (lines.length === 0 && allowed.length === 0)
         lines.push(`${FILE_NAME}: models is empty, so no model routes`);
-      if (lines.length > 0) return failed(lines);
+      if (lines.length > 0) return failedWithOrder(lines);
 
       const shown: Array<typeof Profile.Type> = [];
       const profileProblems: Array<string> = [];
@@ -559,7 +594,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
         });
       }
       if (found.configuredProfiles || shown.length === 0) lines.push(...profileProblems);
-      if (lines.length > 0) return failed(lines);
+      if (lines.length > 0) return failedWithOrder(lines);
 
       // The judge is asked last, so a config with a problem never spends a
       // request.

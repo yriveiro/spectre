@@ -95,7 +95,8 @@ the model reads.
 - **R10. The preference order is readable.** The routing answer carries every
   allowed model with its priority, family, rungs and cost, and the crosscheck
   fallback order, so a session can read what the resolver will consider from
-  one call.
+  one call. A `problems` answer carries the same arrays when the models and the
+  priority are valid, so a broken profile does not hide the order.
 
 ## Platform facts
 

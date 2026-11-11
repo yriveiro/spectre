@@ -183,7 +183,9 @@ A profile row has one `model`, and that is the model to spend:
    user wants routing later, they remove the `setup` key from that file.
 4. **`status` is `problems`.** The config is there and wrong. `problems` lists every
    mistake, one per line, and each line names the key. Quote the lines, say routing
-   is misconfigured, then ask whether to continue on the current model. Do **not**
+   is misconfigured, then ask whether to continue on the current model. When the
+   models and the priority order are themselves valid, the answer also carries
+   `models` and `crosscheck`; read the order while you fix the profile. Do **not**
    fall back to a model you remember, and do not retry with a different string.
 
 `model` is optional on the `subagent` tool, so every path spawns something.
