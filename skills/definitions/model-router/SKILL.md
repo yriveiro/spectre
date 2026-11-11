@@ -87,6 +87,19 @@ The order is `priority` in the config, never the order the `models` object happe
 
 `model` is optional on the `subagent` tool, so every path spawns something.
 
+## A crosscheck is a review, not a second answer
+
+When the profile row carries a `crosscheck`, the config asks for a second opinion. Run the primary first. Then run the crosscheck as a reviewer, not as a second attempt at the task.
+
+1. Spawn the primary on `profile.model.ref`, and keep the child `sessionID`.
+2. Spawn the crosscheck on `profile.crosscheck.ref` with the task and the primary's result. Ask for concrete defects with evidence, or `no challenge`.
+3. You are the judge. Accept a challenge only when the evidence supports it. A different opinion is not a challenge.
+4. If you accept a challenge, continue the primary with its `sessionID` and the accepted challenges. Ask for a revised result and what changed. Do not run the whole task again.
+5. If you accept no challenge, the primary result stands.
+6. Say the outcome in one line: the profile, both refs, and the challenges you accepted.
+
+The `judge` field in the routing answer is the profile classifier. It does not review results. You are the judge here. `references/routing-flow.md` has the reviewer prompt and the full path.
+
 ## Split the task, do not only delegate
 
 A task that spans several kinds of work is usually three tasks. Evaluate each part on its own, then route each part separately, in parallel where they do not depend on each other. One call gives you every row you need:
@@ -108,4 +121,5 @@ Load only what the task needs.
 | --- | --- |
 | `references/answer-shape.md` | You need the exact fields on a profile row, a model row, the crosscheck, or a `problems` answer. |
 | `references/subagent-call.md` | You are about to call `subagent`, or you need the model precedence and the agent rules. |
+| `references/routing-flow.md` | You need the full path for a scenario, the reviewer prompt, or the crosscheck review loop. |
 | `references/worked-example.md` | You want one full run from the task statement to the spoken line. |

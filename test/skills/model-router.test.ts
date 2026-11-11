@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 const SKILL = "skills/definitions/model-router";
 
-const references = ["answer-shape.md", "subagent-call.md", "worked-example.md"];
+const references = ["answer-shape.md", "subagent-call.md", "routing-flow.md", "worked-example.md"];
 
 describe("model-router ships the body it promises", () => {
   test("the body names the four steps and the routing tool", async () => {
@@ -33,5 +33,15 @@ describe("model-router ships the body it promises", () => {
       expect(body).toContain(status);
     expect(body).toContain("priority");
     expect(body).toContain("crosscheck");
+  });
+
+  test("the body states the crosscheck review and the flow page draws it", async () => {
+    const body = await Bun.file(`${SKILL}/SKILL.md`).text();
+    expect(body).toContain("## A crosscheck is a review, not a second answer");
+    expect(body).toContain("You are the judge");
+    const flow = await Bun.file(`${SKILL}/references/routing-flow.md`).text();
+    expect(flow).toContain("flowchart TD");
+    expect(flow).toContain("Spawn the crosscheck");
+    expect(flow).toContain("The judge accepts a challenge?");
   });
 });

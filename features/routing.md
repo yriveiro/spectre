@@ -97,6 +97,13 @@ the model reads.
   fallback order, so a session can read what the resolver will consider from
   one call. A `problems` answer carries the same arrays when the models and the
   priority are valid, so a broken profile does not hide the order.
+- **R11. A crosscheck is a review.** A profile that carries a crosscheck runs
+  the primary, then the crosscheck on the result. The reviewer returns concrete
+  challenges with evidence. The session that routed the work is the judge. It
+  accepts a challenge only when the evidence supports it, and it sends accepted
+  challenges back to the primary for one revision. The routing `judge` names a
+  profile and does not review results. The path and the reviewer prompt are in
+  `skills/definitions/model-router/references/routing-flow.md`.
 
 ## Platform facts
 
