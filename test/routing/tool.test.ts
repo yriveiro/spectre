@@ -64,6 +64,11 @@ const FAMILIES: ReadonlyArray<Thin> = [
   { providerID: "acme", id: "falcon-max", family: "raptor", variants: [{ id: "high" }] },
 ];
 
+const THREE_FAMILIES: ReadonlyArray<Thin> = [
+  ...FAMILIES,
+  { providerID: "acme", id: "falcon-third", family: "third", variants: [{ id: "high" }] },
+];
+
 const good = JSON.stringify({
   ...allow({ light: "acme/falcon-mini" }),
   profiles: { explorer: { effort: "high", match: "one named file", why: "w" } },
@@ -315,8 +320,51 @@ describe("tools.spectre.routing", () => {
 
     expect(out.profiles[0]?.crosscheck).toBeUndefined();
     expect(out.profiles[0]?.crosscheckProblem).toContain(
-      "found no allowed model from another family",
+      "found no model in the crosscheck list from another family",
     );
+  });
+
+  test("the crosscheck list wins over the allowlist order", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({
+          light: "acme/falcon-mini",
+          other: "acme/falcon-max",
+          third: "acme/falcon-third",
+        }),
+        crosscheck: ["third", "other"],
+        profiles: { judged: { effort: "high", crosscheck: { effort: "high" }, match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir(), {}, listOf(THREE_FAMILIES)), "resolved");
+
+    expect(out.profiles[0]?.model.ref).toBe("acme/falcon-mini#high");
+    expect(out.profiles[0]?.crosscheck?.ref).toBe("acme/falcon-third#high");
+  });
+
+  test("a crosscheck alias that is not in the allowlist is a problem", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini" }),
+        crosscheck: ["ghost"],
+        profiles: { judged: { effort: "high", crosscheck: { effort: "high" }, match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir(), {}, listOf(FAMILIES)), "problems");
+    expect(out.problems).toContain('crosscheck: "ghost" is not a model in models');
+  });
+
+  test("an empty crosscheck list leaves a declared second opinion unavailable", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini", other: "acme/falcon-max" }),
+        crosscheck: [],
+        profiles: { judged: { effort: "high", crosscheck: { effort: "high" }, match: "w" } },
+      }),
+    );
+    const out = at(await call(scratch.projectDir(), {}, listOf(FAMILIES)), "resolved");
+    expect(out.profiles[0]?.crosscheck).toBeUndefined();
+    expect(out.profiles[0]?.crosscheckProblem).toContain("crosscheck list is empty");
   });
 
   test("a ref the catalogue does not have is a problem that names its key", async () => {

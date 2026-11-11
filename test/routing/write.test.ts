@@ -80,6 +80,21 @@ describe("serialise", () => {
     expect(Object.keys(JSON.parse(serialise(ranked)))).toEqual(["models", "priority"]);
   });
 
+  test("crosscheck is written between priority and profiles", () => {
+    const ranked: File = {
+      models: { glm: "opencode-go/glm-5.3-flash" },
+      priority: ["glm"],
+      crosscheck: ["glm"],
+      profiles: {},
+    };
+    expect(Object.keys(JSON.parse(serialise(ranked)))).toEqual([
+      "models",
+      "priority",
+      "crosscheck",
+      "profiles",
+    ]);
+  });
+
   test("a null, which removes an inherited entry, is written and not dropped", () => {
     const removal: File = { models: { glm: null } };
     expect(JSON.parse(serialise(removal)).models).toEqual({ glm: null });

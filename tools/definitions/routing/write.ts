@@ -28,6 +28,7 @@ export const serialise = (config: File): string => {
     "provider",
     "models",
     "priority",
+    "crosscheck",
     "profiles",
     "judge",
     "dictionary",

@@ -80,9 +80,11 @@ the model reads.
 - **R7. The terminal can configure it.** A page lists the profiles, the
   allowlist and the live catalogue, and every choice is a dialog over the
   catalogue. The allowlist tab shows each model's priority and moves a model
-  up or down. A profile row carries its crosscheck as a control: off, the
+  up or down. The crosscheck tab lists the allowlist models with a toggle and
+  the same reorder controls. The enabled models, in order, are the crosscheck
+  fallback. A profile row carries its crosscheck as a control: off, the
   profile's own effort, or a named effort. A configured crosscheck that no
-  allowed family can serve shows its reason beside the row.
+  model in the fallback can serve shows its reason beside the row.
 - **R8. The resolver reports what it chose and what it could not reach.** A
   profile that asks for an effort no allowed model reaches is a problem, and
   a model that had to step up to meet one says so.
@@ -91,8 +93,9 @@ the model reads.
   stop a delegation. The work still gets done, with the agent's own judgement
   in the judge's place, and the report says which path ran.
 - **R10. The preference order is readable.** One tool returns every allowed
-  model with its priority, family, rungs and cost, so a session can ask what
-  the order is without resolving a profile.
+  model with its priority, family, rungs and cost, and the crosscheck fallback
+  order, so a session can ask what the resolver will read without resolving a
+  profile.
 
 ## Platform facts
 
@@ -140,6 +143,7 @@ can do, and the resolver has to say which part.
     "minimax":        "opencode-go/minimax-m3.1-flash-free"
   },
   "priority": ["glm-flash", "deepseek-flash", "muse", "minimax"],
+  "crosscheck": ["glm-flash", "deepseek-flash", "muse", "minimax"],
   "profiles": {
     "mechanical": { "effort": "low", "match": "Use when …", "why": "…" },
     "search":     { "effort": "medium", "match": "Use when …", "why": "…" },
@@ -167,7 +171,9 @@ the order with the catalogue facts behind each model.
 
 `crosscheck` is the second opinion, stated as a requirement rather than as a
 model id. The current ladder's third and fourth rungs were not preferences.
-They were a rule: a second family, taken in the priority order.
+They were a rule: a second family, taken from the crosscheck fallback list.
+That list names the allowlist models that may serve a second opinion, in the
+order the resolver tries them. A model that is absent is off.
 
 ### Field rules
 
@@ -176,6 +182,7 @@ They were a rule: a second family, taken in the priority order.
 | `models` | An alias and a ref. The alias is `^[a-z0-9][a-z0-9-]*$`. The object order is not read. |
 | `models[*]` | `"providerID/modelID"`. A variant may be pinned here; it is then the only rung the model is asked for. |
 | `priority` | Every alias in `models`, once, in the order the resolver reads. The first entry that fits is spent. |
+| `crosscheck` | An optional subset of `models`, once each, in fallback order. A model that is absent cannot serve a second opinion. |
 | `profiles[*].effort` | An effort name from the catalogue. Not a closed enum: the range is read per call. |
 | `profiles[*].model` | Optional. A pin. It wins over `effort`. |
 | `profiles[*].crosscheck.effort` | Optional. The effort the second opinion is asked for. |
@@ -229,8 +236,10 @@ resolve(profile, allowlist, catalogue):
                   (exact match only for a name outside the known order;
                    a model with no ladder qualifies only for "none")
   3. primary    ← the FIRST candidate that qualifies        ← the priority order
-  4. crosscheck ← the first candidate whose catalogue family differs from the
-                  primary's, in the same priority order
+  4. crosscheck ← the first candidate in `crosscheck` order whose catalogue
+                  family differs from the primary's and meets the crosscheck
+                  effort; an absent list reads the whole allowlist, an empty
+                  list has no candidate
   5. report     ← the ref, the ladder, the gap when there was one, the cost
 ```
 
@@ -389,6 +398,8 @@ opposite loses that argument. A hook would end the argument.
 - **One allowlist order, and the file states it in `priority`.** The page can
   reorder that list. Which family leads is the user's policy call, and the
   order is explicit rather than the order in which the user added the models.
+  A separate `crosscheck` list names the models that may serve a second
+  opinion, in its own fallback order.
 - **The tool withholds the whole table on any problem.** One good row is lost
   to a broken one, bought as never routing onto a broken row.
 

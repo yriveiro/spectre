@@ -575,6 +575,34 @@ describe("resolve: the crosscheck", () => {
     expect(found.resolution?.crosscheck?.costInput).toBe(0.15);
   });
 
+  test("the crosscheck follows its own fallback list, not the allowlist order", () => {
+    const found = resolve(
+      "worker",
+      { effort: "high", crosscheck: { effort: "high" } },
+      kept([
+        allow("glm", "opencode-go/glm-5.3-flash"),
+        allow("deep", "opencode-go/deepseek-v4.1-flash"),
+        allow("free", "opencode-go/minimax-m3.1-flash-free"),
+      ]),
+      "spectre",
+      ["free", "deep"],
+    );
+    expect(found.resolution?.primary.alias).toBe("glm");
+    expect(found.resolution?.crosscheck?.alias).toBe("free");
+  });
+
+  test("an empty crosscheck list leaves the second opinion unavailable", () => {
+    const found = resolve(
+      "worker",
+      { effort: "high", crosscheck: { effort: "high" } },
+      kept([allow("glm", "opencode-go/glm-5.3-flash")]),
+      "spectre",
+      [],
+    );
+    expect(found.resolution?.crosscheck).toBeUndefined();
+    expect(found.resolution?.crosscheckProblem).toContain("crosscheck list is empty");
+  });
+
   test("the crosscheck reads the whole allowlist, not the candidates after the primary", () => {
     const found = resolve(
       "thinking",

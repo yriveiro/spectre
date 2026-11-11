@@ -5,7 +5,7 @@ import { candidates } from "./catalogue";
 import { hostCatalogue, sessionDirectory } from "./host";
 import { load } from "./load";
 import { FILE_NAME } from "./locate";
-import { priorityOf } from "./order";
+import { crosscheckOf, priorityOf } from "./order";
 
 /**
  * The model preference order, as one answer.
@@ -30,6 +30,7 @@ const Row = Schema.Struct({
 const Resolved = Schema.Struct({
   status: Schema.Literals(["resolved"]),
   models: Schema.Array(Row),
+  crosscheck: Schema.Array(Row),
   sources: Schema.Array(Schema.String),
 });
 
@@ -49,13 +50,13 @@ const failed = (lines: ReadonlyArray<string>): { output: Page } => ({
   output: { status: "problems", problems: lines.join("\n") },
 });
 
-const DESCRIPTION = `Return the model preference order: every model in the allowlist, the priority it holds, and the catalogue facts behind it.
+const DESCRIPTION = `Return the model preference order: every model in the allowlist, the priority it holds, the crosscheck fallback order, and the catalogue facts behind each model.
 
-The resolver spends the first model in this order that meets a profile's requirement. The order is the \`priority\` array in \`spectre.json\`, never the order the \`models\` object happens to have in the file. This tool is read-only; the routing page writes the order.
+The resolver spends the first model in this order that meets a profile's requirement. The order is the \`priority\` array in \`spectre.json\`, never the order the \`models\` object happens to have in the file. A profile's crosscheck takes the first model in \`crosscheck\` whose family differs from the primary's. This tool is read-only; the routing page writes both orders.
 
-  { status: "resolved", models: [{ priority, alias, ref, family, rungs, cost }], sources }
+  { status: "resolved", models: [{ priority, alias, ref, family, rungs, cost }], crosscheck: [...], sources }
 
-A model the config lists but the catalogue cannot see, a priority that names no model, a model missing from \`priority\`, or a duplicate is a \`problems\` answer. Read \`sources\` to see which files were read.`;
+A model the config lists but the catalogue cannot see, a priority that names no model, a model missing from \`priority\`, a crosscheck alias that names no model, or a duplicate is a \`problems\` answer. Read \`sources\` to see which files were read.`;
 
 export const routingModelPreference = (
   ctx: Plugin.Context,
@@ -88,6 +89,13 @@ export const routingModelPreference = (
       if (ordered.ranked.length === 0)
         return failed([`${FILE_NAME}: models is empty, so there is no model preference`]);
 
+      const crosscheck = crosscheckOf(
+        found.tables.models,
+        found.tables.crosscheck,
+        ordered.ranked.map((one) => one.alias),
+      );
+      if (crosscheck.problems.length > 0) return failed(crosscheck.problems);
+
       const listed = yield* hostCatalogue(ctx);
       const lines: Array<string> = [];
       if (listed.problem !== undefined) lines.push(listed.problem);
@@ -100,6 +108,23 @@ export const routingModelPreference = (
         lines.push(...kept.missing.map((one) => `models.${one.alias}: ${one.reason}`));
       if (lines.length > 0) return failed(lines);
 
+      const byAlias = new Map(kept.kept.map((one) => [one.alias, one]));
+      const crossRows = crosscheck.listed.flatMap((alias, at) => {
+        const one = byAlias.get(alias);
+        return one === undefined
+          ? []
+          : [
+              {
+                priority: at + 1,
+                alias: one.alias,
+                ref: one.ref,
+                family: one.model.family,
+                rungs: [...one.model.rungs],
+                cost: { input: one.model.costInput, output: one.model.costOutput },
+              },
+            ];
+      });
+
       return {
         output: {
           status: "resolved" as const,
@@ -111,6 +136,7 @@ export const routingModelPreference = (
             rungs: [...one.model.rungs],
             cost: { input: one.model.costInput, output: one.model.costOutput },
           })),
+          crosscheck: crossRows,
           sources: [...found.sources],
         },
       };

@@ -74,3 +74,46 @@ export const priorityOf = (
 
   return { ranked, problems };
 };
+
+export type CrosscheckOrder = {
+  /** The aliases that may serve a crosscheck, in fallback order. */
+  readonly listed: ReadonlyArray<string>;
+  readonly problems: ReadonlyArray<string>;
+};
+
+/**
+ * The crosscheck fallback order.
+ *
+ * The list is a subset of the allowlist, so a model that is absent is off
+ * rather than missing. Undefined keeps the old behaviour: every allowed model
+ * is a candidate, in allowlist priority order. An empty list is a decision:
+ * no model serves a second opinion.
+ */
+export const crosscheckOf = (
+  models: Readonly<Record<string, string>>,
+  crosscheck: ReadonlyArray<string> | undefined,
+  fallback: ReadonlyArray<string>,
+): CrosscheckOrder => {
+  if (crosscheck === undefined) return { listed: fallback, problems: [] };
+
+  const problems: Array<string> = [];
+  const listed: Array<string> = [];
+  const seen = new Set<string>();
+
+  for (const alias of crosscheck) {
+    if (!Object.hasOwn(models, alias)) {
+      problems.push(
+        `crosscheck: "${alias}" is not a model in models. Names: ${names(models).join(", ") || "none"}`,
+      );
+      continue;
+    }
+    if (seen.has(alias)) {
+      problems.push(`crosscheck: "${alias}" is listed twice.`);
+      continue;
+    }
+    seen.add(alias);
+    listed.push(alias);
+  }
+
+  return { listed, problems };
+};

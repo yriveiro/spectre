@@ -194,7 +194,7 @@ What comes back, by \`status\`:
 - \`declined\`: the user already said no. Do not ask again. Spawn without \`model\`, and the agent's own model runs the work.
 - \`problems\`: the config is wrong. Every mistake is on its own line and names the key. Quote it, say routing is misconfigured, and ask whether to continue on the current model. Do not substitute a model you remember.
 
-The allowlist is the whole vocabulary. \`priority\` states the order the resolver reads, and the page can reorder it. A ref that is not in \`models\` is not returned by this tool, and nothing checks the allowlist at the subagent boundary: a ref you write yourself is one nobody checked. Never write a model id from memory. If nothing here fits, say so and ask.
+The allowlist is the whole vocabulary. \`priority\` states the order the resolver reads, and the page can reorder it. The \`crosscheck\` list states which models may serve a second opinion, in fallback order; a profile's crosscheck takes the first model in that list from another family. A ref that is not in \`models\` is not returned by this tool, and nothing checks the allowlist at the subagent boundary: a ref you write yourself is one nobody checked. Never write a model id from memory. If nothing here fits, say so and ask.
 
 A profile states what a task needs in \`effort\` and when to reach for it in \`match\`. The resolver reads the \`priority\` order and the live catalogue. It never reads \`why\`, which is the rationale for the human.`;
 
@@ -511,7 +511,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
       const shown: Array<typeof Profile.Type> = [];
       const profileProblems: Array<string> = [];
       for (const [name, entry] of Object.entries(found.tables.profiles)) {
-        const one = resolve(name, entry, kept.kept, DEFAULT_AGENT);
+        const one = resolve(name, entry, kept.kept, DEFAULT_AGENT, found.tables.crosscheck);
         if (one.problem !== undefined) {
           profileProblems.push(one.problem);
           continue;
@@ -565,6 +565,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
             { ...entry, effort: choice.effort },
             kept.kept,
             DEFAULT_AGENT,
+            found.tables.crosscheck,
           );
           if (one.problem === undefined && one.resolution !== undefined) {
             const row = {
@@ -640,8 +641,8 @@ export type { Description, Judge, Verdict } from "./judge";
 export { lexicalJudge, rank, surface } from "./judge";
 export { load, loadProject } from "./load";
 export { FILE_NAME, LEGACY_NAME, projectPath } from "./locate";
-export type { Ordered, Ranked } from "./order";
-export { priorityOf } from "./order";
+export type { CrosscheckOrder, Ordered, Ranked } from "./order";
+export { crosscheckOf, priorityOf } from "./order";
 export type { Choice } from "./policy";
 export { decide, oneStepUp, PLAY_SAFE } from "./policy";
 export { routingModelPreference } from "./preference";

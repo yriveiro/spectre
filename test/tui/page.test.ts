@@ -79,6 +79,7 @@ const draft: Draft = {
     { alias: "muse", ref: "acme/muse-spark-1.3", priority: 1 },
     { alias: "glm-flash", ref: "acme/glm-5.3-flash", priority: 2 },
   ],
+  crosscheck: ["muse", "glm-flash"],
   profiles: [
     {
       name: "worker",
@@ -476,8 +477,8 @@ describe("the modal draws what the session would spend", () => {
     expect(previewDrawn).toContain('"provider": "acme"');
     expect(previewDrawn).toContain('"models": {');
     expect(previewDrawn).toContain('"muse": "acme/muse-spark-1.3"');
-    expect(previewDrawn).toContain('"profiles": {');
-    expect(previewDrawn).toContain('"worker": {');
+    expect(previewDrawn).toContain('"priority": [');
+    expect(previewDrawn).toContain('"crosscheck": [');
     await previewSetup.dispose();
   });
 
@@ -524,6 +525,11 @@ describe("the modal draws what the session would spend", () => {
     };
     const cleaned = usableDraft(dirtyDraft, mixedCatalog);
     expect(cleaned.models).toEqual(draft.models);
+    expect(cleaned.crosscheck).toEqual(draft.crosscheck);
+
+    const dirtyCrosscheck: Draft = { ...draft, crosscheck: ["muse", "foreign"] };
+    const crosscheckCleaned = usableDraft(dirtyCrosscheck, mixedCatalog);
+    expect(crosscheckCleaned.crosscheck).toEqual(["muse"]);
   });
 });
 
@@ -610,6 +616,60 @@ describe("the page changes the draft and writes it only when asked", () => {
       ["glm-flash", 1],
       ["muse", 2],
     ]);
+    await setup.dispose();
+  });
+
+  test("the Crosscheck tab toggles a model with Space and the badge", async () => {
+    const changes: Array<Draft> = [];
+    const { setup } = await frame({
+      tab: "crosscheck",
+      onChange: (next) => {
+        changes.push(next);
+      },
+    });
+    expect(setup.captureCharFrame()).toContain("Crosscheck (2)");
+
+    setup.mockInput.pressKey(" ");
+    await setup.flush();
+    expect(changes[0]?.crosscheck).toEqual(["glm-flash"]);
+    await setup.dispose();
+
+    const partial: Draft = { ...draft, crosscheck: ["muse"] };
+    const enabled: Array<Draft> = [];
+    const off = await frame({
+      tab: "crosscheck",
+      draft: partial,
+      onChange: (next) => {
+        enabled.push(next);
+      },
+    });
+    const lines = off.setup.captureCharFrame().split("\n");
+    const row = lines.findIndex((one) => one.includes("glm-flash") && one.includes("[ ] Off"));
+    expect(row).toBeGreaterThan(-1);
+    const line = lines[row];
+    if (line === undefined) throw new Error("the frame has no disabled glm-flash row");
+    await off.setup.mockMouse.click(line.indexOf("[ ] Off"), row);
+    await off.setup.flush();
+    expect(enabled[0]?.crosscheck).toEqual(["muse", "glm-flash"]);
+    await off.setup.dispose();
+  });
+
+  test("the Crosscheck tab moves an enabled model up in fallback order", async () => {
+    const changes: Array<Draft> = [];
+    const { setup } = await frame({
+      tab: "crosscheck",
+      onChange: (next) => {
+        changes.push(next);
+      },
+    });
+    const lines = setup.captureCharFrame().split("\n");
+    const row = lines.findIndex((one) => one.includes("glm-flash") && one.includes("↑"));
+    expect(row).toBeGreaterThan(-1);
+    const line = lines[row];
+    if (line === undefined) throw new Error("the frame has no glm-flash row");
+    await setup.mockMouse.click(line.indexOf("↑"), row);
+    await setup.flush();
+    expect(changes[0]?.crosscheck).toEqual(["glm-flash", "muse"]);
     await setup.dispose();
   });
 
@@ -1027,12 +1087,14 @@ describe("the page changes the draft and writes it only when asked", () => {
             ...spent,
             crosscheck: undefined,
             crosscheckProblem:
-              'the crosscheck at "max" found no allowed model from another family.',
+              'the crosscheck at "max" found no model in the crosscheck list from another family.',
           },
         },
       ],
     });
-    expect(setup.captureCharFrame()).toContain("found no allowed model from another family");
+    expect(setup.captureCharFrame()).toContain(
+      "found no model in the crosscheck list from another family",
+    );
     await setup.dispose();
   });
 

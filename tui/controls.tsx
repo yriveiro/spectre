@@ -64,6 +64,16 @@ export type Edit =
       readonly delta: -1 | 1;
     }
   | {
+      readonly kind: "toggle-crosscheck";
+      readonly alias: string;
+      readonly enabled?: boolean | undefined;
+    }
+  | {
+      readonly kind: "move-crosscheck";
+      readonly alias: string;
+      readonly delta: -1 | 1;
+    }
+  | {
       readonly kind: "toggle-profile";
       readonly profile: string;
       readonly enabled?: boolean | undefined;
@@ -164,6 +174,7 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
       ...draft,
       provider: edit.provider,
       models: models.map((one, index) => ({ ...one, priority: index + 1 })),
+      crosscheck: draft.crosscheck.filter((alias) => held.has(alias)),
       profiles: draft.profiles.map((one) =>
         one.pinned !== undefined && !held.has(one.pinned) ? { ...one, pinned: undefined } : one,
       ),
@@ -175,6 +186,7 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
       models: draft.models
         .filter((one) => one.alias !== edit.alias)
         .map((one, index) => ({ ...one, priority: index + 1 })),
+      crosscheck: draft.crosscheck.filter((alias) => alias !== edit.alias),
       profiles: draft.profiles.map((one) =>
         one.pinned === edit.alias ? { ...one, pinned: undefined } : one,
       ),
@@ -193,12 +205,36 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
       models: models.map((one, index) => ({ ...one, priority: index + 1 })),
     };
   }
+  if (edit.kind === "toggle-crosscheck") {
+    const on = draft.crosscheck.includes(edit.alias);
+    const enabled = edit.enabled ?? !on;
+    if (enabled === on) return draft;
+    return {
+      ...draft,
+      crosscheck: enabled
+        ? [...draft.crosscheck, edit.alias]
+        : draft.crosscheck.filter((alias) => alias !== edit.alias),
+    };
+  }
+  if (edit.kind === "move-crosscheck") {
+    const at = draft.crosscheck.indexOf(edit.alias);
+    const to = at + edit.delta;
+    if (at === -1 || to < 0 || to >= draft.crosscheck.length) return draft;
+    const crosscheck = [...draft.crosscheck];
+    const [moved] = crosscheck.splice(at, 1);
+    if (moved === undefined) return draft;
+    crosscheck.splice(to, 0, moved);
+    return { ...draft, crosscheck };
+  }
   return {
     ...draft,
     models: [
       ...draft.models,
       { alias: edit.alias, ref: edit.ref, priority: draft.models.length + 1 },
     ],
+    crosscheck: draft.crosscheck.includes(edit.alias)
+      ? draft.crosscheck
+      : [...draft.crosscheck, edit.alias],
   };
 };
 
@@ -290,13 +326,20 @@ export const usableDraft = (draft: Draft, catalogue: ReadonlyArray<Model>): Draf
     return true;
   });
   const held = new Set(models.map((one) => one.alias));
+  const crosscheck = draft.crosscheck.filter((alias) => held.has(alias));
   const hasInvalidPin =
     catalogue.length > 0 &&
     draft.profiles.some((one) => one.pinned !== undefined && !held.has(one.pinned));
-  if (models.length === draft.models.length && !hasInvalidPin) return draft;
+  if (
+    models.length === draft.models.length &&
+    crosscheck.length === draft.crosscheck.length &&
+    !hasInvalidPin
+  )
+    return draft;
   return {
     ...draft,
     models,
+    crosscheck,
     profiles: draft.profiles.map((one) =>
       one.pinned !== undefined && !held.has(one.pinned) ? { ...one, pinned: undefined } : one,
     ),

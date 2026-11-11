@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { priorityOf } from "../../tools/definitions/routing/order";
+import { crosscheckOf, priorityOf } from "../../tools/definitions/routing/order";
 
 const models = {
   first: "opencode-go/deepseek-v4.1-flash",
@@ -47,6 +47,40 @@ describe("priorityOf", () => {
   test("an empty allowlist asks for no priority", () => {
     const found = priorityOf({}, undefined);
     expect(found.ranked).toEqual([]);
+    expect(found.problems).toEqual([]);
+  });
+});
+
+describe("crosscheckOf", () => {
+  test("a file with no crosscheck list falls back to the priority order", () => {
+    const found = crosscheckOf(models, undefined, ["second", "first"]);
+    expect(found.listed).toEqual(["second", "first"]);
+    expect(found.problems).toEqual([]);
+  });
+
+  test("the crosscheck list keeps its own order", () => {
+    const found = crosscheckOf(models, ["first", "second"], ["second", "first"]);
+    expect(found.listed).toEqual(["first", "second"]);
+    expect(found.problems).toEqual([]);
+  });
+
+  test("a model that is not in the allowlist is a problem", () => {
+    const found = crosscheckOf(models, ["second", "ghost"], ["first", "second"]);
+    expect(found.listed).toEqual(["second"]);
+    expect(found.problems).toContain(
+      'crosscheck: "ghost" is not a model in models. Names: first, second',
+    );
+  });
+
+  test("a repeated name is a problem and is listed once", () => {
+    const found = crosscheckOf(models, ["second", "second"], ["first", "second"]);
+    expect(found.listed).toEqual(["second"]);
+    expect(found.problems).toContain('crosscheck: "second" is listed twice.');
+  });
+
+  test("an empty list is a decision, not a fallback", () => {
+    const found = crosscheckOf(models, [], ["first", "second"]);
+    expect(found.listed).toEqual([]);
     expect(found.problems).toEqual([]);
   });
 });

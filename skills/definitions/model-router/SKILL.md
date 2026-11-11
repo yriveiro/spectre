@@ -126,9 +126,10 @@ This matters more than it sounds. You are choosing what the work costs. A model 
 invent is a cost nobody agreed to, and it is invisible in the result.
 
 The order itself is `priority` in `spectre.json`, never the order the `models`
-object happens to have. Call `tools.spectre.routing_model_preference({})` when
-you need the order, its priority numbers, or the catalogue facts behind each
-model. The `models` array on a `resolved` answer is already in that order.
+object happens to have. The crosscheck has its own `crosscheck` fallback list.
+Call `tools.spectre.routing_model_preference({})` when you need either order,
+their priority numbers, or the catalogue facts behind each model. The `models`
+array on a `resolved` answer is already in the allowlist order.
 
 ## What the answer carries
 
@@ -151,12 +152,13 @@ A profile row has one `model`, and that is the model to spend:
   had no rung at `effort` and took `model.rung` instead, and `model.below` is the
   rung under the one used. Say it when you explain the choice.
 - `crosscheck` is the second opinion the profile asked for: the first model in
-  `priority` whose catalogue family differs from the primary's, at the
-  crosscheck's effort, or the profile's effort when it states none. Its `ref`
-  is a second string to spend. Use it when the task is a decision and a second
-  family is worth the spend. Run it beside the first, not instead of it.
-- `crosscheckProblem` means the profile asked for a second opinion and no allowed
-  model from another family could give one. Say it. Do not invent a second model.
+  the `crosscheck` list whose catalogue family differs from the primary's, at
+  the crosscheck's effort, or the profile's effort when it states none. Its
+  `ref` is a second string to spend. Use it when the task is a decision and a
+  second family is worth the spend. Run it beside the first, not instead of it.
+- `crosscheckProblem` means the profile asked for a second opinion and the
+  `crosscheck` list had no model from another family that could serve it, or
+  the list was empty. Say it. Do not invent a second model.
 - `excluded` lists the candidates that did not qualify, with the highest rung each
   one reaches. It explains why a model you expected is not here. It is not a menu
   to fall back to.

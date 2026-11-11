@@ -90,6 +90,12 @@ export const Config = Schema.Struct({
    * list, never the order the `models` object happens to have in the file.
    */
   priority: Schema.optional(Schema.Array(Schema.String)),
+  /**
+   * The models that may serve as a crosscheck, in fallback order. Every name
+   * is an alias in `models`. A model that is absent is off; an empty list
+   * means no second opinion is available.
+   */
+  crosscheck: Schema.optional(Schema.Array(Schema.String)),
   profiles: Schema.optional(Schema.Record(Schema.String, Schema.Union([Profile, Schema.Null]))),
   /**
    * The judge, when the file asks for one. `null` says no, and it removes a
@@ -131,6 +137,8 @@ export type Tables = {
   readonly models: Readonly<Record<string, string>>;
   /** The allowlist in priority order, or absent when the file states none. */
   readonly priority: ReadonlyArray<string> | undefined;
+  /** The models that may serve as a crosscheck, in fallback order. */
+  readonly crosscheck: ReadonlyArray<string> | undefined;
   readonly profiles: Readonly<Record<string, Profile>>;
   /** The configured path, resolved against the config file that set it, or absent. */
   readonly dictionary?: { readonly path: string; readonly from: string };

@@ -4,6 +4,7 @@ import type { Model as Schema } from "@opencode/schema/model";
 import { Effect } from "effect";
 import {
   candidates,
+  crosscheckOf,
   DEFAULT_AGENT,
   DEFAULT_PROFILES,
   FILE_NAME,
@@ -60,6 +61,8 @@ export type Draft = {
     readonly ref: string;
     readonly priority: number;
   }>;
+  /** The models that may serve a crosscheck, in fallback order. */
+  readonly crosscheck: ReadonlyArray<string>;
   readonly profiles: ReadonlyArray<Profile>;
   readonly judge?: JudgeConfig | undefined;
 };
@@ -170,16 +173,22 @@ export const read = async (directory: string): Promise<Draft> => {
     ref: one.ref,
     priority: one.priority,
   }));
+  const crosscheck = crosscheckOf(
+    found.tables.models,
+    found.tables.crosscheck,
+    models.map((one) => one.alias),
+  );
   const held = new Set(models.map((one) => one.alias));
 
   if (!found.configuredProfiles) {
     return {
       directory,
       source,
-      problems: [...found.problems, ...ordered.problems],
+      problems: [...found.problems, ...ordered.problems, ...crosscheck.problems],
       provider: found.tables.provider,
       judge: found.tables.judge,
       models,
+      crosscheck: crosscheck.listed,
       profiles: defaultProfiles(true),
     };
   }
@@ -203,10 +212,11 @@ export const read = async (directory: string): Promise<Draft> => {
   return {
     directory,
     source,
-    problems: [...found.problems, ...ordered.problems],
+    problems: [...found.problems, ...ordered.problems, ...crosscheck.problems],
     provider: found.tables.provider,
     judge: found.tables.judge,
     models,
+    crosscheck: crosscheck.listed,
     profiles: [...fromFile, ...disabledDefaults],
   };
 };
@@ -264,6 +274,7 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
       },
       kept.kept,
       DEFAULT_AGENT,
+      draft.crosscheck,
     );
 
     if (found.resolution === undefined)
@@ -352,6 +363,7 @@ export const crosscheckOptionsFor = (
       },
       kept,
       DEFAULT_AGENT,
+      draft.crosscheck,
     );
 
     if (found.resolution === undefined)
@@ -426,6 +438,7 @@ const written = (draft: Draft): Parameters<typeof writeConfig>[1] => ({
   judge: draft.judge,
   models: Object.fromEntries(draft.models.map((one) => [one.alias, one.ref])),
   priority: draft.models.map((one) => one.alias),
+  crosscheck: [...draft.crosscheck],
   profiles: Object.fromEntries(
     configuredProfiles(draft).map((one) => [
       one.name,

@@ -1,6 +1,6 @@
 import { Model } from "@opencode/schema/model";
 import { effortOf, fit, ladderOf } from "./effort";
-import { priorityOf } from "./order";
+import { crosscheckOf, priorityOf } from "./order";
 import { formatRef, type Tables } from "./types";
 
 export type Row = { name: string; model: string };
@@ -58,6 +58,12 @@ export const check = (
 
   const ordered = priorityOf(tables.models, tables.priority);
   problems.push(...ordered.problems);
+  const crosscheck = crosscheckOf(
+    tables.models,
+    tables.crosscheck,
+    ordered.ranked.map((one) => one.alias),
+  );
+  problems.push(...crosscheck.problems);
 
   for (const { alias: name, ref: raw } of ordered.ranked) {
     if (!ALIAS.test(name)) {

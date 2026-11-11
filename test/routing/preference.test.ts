@@ -43,8 +43,26 @@ describe("routing_model_preference", () => {
       ["second", 1],
       ["first", 2],
     ]);
+    expect(out.crosscheck.map((one) => [one.alias, one.priority])).toEqual([
+      ["second", 1],
+      ["first", 2],
+    ]);
     expect(out.models[0]?.ref).toBe("acme/falcon-max");
     expect(out.sources).toEqual([`${scratch.projectDir()}/spectre.json`]);
+  });
+
+  test("returns the crosscheck fallback order as its own list", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        models: { first: "acme/falcon-mini", second: "acme/falcon-max" },
+        priority: ["second", "first"],
+        crosscheck: ["first"],
+      }),
+    );
+
+    const out = at(await call(scratch.projectDir()), "resolved");
+    expect(out.models.map((one) => one.alias)).toEqual(["second", "first"]);
+    expect(out.crosscheck.map((one) => [one.alias, one.priority])).toEqual([["first", 1]]);
   });
 
   test("a file with no priority is a problem, so an implicit order never reads as a decision", async () => {

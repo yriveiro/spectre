@@ -38,6 +38,7 @@ const tables = (
   judge: undefined,
   models,
   priority: Object.keys(models),
+  crosscheck: undefined,
   profiles: Object.fromEntries(
     Object.entries(profiles).map(([name, entry]) => [
       name,

@@ -268,6 +268,31 @@ describe("the priority order", () => {
     const found = await run(scratch.projectDir());
     expect(found.tables.priority).toEqual(["a"]);
   });
+
+  test("a file's crosscheck list is carried into the tables", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        models: { a: "acme/falcon-mini", b: "acme/falcon-max" },
+        priority: ["a", "b"],
+        crosscheck: ["b"],
+      }),
+    );
+    const found = await run(scratch.projectDir());
+    expect(found.tables.crosscheck).toEqual(["b"]);
+  });
+
+  test("a later file replaces the crosscheck list whole", async () => {
+    await scratch.writeGlobal(
+      JSON.stringify({
+        models: { a: "acme/falcon-mini", b: "acme/falcon-max" },
+        priority: ["a", "b"],
+        crosscheck: ["a"],
+      }),
+    );
+    await scratch.writeProject(JSON.stringify({ crosscheck: ["b"] }));
+    const found = await run(scratch.projectDir());
+    expect(found.tables.crosscheck).toEqual(["b"]);
+  });
 });
 
 describe("the dictionary path", () => {

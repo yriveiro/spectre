@@ -6,6 +6,7 @@
     "kimi": "opencode-go/kimi-k3"
   },
   "priority": ["minimax", "muse", "kimi"],
+  "crosscheck": ["minimax", "muse", "kimi"],
   "profiles": {
     "mechanical": {
       "effort": "low",

@@ -43,6 +43,7 @@ const empty = (directory: string): Draft => ({
   problems: [],
   provider: undefined,
   models: [],
+  crosscheck: [],
   profiles: defaultProfiles(true),
 });
 
@@ -57,6 +58,7 @@ const copy = (draft: Draft): MutableDraft => ({
     ref: one.ref,
     priority: one.priority,
   })),
+  crosscheck: [...(Array.isArray(draft.crosscheck) ? draft.crosscheck : [])],
   profiles: (Array.isArray(draft.profiles) && draft.profiles.length > 0
     ? draft.profiles
     : defaultProfiles(true)
@@ -79,6 +81,7 @@ const assignDraft = (target: MutableDraft, source: MutableDraft): void => {
   target.provider = source.provider;
   target.judge = source.judge;
   target.models = source.models;
+  target.crosscheck = source.crosscheck;
   target.profiles = source.profiles;
 };
 
