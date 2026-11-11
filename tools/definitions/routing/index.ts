@@ -197,26 +197,26 @@ A profile states what a task needs in \`effort\` and when to reach for it in \`m
  * The directory the config is read from: the one the invoking session is in.
  *
  * A session carries its own location and `session.move` updates it, so a session
- * moved into a worktree reads that worktree's file. `ctx.location` is the
- * location the plugin loaded with, and it is the fallback only: reading it after
- * a move would read the file of the directory the session left.
+ * moved into a worktree reads that worktree's file. The plugin's location is not
+ * a fallback: it is the location the plugin loaded with, so reading it after a
+ * move would read the file of the directory the session left. When the session
+ * cannot be read, the tool answers a problem instead.
  */
 const sessionDirectory = (
   ctx: Plugin.Context,
-  sessionID: Session.ID | undefined,
-): Effect.Effect<string> =>
+  sessionID: Session.ID,
+): Effect.Effect<string | undefined> =>
   Effect.gen(function* () {
-    if (sessionID === undefined) return ctx.location.directory;
     const session = yield* ctx.session
       .get({ sessionID })
-      .pipe(Effect.catchCause(() => Effect.succeed(undefined)));
-    return session?.location.directory ?? ctx.location.directory;
+      .pipe(Effect.catch(() => Effect.succeed(undefined)));
+    return session?.location.directory;
   });
 
 const catalogue = (ctx: Plugin.Context) =>
   ctx.model.list().pipe(
     Effect.map((out) => ({ models: out.data, problem: undefined }) as const),
-    Effect.catchCause(() =>
+    Effect.catch(() =>
       Effect.succeed({
         models: [] as ReadonlyArray<Model.Info>,
         problem: `the model catalogue could not be read, so no model was checked`,
@@ -338,11 +338,11 @@ const consoleKey = (ctx: Plugin.Context): Effect.Effect<string | undefined> =>
     if (integration === undefined) return undefined;
     const connection = yield* integration.connection
       .active(Integration.ID.make("opencode"))
-      .pipe(Effect.catchCause(() => Effect.succeed(undefined)));
+      .pipe(Effect.catch(() => Effect.succeed(undefined)));
     if (connection === undefined) return undefined;
     const value = yield* integration.connection
       .resolve(connection)
-      .pipe(Effect.catchCause(() => Effect.succeed(undefined)));
+      .pipe(Effect.catch(() => Effect.succeed(undefined)));
     if (value === null || typeof value !== "object") return undefined;
     const key = (value as { readonly key?: unknown }).key;
     return typeof key === "string" ? key : undefined;
@@ -438,8 +438,13 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
     Effect.gen(function* () {
       // The session owns the directory. A project session that moved into a
       // worktree reads that worktree's config on the next call, which is the
-      // call that routes the next task.
+      // call that routes the next task. A session that cannot be read is a
+      // problem, not a reason to read the plugin's directory.
       const directory = yield* sessionDirectory(ctx, context.sessionID);
+      if (directory === undefined)
+        return failed([
+          `the session ${context.sessionID} could not be read, so the directory that holds its ${FILE_NAME} is unknown`,
+        ]);
       const path = `${directory}/${FILE_NAME}`;
 
       // The setup action writes one file and then answers from what it wrote.

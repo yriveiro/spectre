@@ -1,4 +1,5 @@
-import type { ModelInfo } from "@opencode/client";
+import type { ModelInfo, SessionInfo } from "@opencode/client";
+import type { Route } from "@opencode/plugin/tui/context";
 import type { Model as Schema } from "@opencode/schema/model";
 import { Effect } from "effect";
 import {
@@ -8,6 +9,7 @@ import {
   FILE_NAME,
   isDefaultProfile,
   type JudgeConfig,
+  KNOWN_ORDER,
   known,
   loadProject,
   type ProfileEntry,
@@ -39,7 +41,7 @@ export type Profile = {
   readonly match: string | undefined;
   readonly why: string | undefined;
   readonly crosscheck:
-    | { readonly effort: string | undefined; readonly prefer: string | undefined }
+    | { readonly effort: string | undefined; readonly prefer: "free" | undefined }
     | undefined;
   readonly agent: string;
   readonly pinned: string | undefined;
@@ -88,6 +90,8 @@ export type Resolution = {
   readonly rung: string | undefined;
   readonly cost: string | undefined;
   readonly crosscheck: string | undefined;
+  /** Why a configured crosscheck found no model. Absent when none was asked for. */
+  readonly crosscheckProblem: string | undefined;
   readonly problem: string | undefined;
 };
 
@@ -129,14 +133,7 @@ const pins = (model: ProfileEntry["model"]): ReadonlyArray<string> => {
 };
 
 /** The part of a session the page reads: where the session is. */
-export type SessionAt = {
-  readonly location?: { readonly directory?: string | undefined } | undefined;
-};
-
-export type RouteAt =
-  | { readonly type: "home" }
-  | { readonly type: "session"; readonly sessionID: string }
-  | { readonly type: "plugin"; readonly id: string; readonly name: string };
+export type SessionAt = Pick<SessionInfo, "location">;
 
 /**
  * The directory the config is read from: the one the session is in.
@@ -148,16 +145,16 @@ export type RouteAt =
 export const directoryOf = (input: {
   readonly sessionID?: string | undefined;
   readonly session: (sessionID: string) => SessionAt | undefined;
-  readonly route: RouteAt;
+  readonly route: Route;
   readonly location: { readonly directory?: string | undefined } | undefined;
   readonly fallback: string;
 }): string => {
   const named =
-    input.sessionID === undefined ? undefined : input.session(input.sessionID)?.location?.directory;
+    input.sessionID === undefined ? undefined : input.session(input.sessionID)?.location.directory;
   if (named !== undefined) return named;
   const routed =
     input.route.type === "session"
-      ? input.session(input.route.sessionID)?.location?.directory
+      ? input.session(input.route.sessionID)?.location.directory
       : undefined;
   return routed ?? input.location?.directory ?? input.fallback;
 };
@@ -258,7 +255,7 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
             ? undefined
             : {
                 effort: profile.crosscheck.effort,
-                prefer: profile.crosscheck.prefer === "free" ? "free" : undefined,
+                prefer: profile.crosscheck.prefer,
               },
         match: profile.match,
         why: profile.why,
@@ -276,6 +273,7 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
         rung: undefined,
         cost: undefined,
         crosscheck: undefined,
+        crosscheckProblem: undefined,
         problem: found.problem,
       };
 
@@ -288,9 +286,125 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
       rung: primary.rung,
       cost: formatCost(primary.costInput, primary.costOutput),
       crosscheck: crosscheck === undefined ? undefined : spendRef(crosscheck),
+      crosscheckProblem: found.resolution.crosscheckProblem,
       problem: undefined,
     };
   });
+};
+
+/** One answer to "what should the second opinion be": nothing, or an effort. */
+export type CrosscheckChoice =
+  | { readonly kind: "off" }
+  | { readonly kind: "effort"; readonly effort: string | undefined };
+
+type CrosscheckResult =
+  | {
+      readonly available: true;
+      /** The ref the choice would spend. `Off` is available and spends nothing. */
+      readonly resolved: string | undefined;
+      readonly reason: undefined;
+    }
+  | {
+      readonly available: false;
+      readonly resolved: undefined;
+      readonly reason: string;
+    };
+
+export type CrosscheckOption = {
+  readonly choice: CrosscheckChoice;
+  readonly label: string;
+  readonly current: boolean;
+} & CrosscheckResult;
+
+/**
+ * The crosscheck choices for one profile, resolved by the same rule the router
+ * runs. `Profile effort` asks the second opinion at the profile's own effort,
+ * which is what a crosscheck with no `effort` means.
+ */
+export const crosscheckOptionsFor = (
+  draft: Draft,
+  models: ReadonlyArray<Model>,
+  profile: Profile,
+): ReadonlyArray<CrosscheckOption> => {
+  const kept = candidates(
+    draft.models.map((one) => ({ alias: one.alias, ref: one.ref, pinned: undefined })),
+    models.map(info),
+  ).kept;
+
+  const trial = (effort: string | undefined): CrosscheckResult => {
+    if (effort === undefined && profile.effort === undefined)
+      return {
+        available: false,
+        resolved: undefined,
+        reason: "The profile states no effort, so the crosscheck has no requirement to read.",
+      };
+
+    const found = resolveProfile(
+      profile.name,
+      {
+        effort: profile.effort,
+        model: profile.pinned === undefined ? undefined : [profile.pinned],
+        crosscheck: { effort, prefer: profile.crosscheck?.prefer },
+        match: profile.match,
+        why: profile.why,
+        agent: profile.agent,
+      },
+      kept,
+      DEFAULT_AGENT,
+    );
+
+    if (found.resolution === undefined)
+      return {
+        available: false,
+        resolved: undefined,
+        reason: found.problem ?? "The resolver returned no row.",
+      };
+    const crosscheck = found.resolution.crosscheck;
+    if (crosscheck === undefined)
+      return {
+        available: false,
+        resolved: undefined,
+        reason: found.resolution.crosscheckProblem ?? "The resolver returned no second opinion.",
+      };
+    return { available: true, resolved: spendRef(crosscheck), reason: undefined };
+  };
+
+  const names: Array<string> = [...KNOWN_ORDER];
+  for (const candidate of kept) {
+    for (const rung of candidate.model.rungs) if (!names.includes(rung)) names.push(rung);
+  }
+  if (profile.effort !== undefined && !names.includes(profile.effort)) names.push(profile.effort);
+  const configured = profile.crosscheck?.effort;
+  if (configured !== undefined && !names.includes(configured)) names.push(configured);
+
+  const rows: Array<CrosscheckOption> = [
+    {
+      choice: { kind: "off" },
+      label: "Off",
+      current: profile.crosscheck === undefined,
+      available: true,
+      resolved: undefined,
+      reason: undefined,
+    },
+    {
+      choice: { kind: "effort", effort: undefined },
+      label: "Profile effort",
+      current: profile.crosscheck !== undefined && profile.crosscheck.effort === undefined,
+      ...trial(undefined),
+    },
+  ];
+
+  for (const name of names) {
+    const choice: CrosscheckChoice = { kind: "effort", effort: name };
+    rows.push({
+      choice,
+      label: name,
+      current: profile.crosscheck?.effort === name,
+      ...trial(name),
+    });
+  }
+
+  return rows;
 };
 
 const preserved = async (path: string): Promise<Record<string, unknown>> => {
@@ -321,7 +435,7 @@ const written = (draft: Draft): Parameters<typeof writeConfig>[1] => ({
             ? undefined
             : {
                 effort: one.crosscheck.effort,
-                prefer: one.crosscheck.prefer === "free" ? "free" : undefined,
+                prefer: one.crosscheck.prefer,
               },
         match: one.match,
         why: one.why,

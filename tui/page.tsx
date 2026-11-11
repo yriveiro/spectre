@@ -7,6 +7,7 @@ import { FILE_NAME, KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
 import {
   addProfilePrompt,
   applied,
+  crosscheckPicker,
   DEFAULT_PROVIDER,
   type Edit,
   effortPicker,
@@ -103,6 +104,9 @@ export const usableEntryRows = (
   });
 
 const INDENT = 2;
+
+/** The widest a compact select grows before its value truncates. */
+const COMPACT_SELECT_MAX_WIDTH = 64;
 
 export type LayoutMetrics = {
   readonly modalWidth: number;
@@ -279,6 +283,8 @@ const selectControl = (input: {
   readonly colors: Palette;
   readonly width?: number;
   readonly flexGrow?: number;
+  /** Size to the value, keeping the chevron beside it instead of at the column edge. */
+  readonly compact?: boolean;
   readonly value: string;
   readonly tone?: RGBA | undefined;
   readonly onOpen: () => void;
@@ -289,12 +295,13 @@ const selectControl = (input: {
     "box",
     {
       width: input.width,
+      maxWidth: input.compact === true ? COMPACT_SELECT_MAX_WIDTH : undefined,
       flexGrow: input.flexGrow,
-      flexShrink: input.flexGrow !== undefined ? 1 : 0,
+      flexShrink: input.flexGrow !== undefined || input.compact === true ? 1 : 0,
       flexBasis: input.flexGrow !== undefined && input.width === undefined ? 0 : undefined,
       minWidth: input.flexGrow !== undefined ? 0 : undefined,
       flexDirection: "row",
-      justifyContent: "space-between",
+      justifyContent: input.compact === true ? "flex-start" : "space-between",
       paddingLeft: 1,
       paddingRight: 1,
       backgroundColor: () => (hovered() ? input.colors.selectHoverBg : input.colors.insetBg),
@@ -306,9 +313,9 @@ const selectControl = (input: {
       "text",
       {
         fg: () => (hovered() ? input.colors.cyan : baseTone),
-        flexGrow: 1,
+        flexGrow: input.compact === true ? 0 : 1,
         flexShrink: 1,
-        flexBasis: 0,
+        flexBasis: input.compact === true ? undefined : 0,
         minWidth: 0,
         truncate: true,
         wrapMode: "none",
@@ -585,8 +592,8 @@ const profileListRow = (
       "box",
       { flexDirection: "row", columnGap: 1, width: "100%" },
       cell(cols.gutter, () => (selected ? "▸" : " "), colors.cyan),
-      h("text", nameProps, () => profile.name),
       infoBadge({ colors, width: cols.info, onOpen: actions.info }),
+      h("text", nameProps, () => profile.name),
       cell(cols.kind, () => (custom ? "custom" : "default"), custom ? colors.teal : colors.muted),
       statusToggleBadge({ colors, width: cols.status, enabled, onToggle: actions.toggle }),
       modelCell(
@@ -601,20 +608,36 @@ const profileListRow = (
   );
 };
 
+/**
+ * What the crosscheck control says. The resolved model is the answer a session
+ * spends. A configured crosscheck that found none names the requirement it
+ * asked for, so "no model" is not mistaken for "off".
+ */
+const crosscheckValue = (row: ProfileRow): string => {
+  const configured = row.profile.crosscheck;
+  if (configured === undefined) return "None";
+  const resolved = row.resolution?.crosscheck;
+  if (resolved !== undefined) return resolved;
+  const want = configured.effort ?? "profile effort";
+  return `No model (${want})`;
+};
+
 const profileRow = (
   colors: Palette,
-  theme: ResolvedTheme,
   cols: LayoutMetrics["profileColumns"],
   row: ProfileRow,
   selected: boolean,
   actions: {
     readonly effort: () => void;
     readonly pin: () => void;
+    readonly crosscheck: () => void;
+    readonly prefer: () => void;
     readonly info: () => void;
     readonly selectRow: () => void;
   },
 ): JSX.Element => {
   const profile = row.profile;
+  const crosscheck = profile.crosscheck;
   const [hovered, setHovered] = createSignal(false);
   const costText = normalizeCost(row.resolution?.cost) ?? "-";
   const costTone = isExpensiveCost(costText) ? colors.yellow : colors.muted;
@@ -645,9 +668,8 @@ const profileRow = (
       "box",
       { flexDirection: "row", columnGap: 1, width: "100%" },
       cell(cols.gutter, () => (selected ? "▸" : " "), colors.cyan),
-      h("text", nameProps, () => profile.name),
       infoBadge({ colors, width: cols.info, onOpen: actions.info }),
-      selectControl({ colors, width: cols.effort, value: effort, onOpen: actions.effort }),
+      h("text", nameProps, () => profile.name),
       selectControl({
         colors,
         width: cols.model,
@@ -655,16 +677,54 @@ const profileRow = (
         value: ref,
         onOpen: actions.pin,
       }),
+      selectControl({ colors, width: cols.effort, value: effort, onOpen: actions.effort }),
       costCell(cols.cost, () => costText, costTone),
     ),
+    h(
+      "box",
+      {
+        flexDirection: "row",
+        alignItems: "center",
+        width: "100%",
+        columnGap: 1,
+        paddingRight: 1,
+      },
+      h(
+        "box",
+        {
+          // The label is right-aligned so the select starts at the Model
+          // column whatever width the Profile column takes.
+          width: cols.gutter + cols.info + cols.name + 2,
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "flex-end",
+        },
+        h("text", { fg: colors.blue, wrapMode: "none" }, "↳ crosscheck:"),
+      ),
+      selectControl({
+        colors,
+        compact: true,
+        value: crosscheckValue(row),
+        onOpen: actions.crosscheck,
+      }),
+      h("box", { width: cols.effort, flexShrink: 0 }),
+      h("box", { flexGrow: 1 }),
+      crosscheck === undefined
+        ? null
+        : h(
+            "text",
+            {
+              fg: crosscheck.prefer === "free" ? colors.green : colors.muted,
+              flexShrink: 0,
+              wrapMode: "none",
+              onMouseUp: actions.prefer,
+            },
+            crosscheck.prefer === "free" ? "(●) free" : "(○) free",
+          ),
+    ),
     show(
-      () => row.resolution !== undefined && row.resolution.crosscheck !== undefined,
-      () =>
-        h(
-          "box",
-          { paddingLeft: INDENT, paddingRight: 1 },
-          field(theme, "Crosscheck", () => row.resolution?.crosscheck ?? ""),
-        ),
+      () => row.resolution?.crosscheckProblem !== undefined,
+      () => indentedLine(colors.warning, row.resolution?.crosscheckProblem ?? ""),
     ),
     show(
       () => row.resolution !== undefined && row.resolution.problem !== undefined,
@@ -753,10 +813,10 @@ const headerCells = {
     cols: LayoutMetrics["profileColumns"],
   ): ReadonlyArray<JSX.Element> => [
     cell(cols.gutter, () => "", colors.blue),
-    cell(cols.name, () => "Profile", colors.blue),
     cell(cols.info, () => "Info", colors.blue),
-    cell(cols.effort, () => "Effort", colors.blue),
+    cell(cols.name, () => "Profile", colors.blue),
     modelCell(cols.model, () => "Model", colors.blue),
+    cell(cols.effort, () => "Effort", colors.blue),
     costCell(cols.cost, () => "Cost", colors.blue),
   ],
   profileList: (
@@ -764,8 +824,8 @@ const headerCells = {
     cols: LayoutMetrics["profileListColumns"],
   ): ReadonlyArray<JSX.Element> => [
     cell(cols.gutter, () => "", colors.blue),
-    cell(cols.name, () => "Profile", colors.blue),
     cell(cols.info, () => "Info", colors.blue),
+    cell(cols.name, () => "Profile", colors.blue),
     cell(cols.kind, () => "Kind", colors.blue),
     cell(cols.status, () => "Status", colors.blue),
     modelCell(cols.summary, () => "When to use", colors.blue),
@@ -865,6 +925,8 @@ const activeTabBody = (input: {
   ) => {
     readonly effort: () => void;
     readonly pin: () => void;
+    readonly crosscheck: () => void;
+    readonly prefer: () => void;
     readonly info: () => void;
     readonly selectRow: () => void;
   };
@@ -949,7 +1011,6 @@ const activeTabBody = (input: {
       input.rows.map((row, index) =>
         profileRow(
           colors,
-          theme,
           metrics.profileColumns,
           row,
           index === input.selectedRow(),
@@ -1218,6 +1279,29 @@ export const page = (input: PageInput): JSX.Element => {
       run(() =>
         pinPicker({ dialog, draft: input.draft, models: input.catalogue, profile: row.profile }),
       ),
+    crosscheck: () =>
+      run(() =>
+        crosscheckPicker({
+          dialog,
+          draft: input.draft,
+          models: input.catalogue,
+          profile: row.profile,
+        }),
+      ),
+    prefer: () => {
+      const current = row.profile.crosscheck;
+      if (current === undefined) return;
+      input.onChange(
+        applied(input.draft, {
+          kind: "crosscheck",
+          profile: row.profile.name,
+          crosscheck: {
+            effort: current.effort,
+            prefer: current.prefer === "free" ? undefined : "free",
+          },
+        }),
+      );
+    },
     info: () => openProfileInfo(row),
     selectRow: () => {
       setSelectedRow(index);

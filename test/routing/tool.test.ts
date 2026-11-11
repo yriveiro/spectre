@@ -36,7 +36,8 @@ const call = async (
   list?: () => Effect.Effect<unknown, unknown>,
   session?: { readonly id: string; readonly sessions: Record<string, string> },
 ) => {
-  const run = routing(context(directory, list, session?.sessions)).execute as unknown as (
+  const sessions = session?.sessions ?? { ses_project: directory };
+  const run = routing(context(directory, list, sessions)).execute as unknown as (
     given: typeof input,
     context: { readonly sessionID: string },
   ) => Effect.Effect<{
@@ -154,6 +155,16 @@ describe("tools.spectre.routing", () => {
       "setup",
     );
     expect(after.source).toBe(`${moved}/spectre.json`);
+  });
+
+  test("a session that cannot be read is a problem, not the plugin's directory", async () => {
+    await scratch.writeProject(good);
+    const out = at(
+      await call(scratch.projectDir(), {}, undefined, { id: "ses_missing", sessions: {} }),
+      "problems",
+    );
+    expect(out.problems).toContain("ses_missing");
+    expect(out.problems).toContain("could not be read");
   });
 
   test("a global file with no allowlist does not stop the setup question", async () => {

@@ -1,6 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { catalogue, directoryOf, effortDots, read, resolve, save } from "../../tui/data";
+import { AbsolutePath } from "@opencode/schema";
+import {
+  catalogue,
+  crosscheckOptionsFor,
+  type Draft,
+  directoryOf,
+  effortDots,
+  type Profile,
+  read,
+  resolve,
+  save,
+} from "../../tui/data";
 
 const scratch = () => join(Bun.env.TMPDIR ?? "/tmp", `spectre-tui-data-${crypto.randomUUID()}`);
 
@@ -175,7 +186,9 @@ describe("the page reads the repository's own file", () => {
 });
 
 describe("the page reads the directory the session is in", () => {
-  const at = (directory: string) => ({ location: { directory } });
+  const at = (directory: string) => ({
+    location: { directory: AbsolutePath.make(directory) },
+  });
   const sessions = { ses_main: at("/main"), ses_worktree: at("/worktree") };
   const session = (id: string) => sessions[id as keyof typeof sessions];
 
@@ -239,6 +252,69 @@ describe("the page resolves what the tool resolves", () => {
     const worker = rows.find((one) => one.profile === "worker");
     expect(worker?.ref).toBe("opencode-go/deepseek-v4.1-flash#high");
     expect(worker?.crosscheck).toContain("minimax");
+  });
+
+  test("the crosscheck choices read the same rule, mark the configured one, and follow prefer free", async () => {
+    const draft = await read(await project());
+    const worker = draft.profiles.find((one) => one.name === "worker");
+    const mechanical = draft.profiles.find((one) => one.name === "mechanical");
+    if (worker === undefined || mechanical === undefined)
+      throw new Error("the fixture has no worker and mechanical profiles");
+
+    const listed = crosscheckOptionsFor(draft, catalogue(models), worker);
+    const byLabel = new Map(listed.map((one) => [one.label, one]));
+
+    expect(byLabel.get("Off")?.available).toBe(true);
+    expect(byLabel.get("Off")?.current).toBe(false);
+    expect(byLabel.get("high")?.current).toBe(true);
+    expect(byLabel.get("high")?.resolved).toContain("minimax");
+
+    // A second opinion needs another family, and a single-model allowlist has none.
+    const narrow = {
+      ...draft,
+      models: [{ alias: "deep", ref: "opencode-go/deepseek-v4.1-flash" }],
+    };
+    const unreachable = crosscheckOptionsFor(narrow, catalogue(models), worker).find(
+      (one) => one.label === "high",
+    );
+    expect(unreachable?.available).toBe(false);
+    expect(unreachable?.reason).toContain("found no allowed model from another family");
+
+    const off = crosscheckOptionsFor(draft, catalogue(models), mechanical).find(
+      (one) => one.label === "Off",
+    );
+    expect(off?.current).toBe(true);
+
+    const paidFirst: Draft = {
+      ...draft,
+      models: [
+        { alias: "deep", ref: "opencode-go/deepseek-v4.1-flash" },
+        { alias: "glm", ref: "opencode-go/glm-5.3-flash" },
+        { alias: "minimax", ref: "opencode-go/minimax-m3.1-flash-free" },
+      ],
+      profiles: [
+        { ...worker, crosscheck: { effort: "high", prefer: undefined } },
+        { ...worker, name: "free", crosscheck: { effort: "high", prefer: "free" } },
+      ],
+    };
+    const first = paidFirst.profiles[0];
+    const second = paidFirst.profiles[1];
+    if (first === undefined || second === undefined)
+      throw new Error("the trial profiles are missing");
+    const paid = crosscheckOptionsFor(paidFirst, catalogue(models), first);
+    const free = crosscheckOptionsFor(paidFirst, catalogue(models), second);
+    expect(paid.find((one) => one.label === "high")?.resolved).toContain("glm");
+    expect(free.find((one) => one.label === "high")?.resolved).toContain("minimax");
+
+    const custom: Profile = {
+      ...worker,
+      crosscheck: { effort: "turbo", prefer: "free" },
+    };
+    const turbo = crosscheckOptionsFor(draft, catalogue(models), custom).find(
+      (one) => one.label === "turbo",
+    );
+    expect(turbo?.current).toBe(true);
+    expect(turbo?.available).toBe(false);
   });
 
   test("a pin the allowlist does not hold is a problem, not a guess", async () => {

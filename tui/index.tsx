@@ -91,6 +91,7 @@ const absent = (name: string): Resolution => ({
   rung: undefined,
   cost: undefined,
   crosscheck: undefined,
+  crosscheckProblem: undefined,
   problem: "The resolver returned no row",
 });
 
@@ -300,7 +301,8 @@ export const opener = (open: () => void) => ({
 export default Plugin.define({
   id: "spectre.routing",
   setup: async (context) => {
-    const initial = context.location?.directory ?? Bun.env.PWD ?? ".";
+    const defaultDirectory = context.data.location.default().directory;
+    const initial = context.location?.directory ?? defaultDirectory;
 
     const [view, setView] = context.storage.store(VIEW, {
       initial: { open: true },
@@ -333,14 +335,14 @@ export default Plugin.define({
       return route.type === "session" ? route.sessionID : undefined;
     };
 
-    /** The session's directory, or the location this TUI runs in when no session is open. */
+    /** The session's directory, or the TUI's own default location when no session is open. */
     const directoryFor = (sessionID?: string): string =>
       directoryOf({
         sessionID,
         session: (id) => context.data.session.get(id),
         route: context.ui.router.current(),
         location: context.location,
-        fallback: Bun.env.PWD ?? ".",
+        fallback: defaultDirectory,
       });
 
     /** Read one directory into the cache, once. A second caller joins the read. */

@@ -78,7 +78,10 @@ the model reads.
   table, and the session writes the answer down so it never asks again.
 - **R7. The terminal can configure it.** A page lists the profiles, the
   allowlist and the live catalogue, and every choice is a dialog over the
-  catalogue.
+  catalogue. A profile row carries its crosscheck as a control: off, the
+  profile's own effort, or a named effort, with a `prefer free` toggle. A
+  configured crosscheck that no allowed family can serve shows its reason
+  beside the row.
 - **R8. The resolver reports what it chose and what it could not reach.** A
   profile that asks for an effort no allowed model reaches is a problem, and
   a model that had to step up to meet one says so.

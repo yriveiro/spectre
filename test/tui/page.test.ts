@@ -6,6 +6,7 @@ import { createComponent, testRender } from "@opentui/solid";
 import {
   applied,
   compatibleModelsFor,
+  crosscheckPicker,
   effortModal,
   effortOptionsFor,
   effortPicker,
@@ -107,6 +108,7 @@ const spent: Resolution = {
   rung: "high",
   cost: "$0.1/$0.2",
   crosscheck: undefined,
+  crosscheckProblem: undefined,
   problem: undefined,
 };
 
@@ -124,6 +126,7 @@ const rows = [
       rung: undefined,
       cost: undefined,
       crosscheck: undefined,
+      crosscheckProblem: undefined,
       problem: 'profiles.pinned.model: "ghost" is not an allowed model in this session.',
     },
   },
@@ -264,6 +267,70 @@ describe("the modal draws what the session would spend", () => {
     expect(readingFrame).toContain("Reading /tmp/project");
     expect(readingFrame).not.toContain("No spectre.json in /tmp/project");
     await reading.setup.dispose();
+  });
+
+  test("the configured tab carries a crosscheck control on every profile, and None opens the picker", async () => {
+    const { setup, shownRenders } = await frame({});
+    const lines = setup.captureCharFrame().split("\n");
+    const noneLine = lines.findIndex(
+      (one) => one.includes("↳ crosscheck:") && one.includes("None"),
+    );
+    expect(noneLine).toBeGreaterThan(-1);
+    const line = lines[noneLine];
+    if (line === undefined) throw new Error("the frame has no crosscheck line");
+    await setup.mockMouse.click(line.indexOf("None"), noneLine);
+    await setup.flush();
+    expect(shownRenders.length).toBe(1);
+    await setup.dispose();
+  });
+
+  test("the crosscheck is nested under the profile, and the free toggle edits the draft", async () => {
+    const changes: Array<Draft> = [];
+    const configured: Draft = {
+      ...draft,
+      profiles: draft.profiles.map((one, at) =>
+        at === 0 ? { ...one, crosscheck: { effort: "high", prefer: undefined } } : one,
+      ),
+    };
+    const firstRow = rows[0];
+    const firstProfile = configured.profiles[0];
+    if (firstRow === undefined || firstProfile === undefined)
+      throw new Error("the worker row is missing");
+    const { setup } = await frame({
+      draft: configured,
+      rows: [
+        {
+          ...firstRow,
+          profile: firstProfile,
+          resolution: { ...spent, crosscheck: "acme/glm-5.3-flash#high" },
+        },
+        rows[1] ?? firstRow,
+      ],
+      onChange: (next) => {
+        changes.push(next);
+      },
+    });
+    const lines = setup.captureCharFrame().split("\n");
+    const nameLine = lines.findIndex((one) => one.includes("worker"));
+    const crossLine = lines.findIndex((one) => one.includes("↳ crosscheck:"));
+    expect(nameLine).toBeGreaterThan(-1);
+    expect(crossLine).toBeGreaterThan(nameLine);
+    const name = lines[nameLine];
+    const cross = lines[crossLine];
+    if (name === undefined || cross === undefined) throw new Error("the frame has no crosscheck");
+    expect(cross.indexOf("↳")).toBeGreaterThan(-1);
+    expect(cross.indexOf("↳")).toBeLessThan(cross.indexOf("acme/glm-5.3-flash#high"));
+    expect(cross.indexOf("acme/glm-5.3-flash#high")).toBe(name.indexOf("acme/muse-spark-1.3#high"));
+    expect(cross).toContain("(○) free");
+
+    const header = lines.find((one) => one.includes("Info") && one.includes("Profile"));
+    if (header === undefined) throw new Error("the frame has no header row");
+    expect(header.indexOf("Info")).toBeLessThan(header.indexOf("Profile"));
+
+    await setup.mockMouse.click(cross.indexOf("(○) free"), crossLine);
+    await setup.flush();
+    expect(changes[0]?.profiles[0]?.crosscheck).toEqual({ effort: "high", prefer: "free" });
+    await setup.dispose();
   });
 
   test("layoutMetrics calculates available space so model names are not trimmed in wide terminals", async () => {
@@ -487,7 +554,7 @@ describe("the page changes the draft and writes it only when asked", () => {
     expect(row).toBeGreaterThan(-1);
     const line = lines[row];
     if (line === undefined) throw new Error("the frame has no worker row");
-    await setup.mockMouse.click(line.indexOf("high"), row);
+    await setup.mockMouse.click(line.lastIndexOf("high"), row);
     await setup.flush();
     expect(shownRenders.length).toBe(1);
     await setup.mockMouse.click(line.indexOf("acme/muse-spark-1.3#high"), row);
@@ -856,6 +923,118 @@ describe("the page changes the draft and writes it only when asked", () => {
     });
   });
 
+  test("the crosscheck picker sets the effort, toggles prefer free, and turns the second opinion off", async () => {
+    const target = draft.profiles[0];
+    if (target === undefined) throw new Error("the worker profile is missing");
+
+    const open = async (profile: typeof target, answer?: string) => {
+      const { shownRenders, context } = host(answer);
+      const pending = crosscheckPicker({
+        dialog: context.ui.dialog as never,
+        draft,
+        models,
+        profile,
+      });
+      expect(shownRenders.length).toBe(1);
+      const setup = await testRender(
+        () =>
+          createComponent(PluginContextProvider, {
+            value: context as never,
+            get children() {
+              return shownRenders[0]?.() as never;
+            },
+          }),
+        { width: 96, height: 28 },
+      );
+      await setup.renderOnce();
+      return { setup, pending };
+    };
+
+    const first = await open(target);
+    const firstFrame = first.setup.captureCharFrame();
+    expect(firstFrame).toContain('The crosscheck for "worker"');
+    expect(firstFrame).toContain("Profile effort");
+    expect(firstFrame).toContain("Prefer free: Off");
+    const highLine = firstFrame.split("\n").findIndex((one) => /\bhigh\s+available/.test(one));
+    expect(highLine).toBeGreaterThan(-1);
+    await first.setup.mockMouse.click(6, highLine);
+    await first.setup.flush();
+    expect(await first.pending).toEqual({
+      kind: "crosscheck",
+      profile: "worker",
+      crosscheck: { effort: "high", prefer: undefined },
+    });
+    await first.setup.dispose();
+
+    const second = await open(target);
+    second.setup.mockInput.pressKey("f");
+    await second.setup.flush();
+    const secondHigh = second.setup
+      .captureCharFrame()
+      .split("\n")
+      .findIndex((one) => /\bhigh\s+available/.test(one));
+    expect(secondHigh).toBeGreaterThan(-1);
+    await second.setup.mockMouse.click(6, secondHigh);
+    await second.setup.flush();
+    expect(await second.pending).toEqual({
+      kind: "crosscheck",
+      profile: "worker",
+      crosscheck: { effort: "high", prefer: "free" },
+    });
+    await second.setup.dispose();
+
+    const configured = applied(draft, {
+      kind: "crosscheck",
+      profile: "worker",
+      crosscheck: { effort: "high", prefer: "free" },
+    });
+    const worker = configured.profiles[0];
+    if (worker === undefined) throw new Error("the configured worker profile is missing");
+    const off = await open(worker);
+    const offLine = off.setup
+      .captureCharFrame()
+      .split("\n")
+      .findIndex((one) => /\bOff\s+available/.test(one));
+    expect(offLine).toBeGreaterThan(-1);
+    await off.setup.mockMouse.click(6, offLine);
+    await off.setup.flush();
+    expect(await off.pending).toEqual({
+      kind: "crosscheck",
+      profile: "worker",
+      crosscheck: undefined,
+    });
+    await off.setup.dispose();
+
+    const cleared = applied(configured, {
+      kind: "crosscheck",
+      profile: "worker",
+      crosscheck: undefined,
+    });
+    expect(
+      resolveDraft(cleared, models).find((one) => one.profile === "worker")?.crosscheck,
+    ).toBeUndefined();
+  });
+
+  test("the configured tab shows a crosscheck no other family can serve", async () => {
+    const row = rows[0];
+    if (row === undefined) throw new Error("the worker row is missing");
+    const { setup } = await frame({
+      rows: [
+        {
+          ...row,
+          resolution: {
+            ...spent,
+            crosscheck: undefined,
+            crosscheckProblem:
+              'the crosscheck at "max" found no allowed model from another family.',
+          },
+        },
+      ],
+    });
+    expect(setup.captureCharFrame()).toContain("found no allowed model from another family");
+    await setup.dispose();
+  });
+
   test("the write line writes the draft", async () => {
     let saved = 0;
     const { setup } = await frame({ onSave: () => saved++ });
@@ -881,6 +1060,7 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
       rung: undefined,
       cost: undefined,
       crosscheck: undefined,
+      crosscheckProblem: undefined,
       problem: 'profiles.pinned.model: "ghost" is not an allowed model in this session.',
     },
   ];
@@ -1088,6 +1268,7 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
       },
       data: {
         location: {
+          default: () => ({ directory: tempDir }),
           model: {
             list: () => [
               {
