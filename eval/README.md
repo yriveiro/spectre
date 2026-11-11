@@ -17,6 +17,8 @@ bun run eval -- --held-out       # only the rows that predate current work
 bun run eval -- --blind          # the fresh rows no description has seen
 bun run eval -- --model=opencode/mimo-v2.6-flash-free
 bun run eval -- --no-ripwire     # skip the lexical arms
+bun run eval:resume              # the resume contract, Docker and a scripted model
+bun run eval:resume -- --live --scenario=correction
 ```
 
 To keep a run and diff the next one against it:
@@ -54,6 +56,7 @@ the pinned model, pin one variant, or drop one by name.
 | `models.ts` | Which models run, and the variants they carry |
 | `guard.ts` | Stops a run whose failures are systemic rather than routing |
 | `run.ts` | The orchestrator |
+| `resume/` | The resume contract: Docker and a scripted model by default, a host live mode, scenario fixtures and normalized goldens |
 
 `score.ts`, `record.ts`, `observe.ts`, `progress.ts`, `models.ts`, `guard.ts`,
 `reporter.ts`, `boot.ts`, and `catalogue.ts` are pure or near-pure and have unit
@@ -88,6 +91,17 @@ A wrong profile is a task done on the wrong model, so it costs the price of the
 profile that should have run. The unit is the catalogue's rate per million
 tokens, and the prices come from the product's own resolver, so the corpus is
 measured against the routing the tool actually does.
+
+## The resume harness
+
+`eval/resume/` measures a different decision: when a delegated result is wrong,
+does the session continue the child that produced it, and when the work is a new
+unit, does it start a new one? The default run boots the Docker image with a
+scripted model, so it needs no credential and no spend. `--live` starts a host
+server and spends a real model on the same fixtures. The fixture holds the
+prompts and the script, the golden holds the normalized tool-call shape, and the
+raw transcripts stay in `.runs/`. The full command set and the mount layout are
+in `eval/resume/README.md`.
 
 ## The three slices
 

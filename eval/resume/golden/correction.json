@@ -1,0 +1,25 @@
+{
+  "scenario": "correction",
+  "mode": "mock",
+  "model": "mock/resume",
+  "calls": [
+    {
+      "agent": "spectre",
+      "hasSessionID": false,
+      "hasOutputSessionID": true,
+      "continuesFirst": false,
+      "status": "completed"
+    },
+    {
+      "agent": "spectre",
+      "hasSessionID": true,
+      "hasOutputSessionID": true,
+      "continuesFirst": true,
+      "status": "completed"
+    }
+  ],
+  "childSessions": 1,
+  "files": {
+    "notes.txt": "alpha\nBETA-42\ngamma\nORCHID-42"
+  }
+}

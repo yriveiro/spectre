@@ -1,0 +1,62 @@
+{
+  "id": "new-unit",
+  "description": "A second, independent unit of work spawns a new child instead of continuing the first. This is the negative control: a rule that always resumes would fail it.",
+  "setup": {},
+  "turns": [
+    {
+      "prompt": "Use the `subagent` tool. Do not do this yourself and do not ask questions. Spawn the `spectre` agent with description \"Write a\" and this task: \"Create /workspace/a.txt with exactly the word alpha.\" Do not call `tools.spectre.routing`. Let the child inherit your model. When it returns, report its `sessionID`."
+    },
+    {
+      "prompt": "This is a new unit of work, not a correction. Spawn a new child with description \"Write b\" and this task: \"Create /workspace/b.txt with exactly the word beta.\" Do not pass the first child's `sessionID`. Do not call `tools.spectre.routing`; let the child inherit your model. Report the new child's `sessionID`."
+    }
+  ],
+  "mock": [
+    {
+      "role": "parent",
+      "when": "Use the `subagent` tool",
+      "tool": "subagent",
+      "input": {
+        "agent": "spectre",
+        "description": "Write a",
+        "prompt": "Create /workspace/a.txt with exactly the word alpha."
+      }
+    },
+    {
+      "role": "child",
+      "when": "Create /workspace/a.txt",
+      "tool": "write",
+      "input": {
+        "path": "/workspace/a.txt",
+        "content": "alpha\n"
+      }
+    },
+    {
+      "role": "parent",
+      "when": "new unit of work",
+      "tool": "subagent",
+      "input": {
+        "agent": "spectre",
+        "description": "Write b",
+        "prompt": "Create /workspace/b.txt with exactly the word beta."
+      }
+    },
+    {
+      "role": "child",
+      "when": "Create /workspace/b.txt",
+      "tool": "write",
+      "input": {
+        "path": "/workspace/b.txt",
+        "content": "beta\n"
+      }
+    }
+  ],
+  "expect": {
+    "subagentCalls": 2,
+    "continuesFirstChild": false,
+    "childSessions": 2,
+    "files": {
+      "a.txt": "alpha",
+      "b.txt": "beta"
+    }
+  }
+}

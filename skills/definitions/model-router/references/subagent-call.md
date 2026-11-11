@@ -10,10 +10,25 @@ Read this page when you are about to spawn a routed subagent, or when you need t
 | `description` | yes | A 3-5 word label for the task. |
 | `prompt` | yes | The task itself. |
 | `model` | no | `providerID/modelID` or `providerID/modelID#variant`. |
-| `sessionID` | no | Continue a previous child instead of starting one. |
+| `sessionID` | no | Continue a child this session spawned. A follow-up keeps the child's context. |
 | `background` | no | Run without blocking the caller. |
 
 `agent` must name an agent the session can run as a subagent. The routing config accepts only a spectre agent, so take `agent` from the profile. A profile that names none uses `spectre`.
+
+## A follow-up
+
+Only the direct parent can continue a child. A sibling, a grandparent, or a new
+top-level session cannot.
+
+Omit `model` and the child keeps its model. Pass `model` to switch it. Pass a
+different `agent` to switch the agent, and its model applies unless `model`
+overrides it.
+
+Send the prompt as-is. Do not repeat the original brief. Name the defect, the
+gap, or the evidence.
+
+The host steers a running child and wakes a finished one. A resumed child stays
+in the directory it is in. Resume consumes no depth.
 
 ## Model precedence
 
@@ -42,6 +57,8 @@ subagent({
 })
 ```
 
-`model` is optional. When it is absent, the agent's own model runs the work. When the agent has no model of its own, the parent's model runs it. Every path still spawns something.
+`model` is optional. For a new child, an absent `model` uses the agent's model,
+then the parent's. On a follow-up, an absent `model` keeps the model the child
+already has.
 
 A `sessionID` continues a child. A `background` call returns at once, and the host notifies you when it finishes. Do not poll a background child.

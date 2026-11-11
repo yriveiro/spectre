@@ -106,6 +106,8 @@ When the work has to fan out, each subagent opens its own worktree as its first
 act: the call moves the caller in, and a caller owns one worktree. A session
 parked on main while its subagents work is the correct shape, not a workaround.
 
+A resumed child keeps the worktree it opened, so a correction lands in that tree.
+
 Turn them off only when the reader says "stop spectre mode" or "normal mode".
 Confirm in one line, then return to your default style.
 
@@ -149,7 +151,7 @@ skipped and why.
 | You just changed a decision that other files state | `principle-hygiene` |
 | You are inside code you are editing anyway | `principle-hygiene` |
 | A file, a log, or a file list is too big to read at once | `principle-guard-the-context-window` |
-| You are about to spawn a subagent, or a task splits into mechanical and judgement | `model-router` |
+| You are about to spawn a subagent, a delegated result needs correcting, or a task splits into mechanical and judgement | `model-router` |
 | A request is a whole task whose ORDER matters, rather than a claim you are holding | `playbook` |
 | You are about to add a layer, a wrapper, or a field | `principle-laziness-protocol` |
 | A value's origin or mutability takes more than one hop to answer | `principle-laziness-protocol` |

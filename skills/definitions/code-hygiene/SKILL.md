@@ -30,8 +30,8 @@ Mode tool that has no other surface.
 2. Spawn Sicko with the `subagent` tool. `agent` is `sicko`, which is the agent
    id, not the persona name. Pass the scope in `prompt`: the caller's files or
    diff, or the working-tree diff against the base branch, default `main`. Set
-   `description` to a short phrase naming the scope. Do not restate its rules.
-   The keep list is its own.
+   `description` to a short phrase naming the scope. Keep the `sessionID` the
+   spawn returns. Do not restate its rules. The keep list is its own.
 
    The tool is `subagent` and the argument is `agent`. There is no other way to
    spawn an agent, so if the name you reach for is not `subagent`, name the tool
@@ -69,8 +69,9 @@ Mode tool that has no other surface.
    inventory is an inventory: it cannot apply the keep list, so every hit it
    returns still goes through it.
 
-   Revert and rerun one rejected report with the failure named. Reject a second,
-   report it open, and fail this skill.
+   Revert, then send the rejection back to the same Sicko session with the
+   failure named. Keep the `sessionID`, name the defect, and do not spawn a
+   second Sicko. Reject a second, report it open, and fail this skill.
 
 4. Fix the accepted flags with the remedy Sicko named. Rename, extract, add a
    type, or restructure until the behavior is obvious without prose. `edit` for a
@@ -96,5 +97,5 @@ Mode tool that has no other surface.
    the comment. If not, delete the comment, report the constraint open, and
    sketch the out-of-scope work.
 
-7. Report what you deleted, the comments you restored, reruns, sketches, fixes,
+7. Report what you deleted, the comments you restored, follow-ups, sketches, fixes,
    encoding offers, encodings, unenforced constraints, and any other open work.

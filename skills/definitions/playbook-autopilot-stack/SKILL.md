@@ -35,7 +35,8 @@ self-proof, the repo's own pre-review checks from its `AGENTS.md`, a review-comm
 a rebase onto trunk, and green checks. Within roughly one run every owner has started a
 `decisions.tsv` trail (`show-me-your-work`), pushed its first branch snapshot, and opened
 the PR ready rather than draft. The trail stays uncommitted and comes back with the report.
-Each owner also keeps a `children.tsv`: subagent id, expected runtime, state.
+Each owner also keeps a `children.tsv`: the `sessionID` the spawn returned, expected
+runtime, state. The `sessionID` is how a correction reaches the same child.
 
 **Keep owner paths disjoint.** Every worker shares one filesystem, and the collision reads as a corrupted file rather than a scheduling bug. So:
 one writer per branch, disjoint files, and owners parallelised only across work that

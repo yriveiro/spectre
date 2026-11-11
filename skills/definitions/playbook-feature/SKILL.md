@@ -60,8 +60,9 @@ next reader can tell a considered decision from an oversight.
 
 Code-coupled work — one feature, one migration — goes to a single owner who fans
 out internally after the blocking phase. Parent-level fan-out is for slices that
-produce independent artifacts. Spawn a fresh owner rather than chaining
-interrupts, and never answer with a standing-by message that waits on a nested
+produce independent artifacts. Spawn a fresh owner for a new unit of work. A
+defect in the current owner's result is a follow-up on that owner's `sessionID`,
+not a new owner. Never answer with a standing-by message that waits on a nested
 agent.
 
 ## Phase D: Build

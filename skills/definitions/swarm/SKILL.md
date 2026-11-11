@@ -48,9 +48,10 @@ what order. The worker records both in its result.
 ## Phase B: Fan out
 
 Spawn all N workers in one message with `background: true`, each with its agent,
-its model, and the path to its own `brief.md`. Every brief stands alone, because a
-worker cannot ask you a question. Each one carries the goal, its scope, its exact
-slice or race arm, its own output path, how to verify, and what to report back.
+its model, and the path to its own `brief.md`. Every brief stands alone, because
+a worker cannot ask you a question. Each one carries the goal, its scope, its
+exact slice or race arm, its own output path, how to verify, and what to report
+back. Keep each worker's `sessionID`.
 
 Reports come back as `PASS`, `ISSUES` or `BLOCKED`, with the evidence attached. A
 worker that can prove a defect reports `ISSUES` and lists every issue it proved,
@@ -66,8 +67,9 @@ smaller swarm than the one you said you would run.
 Read the terminal results.
 
 A result that does not record the SHAs and method its brief named is not a
-result. Drop it and rerun that worker once. If it misses again, record a gap, and
-a gap is not a pass.
+result. Send that worker a follow-up naming the missing fields, and keep the same
+`sessionID`. One follow-up only. If it misses again, record a gap, and a gap is
+not a pass.
 
 For coverage, every slice you promised needs a result. Missing one means the
 coverage claim is wrong, not that the slice was fine. A worker whose path is empty

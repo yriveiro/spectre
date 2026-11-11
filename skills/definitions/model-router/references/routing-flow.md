@@ -45,7 +45,11 @@ flowchart TD
     Z -- "no" --> AA["Done"]
     Z -- "yes" --> AB["Spawn the crosscheck on crosscheck.ref as a reviewer"]
     AB --> AC["The reviewer returns challenges with evidence"]
-    AC --> AD{"The judge accepts a challenge?"}
+    AC --> EVID{"Does the challenge carry evidence?"}
+    EVID -- "yes" --> AD
+    EVID -- "no" --> ASK["Continue the reviewer with its sessionID for the source and line"]
+    ASK --> AC
+    AD{"The judge accepts a challenge?"}
     AD -- "no" --> AA
     AD -- "yes" --> AE["Continue the primary with the accepted challenges"]
     AE --> AF["The primary revises the result"]
@@ -70,6 +74,7 @@ The router ends at `resolved`. It does not spawn a subagent, run a review, or re
 | The judge chooses | `judge: used` | Takes the row named by `judge.profile`. |
 | The judge is unsure | Raise the effort, then `judge: used` | Takes the escalated row. |
 | The profile finds a crosscheck | Primary → review → judge | Accepts or rejects each challenge, then revises once when it accepts one. |
+| A challenge is unclear | Resume the reviewer once | Asks for the source and line, then rejects it when none arrives. |
 | The profile asks and finds no crosscheck | `crosscheckProblem` | Says the problem and spawns the primary without a review. |
 
 ## The crosscheck review
@@ -101,15 +106,17 @@ Each defect needs evidence. If you find none, reply exactly: no challenge.
 
 For a code change, tell the reviewer to read the worktree and run the checks it needs. It has the same tools as the primary.
 
+Keep the reviewer's `sessionID` too. A challenge that is unclear goes back to the reviewer once for evidence.
+
 ### 3. Judge the challenges
 
-Accept a challenge only when the evidence supports it. A different opinion is not a challenge. A style preference is not a challenge. A second guess with no evidence is not a challenge.
+Accept a challenge only when the evidence supports it. A different opinion is not a challenge. A style preference is not a challenge. A second guess with no evidence is not a challenge. A challenge without evidence is not rejected on sight. Continue the reviewer with its `sessionID` and ask for the source and line. Reject it when the evidence still does not come.
 
 When you accept a challenge, keep the exact evidence. You will send it to the primary.
 
 ### 4. Revise once
 
-Continue the primary with its `sessionID`. Give it the accepted challenges and their evidence. Ask for a revised result and a list of what changed. Do not run the whole task again, and do not start a new child.
+Continue the primary with its `sessionID`. Give it the accepted challenges and their evidence. Ask for a revised result and a list of what changed. Do not run the whole task again, and do not start a new child. A follow-up is not a new review round.
 
 One revision round ends the review. If the revision raises a new question, report it. Do not start a second review loop.
 

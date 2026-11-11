@@ -43,6 +43,23 @@ subagent({
 
 > Routed to `mechanical` on `<provider>/<model>#<rung>`. The judge chose it at 0.93 confidence. One command and one log, no judgement needed.
 
+## If the result is wrong
+
+The report says the suite passed and the log holds a failing assertion. That is
+a correction, not a new task. Continue the same child:
+
+```text
+subagent({
+  agent:       mechanical.agent,
+  description: "Recheck the failing assertion",
+  prompt:      "Your report says the suite passed. `bun test auth` returns one failure at auth.spec.ts:42. Read that output again and report the failing test and its assertion.",
+  sessionID:   "<the id the first call returned>",
+})
+```
+
+`model` is absent, so the child keeps the routed one. Do not call `routing`
+again: the profile was chosen for the task, not for this turn.
+
 ## A skipped judge
 
 When `judge.status` is `skipped`, read `reason`, then pick the profile from the `match` lines yourself. The rest of the run is the same:

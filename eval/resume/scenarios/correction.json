@@ -1,0 +1,62 @@
+{
+  "id": "correction",
+  "description": "A parent delegates, the result is rejected with a defect, and the correction continues the same child. The remembered word is only in the first child prompt, so a new child cannot produce the final file from the second prompt.",
+  "setup": {},
+  "turns": [
+    {
+      "prompt": "Use the `subagent` tool. Do not do this yourself and do not ask questions. Spawn the `spectre` agent with description \"Write the notes file\" and this task: \"Create /workspace/notes.txt with exactly three lines: alpha, beta, gamma. Remember the word ORCHID-42, but do not write it in this turn.\" Do not call `tools.spectre.routing`. Let the child inherit your model. When it returns, report its `sessionID`."
+    },
+    {
+      "prompt": "The child's file is wrong: line 2 must be BETA-42 and line 4 must be the word the child was told to remember. Continue the same child session with `sessionID`. Do not start a new child. Do not call `tools.spectre.routing` for this follow-up. Do not repeat the remembered word in your follow-up; refer to it as the word the child was told to remember. Then report the `sessionID` you continued."
+    }
+  ],
+  "mock": [
+    {
+      "role": "parent",
+      "when": "Use the `subagent` tool",
+      "tool": "subagent",
+      "input": {
+        "agent": "spectre",
+        "description": "Write the notes file",
+        "prompt": "Create /workspace/notes.txt with exactly three lines: alpha, beta, gamma. Remember the word ORCHID-42, but do not write it in this turn."
+      }
+    },
+    {
+      "role": "child",
+      "when": "Create /workspace/notes.txt",
+      "tool": "write",
+      "input": {
+        "path": "/workspace/notes.txt",
+        "content": "alpha\nbeta\ngamma\n"
+      }
+    },
+    {
+      "role": "parent",
+      "when": "The child's file is wrong",
+      "tool": "subagent",
+      "input": {
+        "agent": "spectre",
+        "description": "Correct the notes file",
+        "prompt": "Edit /workspace/notes.txt so it has exactly four lines: alpha, BETA-42, gamma, and the word you were told to remember.",
+        "sessionID": "$firstChild"
+      }
+    },
+    {
+      "role": "child",
+      "when": "Edit /workspace/notes.txt",
+      "tool": "write",
+      "input": {
+        "path": "/workspace/notes.txt",
+        "content": "alpha\nBETA-42\ngamma\nORCHID-42\n"
+      }
+    }
+  ],
+  "expect": {
+    "subagentCalls": 2,
+    "continuesFirstChild": true,
+    "childSessions": 1,
+    "files": {
+      "notes.txt": "alpha\nBETA-42\ngamma\nORCHID-42"
+    }
+  }
+}

@@ -18,6 +18,12 @@ task, picks a model from the allowlist in \`spectre.json\`, and hands back the
 exact string to pass as \`model\`. Do not write a model id from memory, whatever
 the provider offers.
 
+A delegated result you reject is a follow-up, not a new child. Every \`subagent\`
+call returns a \`sessionID\`, and you keep it. Correct, extend, or challenge with
+that \`sessionID\`, and omit \`model\` so the child keeps the model it was routed
+on. Spawn a new child only when the child's context is the defect, the work is a
+new unit, or the session is gone.
+
 A task you can finish by reading a file or two needs no subagent and no routing.
 Delegating small work costs more than doing it, so delegate the parts that are
 worth a separate context, and route each of those.

@@ -37,9 +37,11 @@ Every file has one writer. Readers aggregate at read time.
   Numbered lines, one constraint each: model policy, stack shape, verification bar,
   forbidden paths, escalation policy. Paste it verbatim into every spawn, and append a
   line whenever you catch yourself restating an instruction.
-- `units.tsv`, one row per unit with a header line: `id`, `track`, `state`, `branch`, `pr`,
-  `head`, `brief`. Update rows in place. States are `pending`, `briefed`, `running`,
-  `landed`, `failed`, `abandoned`, `zombie-reconciled`.
+- `units.tsv`, one row per unit with a header line: `id`, `track`, `state`, `branch`,
+  `pr`, `head`, `session`, `brief`. Update rows in place. States are `pending`,
+  `briefed`, `running`, `landed`, `failed`, `abandoned`, `zombie-reconciled`. `session`
+  is the `sessionID` the spawn returned, and a correction is a follow-up on that child,
+  not a new worker.
 - `ledger.tsv`, one row per verdict: `pr`, `head`, `verdict`, `lanes`, `at`. Verdicts are
   `live-verified`, `unit-test-verified`, `type-check-only`, `verifier-blocked`,
   `verifier-failed`. A new head SHA voids the row, and CI green is an input to a verdict,
@@ -48,7 +50,8 @@ Every file has one writer. Readers aggregate at read time.
   holds the PR numbers bottom-up, `branches` and `heads` are the parallel arrays, and
   `lowestUnmerged` is the one to land next.
 - `overview.md`, the durable pull request and issue list. Append, never rewrite.
-- `inbox/`, one file per completion: status, branch, head SHA, PR, verdict, deviations.
+- `inbox/`, one file per completion: status, branch, head SHA, PR, verdict, deviations,
+  session.
 - `gates.md`, the human's questions: the question, the options, and the default when
   nobody answers.
 - `decisions.tsv`, the trail: `at`, `unit`, `head`, `decision`, `why`.
