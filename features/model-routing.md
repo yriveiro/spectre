@@ -128,7 +128,7 @@ and its own feature file. Routing does not know it exists.
 | `profiles[*].effort` | The thinking the task needs. A name from the catalogue, not a closed set. |
 | `profiles[*].model` | Optional. A pin. It wins over `effort`. |
 | `profiles[*].match` | The routing surface: the moment, with the nouns a prompt would carry, and one exclusion. |
-| `profiles[*].crosscheck` | Optional. The second opinion, stated as a requirement rather than a model. |
+| `profiles[*].crosscheck` | Optional. The second opinion. Its `effort` states the requirement; its optional `model` pins an allowlist model, and the pin wins over the crosscheck effort, the list and the family rule. |
 | `profiles[*].why` | One line saying when this choice fits, for the human. The resolver never reads it. |
 | `profiles[*].agent` | Optional. Must be a spectre agent. Defaults to `spectre`. |
 | `$schema` | Accepted and ignored. There is no emitted JSON Schema artifact. |

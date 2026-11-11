@@ -67,7 +67,10 @@ const copy = (draft: Draft): MutableDraft => ({
     effort: one.effort,
     match: one.match,
     why: one.why,
-    crosscheck: one.crosscheck === undefined ? undefined : { effort: one.crosscheck.effort },
+    crosscheck:
+      one.crosscheck === undefined
+        ? undefined
+        : { effort: one.crosscheck.effort, pinned: one.crosscheck.pinned },
     agent: one.agent,
     pinned: one.pinned,
     enabled: one.enabled,

@@ -7,7 +7,8 @@ import { FILE_NAME, KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
 import {
   addProfilePrompt,
   applied,
-  crosscheckPicker,
+  crosscheckEffortPicker,
+  crosscheckModelPicker,
   DEFAULT_PROVIDER,
   type Edit,
   effortPicker,
@@ -139,9 +140,6 @@ export const crosscheckRows = (
 
 const INDENT = 2;
 
-/** The widest a compact select grows before its value truncates. */
-const COMPACT_SELECT_MAX_WIDTH = 64;
-
 export type LayoutMetrics = {
   readonly modalWidth: number;
   readonly bodyHeight: number;
@@ -170,7 +168,6 @@ export type LayoutMetrics = {
     readonly rungs: number;
     readonly model: number;
     readonly cost: number;
-    readonly move: number;
     readonly remove: number;
   };
 };
@@ -223,7 +220,6 @@ export const layoutMetrics = (input: {
 
   const eGutter = 2;
   const ePriority = 8;
-  const eMove = 4;
   const eRemove = 10;
   const maxAlias = input.models.reduce((max, one) => Math.max(max, one.alias.length), 5);
   const eAlias = Math.max(8, Math.min(16, maxAlias + 1));
@@ -247,10 +243,10 @@ export const layoutMetrics = (input: {
     return Math.max(max, text.length);
   }, 4);
   const eCost = Math.max(6, Math.min(12, maxEntryCost));
-  const eGaps = 8;
+  const eGaps = 7;
   const eModel = Math.max(
     18,
-    innerWidth - eGutter - ePriority - eAlias - eFamily - eRungs - eCost - eMove - eRemove - eGaps,
+    innerWidth - eGutter - ePriority - eAlias - eFamily - eRungs - eCost - eRemove - eGaps,
   );
 
   return {
@@ -281,7 +277,6 @@ export const layoutMetrics = (input: {
       rungs: eRungs,
       model: eModel,
       cost: eCost,
-      move: eMove,
       remove: eRemove,
     },
   };
@@ -320,8 +315,6 @@ const selectControl = (input: {
   readonly colors: Palette;
   readonly width?: number;
   readonly flexGrow?: number;
-  /** Size to the value, keeping the chevron beside it instead of at the column edge. */
-  readonly compact?: boolean;
   readonly value: string;
   readonly tone?: RGBA | undefined;
   readonly onOpen: () => void;
@@ -332,13 +325,12 @@ const selectControl = (input: {
     "box",
     {
       width: input.width,
-      maxWidth: input.compact === true ? COMPACT_SELECT_MAX_WIDTH : undefined,
       flexGrow: input.flexGrow,
-      flexShrink: input.flexGrow !== undefined || input.compact === true ? 1 : 0,
+      flexShrink: input.flexGrow !== undefined ? 1 : 0,
       flexBasis: input.flexGrow !== undefined && input.width === undefined ? 0 : undefined,
       minWidth: input.flexGrow !== undefined ? 0 : undefined,
       flexDirection: "row",
-      justifyContent: input.compact === true ? "flex-start" : "space-between",
+      justifyContent: "space-between",
       paddingLeft: 1,
       paddingRight: 1,
       backgroundColor: () => (hovered() ? input.colors.selectHoverBg : input.colors.insetBg),
@@ -350,9 +342,9 @@ const selectControl = (input: {
       "text",
       {
         fg: () => (hovered() ? input.colors.cyan : baseTone),
-        flexGrow: input.compact === true ? 0 : 1,
+        flexGrow: 1,
         flexShrink: 1,
-        flexBasis: input.compact === true ? undefined : 0,
+        flexBasis: 0,
         minWidth: 0,
         truncate: true,
         wrapMode: "none",
@@ -433,17 +425,14 @@ const removeBadge = (input: {
 
 const moveBadges = (input: {
   readonly colors: Palette;
-  readonly width: number;
   readonly onUp: () => void;
   readonly onDown: () => void;
 }): JSX.Element =>
   h(
     "box",
     {
-      width: input.width,
       flexShrink: 0,
       flexDirection: "row",
-      justifyContent: "center",
       columnGap: 1,
     },
     h("text", { fg: input.colors.muted, wrapMode: "none", onMouseUp: input.onUp }, "↑"),
@@ -666,9 +655,9 @@ const profileListRow = (
 };
 
 /**
- * What the crosscheck control says. The resolved model is the answer a session
- * spends. A configured crosscheck that found none names the requirement it
- * asked for, so "no model" is not mistaken for "off".
+ * What the crosscheck model control says. The resolved model is the answer a
+ * session spends. A configured crosscheck that found none names the requirement
+ * it asked for, so "no model" is not mistaken for "off".
  */
 const crosscheckValue = (row: ProfileRow): string => {
   const configured = row.profile.crosscheck;
@@ -677,6 +666,13 @@ const crosscheckValue = (row: ProfileRow): string => {
   if (resolved !== undefined) return resolved;
   const want = configured.effort ?? "profile effort";
   return `No model (${want})`;
+};
+
+/** What the crosscheck effort control says. */
+const crosscheckEffortValue = (row: ProfileRow): string => {
+  const configured = row.profile.crosscheck;
+  if (configured === undefined) return "Off";
+  return configured.effort ?? "Profile effort";
 };
 
 const profileRow = (
@@ -688,6 +684,7 @@ const profileRow = (
     readonly effort: () => void;
     readonly pin: () => void;
     readonly crosscheck: () => void;
+    readonly crosscheckEffort: () => void;
     readonly info: () => void;
     readonly selectRow: () => void;
   },
@@ -742,13 +739,12 @@ const profileRow = (
         alignItems: "center",
         width: "100%",
         columnGap: 1,
-        paddingRight: 1,
       },
       h(
         "box",
         {
-          // The label is right-aligned so the select starts at the Model
-          // column whatever width the Profile column takes.
+          // The label is right-aligned so both selects start at the Model and
+          // Effort columns whatever width the Profile column takes.
           width: cols.gutter + cols.info + cols.name + 2,
           flexShrink: 0,
           flexDirection: "row",
@@ -758,11 +754,20 @@ const profileRow = (
       ),
       selectControl({
         colors,
-        compact: true,
+        width: cols.model,
+        flexGrow: 1,
         value: crosscheckValue(row),
+        tone: profile.crosscheck === undefined ? colors.muted : undefined,
         onOpen: actions.crosscheck,
       }),
-      h("box", { flexGrow: 1 }),
+      selectControl({
+        colors,
+        width: cols.effort,
+        value: crosscheckEffortValue(row),
+        tone: profile.crosscheck === undefined ? colors.muted : undefined,
+        onOpen: actions.crosscheckEffort,
+      }),
+      h("box", { width: cols.cost, flexShrink: 0 }),
     ),
     show(
       () => row.resolution?.crosscheckProblem !== undefined,
@@ -774,6 +779,31 @@ const profileRow = (
     ),
   );
 };
+
+const priorityCell = (input: {
+  readonly colors: Palette;
+  readonly width: number;
+  readonly order: number | undefined;
+  readonly up: (() => void) | undefined;
+  readonly down: (() => void) | undefined;
+}): JSX.Element =>
+  h(
+    "box",
+    {
+      width: input.width,
+      flexShrink: 0,
+      flexDirection: "row",
+      columnGap: 1,
+    },
+    h(
+      "text",
+      { fg: input.colors.faint, wrapMode: "none" },
+      input.order === undefined ? "-" : String(input.order),
+    ),
+    input.up === undefined || input.down === undefined
+      ? null
+      : moveBadges({ colors: input.colors, onUp: input.up, onDown: input.down }),
+  );
 
 const entryRow = (
   colors: Palette,
@@ -809,7 +839,13 @@ const entryRow = (
       "box",
       { flexDirection: "row", columnGap: 1, width: "100%" },
       cell(cols.gutter, () => (selected ? "▸" : " "), colors.cyan),
-      cell(cols.priority, () => (order === undefined ? "-" : String(order)), colors.faint),
+      priorityCell({
+        colors,
+        width: cols.priority,
+        order,
+        up: mode === "crosscheck" && actions.enabled !== true ? undefined : actions.up,
+        down: mode === "crosscheck" && actions.enabled !== true ? undefined : actions.down,
+      }),
       cell(cols.alias, () => row.alias, selected ? colors.cyan : colors.text),
       cell(cols.family, () => model?.family ?? "-", colors.text),
       cell(
@@ -823,14 +859,6 @@ const entryRow = (
         () => (model === undefined ? "-" : formatCost(model.costInput, model.costOutput)),
         colors.muted,
       ),
-      mode === "crosscheck" && actions.enabled !== true
-        ? cell(cols.move, () => "", colors.faint)
-        : moveBadges({
-            colors,
-            width: cols.move,
-            onUp: actions.up ?? (() => {}),
-            onDown: actions.down ?? (() => {}),
-          }),
       mode === "crosscheck"
         ? statusToggleBadge({
             colors,
@@ -909,7 +937,6 @@ const headerCells = {
     cell(cols.rungs, () => "Rungs", colors.blue),
     modelCell(cols.model, () => "Model", colors.blue),
     costCell(cols.cost, () => "Cost", colors.blue),
-    cell(cols.move, () => "", colors.blue),
     cell(cols.remove, () => (mode === "crosscheck" ? "Crosscheck" : "Remove"), colors.blue),
   ],
 };
@@ -999,6 +1026,7 @@ const activeTabBody = (input: {
     readonly effort: () => void;
     readonly pin: () => void;
     readonly crosscheck: () => void;
+    readonly crosscheckEffort: () => void;
     readonly info: () => void;
     readonly selectRow: () => void;
   };
@@ -1446,7 +1474,16 @@ export const page = (input: PageInput): JSX.Element => {
       ),
     crosscheck: () =>
       run(() =>
-        crosscheckPicker({
+        crosscheckModelPicker({
+          dialog,
+          draft: input.draft,
+          models: input.catalogue,
+          profile: row.profile,
+        }),
+      ),
+    crosscheckEffort: () =>
+      run(() =>
+        crosscheckEffortPicker({
           dialog,
           draft: input.draft,
           models: input.catalogue,

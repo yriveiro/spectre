@@ -13,9 +13,11 @@ import { Schema } from "effect";
 /** One model, or several in order of preference. */
 const ModelNames = Schema.Union([Schema.String, Schema.Array(Schema.String)]);
 
-/** The second opinion: the effort it is asked for. */
+/** The second opinion: the effort it is asked for, and an optional pin. */
 const Crosscheck = Schema.Struct({
   effort: Schema.optional(Schema.String),
+  /** A pin. It wins over the crosscheck list and the different-family rule. */
+  model: Schema.optional(ModelNames),
 });
 export type Crosscheck = typeof Crosscheck.Type;
 
@@ -33,6 +35,14 @@ const Profile = Schema.Struct({
   agent: Schema.optional(Schema.String),
 });
 export type ProfileEntry = typeof Profile.Type;
+
+/** A pin as a list, whether the file wrote one name or several. */
+export const modelNames = (
+  model: string | ReadonlyArray<string> | undefined,
+): ReadonlyArray<string> => {
+  if (model === undefined) return [];
+  return typeof model === "string" ? [model] : model;
+};
 
 /**
  * A path to the reader's own copy of the ASD-STE100 dictionary, as JSON.

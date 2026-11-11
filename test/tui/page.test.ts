@@ -6,7 +6,9 @@ import { createComponent, testRender } from "@opentui/solid";
 import {
   applied,
   compatibleModelsFor,
-  crosscheckPicker,
+  crosscheckEffortOptionsFor,
+  crosscheckEffortPicker,
+  crosscheckModelPicker,
   effortModal,
   effortOptionsFor,
   effortPicker,
@@ -270,18 +272,18 @@ describe("the modal draws what the session would spend", () => {
     await reading.setup.dispose();
   });
 
-  test("the configured tab carries a crosscheck control on every profile, and None opens the picker", async () => {
-    const { setup, shownRenders } = await frame({});
+  test("the configured tab carries a crosscheck model and effort control on every profile, and None opens the picker", async () => {
+    const { setup, asked } = await frame({});
     const lines = setup.captureCharFrame().split("\n");
     const noneLine = lines.findIndex(
-      (one) => one.includes("↳ crosscheck:") && one.includes("None"),
+      (one) => one.includes("↳ crosscheck:") && one.includes("None") && one.includes("Off"),
     );
     expect(noneLine).toBeGreaterThan(-1);
     const line = lines[noneLine];
     if (line === undefined) throw new Error("the frame has no crosscheck line");
     await setup.mockMouse.click(line.indexOf("None"), noneLine);
     await setup.flush();
-    expect(shownRenders.length).toBe(1);
+    expect(asked).toContain('The crosscheck model "worker" spends');
     await setup.dispose();
   });
 
@@ -289,7 +291,7 @@ describe("the modal draws what the session would spend", () => {
     const configured: Draft = {
       ...draft,
       profiles: draft.profiles.map((one, at) =>
-        at === 0 ? { ...one, crosscheck: { effort: "high" } } : one,
+        at === 0 ? { ...one, crosscheck: { effort: "high", pinned: undefined } } : one,
       ),
     };
     const firstRow = rows[0];
@@ -323,6 +325,8 @@ describe("the modal draws what the session would spend", () => {
     const header = lines.find((one) => one.includes("Info") && one.includes("Profile"));
     if (header === undefined) throw new Error("the frame has no header row");
     expect(header.indexOf("Info")).toBeLessThan(header.indexOf("Profile"));
+    // The crosscheck effort select sits in the same column as the primary's.
+    expect(cross.lastIndexOf("high")).toBe(header.indexOf("Effort") + 1);
 
     await setup.dispose();
   });
@@ -610,6 +614,8 @@ describe("the page changes the draft and writes it only when asked", () => {
     expect(row).toBeGreaterThan(-1);
     const line = lines[row];
     if (line === undefined) throw new Error("the frame has no glm-flash row");
+    // The arrows are inside the Priority cell, beside the number.
+    expect(/\b2\s+↑\s+↓/.test(line)).toBe(true);
     await setup.mockMouse.click(line.indexOf("↑"), row);
     await setup.flush();
     expect(changes[0]?.models.map((one) => [one.alias, one.priority])).toEqual([
@@ -667,6 +673,7 @@ describe("the page changes the draft and writes it only when asked", () => {
     expect(row).toBeGreaterThan(-1);
     const line = lines[row];
     if (line === undefined) throw new Error("the frame has no glm-flash row");
+    expect(/\b2\s+↑\s+↓/.test(line)).toBe(true);
     await setup.mockMouse.click(line.indexOf("↑"), row);
     await setup.flush();
     expect(changes[0]?.crosscheck).toEqual(["glm-flash", "muse"]);
@@ -1001,70 +1008,37 @@ describe("the page changes the draft and writes it only when asked", () => {
     });
   });
 
-  test("the crosscheck picker sets the effort and turns the second opinion off", async () => {
+  test("the crosscheck model picker pins a model, and Off turns the second opinion off", async () => {
     const target = draft.profiles[0];
     if (target === undefined) throw new Error("the worker profile is missing");
 
-    const open = async (profile: typeof target, answer?: string) => {
-      const { shownRenders, context } = host(answer);
-      const pending = crosscheckPicker({
-        dialog: context.ui.dialog as never,
-        draft,
-        models,
-        profile,
-      });
-      expect(shownRenders.length).toBe(1);
-      const setup = await testRender(
-        () =>
-          createComponent(PluginContextProvider, {
-            value: context as never,
-            get children() {
-              return shownRenders[0]?.() as never;
-            },
-          }),
-        { width: 96, height: 28 },
-      );
-      await setup.renderOnce();
-      return { setup, pending };
-    };
-
-    const first = await open(target);
-    const firstFrame = first.setup.captureCharFrame();
-    expect(firstFrame).toContain('The crosscheck for "worker"');
-    expect(firstFrame).toContain("Profile effort");
-    expect(firstFrame).not.toContain("Prefer free");
-    const highLine = firstFrame.split("\n").findIndex((one) => /\bhigh\s+available/.test(one));
-    expect(highLine).toBeGreaterThan(-1);
-    await first.setup.mockMouse.click(6, highLine);
-    await first.setup.flush();
-    expect(await first.pending).toEqual({
+    const { asked, context } = host("glm-flash");
+    const pinned = await crosscheckModelPicker({
+      dialog: context.ui.dialog as never,
+      draft,
+      models,
+      profile: target,
+    });
+    expect(asked).toContain('The crosscheck model "worker" spends');
+    expect(pinned).toEqual({
       kind: "crosscheck",
       profile: "worker",
-      crosscheck: { effort: "high" },
+      crosscheck: { effort: undefined, pinned: "glm-flash" },
     });
-    await first.setup.dispose();
 
-    const configured = applied(draft, {
-      kind: "crosscheck",
-      profile: "worker",
-      crosscheck: { effort: "high" },
-    });
+    if (pinned === undefined) throw new Error("the pin was not chosen");
+    const configured = applied(draft, pinned);
     const worker = configured.profiles[0];
     if (worker === undefined) throw new Error("the configured worker profile is missing");
-    const off = await open(worker);
-    const offLine = off.setup
-      .captureCharFrame()
-      .split("\n")
-      .findIndex((one) => /\bOff\s+available/.test(one));
-    expect(offLine).toBeGreaterThan(-1);
-    await off.setup.mockMouse.click(6, offLine);
-    await off.setup.flush();
-    expect(await off.pending).toEqual({
-      kind: "crosscheck",
-      profile: "worker",
-      crosscheck: undefined,
+
+    const offHost = host("off");
+    const off = await crosscheckModelPicker({
+      dialog: offHost.context.ui.dialog as never,
+      draft: configured,
+      models,
+      profile: worker,
     });
-    await off.setup.dispose();
+    expect(off).toEqual({ kind: "crosscheck", profile: "worker", crosscheck: undefined });
 
     const cleared = applied(configured, {
       kind: "crosscheck",
@@ -1074,6 +1048,126 @@ describe("the page changes the draft and writes it only when asked", () => {
     expect(
       resolveDraft(cleared, models).find((one) => one.profile === "worker")?.crosscheck,
     ).toBeUndefined();
+  });
+
+  test("the crosscheck effort picker keeps the pin and sets the effort", async () => {
+    const configured: Draft = {
+      ...draft,
+      profiles: draft.profiles.map((one, at) =>
+        at === 0 ? { ...one, crosscheck: { effort: undefined, pinned: "glm-flash" } } : one,
+      ),
+    };
+    const worker = configured.profiles[0];
+    if (worker === undefined) throw new Error("the configured worker profile is missing");
+
+    const { shownRenders, context } = host();
+    const pending = crosscheckEffortPicker({
+      dialog: context.ui.dialog as never,
+      draft: configured,
+      models,
+      profile: worker,
+    });
+    expect(shownRenders.length).toBe(1);
+    const setup = await testRender(
+      () =>
+        createComponent(PluginContextProvider, {
+          value: context as never,
+          get children() {
+            return shownRenders[0]?.() as never;
+          },
+        }),
+      { width: 96, height: 28 },
+    );
+    await setup.renderOnce();
+    const drawn = setup.captureCharFrame();
+    expect(drawn).toContain('The crosscheck effort for "worker"');
+    expect(drawn).toContain("glm-flash (acme/glm-5.3-flash)");
+    expect(drawn).toContain("low, high, max");
+
+    const highLine = drawn.split("\n").findIndex((one) => /\bhigh\s+available/.test(one));
+    expect(highLine).toBeGreaterThan(-1);
+    await setup.mockMouse.click(6, highLine);
+    await setup.flush();
+    expect(await pending).toEqual({
+      kind: "crosscheck",
+      profile: "worker",
+      crosscheck: { effort: "high", pinned: "glm-flash" },
+    });
+    await setup.dispose();
+  });
+
+  test("the crosscheck effort options read the pin's rungs, and the list when there is no pin", () => {
+    const pinned: Draft = {
+      ...draft,
+      profiles: draft.profiles.map((one, at) =>
+        at === 0 ? { ...one, crosscheck: { effort: "high", pinned: "glm-flash" } } : one,
+      ),
+    };
+    const worker = pinned.profiles[0];
+    if (worker === undefined) throw new Error("the worker profile is missing");
+    const options = crosscheckEffortOptionsFor(pinned, models, worker);
+    const byName = new Map(options.map((one) => [one.name, one]));
+
+    expect(byName.get("Profile effort")?.value).toBeUndefined();
+    expect(byName.get("Profile effort")?.available).toBe(true);
+    expect(byName.get("Profile effort")?.targetRef).toBe("acme/glm-5.3-flash#high");
+    expect(byName.get("high")?.available).toBe(true);
+    expect(byName.get("high")?.current).toBe(true);
+    expect(byName.get("high")?.targetRef).toBe("acme/glm-5.3-flash#high");
+    expect(byName.get("medium")?.available).toBe(false);
+    expect(byName.get("medium")?.reason).toContain("not supported by acme/glm-5.3-flash");
+
+    const target = draft.profiles[0];
+    if (target === undefined) throw new Error("the worker profile is missing");
+    const auto = crosscheckEffortOptionsFor(draft, models, target);
+    const autoByName = new Map(auto.map((one) => [one.name, one]));
+    expect(autoByName.get("high")?.available).toBe(true);
+    expect(autoByName.get("high")?.targetRef).toBe("acme/glm-5.3-flash#high");
+  });
+
+  test("the crosscheck effort options disable a Profile effort the pin cannot take", () => {
+    const pinned: Draft = {
+      ...draft,
+      profiles: draft.profiles.map((one, at) =>
+        at === 0
+          ? {
+              ...one,
+              effort: "medium",
+              crosscheck: { effort: undefined, pinned: "glm-flash" },
+            }
+          : one,
+      ),
+    };
+    const worker = pinned.profiles[0];
+    if (worker === undefined) throw new Error("the worker profile is missing");
+    const profileRow = crosscheckEffortOptionsFor(pinned, models, worker).find(
+      (one) => one.name === "Profile effort",
+    );
+    expect(profileRow?.available).toBe(false);
+    expect(profileRow?.reason).toContain("not supported by acme/glm-5.3-flash");
+  });
+
+  test("a pinned crosscheck with no profile effort still offers the pin", () => {
+    const pinned: Draft = {
+      ...draft,
+      profiles: draft.profiles.map((one, at) =>
+        at === 0
+          ? {
+              ...one,
+              effort: undefined,
+              pinned: "muse",
+              crosscheck: { effort: undefined, pinned: "glm-flash" },
+            }
+          : one,
+      ),
+    };
+    const worker = pinned.profiles[0];
+    if (worker === undefined) throw new Error("the worker profile is missing");
+    const profileRow = crosscheckEffortOptionsFor(pinned, models, worker).find(
+      (one) => one.name === "Profile effort",
+    );
+    expect(profileRow?.available).toBe(true);
+    expect(profileRow?.targetRef).toBe("acme/glm-5.3-flash");
   });
 
   test("the configured tab shows a crosscheck no other family can serve", async () => {

@@ -5,6 +5,7 @@ import { type KeyEvent, TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import {
+  candidates,
   DEFAULT_AGENT,
   DEFAULT_TIMEOUT_MS,
   effortOf,
@@ -15,23 +16,23 @@ import {
   type Known,
   ladderOf,
   proposeAlias,
+  resolveProfile,
   rungs,
   SYSTEMONE_ENDPOINT,
   SYSTEMONE_KEY_ENV,
 } from "../tools/definitions/routing/index.ts";
 import {
-  type CrosscheckChoice,
-  type CrosscheckOption,
-  crosscheckOptionsFor,
   type Draft,
   formatConfig,
   formatCost,
   isProfileEnabled,
   type Model,
+  modelInfo,
   normalizeCost,
   type Profile,
   type Resolution,
   resolve as resolveDraft,
+  spendRef,
 } from "./data.ts";
 import { bindKeyboard, field, h, palette, show } from "./render.ts";
 
@@ -417,6 +418,8 @@ export const selectedModelFor = (
 
 export type EffortOptionRow = {
   readonly name: string;
+  /** The effort the row sets. `undefined` is the profile's own effort. */
+  readonly value: string | undefined;
   readonly available: boolean;
   readonly current: boolean;
   readonly targetRef: string;
@@ -447,6 +450,7 @@ export const effortOptionsFor = (
       const fallbackRef = selected?.ref ?? "No model selected";
       return {
         name,
+        value: name,
         available: false,
         current,
         targetRef: fallbackRef,
@@ -466,6 +470,7 @@ export const effortOptionsFor = (
     if (available) {
       return {
         name,
+        value: name,
         available: true,
         current,
         targetRef,
@@ -476,6 +481,7 @@ export const effortOptionsFor = (
 
     return {
       name,
+      value: name,
       available: false,
       current,
       targetRef: baseRef,
@@ -500,7 +506,15 @@ export const effortModal = (input: {
   readonly profile: Profile;
   readonly draft: Draft;
   readonly models: ReadonlyArray<Model>;
-  readonly onSelect: (effort: string) => void;
+  /** The heading. Defaults to the primary effort question. */
+  readonly title?: string | undefined;
+  /** The rows to show. Defaults to the primary's effort options. */
+  readonly rows?: ReadonlyArray<EffortOptionRow> | undefined;
+  /** The model the requirement is read against, as the header shows it. */
+  readonly selectedText?: string | undefined;
+  /** The efforts the selected model declares, as the header shows them. */
+  readonly availableText?: string | undefined;
+  readonly onSelect: (effort: string | undefined) => void;
   readonly onCancel: () => void;
 }): JSX.Element => {
   const context = usePlugin();
@@ -508,7 +522,7 @@ export const effortModal = (input: {
     typeof context.theme.surface === "function" ? context.theme.surface("dialog") : context.theme;
   const colors = palette(context.theme, dialogTheme);
   const selected = selectedModelFor(input.draft, input.models, input.profile);
-  const rows = effortOptionsFor(input.draft, input.models, input.profile);
+  const rows = input.rows ?? effortOptionsFor(input.draft, input.models, input.profile);
   const enabledIndices = rows.flatMap((row, idx) => (row.available ? [idx] : []));
   const initialIndex = (() => {
     const currentIdx = rows.findIndex((row) => row.current && row.available);
@@ -545,7 +559,7 @@ export const effortModal = (input: {
       event.preventDefault();
       event.stopPropagation();
       const row = rows[focusedIndex()];
-      if (row?.available) input.onSelect(row.name);
+      if (row?.available) input.onSelect(row.value);
       return;
     }
     if (key === "escape") {
@@ -556,13 +570,15 @@ export const effortModal = (input: {
   });
 
   const selectedModelText =
-    selected?.model !== undefined
+    input.selectedText ??
+    (selected?.model !== undefined
       ? `${selected.alias} (${refOf(selected.model)})`
-      : (selected?.ref ?? "No model selected");
+      : (selected?.ref ?? "No model selected"));
   const supportedList =
-    selected?.model !== undefined
+    input.availableText ??
+    (selected?.model !== undefined
       ? rungsOf(selected.model).join(", ") || "None"
-      : "All catalogue efforts";
+      : "All catalogue efforts");
 
   return h(
     "box",
@@ -593,7 +609,7 @@ export const effortModal = (input: {
         h(
           "text",
           { fg: colors.text, attributes: TextAttributes.BOLD },
-          `The effort for "${input.profile.name}"`,
+          input.title ?? `The effort for "${input.profile.name}"`,
         ),
         h("text", { fg: colors.teal, onMouseUp: input.onCancel }, "Esc"),
       ),
@@ -667,7 +683,7 @@ export const effortModal = (input: {
             },
             onMouseOut: () => setHovered(false),
             onMouseUp: () => {
-              if (row.available) input.onSelect(row.name);
+              if (row.available) input.onSelect(row.value);
             },
           },
           h(
@@ -792,7 +808,7 @@ export const effortPicker = async (input: {
           draft: input.draft,
           models: input.models,
           onSelect: (chosen) => {
-            if (chosen === input.profile.effort) {
+            if (chosen === undefined || chosen === input.profile.effort) {
               finish(undefined);
               return;
             }
@@ -810,264 +826,211 @@ export const effortPicker = async (input: {
     input.dialog.set({ size: "large", centered: true });
   });
 
-export const crosscheckModal = (input: {
-  readonly profile: Profile;
-  readonly draft: Draft;
-  readonly models: ReadonlyArray<Model>;
-  readonly onSelect: (choice: CrosscheckChoice) => void;
-  readonly onCancel: () => void;
-}): JSX.Element => {
-  const context = usePlugin();
-  const dialogTheme =
-    typeof context.theme.surface === "function" ? context.theme.surface("dialog") : context.theme;
-  const colors = palette(context.theme, dialogTheme);
-  const selected = selectedModelFor(input.draft, input.models, input.profile);
+/**
+ * The crosscheck effort choices for one profile. A pin reads the pin's own
+ * rungs; without one each effort is tried against the crosscheck list, by the
+ * same rule the router runs.
+ */
+export const crosscheckEffortOptionsFor = (
+  draft: Draft,
+  models: ReadonlyArray<Model>,
+  profile: Profile,
+): ReadonlyArray<EffortOptionRow> => {
+  const clean = usableDraft(draft, models);
+  const pinnedAlias = profile.crosscheck?.pinned;
+  const pin =
+    pinnedAlias === undefined ? undefined : clean.models.find((one) => one.alias === pinnedAlias);
+  const pinModel = pin === undefined ? undefined : findCatalogModel(models, pin.ref);
+  const declared = pinModel === undefined ? [] : rungsOf(pinModel);
+  const kept = candidates(
+    clean.models.map((one) => ({ alias: one.alias, ref: one.ref, pinned: undefined })),
+    models.map(modelInfo),
+  ).kept;
 
-  const rows = crosscheckOptionsFor(input.draft, input.models, input.profile);
-  const enabledIndices = (): ReadonlyArray<number> =>
-    rows.flatMap((row, idx) => (row.available ? [idx] : []));
-  const initialIndex = (() => {
-    const currentIdx = rows.findIndex((row) => row.current && row.available);
-    if (currentIdx !== -1) return currentIdx;
-    return enabledIndices()[0] ?? 0;
-  })();
+  const trial = (
+    effort: string | undefined,
+  ): {
+    readonly available: boolean;
+    readonly ref: string | undefined;
+    readonly cost: string | undefined;
+    readonly reason: string | undefined;
+  } => {
+    if (effort === undefined && profile.effort === undefined)
+      return {
+        available: false,
+        ref: undefined,
+        cost: undefined,
+        reason: "The profile states no effort, so the crosscheck has no requirement to read.",
+      };
 
-  const [focusedIndex, setFocusedIndex] = createSignal(initialIndex);
+    const found = resolveProfile(
+      profile.name,
+      {
+        effort: profile.effort,
+        model: profile.pinned === undefined ? undefined : [profile.pinned],
+        crosscheck: { effort },
+        match: profile.match,
+        why: profile.why,
+        agent: profile.agent,
+      },
+      kept,
+      DEFAULT_AGENT,
+      clean.crosscheck,
+    );
 
-  const stepFocus = (delta: number): void => {
-    const indices = enabledIndices();
-    if (indices.length === 0) return;
-    const currentPos = indices.indexOf(focusedIndex());
-    const nextPos = currentPos === -1 ? 0 : (currentPos + delta + indices.length) % indices.length;
-    const target = indices[nextPos];
-    if (target !== undefined) setFocusedIndex(target);
+    if (found.resolution === undefined)
+      return {
+        available: false,
+        ref: undefined,
+        cost: undefined,
+        reason: found.problem ?? "The resolver returned no row.",
+      };
+    const crosscheck = found.resolution.crosscheck;
+    if (crosscheck === undefined)
+      return {
+        available: false,
+        ref: undefined,
+        cost: undefined,
+        reason: found.resolution.crosscheckProblem ?? "The resolver returned no second opinion.",
+      };
+    return {
+      available: true,
+      ref: spendRef(crosscheck),
+      cost: formatCost(crosscheck.costInput, crosscheck.costOutput),
+      reason: undefined,
+    };
   };
 
-  const choose = (row: CrosscheckOption | undefined): void => {
-    if (row?.available) input.onSelect(row.choice);
+  const pinnedRow = (effort: string | undefined): { ref: string; cost: string | undefined } => {
+    if (pin === undefined || pinModel === undefined)
+      return { ref: pin?.ref ?? "No model selected", cost: undefined };
+    const effective = effort ?? profile.effort;
+    const rung = effective !== undefined && declared.includes(effective) ? effective : undefined;
+    return {
+      ref: rung === undefined || pin.ref.includes("#") ? pin.ref : `${pin.ref}#${rung}`,
+      cost: formatCost(pinModel.costInput, pinModel.costOutput),
+    };
   };
 
-  bindKeyboard(context.renderer, (event: KeyEvent) => {
-    const key = event.name || event.sequence || "";
-    if (key === "down" || key === "j") {
-      event.preventDefault();
-      event.stopPropagation();
-      stepFocus(1);
-      return;
-    }
-    if (key === "up" || key === "k") {
-      event.preventDefault();
-      event.stopPropagation();
-      stepFocus(-1);
-      return;
-    }
-    if (key === "return" || key === "enter") {
-      event.preventDefault();
-      event.stopPropagation();
-      choose(rows[focusedIndex()]);
-      return;
-    }
-    if (key === "escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      input.onCancel();
-    }
-  });
+  const names: Array<string> = [...KNOWN_ORDER];
+  for (const rung of declared) if (!names.includes(rung)) names.push(rung);
+  if (pin === undefined)
+    for (const candidate of kept)
+      for (const rung of candidate.model.rungs) if (!names.includes(rung)) names.push(rung);
+  if (profile.effort !== undefined && !names.includes(profile.effort)) names.push(profile.effort);
+  const configured = profile.crosscheck?.effort;
+  if (configured !== undefined && !names.includes(configured)) names.push(configured);
 
-  const primaryText =
-    selected?.model !== undefined
-      ? `${selected.alias} (${refOf(selected.model)})`
-      : (selected?.ref ?? "No model selected");
+  const rowFor = (name: string, value: string | undefined): EffortOptionRow => {
+    const current = profile.crosscheck !== undefined && profile.crosscheck.effort === value;
+    if (pin !== undefined) {
+      const shown = pinnedRow(value);
+      const effective = value === undefined ? profile.effort : value;
+      const available =
+        effective === undefined
+          ? true
+          : declared.length === 0
+            ? effective === "none"
+            : declared.includes(effective);
+      return {
+        name,
+        value,
+        current,
+        available,
+        targetRef: shown.ref,
+        cost: shown.cost,
+        reason: available ? undefined : `not supported by ${pin.ref}`,
+      };
+    }
+    const shown = trial(value);
+    return {
+      name,
+      value,
+      current,
+      available: shown.available,
+      targetRef: shown.ref ?? "No model selected",
+      cost: shown.cost,
+      reason: shown.reason,
+    };
+  };
 
-  return h(
-    "box",
-    {
-      flexDirection: "column",
-      width: "100%",
-      border: true,
-      borderStyle: "rounded",
-      borderColor: colors.borderOuter,
-      backgroundColor: colors.modalBg,
-    },
-    h(
-      "box",
-      {
-        flexDirection: "column",
-        width: "100%",
-        flexShrink: 0,
-        paddingLeft: 3,
-        paddingRight: 3,
-        paddingTop: 1,
-        paddingBottom: 1,
-        border: ["bottom"],
-        borderColor: colors.border,
-      },
-      h(
-        "box",
-        { flexDirection: "row", justifyContent: "space-between", width: "100%" },
-        h(
-          "text",
-          { fg: colors.text, attributes: TextAttributes.BOLD },
-          `The crosscheck for "${input.profile.name}"`,
-        ),
-        h("text", { fg: colors.teal, onMouseUp: input.onCancel }, "Esc"),
-      ),
-      h(
-        "box",
-        {
-          flexDirection: "row",
-          width: "100%",
-          paddingTop: 1,
-        },
-        field(dialogTheme, "Primary", () => primaryText),
-      ),
-    ),
-    h(
-      "box",
-      {
-        flexDirection: "column",
-        width: "100%",
-        paddingLeft: 3,
-        paddingRight: 3,
-        paddingTop: 1,
-        paddingBottom: 1,
-      },
-      h(
-        "box",
-        {
-          flexDirection: "row",
-          width: "100%",
-          columnGap: 2,
-          paddingBottom: 1,
-          border: ["bottom"],
-          borderColor: colors.border,
-        },
-        h("text", { width: 3, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, ""),
-        h("text", { width: 16, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, "Crosscheck"),
-        h("text", { width: 12, flexShrink: 0, fg: colors.blue, wrapMode: "none" }, "Status"),
-        h(
-          "text",
-          { width: 36, flexGrow: 1, flexShrink: 1, minWidth: 0, fg: colors.blue, wrapMode: "none" },
-          "Resolves to",
-        ),
-      ),
-      () =>
-        rows.map((row, index) => {
-          const [hovered, setHovered] = createSignal(false);
-          const isFocused = () => focusedIndex() === index;
-          const marker = () => {
-            if (row.current && isFocused()) return "▸●";
-            if (row.current) return " ●";
-            if (isFocused()) return "▸ ";
-            return "  ";
-          };
-          const nameColor = () => {
-            if (!row.available) return colors.disabled;
-            if (isFocused() || hovered()) return colors.cyan;
-            return colors.green;
-          };
-          const detailColor = () => {
-            if (!row.available) return colors.disabled;
-            if (isFocused() || hovered()) return colors.text;
-            return colors.teal;
-          };
-
-          return h(
-            "box",
-            {
-              flexDirection: "row",
-              width: "100%",
-              columnGap: 2,
-              backgroundColor: () =>
-                row.available && (isFocused() || hovered()) ? colors.rowHoverBg : undefined,
-              onMouseOver: () => {
-                setHovered(true);
-                if (row.available) setFocusedIndex(index);
-              },
-              onMouseOut: () => setHovered(false),
-              onMouseUp: () => choose(row),
-            },
-            h(
-              "text",
-              {
-                width: 3,
-                flexShrink: 0,
-                fg: () => (row.available ? colors.cyan : colors.disabled),
-                wrapMode: "none",
-              },
-              marker,
-            ),
-            h(
-              "text",
-              {
-                width: 16,
-                flexShrink: 0,
-                fg: nameColor,
-                attributes: row.available ? TextAttributes.BOLD : TextAttributes.DIM,
-                wrapMode: "none",
-              },
-              row.label,
-            ),
-            h(
-              "text",
-              {
-                width: 12,
-                flexShrink: 0,
-                fg: () => (row.available ? colors.green : colors.disabled),
-                wrapMode: "none",
-              },
-              row.available ? "available" : "disabled",
-            ),
-            h(
-              "text",
-              {
-                width: 36,
-                flexGrow: 1,
-                flexShrink: 1,
-                minWidth: 0,
-                fg: detailColor,
-                truncate: true,
-                wrapMode: "none",
-              },
-              row.available ? (row.resolved ?? "No second opinion") : row.reason,
-            ),
-          );
-        }),
-    ),
-    h(
-      "box",
-      {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        backgroundColor: colors.insetBg,
-        border: ["top"],
-        borderColor: colors.border,
-        paddingLeft: 3,
-        paddingRight: 3,
-        paddingTop: 1,
-        paddingBottom: 1,
-      },
-      h(
-        "box",
-        { flexDirection: "row", gap: 3 },
-        h(
-          "text",
-          { fg: colors.text, attributes: TextAttributes.BOLD },
-          "Enter ",
-          h("span", { style: { fg: colors.muted } }, "Select crosscheck"),
-        ),
-      ),
-      h(
-        "text",
-        { fg: colors.text, attributes: TextAttributes.BOLD, onMouseUp: input.onCancel },
-        "Esc ",
-        h("span", { style: { fg: colors.muted } }, "Back"),
-      ),
-    ),
-  );
+  return [rowFor("Profile effort", undefined), ...names.map((name) => rowFor(name, name))];
 };
 
-export const crosscheckPicker = async (input: {
+/**
+ * The crosscheck model control. It works like the primary's model select: the
+ * standard picker, the allowlist as options, and an absent pin shown as Auto.
+ * Off turns the second opinion off and keeps the effort for when it returns.
+ */
+export const crosscheckModelPicker = async (input: {
+  readonly dialog: Dialog;
+  readonly draft: Draft;
+  readonly models: ReadonlyArray<Model>;
+  readonly profile: Profile;
+}): Promise<Edit | undefined> => {
+  const cleanDraft = usableDraft(input.draft, input.models);
+  const held = input.profile.crosscheck;
+  const listed = new Set(cleanDraft.crosscheck);
+  const options: Array<DialogSelectOption<string>> = [
+    {
+      title: "Off",
+      value: "off",
+      description: `profiles.${input.profile.name}.crosscheck`,
+      footer: "No second opinion",
+    },
+    {
+      title: "Auto (crosscheck list)",
+      value: "",
+      description: `profiles.${input.profile.name}.crosscheck.model`,
+      footer: "By fallback order",
+    },
+    ...cleanDraft.models.map((one) => ({
+      title: one.alias,
+      value: one.alias,
+      description: one.ref,
+      footer: listed.has(one.alias) ? "In crosscheck list" : "Not in crosscheck list",
+    })),
+  ];
+
+  const current = held === undefined ? "off" : (held.pinned ?? "");
+  const pending = input.dialog.select({
+    title: `The crosscheck model "${input.profile.name}" spends`,
+    placeholder: "Search the allowlist",
+    options,
+    current,
+  });
+  input.dialog.set({ size: "xlarge", centered: true });
+  const chosen = await pending;
+
+  if (chosen === undefined) return undefined;
+  if (chosen === "off") {
+    if (held === undefined) return undefined;
+    return { kind: "crosscheck", profile: input.profile.name, crosscheck: undefined };
+  }
+  const pinned = chosen === "" ? undefined : chosen;
+  if (held !== undefined && held.pinned === pinned) return undefined;
+  return {
+    kind: "crosscheck",
+    profile: input.profile.name,
+    crosscheck: { effort: held?.effort, pinned },
+  };
+};
+
+/** The model the crosscheck effort is read against, as the modal names it. */
+const crosscheckSelectedText = (
+  draft: Draft,
+  models: ReadonlyArray<Model>,
+  profile: Profile,
+): string => {
+  const pinnedAlias = profile.crosscheck?.pinned;
+  if (pinnedAlias === undefined) return "Auto (crosscheck list)";
+  const entry = usableDraft(draft, models).models.find((one) => one.alias === pinnedAlias);
+  const model = entry === undefined ? undefined : findCatalogModel(models, entry.ref);
+  return model === undefined ? pinnedAlias : `${pinnedAlias} (${refOf(model)})`;
+};
+
+/** The crosscheck effort control, in the same modal the primary effort uses. */
+export const crosscheckEffortPicker = async (input: {
   readonly dialog: Dialog;
   readonly draft: Draft;
   readonly models: ReadonlyArray<Model>;
@@ -1081,25 +1044,40 @@ export const crosscheckPicker = async (input: {
       resolve(value);
     };
 
+    const rows = crosscheckEffortOptionsFor(input.draft, input.models, input.profile);
+    const pinnedAlias = input.profile.crosscheck?.pinned;
+    const pinEntry =
+      pinnedAlias === undefined
+        ? undefined
+        : usableDraft(input.draft, input.models).models.find((one) => one.alias === pinnedAlias);
+    const pinModel =
+      pinEntry === undefined ? undefined : findCatalogModel(input.models, pinEntry.ref);
+    const availableText =
+      pinModel === undefined
+        ? "Any the crosscheck list can serve"
+        : rungsOf(pinModel).join(", ") || "None";
+
     input.dialog.show(
       () =>
-        crosscheckModal({
+        effortModal({
           profile: input.profile,
           draft: input.draft,
           models: input.models,
-          onSelect: (choice) => {
-            const crosscheck: Profile["crosscheck"] =
-              choice.kind === "off" ? undefined : { effort: choice.effort };
+          title: `The crosscheck effort for "${input.profile.name}"`,
+          rows,
+          selectedText: crosscheckSelectedText(input.draft, input.models, input.profile),
+          availableText,
+          onSelect: (chosen) => {
             const held = input.profile.crosscheck;
-            const unchanged =
-              crosscheck === undefined
-                ? held === undefined
-                : held !== undefined && held.effort === crosscheck.effort;
-            finish(
-              unchanged
-                ? undefined
-                : { kind: "crosscheck", profile: input.profile.name, crosscheck },
-            );
+            if (held !== undefined && held.effort === chosen) {
+              finish(undefined);
+              return;
+            }
+            finish({
+              kind: "crosscheck",
+              profile: input.profile.name,
+              crosscheck: { effort: chosen, pinned: held?.pinned },
+            });
           },
           onCancel: () => finish(undefined),
         }),

@@ -1,7 +1,7 @@
 import { Model } from "@opencode/schema/model";
 import { effortOf, fit, ladderOf } from "./effort";
 import { crosscheckOf, priorityOf } from "./order";
-import { formatRef, type Tables } from "./types";
+import { formatRef, modelNames, type Tables } from "./types";
 
 export type Row = { name: string; model: string };
 
@@ -181,6 +181,21 @@ export const check = (
       rows.push({ name: asked, model });
     }
     if (rows.length !== pinned.length) ok = false;
+
+    // A crosscheck pin names an allowlist model too. The resolver spends the
+    // first name it finds, so a name no model carries is a problem rather than
+    // a silent fall back to the crosscheck list.
+    for (const asked of modelNames(entry.crosscheck?.model)) {
+      if (resolved.has(asked)) continue;
+      if (!(asked in tables.models)) {
+        problems.push(
+          `profiles.${name}.crosscheck.model: "${asked}" is not a name in models. Names: ${
+            Object.keys(tables.models).join(", ") || "none"
+          }`,
+        );
+        ok = false;
+      }
+    }
 
     if (!ok) continue;
     profiles.push({ name, models: rows, agent, why: entry.why ?? "" });

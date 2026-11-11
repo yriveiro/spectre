@@ -79,12 +79,14 @@ the model reads.
   table, and the session writes the answer down so it never asks again.
 - **R7. The terminal can configure it.** A page lists the profiles, the
   allowlist and the live catalogue, and every choice is a dialog over the
-  catalogue. The allowlist tab shows each model's priority and moves a model
-  up or down. The crosscheck tab lists the allowlist models with a toggle and
-  the same reorder controls. The enabled models, in order, are the crosscheck
-  fallback. A profile row carries its crosscheck as a control: off, the
-  profile's own effort, or a named effort. A configured crosscheck that no
-  model in the fallback can serve shows its reason beside the row.
+  catalogue. The allowlist tab shows each model's priority, with the reorder
+  arrows in that column, and moves a model up or down. The crosscheck tab lists
+  the allowlist models with a toggle and the same priority controls. The enabled
+  models, in order, are the crosscheck fallback. A profile row carries its
+  crosscheck as two controls, in the Model and Effort columns: a model control
+  (off, the fallback list, or a pinned model) and an effort control (the
+  profile's own effort or a named one). A configured crosscheck that no model
+  in the fallback can serve shows its reason beside the row.
 - **R8. The resolver reports what it chose and what it could not reach.** A
   profile that asks for an effort no allowed model reaches is a problem, and
   a model that had to step up to meet one says so.
@@ -177,11 +179,14 @@ the setup question, whatever file sits in the directory the session left. The
 page follows the same rule. `tools.spectre.routing` returns the allowlist order
 with the catalogue facts behind each model, and the crosscheck order.
 
-`crosscheck` is the second opinion, stated as a requirement rather than as a
-model id. The current ladder's third and fourth rungs were not preferences.
-They were a rule: a second family, taken from the crosscheck fallback list.
-That list names the allowlist models that may serve a second opinion, in the
-order the resolver tries them. A model that is absent is off.
+`crosscheck` is the second opinion, stated as a requirement. By default the
+resolver takes the first model in the crosscheck fallback list whose family
+differs from the primary's, so the opinion comes from another family at the
+effort the profile asked for. That list names the allowlist models that may
+serve a second opinion, in the order the resolver tries them. A model that is
+absent is off. A profile may pin the second opinion to one allowlist model
+instead, and the pin wins over the list and the family rule the same way a
+profile's `model` pin wins over its `effort`.
 
 ### Field rules
 
@@ -194,6 +199,7 @@ order the resolver tries them. A model that is absent is off.
 | `profiles[*].effort` | An effort name from the catalogue. Not a closed enum: the range is read per call. |
 | `profiles[*].model` | Optional. A pin. It wins over `effort`. |
 | `profiles[*].crosscheck.effort` | Optional. The effort the second opinion is asked for. |
+| `profiles[*].crosscheck.model` | Optional. A pin for the second opinion. It wins over the crosscheck effort, the crosscheck list and the family rule. |
 | `profiles[*].match` | The routing surface: the moment, with the nouns a prompt would carry, and one exclusion. |
 | `profiles[*].why` | The rationale, for the human. Never read by the resolver. |
 | `profiles[*].agent` | Optional. Must be a spectre agent. Defaults to `spectre`. |
@@ -244,10 +250,11 @@ resolve(profile, allowlist, catalogue):
                   (exact match only for a name outside the known order;
                    a model with no ladder qualifies only for "none")
   3. primary    ← the FIRST candidate that qualifies        ← the priority order
-  4. crosscheck ← the first candidate in `crosscheck` order whose catalogue
-                  family differs from the primary's and meets the crosscheck
-                  effort; an absent list reads the whole allowlist, an empty
-                  list has no candidate
+  4. crosscheck ← the pinned model when the profile names one; otherwise the
+                  first candidate in `crosscheck` order whose catalogue family
+                  differs from the primary's and meets the crosscheck effort;
+                  an absent list reads the whole allowlist, an empty list has
+                  no candidate
   5. report     ← the ref, the ladder, the gap when there was one, the cost
 ```
 
@@ -406,7 +413,8 @@ opposite loses that argument. A hook would end the argument.
   reorder that list. Which family leads is the user's policy call, and the
   order is explicit rather than the order in which the user added the models.
   A separate `crosscheck` list names the models that may serve a second
-  opinion, in its own fallback order.
+  opinion, in its own fallback order. A profile may pin the second opinion to
+  one allowlist model, and the pin wins over that list.
 - **The tool withholds the whole table on any problem.** One good row is lost
   to a broken one, bought as never routing onto a broken row.
 

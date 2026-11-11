@@ -10,10 +10,9 @@ import {
   FILE_NAME,
   isDefaultProfile,
   type JudgeConfig,
-  KNOWN_ORDER,
   known,
   loadProject,
-  type ProfileEntry,
+  modelNames,
   priorityOf,
   projectPath,
   resolveProfile,
@@ -42,7 +41,13 @@ export type Profile = {
   readonly effort: string | undefined;
   readonly match: string | undefined;
   readonly why: string | undefined;
-  readonly crosscheck: { readonly effort: string | undefined } | undefined;
+  readonly crosscheck:
+    | {
+        readonly effort: string | undefined;
+        /** The alias the profile pins the second opinion to, or `undefined` for the list. */
+        readonly pinned: string | undefined;
+      }
+    | undefined;
   readonly agent: string;
   readonly pinned: string | undefined;
   readonly enabled?: boolean | undefined;
@@ -80,7 +85,10 @@ export const defaultProfiles = (enabled = true): ReadonlyArray<Profile> =>
     effort: entry.effort,
     match: entry.match,
     why: entry.why,
-    crosscheck: entry.crosscheck === undefined ? undefined : { effort: entry.crosscheck.effort },
+    crosscheck:
+      entry.crosscheck === undefined
+        ? undefined
+        : { effort: entry.crosscheck.effort, pinned: undefined },
     agent: entry.agent ?? DEFAULT_AGENT,
     pinned: undefined,
     enabled,
@@ -127,13 +135,8 @@ export const normalizeCost = (cost: string | undefined): string | undefined => {
   return cost;
 };
 
-const spendRef = (one: Spent): string =>
+export const spendRef = (one: Spent): string =>
   one.rung === undefined || one.ref.includes("#") ? one.ref : `${one.ref}#${one.rung}`;
-
-const pins = (model: ProfileEntry["model"]): ReadonlyArray<string> => {
-  if (model === undefined) return [];
-  return typeof model === "string" ? [model] : model;
-};
 
 /** The part of a session the page reads: where the session is. */
 export type SessionAt = Pick<SessionInfo, "location">;
@@ -194,13 +197,20 @@ export const read = async (directory: string): Promise<Draft> => {
   }
 
   const fromFile = Object.entries(found.tables.profiles).map(([name, entry]): Profile => {
-    const named = pins(entry.model);
+    const named = modelNames(entry.model);
+    const crossNamed = modelNames(entry.crosscheck?.model);
     return {
       name,
       effort: entry.effort,
       match: entry.match,
       why: entry.why,
-      crosscheck: entry.crosscheck === undefined ? undefined : { effort: entry.crosscheck.effort },
+      crosscheck:
+        entry.crosscheck === undefined
+          ? undefined
+          : {
+              effort: entry.crosscheck.effort,
+              pinned: crossNamed.find((one) => held.has(one)) ?? crossNamed[0],
+            },
       agent: entry.agent ?? DEFAULT_AGENT,
       pinned: named.find((one) => held.has(one)) ?? named[0],
       enabled: true,
@@ -235,7 +245,7 @@ export const catalogue = (models: ReadonlyArray<ModelInfo>): ReadonlyArray<Model
   return rows;
 };
 
-const info = (one: Model): Schema.Info => {
+export const modelInfo = (one: Model): Schema.Info => {
   const row = one as Row;
   return {
     providerID: one.providerID,
@@ -253,7 +263,7 @@ const info = (one: Model): Schema.Info => {
 export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArray<Resolution> => {
   const kept = candidates(
     draft.models.map((one) => ({ alias: one.alias, ref: one.ref, pinned: undefined })),
-    models.map(info),
+    models.map(modelInfo),
   );
 
   return configuredProfiles(draft).map((profile): Resolution => {
@@ -267,6 +277,8 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
             ? undefined
             : {
                 effort: profile.crosscheck.effort,
+                model:
+                  profile.crosscheck.pinned === undefined ? undefined : [profile.crosscheck.pinned],
               },
         match: profile.match,
         why: profile.why,
@@ -304,122 +316,6 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
   });
 };
 
-/** One answer to "what should the second opinion be": nothing, or an effort. */
-export type CrosscheckChoice =
-  | { readonly kind: "off" }
-  | { readonly kind: "effort"; readonly effort: string | undefined };
-
-type CrosscheckResult =
-  | {
-      readonly available: true;
-      /** The ref the choice would spend. `Off` is available and spends nothing. */
-      readonly resolved: string | undefined;
-      readonly reason: undefined;
-    }
-  | {
-      readonly available: false;
-      readonly resolved: undefined;
-      readonly reason: string;
-    };
-
-export type CrosscheckOption = {
-  readonly choice: CrosscheckChoice;
-  readonly label: string;
-  readonly current: boolean;
-} & CrosscheckResult;
-
-/**
- * The crosscheck choices for one profile, resolved by the same rule the router
- * runs. `Profile effort` asks the second opinion at the profile's own effort,
- * which is what a crosscheck with no `effort` means.
- */
-export const crosscheckOptionsFor = (
-  draft: Draft,
-  models: ReadonlyArray<Model>,
-  profile: Profile,
-): ReadonlyArray<CrosscheckOption> => {
-  const kept = candidates(
-    draft.models.map((one) => ({ alias: one.alias, ref: one.ref, pinned: undefined })),
-    models.map(info),
-  ).kept;
-
-  const trial = (effort: string | undefined): CrosscheckResult => {
-    if (effort === undefined && profile.effort === undefined)
-      return {
-        available: false,
-        resolved: undefined,
-        reason: "The profile states no effort, so the crosscheck has no requirement to read.",
-      };
-
-    const found = resolveProfile(
-      profile.name,
-      {
-        effort: profile.effort,
-        model: profile.pinned === undefined ? undefined : [profile.pinned],
-        crosscheck: { effort },
-        match: profile.match,
-        why: profile.why,
-        agent: profile.agent,
-      },
-      kept,
-      DEFAULT_AGENT,
-      draft.crosscheck,
-    );
-
-    if (found.resolution === undefined)
-      return {
-        available: false,
-        resolved: undefined,
-        reason: found.problem ?? "The resolver returned no row.",
-      };
-    const crosscheck = found.resolution.crosscheck;
-    if (crosscheck === undefined)
-      return {
-        available: false,
-        resolved: undefined,
-        reason: found.resolution.crosscheckProblem ?? "The resolver returned no second opinion.",
-      };
-    return { available: true, resolved: spendRef(crosscheck), reason: undefined };
-  };
-
-  const names: Array<string> = [...KNOWN_ORDER];
-  for (const candidate of kept) {
-    for (const rung of candidate.model.rungs) if (!names.includes(rung)) names.push(rung);
-  }
-  if (profile.effort !== undefined && !names.includes(profile.effort)) names.push(profile.effort);
-  const configured = profile.crosscheck?.effort;
-  if (configured !== undefined && !names.includes(configured)) names.push(configured);
-
-  const rows: Array<CrosscheckOption> = [
-    {
-      choice: { kind: "off" },
-      label: "Off",
-      current: profile.crosscheck === undefined,
-      available: true,
-      resolved: undefined,
-      reason: undefined,
-    },
-    {
-      choice: { kind: "effort", effort: undefined },
-      label: "Profile effort",
-      current: profile.crosscheck !== undefined && profile.crosscheck.effort === undefined,
-      ...trial(undefined),
-    },
-  ];
-
-  for (const name of names) {
-    const choice: CrosscheckChoice = { kind: "effort", effort: name };
-    rows.push({
-      choice,
-      label: name,
-      current: profile.crosscheck?.effort === name,
-      ...trial(name),
-    });
-  }
-
-  return rows;
-};
-
 const preserved = async (path: string): Promise<Record<string, unknown>> => {
   const file = Bun.file(path);
   if (!(await file.exists())) return {};
@@ -450,6 +346,7 @@ const written = (draft: Draft): Parameters<typeof writeConfig>[1] => ({
             ? undefined
             : {
                 effort: one.crosscheck.effort,
+                model: one.crosscheck.pinned,
               },
         match: one.match,
         why: one.why,
