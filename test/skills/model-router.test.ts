@@ -35,13 +35,15 @@ describe("model-router ships the body it promises", () => {
     expect(body).toContain("crosscheck");
   });
 
-  test("the body states the crosscheck review and the flow page draws it", async () => {
+  test("the body states the correction rule and the flow page draws it", async () => {
     const body = await Bun.file(`${SKILL}/SKILL.md`).text();
-    expect(body).toContain("## A crosscheck is a review, not a second answer");
+    expect(body).toContain("## A correction is a follow-up, not a new child");
     expect(body).toContain("You are the judge");
+    expect(body).toContain("reviewer's `sessionID`");
     const flow = await Bun.file(`${SKILL}/references/routing-flow.md`).text();
     expect(flow).toContain("flowchart TD");
     expect(flow).toContain("Spawn the crosscheck");
     expect(flow).toContain("The judge accepts a challenge?");
+    expect(flow).toContain("Does the challenge carry evidence?");
   });
 });

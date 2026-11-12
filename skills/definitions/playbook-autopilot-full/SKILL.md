@@ -43,7 +43,8 @@ a rebase onto trunk, and its own merge.
 Within roughly one run, every owner has started a `decisions.tsv` trail
 (`show-me-your-work`), pushed its first branch snapshot, and opened the PR ready rather
 than draft. Keep the trail uncommitted and return it with the report. Each owner also keeps
-a `children.tsv`: subagent id, expected runtime, state, added when the subagent starts.
+a `children.tsv`: the `sessionID` the spawn returned, expected runtime, state, added
+when the subagent starts. The `sessionID` is how a correction reaches the same child.
 
 **Keep owner paths disjoint.** Every worker shares one filesystem, and the collision reads as a corrupted file rather than a scheduling bug, so
 prevention is structural: one writer per branch, disjoint files, and sequenced work merged

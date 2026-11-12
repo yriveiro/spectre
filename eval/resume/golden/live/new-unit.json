@@ -1,0 +1,26 @@
+{
+  "scenario": "new-unit",
+  "mode": "live",
+  "model": "opencode-go/deepseek-v4.1-flash#high",
+  "calls": [
+    {
+      "agent": "spectre",
+      "hasSessionID": false,
+      "hasOutputSessionID": true,
+      "continuesFirst": false,
+      "status": "completed"
+    },
+    {
+      "agent": "spectre",
+      "hasSessionID": false,
+      "hasOutputSessionID": true,
+      "continuesFirst": false,
+      "status": "completed"
+    }
+  ],
+  "childSessions": 2,
+  "files": {
+    "a.txt": "alpha",
+    "b.txt": "beta"
+  }
+}

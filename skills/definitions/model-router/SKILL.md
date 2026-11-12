@@ -89,18 +89,34 @@ The order is `priority` in the config, never the order the `models` object happe
 
 `model` is optional on the `subagent` tool, so every path spawns something.
 
-## A crosscheck is a review, not a second answer
+## A correction is a follow-up, not a new child
 
-When the profile row carries a `crosscheck`, the config asks for a second opinion. Run the primary first. Then run the crosscheck as a reviewer, not as a second attempt at the task.
+Every `subagent` call returns a `sessionID`. Keep it. A result you reject, a
+defect you find, and a challenge you accept are all follow-ups on that child:
+call `subagent` again with the `sessionID`, name the defect, and omit `model`
+so the child keeps the model the profile chose. A follow-up does not call
+`tools.spectre.routing` again. Switch the model only when the model is the
+defect, and say why.
 
-1. Spawn the primary on `profile.model.ref`, and keep the child `sessionID`.
-2. Spawn the crosscheck on `profile.crosscheck.ref` with the task and the primary's result. Ask for concrete defects with evidence, or `no challenge`.
-3. You are the judge. Accept a challenge only when the evidence supports it. A different opinion is not a challenge.
-4. If you accept a challenge, continue the primary with its `sessionID` and the accepted challenges. Ask for a revised result and what changed. Do not run the whole task again.
-5. If you accept no challenge, the primary result stands.
-6. Say the outcome in one line: the profile, both refs, and the challenges you accepted.
+Spawn a new child only when the child's context is the defect, the work is a
+new unit, or the session is gone.
 
-The `judge` field in the routing answer is the profile classifier. It does not review results. You are the judge here. `references/routing-flow.md` has the reviewer prompt and the full path.
+The crosscheck is the worked case. Run the primary, keep its `sessionID`, and
+run the reviewer as a review of that result. Keep the reviewer's `sessionID`
+too. You are the judge, and a different opinion is not a challenge.
+
+1. A challenge with evidence you accept: continue the primary with its
+   `sessionID`, give it the evidence, and ask for a revised result and what
+   changed. Do not run the whole task again.
+2. A challenge too vague to judge: continue the reviewer with its `sessionID`
+   once, and ask for the source and line. If the evidence still does not come,
+   reject the challenge.
+3. No accepted challenge: the primary result stands.
+
+One revision round ends the review. Say the outcome in one line: the profile,
+both refs, and the challenges you accepted. The `judge` field in the routing
+answer is the profile classifier and does not review results. The reviewer
+prompt and the full path are in `references/routing-flow.md`.
 
 ## Split the task, do not only delegate
 

@@ -63,6 +63,9 @@ Also look for a resume note on disk. `playbook-pause-safely` writes one, and it 
 the part of a transcript that survives here. `/tmp/<slug>-resume.md` from a previous
 session may be gone. A note committed to the branch will not be.
 
+A child `sessionID` in a note is a record, not a handle. This session cannot continue
+another session's child. Continue the work from the report.
+
 ## Phase D: Name the resume point
 
 Compare what shipped against what was planned, and write down where you continue.

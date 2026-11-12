@@ -52,6 +52,31 @@ agent: "spectre",  model: "opencode-go/kimi-k3#max"
 agent: "spectre",  model: "opencode-go/muse-spark-1.3-contributor#high"
 ```
 
+## A correction is a follow-up
+
+The session corrects a wrong delegated result in the same child session. The
+`subagent` tool takes a `sessionID` that continues a child, running or finished,
+and the child keeps its own context. Only the direct parent can continue it, so
+a correction always comes from the session that spawned the work.
+
+Every row below comes from `v2.2.7`, in
+`packages/core/src/tool/plugin/subagent.ts`. The rest of this file's appendix
+stays at `v2.1.1` and does not change.
+
+| Claim | Where, at the tag |
+| ----- | ----------------- |
+| `sessionID` continues a child, running or finished | `:41-43` |
+| the output carries the child id | `:50-54` |
+| a failure carries it too | `:245-251` |
+| only the direct parent can continue it | `:164-167` |
+| no `model` keeps the child's model | `:168-182` |
+| the follow-up prompt is sent as-is | `:208-211` |
+| a running child is steered, and only a new background child sets `resume: false` | `:200-212` |
+| depth counts the caller's ancestors, so resume costs no depth | `:123-139` |
+
+The rule lives in `skills/definitions/model-router/SKILL.md`, and the mechanics
+are in `references/subagent-call.md`. The crosscheck review is its worked case.
+
 ## What OpenCode already does
 
 The point of this section is what spectre does **not** have to do. Every claim is

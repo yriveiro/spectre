@@ -10,6 +10,9 @@ Pattern:
 
 - Isolate large payloads. Route verbose outputs, screenshots, and large documents
   to subagents. The main context gets summaries, not raw data.
+- Follow up on the same child. When a delegated summary omits what you need,
+  continue that child with the gap named. A new child re-reads the payload the
+  delegation existed to avoid.
 - Keep frequently used content inline. Templates and references used on every
   invocation belong in the skill file, not in separate files that cost a read
   each time.

@@ -103,9 +103,11 @@ the model reads.
   the primary, then the crosscheck on the result. The reviewer returns concrete
   challenges with evidence. The session that routed the work is the judge. It
   accepts a challenge only when the evidence supports it, and it sends accepted
-  challenges back to the primary for one revision. The routing `judge` names a
-  profile and does not review results. The path and the reviewer prompt are in
-  `skills/definitions/model-router/references/routing-flow.md`.
+  challenges back to the primary for one revision. A challenge without evidence
+  goes back to the reviewer once, with its `sessionID`, for the source and line,
+  and the session rejects it when the evidence does not come. The routing
+  `judge` names a profile and does not review results. The path and the reviewer
+  prompt are in `skills/definitions/model-router/references/routing-flow.md`.
 
 ## Platform facts
 

@@ -202,6 +202,10 @@ const DESCRIPTION = `Route a task to a model: resolve each profile's requirement
 
 Call it with no \`profile\` to get every profile. Each row carries the profile's \`match\` line, which says when that profile fits, and one \`model\`: the ref the resolver chose, the rung it asked for, and the cost. Take the profile whose \`match\` fits the task, and pass \`model.ref\` to the subagent tool unchanged, variant included.
 
+That \`model.ref\` belongs to the first call. A follow-up continues the child
+with \`sessionID\` and omits \`model\`, so the child keeps the model the profile
+chose. A follow-up does not route again.
+
   const t = await tools.spectre.routing({})
   subagent({ agent: t.profiles[0].agent, prompt: "<the task>", model: t.profiles[0].model.ref })
 

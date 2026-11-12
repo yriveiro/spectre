@@ -84,6 +84,10 @@ Seven things, and a note missing the seventh is why resumes fail:
 
 Write paths, not pasted diffs. A diff in a note goes stale the moment work resumes.
 
+If children are still running, record each `sessionID` beside the note. Only this
+session can continue them, because the host lets the direct parent continue a child. A
+different session inherits the report, not the session.
+
 ## Phase E: Report
 
 Say where you are in the loop, what is on disk versus still in your head — by path —

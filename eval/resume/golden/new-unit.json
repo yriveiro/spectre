@@ -1,0 +1,26 @@
+{
+  "scenario": "new-unit",
+  "mode": "mock",
+  "model": "mock/resume",
+  "calls": [
+    {
+      "agent": "spectre",
+      "hasSessionID": false,
+      "hasOutputSessionID": true,
+      "continuesFirst": false,
+      "status": "completed"
+    },
+    {
+      "agent": "spectre",
+      "hasSessionID": false,
+      "hasOutputSessionID": true,
+      "continuesFirst": false,
+      "status": "completed"
+    }
+  ],
+  "childSessions": 2,
+  "files": {
+    "a.txt": "alpha",
+    "b.txt": "beta"
+  }
+}
