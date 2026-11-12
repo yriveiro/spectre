@@ -9,7 +9,7 @@ plain file in the repository. A note kept only in your context dies with you.
 
 ## Start
 
-Call `todowrite` with one entry per phase.
+Call `todowrite` with one entry per phase when the host exposes it (`experimental.todo` on a released build).
 
 1. Reach a boundary
 2. Take no irreversible action

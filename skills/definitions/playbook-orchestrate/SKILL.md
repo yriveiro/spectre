@@ -8,7 +8,7 @@ programme is a sequence of runs.
 
 ## Start
 
-Call `todowrite` with one entry per phase.
+Call `todowrite` with one entry per phase when the host exposes it (`experimental.todo` on a released build).
 
 The store is `orchestrates/<project-slug>/` under
 `~/.local/share/spectre/<worktree-name>/`, the root `arena` already writes to. It
@@ -143,9 +143,10 @@ Drain the final inbox and reconcile every spawned agent to a terminal row. Silen
 a missing child's work hides the wasted spend and the gap its result existed to close.
 Confirm the predicate on the real artifact and every landed PR's verdict for its current
 head SHA, then encode every correction you made twice as a numbered line in
-`preferences.md`. Delete the audit schedule with `tools.opencode.schedule_list` and `tools.opencode.schedule_delete`,
-or pause it with `tools.opencode.schedule_pause` when the programme will resume. Leave the store
-intact; it is the postmortem for the next run.
+`preferences.md`. Find the audit schedule id with `tools.opencode.schedule_list`, then
+delete it with `tools.opencode.schedule_delete`, or pause it with
+`tools.opencode.schedule_pause` when the programme will resume. Leave the store intact;
+it is the postmortem for the next run.
 
 ## Outputs
 

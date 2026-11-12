@@ -4,6 +4,7 @@ import {
   type Feature,
   MAX_OBJECTIVE,
   parseContract,
+  type RawContract,
   refusal,
 } from "../../tools/definitions/goal/contract";
 
@@ -19,8 +20,8 @@ const raw = {
   check: "bun test",
 };
 
-const parsed = () => {
-  const result = parseContract(raw);
+const parsed = (override: Partial<RawContract> = {}) => {
+  const result = parseContract({ ...raw, ...override });
   if (!result.ok) throw new Error(result.problems.join("\n"));
   return result.value;
 };
@@ -71,6 +72,12 @@ describe("the goal contract", () => {
     expect(result.value).toContain("does not count");
   });
 
+  test("a babysit contract names the babysit playbook", () => {
+    const result = compose(parsed({ playbook: "playbook-babysit" }), place);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toContain("Follow the playbook-babysit skill.");
+  });
+
   test("a composition over the host's cap is refused with the cap named", () => {
     const long = parsed();
     const result = compose(
@@ -88,9 +95,7 @@ describe("the goal contract", () => {
   test("every unsafe place refuses with the fix", () => {
     expect(refusal({ kind: "main-worktree", directory: "/w" })).toContain("main worktree");
     expect(refusal({ kind: "main-worktree", directory: "/w" })).toContain("/wt");
-    expect(refusal({ kind: "main-branch", directory: "/w", branch: "main" })).toContain(
-      "main branch",
-    );
+    expect(refusal({ kind: "main-branch", directory: "/w", branch: "main" })).toContain("trunk");
     expect(refusal({ kind: "detached", directory: "/w" })).toContain("detached");
     expect(refusal({ kind: "not-a-repository", directory: "/w", why: "not here" })).toContain(
       "not here",

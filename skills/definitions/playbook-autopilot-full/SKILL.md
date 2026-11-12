@@ -8,7 +8,7 @@ the audit tick. Without schedules, the tick is when the human returns.
 
 ## Start
 
-Call `todowrite` with one entry per phase. State the plan when asked and stop: a
+Call `todowrite` with one entry per phase when the host exposes it (`experimental.todo` on a released build). State the plan when asked and stop: a
 request to state the protocol is not a go. Execution starts on an explicit go, and
 it begins by writing the objective down.
 

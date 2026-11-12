@@ -6,7 +6,7 @@ merges: the chain is handed to a person who lands it. Capacity is `subagent` wit
 
 ## Start
 
-Call `todowrite` with one entry per phase. State the plan when asked and stop. A
+Call `todowrite` with one entry per phase when the host exposes it (`experimental.todo` on a released build). State the plan when asked and stop. A
 request to state the protocol is not a go. On an explicit go, the run begins by writing
 the objective down.
 

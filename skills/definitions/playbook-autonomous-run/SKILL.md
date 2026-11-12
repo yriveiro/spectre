@@ -28,7 +28,7 @@ and the ledger path. When a goal is active:
 
 ## Native tools
 
-Use the host's tools where they exist. `todowrite` holds the phase list. `question`
+Use the host's tools where they exist. `todowrite` holds the phase list when the host exposes it. `question`
 asks a decision only the user can make. `shell({ background: true })` starts a wait
 the goal can see. `tools.opencode.schedule_create` and its siblings start a wait no goal is holding.
 `read` takes a negative `offset` to read a log's tail. The Spectre tools stay where they
@@ -39,7 +39,7 @@ contract.
 
 ## Start
 
-Call `todowrite` with one entry per phase.
+Call `todowrite` with one entry per phase when the host exposes it (`experimental.todo` on a released build).
 
 Three places hold a run's state, and this playbook uses all three because no single one
 survives everything. The **branch** holds the work, and `tools.spectre.worktrees({})` is
@@ -131,8 +131,8 @@ One watcher does exist, and it returns once rather than following: call `tools.s
 
 ## Phase E: Write the row down
 
-Append one row per iteration to `.spectre/run.md`: what changed, whether the predicate
-moved, the head SHA, the check output in one line. That is the ledger
+Append one row per round to `.spectre/run.md`: the round number, what changed, the check
+output in one line, whether the predicate moved, and the head SHA. That is the ledger
 `show-me-your-work` asks for, and a run that cannot be audited by a person who was not
 here has not kept a trail.
 

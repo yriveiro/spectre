@@ -15,7 +15,7 @@ const raw = {
   check: "bun test",
 };
 
-const fake = (directory: string, parentID?: string) => {
+const fake = (directory: string, parentID?: string, failAfterWrite = false) => {
   const state: {
     goal: Goal.State | null;
     commands: Array<{ sessionID: string; name: string; text: string }>;
@@ -30,7 +30,7 @@ const fake = (directory: string, parentID?: string) => {
           location: { directory },
         }),
       command: (input: { sessionID: string; name: string; text: string }) =>
-        Effect.sync(() => {
+        Effect.gen(function* () {
           state.commands.push(input);
           state.goal = {
             id: "goal-1",
@@ -41,6 +41,7 @@ const fake = (directory: string, parentID?: string) => {
             boot: "boot",
             updatedAt: 0,
           };
+          if (failAfterWrite) return yield* Effect.fail(new Error("kickoff failed"));
         }),
     },
     rpc: Object.assign(() => ({ get: () => Effect.succeed(state.goal) }), {
@@ -138,24 +139,42 @@ describe("arming a goal", () => {
   test("the same active objective is idempotent and writes no second section", async () => {
     const { feature } = await layout();
     const { ctx, state } = fake(feature);
-    state.goal = {
-      id: "goal-1",
-      objective: composed(feature),
-      status: "active",
-      rounds: 2,
-      maxRounds: 50,
-      boot: "boot",
-      updatedAt: 0,
-    };
+
+    const first = await run(ctx, raw);
+    expect(first.status).toBe("armed");
+    expect(state.commands).toHaveLength(1);
+
+    const second = await run(ctx, raw);
+
+    expect(second.status).toBe("armed");
+    expect(state.commands).toHaveLength(1);
+    if (second.status === "armed") {
+      const ledger = await Bun.file(second.ledger).text();
+      expect(ledger.match(/## Goal goal-1/g)).toHaveLength(1);
+    }
+  });
+
+  test("a command that fails after writing still reports the live goal", async () => {
+    const { feature } = await layout();
+    const { ctx } = fake(feature, undefined, true);
 
     const outcome = await run(ctx, raw);
 
     expect(outcome.status).toBe("armed");
-    expect(state.commands).toHaveLength(0);
-    if (outcome.status === "armed") {
-      const ledger = await Bun.file(outcome.ledger).text();
-      expect(ledger.match(/## Goal goal-1/g)).toHaveLength(1);
-    }
+    if (outcome.status === "armed")
+      expect(outcome.problems).toContain("after the goal was written");
+  });
+
+  test("a failed ledger header still returns armed with problems", async () => {
+    const { feature } = await layout();
+    await Bun.write(`${feature}/.spectre`, "not a directory");
+    const { ctx } = fake(feature);
+
+    const outcome = await run(ctx, raw);
+
+    expect(outcome.status).toBe("armed");
+    if (outcome.status === "armed")
+      expect(outcome.problems).toContain("ledger header could not be written");
   });
 
   test("a paused goal is refused, not overwritten", async () => {

@@ -10,7 +10,7 @@ infer it.
 
 ## Start
 
-Call `todowrite` with one entry per phase.
+Call `todowrite` with one entry per phase when the host exposes it (`experimental.todo` on a released build).
 
 1. Find the work
 2. Read what landed

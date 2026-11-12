@@ -81,7 +81,12 @@ type Held =
   | { readonly status: "failed" }
   | null;
 
-const host = (projectRow: string, sessionDirectory: string, held: Held = null) => {
+const host = (
+  projectRow: string,
+  sessionDirectory: string,
+  held: Held = null,
+  unreadable = false,
+) => {
   const session = { where: sessionDirectory };
 
   return {
@@ -93,7 +98,10 @@ const host = (projectRow: string, sessionDirectory: string, held: Held = null) =
           location: { directory: AbsolutePath.make(session.where) },
         },
         session: {
-          get: () => Effect.succeed({ location: { directory: session.where } }),
+          get: () =>
+            unreadable
+              ? Effect.fail(new Error("session down"))
+              : Effect.succeed({ location: { directory: session.where } }),
           move: ({ directory }: { directory: string }) =>
             Effect.sync(() => {
               session.where = directory;
@@ -239,6 +247,17 @@ describe("removing the worktree the session is standing in", () => {
 
     expect(outcome.status).toBe("rejected");
     if (outcome.status === "rejected") expect(outcome.problems).toContain("could not be read");
+    expect(await isDirectory(other)).toBe(true);
+  });
+
+  test("a session read that fails refuses rather than guesses", async () => {
+    const { bare, other } = await layout();
+    const fake = host(bare, other, null, true);
+
+    const outcome = await remove(fake, other);
+
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status === "rejected") expect(outcome.problems).toContain("session could not be read");
     expect(await isDirectory(other)).toBe(true);
   });
 });

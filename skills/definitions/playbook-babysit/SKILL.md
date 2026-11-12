@@ -49,7 +49,7 @@ host's. This procedure is the review. A goal never authorizes a merge.
 
 ## Native tools
 
-Use the host's tools. `todowrite` holds the phase list. `question` asks the owner a
+Use the host's tools. `todowrite` holds the phase list when the host exposes it. `question` asks the owner a
 decision when they are present. `shell({ background: true })` starts the wait a goal
 can see. `tools.opencode.schedule_create` starts a wait no goal is holding. `read` takes a negative
 `offset` to read a job log's tail. The Spectre tools stay for `stack`, `worktrees` and
@@ -57,7 +57,7 @@ the goal contract.
 
 ## Start
 
-Call `todowrite` with one entry per phase.
+Call `todowrite` with one entry per phase when the host exposes it (`experimental.todo` on a released build).
 
 1. Declare
 2. Find the frontier

@@ -33,12 +33,16 @@ export type Predicate = string & { readonly [predicateBrand]: "Goal.Predicate" }
 export type Check = string & { readonly [checkBrand]: "Goal.Check" };
 export type Evidence = string & { readonly [evidenceBrand]: "Goal.Evidence" };
 
-/** The four fields the arming call carries, before any rule is applied. */
+/** The procedure the objective names, so a babysit does not read the autonomous-run steps. */
+export type Playbook = "playbook-autonomous-run" | "playbook-babysit";
+
+/** The fields the arming call carries, before any rule is applied. */
 export type RawContract = {
   readonly objective: string;
   readonly predicate: string;
   readonly check: string;
   readonly evidence?: string;
+  readonly playbook?: Playbook;
 };
 
 /** A contract whose fields passed `parseContract`. It cannot be built another way. */
@@ -47,6 +51,7 @@ export type Contract = {
   readonly predicate: Predicate;
   readonly check: Check;
   readonly evidence?: Evidence;
+  readonly playbook: Playbook;
 } & { readonly [contractBrand]: true };
 
 /** The objective text the host will store. It cannot be built another way. */
@@ -122,6 +127,7 @@ export const parseContract = (raw: RawContract): Parsed<Contract> => {
       predicate: raw.predicate as Predicate,
       check: raw.check as Check,
       ...(raw.evidence === undefined ? {} : { evidence: raw.evidence as Evidence }),
+      playbook: raw.playbook ?? "playbook-autonomous-run",
     } as Contract,
   };
 };
@@ -140,7 +146,7 @@ export const compose = (contract: Contract, place: Feature): Parsed<Composed> =>
     "",
     `Ledger: ${ledger}. Append one row per round: the round number, what changed, the check output in one line, whether the predicate moved, and the head SHA. Never rewrite a row.`,
     "",
-    "Follow the playbook-autonomous-run skill. If you need a decision, credentials, or a manual step only the user can provide, say exactly what and stop. When you delegate, choose the model with tools.spectre.routing first.",
+    `Follow the ${contract.playbook} skill. If you need a decision, credentials, or a manual step only the user can provide, say exactly what and stop. When you delegate, choose the model with tools.spectre.routing first.`,
     "",
     "A claim without tool output, command output, or file contents shown in this conversation does not count.",
   ].join("\n");
@@ -161,12 +167,12 @@ export const compose = (contract: Contract, place: Feature): Parsed<Composed> =>
 export const refusal = (place: Exclude<Place, Feature>): string => {
   switch (place.kind) {
     case "main-worktree":
-      return `This session is in the main worktree at ${place.directory}. A goal armed here would edit a branch in the directory you stand in. Run /wt <name> first, or arm from a feature worktree.`;
+      return `This session is in the main worktree at ${place.directory}. A goal armed here would edit a branch in the directory you stand in. Run /wt <name> here, then arm from the feature worktree.`;
     case "main-branch":
-      return `This session is in a linked worktree on the main branch at ${place.directory}. A goal must run on a feature branch. Run /wt <name> first.`;
+      return `This session is in a linked worktree on the trunk at ${place.directory}. A goal must run on a feature branch. Open a feature worktree from the project's main worktree with /wt <name>, then arm there.`;
     case "detached":
-      return `This session is on a detached HEAD at ${place.directory}. A goal must run on a feature branch. Run /wt <name> first.`;
+      return `This session is on a detached HEAD at ${place.directory}. A goal must run on a feature branch. Move this session to the project's main worktree, run /wt <name> there, and arm.`;
     case "not-a-repository":
-      return `This session is not in a git working tree at ${place.directory}: ${place.why}. Run /wt <name> first.`;
+      return `This session is not in a git working tree at ${place.directory}: ${place.why}. Open the project's main worktree, run /wt <name>, and arm there.`;
   }
 };

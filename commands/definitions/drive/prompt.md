@@ -33,7 +33,7 @@ The tool measures the session's worktree and branch. It refuses the main worktre
 ## 4. Read the result
 
 - `armed`. Say the objective, the predicate, the check and the ledger path in one message. Then stop. If `problems` is present, the goal is running but the ledger header did not write. Repair it next round.
-- `rejected`. Read `problems`. If it names the worktree, tell the user to run `/wt <name>` and stop. Otherwise fix the contract and retry once, then report.
+- `rejected`. Read `problems`. If it names the worktree, follow the instruction in `problems` and stop. Otherwise fix the contract and retry once, then report.
 - `failed`. Read `problems` and report it. Do not arm again blindly.
 
 Never type `/goal` yourself. The host's command is the surface. This tool is the only path that enforces the contract.

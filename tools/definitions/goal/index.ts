@@ -52,6 +52,12 @@ const Arm = Schema.Struct({
       description: "Optional extra evidence the run must show, one line.",
     }),
   ),
+  playbook: Schema.optional(
+    Schema.Literals(["playbook-autonomous-run", "playbook-babysit"]).annotate({
+      description:
+        "The procedure the objective names. Defaults to playbook-autonomous-run; a babysit passes playbook-babysit.",
+    }),
+  ),
 });
 
 const Status = Schema.Struct({
@@ -215,7 +221,7 @@ const arm = (ctx: Plugin.Context, sessionID: Session.ID, input: typeof Arm.Type)
     if (existing?.status === "active") {
       if (existing.objective !== composed.value)
         return rejected(
-          `A different goal is active: ${existing.objective}\nRun /goal clear first, or resume that goal.`,
+          `A different goal is active: ${existing.objective}\nRun /goal clear first, then arm this objective.`,
         );
       const recorded = yield* Effect.promise(() =>
         ensureHeader(existing, parsed.value, place, sessionID),
@@ -237,8 +243,26 @@ const arm = (ctx: Plugin.Context, sessionID: Session.ID, input: typeof Arm.Type)
     const command = yield* Effect.result(
       ctx.session.command({ sessionID, name: "goal", text: composed.value }),
     );
-    if (command._tag === "Failure")
+    if (command._tag === "Failure") {
+      // The host writes the goal before it reads the session title and sends the
+      // kickoff. A failure after that write leaves the loop running, so read the
+      // state before reporting a failure the caller would retry.
+      const afterFailure = yield* readGoal(ctx, sessionID);
+      const live = afterFailure.kind === "read" ? afterFailure.goal : null;
+      if (live?.status === "active" && live.objective === composed.value) {
+        const recorded = yield* Effect.promise(() =>
+          ensureHeader(live, parsed.value, place, sessionID),
+        );
+        const problems = [
+          `The /goal command reported an error after the goal was written: ${String(command.failure)}. The loop is running.`,
+          ...(recorded.status === "failed"
+            ? [`The ledger header could not be written: ${recorded.why}`]
+            : []),
+        ];
+        return armed(viewOf(live), ledgerPath(place.directory), problems.join(" "));
+      }
       return failed(`The /goal command failed: ${String(command.failure)}`);
+    }
 
     const after = yield* readGoal(ctx, sessionID);
     if (after.kind === "failed")

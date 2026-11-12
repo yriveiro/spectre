@@ -6,7 +6,7 @@ Load and follow the `playbook-babysit` skill. This command is the goal-shaped en
 
 Whatever the user typed after `/babysit` is the last line of this prompt, behind `The user added: `. Take the PR numbers and any mode from it.
 
-When no number is named, call `tools.spectre.stack({})` and use the open stack it returns. When the line is absent, ask which PRs and stop.
+When the user names numbers, use them. When the line is absent, call `tools.spectre.stack({})` and use the open stack it returns. When that returns no rows, say there is nothing to babysit and stop. Never arm against an empty stack.
 
 ## 2. Name the predicate and the check
 
@@ -24,10 +24,11 @@ const armed = await tools.spectre.goal({
   objective: "Take PRs <numbers> to merge-ready",
   predicate: "tools.spectre.stack returns clear and no unresolved review threads remain",
   check: "tools.spectre.stack({ prs: [<numbers>] })",
+  playbook: "playbook-babysit",
 });
 ```
 
-The tool measures the session's worktree and branch. It refuses the main worktree, a linked worktree on the trunk, a detached HEAD, and a non-repository. It also refuses a child session, an active or paused goal, and a contract over 4,000 characters. Run `/wt <name>` first if it refuses. Do not judge those facts yourself.
+The tool measures the session's worktree and branch. It refuses the main worktree, a linked worktree on the trunk, a detached HEAD, and a non-repository. It also refuses a child session, an active or paused goal, and a contract over 4,000 characters. If it refuses for the worktree, follow the instruction in `problems` and stop. If it refuses for a goal or a field, fix that instead. Do not judge those facts yourself.
 
 ## 4. Work the frontier
 

@@ -342,16 +342,14 @@ const runEscort = (ctx: Plugin.Context) =>
   });
 
 /**
- * What git can say about a directory before the host is asked to delete it: whether the
- * directory is there at all, whether git still lists it, and which branch it holds.
- * Three reads that do not depend on each other, so they are asked together.
- */
-/**
  * A session's live goal holds the worktree it was armed in. `remove` moves the
  * caller to `main` before deleting the directory, so a goal left active would
  * follow the session home and keep working on the wrong tree; a paused goal
  * would resume there later. The guard is about the caller only. A second
  * session's goal in the target is protected by the existing buckets.
+ *
+ * A session that cannot be read is not a session that is not in the target. The
+ * read and the place both refuse rather than let the removal continue.
  */
 const goalHolding = (ctx: Plugin.Context) =>
   Effect.fn("spectre.worktrees.goal")(function* (
@@ -359,8 +357,17 @@ const goalHolding = (ctx: Plugin.Context) =>
     target: string,
   ) {
     if (sessionID === undefined) return undefined;
-    const where = yield* whereIs(ctx, sessionID);
-    if (where === undefined || where !== target) return undefined;
+
+    const session = yield* Effect.result(ctx.session.get({ sessionID }));
+    if (session._tag === "Failure")
+      return "This session could not be read, and a read that did not answer is not proof that it is not standing in the target. Run /goal to inspect it, then remove. Nothing was removed.";
+
+    const where = yield* Effect.promise(() =>
+      toplevel(session.success.location.directory),
+    );
+    if (where === undefined)
+      return "This session's working directory could not be placed, and a place that did not answer is not proof that it is not the target. Run /goal to inspect it, then remove. Nothing was removed.";
+    if (where !== target) return undefined;
 
     const read = yield* Effect.result(ctx.rpc(Goal.Definition).get({ sessionID }));
     if (read._tag === "Failure")
@@ -374,6 +381,11 @@ const goalHolding = (ctx: Plugin.Context) =>
     return undefined;
   });
 
+/**
+ * What git can say about a directory before the host is asked to delete it: whether the
+ * directory is there at all, whether git still lists it, and which branch it holds.
+ * Three reads that do not depend on each other, so they are asked together.
+ */
 const runStanding = (directory: string, rows: ReadonlyArray<ListedWorktree>) =>
   Effect.gen(function* () {
     const [onDisk, named] = yield* Effect.all(
@@ -559,7 +571,9 @@ session's own directory and, when it is the one being removed, moves to \`main\`
 By the time \`removed\` returns this session is in \`main\`, and \`moved\` says so. A removal
 of somebody else's worktree leaves you where you were. A failed move removes nothing, and
 a repository with no worktree on \`main\` is \`rejected\` rather than performed — there would
-be nowhere to send you.
+be nowhere to send you. A worktree holding this session's active or paused goal is also
+\`rejected\`, until \`/goal clear\`: a live goal would follow the session home and keep
+working on the wrong tree.
 
 ## Where a worktree goes
 

@@ -28,8 +28,8 @@ const header = (goal: GoalView, contract: Contract, place: Feature, sessionID: s
     ...(contract.evidence === undefined ? [] : [`- Evidence also required: ${contract.evidence}`]),
     `- Armed: ${new Date(goal.updatedAt).toISOString()}`,
     "",
-    "| round | unit | changed | check output | predicate moved | head |",
-    "| ----- | ---- | ------- | ------------ | --------------- | ---- |",
+    "| round | changed | check output | predicate moved | head |",
+    "| ----- | ------- | ------------ | --------------- | ---- |",
     "",
   ].join("\n");
 
