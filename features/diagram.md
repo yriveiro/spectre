@@ -3,8 +3,8 @@
 ## What this is
 
 A canvas page that binds data to marks, drawn with a library the page loads from
-beside itself. It is the fourth visual surface, after `canvas` (a page), `pr-canvas`
-(a diff) and `anatomy` (a machine).
+beside itself. It is the third visual surface, after `canvas` (a page) and
+`pr-canvas` (a diff).
 
 The reader asks for a chart. The session chooses the mark the question needs,
 draws it with the fewest elements that carry information, and presents a page

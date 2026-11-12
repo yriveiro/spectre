@@ -12,7 +12,6 @@ rather than a page of prose.
 
 | The reader wants | That skill |
 | --- | --- |
-| A machine, a system, or a mechanism drawn as a physical object | `anatomy`, which builds it from a geometry kit and audits it |
 | A pull request, or a diff, shown as a page | `pr-canvas`, which owns PR identity and the evidence |
 | An idea, a workflow, or a mock UI with no data behind it | `canvas`, which owns the artifact contract |
 | Data bound to marks | this one |
@@ -151,5 +150,3 @@ for, and draws the structure instead.
 
 It does not load a library from the network. The bundle is on disk, beside the
 page, or the page does not use it.
-
-It does not draw a machine. That is `anatomy`.

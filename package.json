@@ -26,7 +26,6 @@
     "eval": "bun run eval/run.ts",
     "eval:resume": "bun run eval/resume/run.ts",
     "eval:routing": "bun run eval/routing/run.ts",
-    "anatomy-kit.sync": "sh scripts/sync-anatomy-kit.sh",
     "d3.vendor": "bun run scripts/sync-d3.ts"
   },
   "dependencies": {

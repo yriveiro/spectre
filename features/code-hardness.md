@@ -169,7 +169,7 @@ same index.
 
 | Verb | What it answers | What it said here |
 | --- | --- | --- |
-| `--hotspots` | which files cost the most to maintain | 93 of 393 files have a measured complexity. The top of the list is `tools/definitions/anatomy/kit/audit.ts`, with churn 1 and cognitive complexity 596 |
+| `--hotspots` | which files cost the most to maintain | 123 of 510 files have a measured complexity. The top of the list is `tui/controls.tsx`, with churn 9 and cognitive complexity 387 |
 | `--rank-by=churn` | which files change most | the top three are `test/history/history.test.ts`, `tools/definitions/pr/read.ts` and `tools/definitions/history/parse.ts` |
 | `--graph-query` | which functions are complex and central | `cx(all,20)` names 18 functions, `fanin(all,10)` names 27, and the conjunction of the two names none |
 | `--cochange` | which files move together | `skills/FOR_AGENTS.md` and `skills/definitions/ripwire/SKILL.md` changed together 48 times in 18 months, and `TODO.md` joined both of them at 32 times |

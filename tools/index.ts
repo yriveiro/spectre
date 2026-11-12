@@ -1,7 +1,5 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Effect } from "effect";
-import { anatomy } from "./definitions/anatomy";
-import { guardFigure } from "./definitions/anatomy/guard";
 import { attach, brain } from "./definitions/brain";
 import { canvases } from "./definitions/canvas";
 import { comments } from "./definitions/comments";
@@ -28,7 +26,6 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
     const opening = pr(ctx);
     const why = historyTool(ctx.location.directory);
     const pages = canvases(ctx);
-    const figures = anatomy(ctx.location.directory);
     const memory = brain(ctx);
     const solid = solidjs(ctx.location.directory);
 
@@ -44,20 +41,14 @@ export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.C
       editor.add(why);
       editor.add(pages);
       editor.add(memory);
-      editor.add(figures);
       editor.add(solid);
     });
 
     yield* Effect.logInfo("Registered tools", {
-      tools: [listed, said, route, trees, prs, opening, why, pages, memory, figures, solid].map(
+      tools: [listed, said, route, trees, prs, opening, why, pages, memory, solid].map(
         (tool) => `${tool.options?.namespace}_${tool.name}`,
       ),
     });
-
-    // A figure is held back from the reader until its geometry has been proved.
-    // `tool.execute.before` is the only hook that can reject a call, so it is
-    // the only place this can be enforced.
-    yield* ctx.tool.hook("execute.before", guardFigure());
 
     yield* sessionReturn(ctx);
     yield* attach(ctx);

@@ -10,8 +10,7 @@ which owns PR identity, evidence, and the review layout. This skill never names
 a PR number.
 
 A page that binds data to marks is `diagram`, which owns the choice of mark and
-the vendored library a chart loads. A machine drawn as a physical object is
-`anatomy`.
+the vendored library a chart loads.
 
 ## Create a canvas
 
