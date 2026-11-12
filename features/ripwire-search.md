@@ -1,6 +1,6 @@
 # Ripwire as the code-search default
 
-Status: designed. Slice 1 is not built.
+Status: slices 1 and 2 built. Slice 3 and the live eval arms are not built.
 
 ## The problem
 
