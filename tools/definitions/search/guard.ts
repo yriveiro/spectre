@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Effect, type Scope } from "effect";
-import { judge } from "./policy";
+import { judge, type Route } from "./policy";
 import { probe } from "./probe";
 import { markRerouted, sessionSeen } from "./state";
 
@@ -11,7 +11,7 @@ type RipgrepInput = {
   readonly literal?: boolean;
 };
 
-const readAsk = (input: unknown): RipgrepInput | undefined => {
+export const readAsk = (input: unknown): RipgrepInput | undefined => {
   if (typeof input !== "object" || input === null) return undefined;
   const { pattern, path, include, literal } = input as {
     readonly pattern?: unknown;
@@ -32,6 +32,26 @@ const readAsk = (input: unknown): RipgrepInput | undefined => {
 };
 
 /**
+ * Carry the verdict's route into the renamed call. The search tool re-derives
+ * its route from the payload, which carries no `kind`, so without this every
+ * reroute would run `--grep`: a task verdict sets `query`, a regex verdict
+ * sets `kind: "regex"`, and a literal verdict leaves the input alone.
+ */
+export const rerouteInput = (
+  input: Record<string, unknown>,
+  route: Route,
+): Record<string, unknown> => {
+  switch (route.kind) {
+    case "task":
+      return { ...input, query: route.task };
+    case "regex":
+      return { ...input, kind: "regex" };
+    case "literal":
+      return { ...input };
+  }
+};
+
+/**
  * The reroute: a code-shaped `ripgrep` call is answered by `spectre_search`
  * once per pattern per session.
  *
@@ -39,7 +59,8 @@ const readAsk = (input: unknown): RipgrepInput | undefined => {
  * and judges. On a `route` verdict it asserts the permission with
  * `action: "grep"` — the permission action stays `grep` while the model sees
  * `ripgrep` — records the pattern in the session's seen set, marks the call
- * id rerouted, and renames `event.tool` to `"spectre_search"`.
+ * id rerouted, carries the route into the input, and renames `event.tool`
+ * to `"spectre_search"`.
  *
  * Only defects are caught, following
  * `tools/definitions/worktrees/return/index.ts:51-73`: the permission
@@ -73,6 +94,7 @@ export const attachGuard = (ctx: Plugin.Context): Effect.Effect<void, never, Sco
           agent: event.agent,
           action: "grep",
           resources: [ask.pattern],
+          save: ["*"],
           metadata: {
             ...(ask.path === undefined ? {} : { path: ask.path }),
             ...(ask.include === undefined ? {} : { include: ask.include }),
@@ -82,6 +104,7 @@ export const attachGuard = (ctx: Plugin.Context): Effect.Effect<void, never, Sco
 
         sessionSeen(event.sessionID).add(ask.pattern);
         markRerouted(event.id);
+        event.input = rerouteInput(event.input as Record<string, unknown>, verdict.route);
         event.tool = "spectre_search";
       }).pipe(
         Effect.catchDefect((defect) =>
