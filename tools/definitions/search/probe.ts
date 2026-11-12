@@ -5,17 +5,7 @@
  * install can hand the plugin its binary without touching PATH.
  */
 
-/**
- * The health of the ripwire instrument. This mirrors `Health` in
- * `./policy.ts` (worker 2's slice) field for field, so this file typechecks
- * on a branch that does not hold it yet. The wave 2 integration collapses
- * this to `import type { Health } from "./policy.ts"` and deletes the local
- * definition; the two are structurally identical, so nothing else changes.
- */
-export type Health =
-  | { readonly kind: "ready"; readonly binary: string; readonly version: string }
-  | { readonly kind: "absent"; readonly why: string }
-  | { readonly kind: "stale"; readonly binary: string; readonly version: string };
+import type { Health } from "./policy";
 
 const MIN_VERSION = "0.6.10";
 
