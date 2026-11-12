@@ -29,25 +29,35 @@ nobody runs. If no verb answers the test, write `no instrument` and say what
 stands in for it. That is a complete answer, and it is more useful than a
 principle quoted at something it was never about.
 
+## The search moment
+
+For a code search, call `spectre_search`. It runs ripwire's `--for`, `--grep` or
+`--regex` and returns the enclosing symbol. For plain text, logs, docs prose,
+fixtures and lock files, call `ripgrep`. `spectre_search` answers a code-shaped
+`ripgrep` call once, and the result says so. Rule 4 allows a second `ripgrep`
+for the same pattern, and `literal: true` always stays on `ripgrep`.
+
 ## The map
 
-Keyed on the test, not the name. The test is the falsifiable half.
+Keyed on the test, not the name. The test is the falsifiable half. The map is
+checked against ripwire 0.6.10, and an older install fails
+`test/skills/ripwire-map.test.ts`.
 
 | Leaf | Its test | The verb that answers it |
 | ---- | -------- | ------------------------ |
-| `principle-laziness-protocol` | where does X come from, what can change it, and what would a deletion have avoided | `--callers` `--uses` `--context-ratio` `--nonlocal-state` `--map-diff` `--clones`, `--for=TASK` for the ranked set a reader would have to read, and `--graph-query=EXPR` for the question those seven cannot phrase, which filters a node set by kind, complexity or fan-in and then walks it. |
+| `principle-laziness-protocol` | where does X come from, what can change it, and what would a deletion have avoided | `--callers` `--uses` `--context-ratio` `--nonlocal-state` `--map-diff` `--clones`, `--for=TASK` for the ranked set a reader would have to read, and `--graph-query=EXPR` for the question those seven cannot phrase, which filters a node set by kind, complexity or fan-in and then walks it. When the name itself is ambiguous, `--defs=NAME` prints the `sel=` spelling every symbol verb accepts, so the next call does not guess. |
 | `principle-verification` | which claim no longer holds | `--doc-drift` `--mentions` `--test-gate`, and `--verify=contains(FILE,"LITERAL")` for the single anchor you are holding rather than the whole corpus. That FILE is a substring over the indexed tree, so it finds a file this repository indexes and nothing else, and a literal cannot hold a `"`. A markdown link to a heading is an edge now, so `--doc-drift` checks a claim about a section and not only about a file. |
 | `principle-evidence` | can this check fail, and has it ever | `--verify=CLAIM` asks the question and returns confirmed, refuted or not-established, over a closed claim language: `calls`, `uses`, `unused`, `contains`, `defines`, `reaches`. A refuted verdict is the proof the check can fail, so this is the row's own test turned into a command. `--seams` gives the complement, which is the edge no test reaches, and `--exercises=FILE` says what one test covers. `--path=A,B` answers a reachability claim with its gaps named: where the graph holds no edge it says where the search stopped. Whether the instrument itself is right is a person. |
 | `principle-make-states-unrepresentable` | can I write a comment saying when this combination of fields is valid | `--seams` names the untested shapes, and the typecheck is the oracle. Whether a sum should have been a union, or whether a struct admits a state nobody can name, is a person reading the type. `--clones` catches the two hand-written copies of one shape. |
-| `principle-boundary-discipline` | where did this value enter, and which checks sit below that point | `--uses` `--callers`, `--impact=TYPE` for the symbols that name a type in a type position, `--grep`'s `reads=` and `vals=` for where a stored value goes, and `--arch=FILE`, which enforces layering rules from a rules file and exits 2 on a violation. That last one is the difference between a boundary rule and a paragraph about one. |
-| `principle-hygiene` | what does nothing reach | `--safe-delete=SYM` answers it in one call: callers, blast radius, uses, test coverage, a `risk=` and a `dead_code_candidate=`, plus the one pasteable follow-up in `next=`. A `risk=` of `hedged` is what a method a constructed name could reach reads, and `pattern_dispatch=N` names the sites. `--dead-code` `--clones` `--lint` name each family separately. |
-| `principle-migrate-callers-then-delete-legacy-apis` | does any caller still reach the old path | `--callers` `--whereis`. A caller list that fits 16,000 B is served whole, and a cut one names the next page in `next=`, so the follow-up starts where the page stopped. |
+| `principle-boundary-discipline` | where did this value enter, and which checks sit below that point | `--uses` `--callers`, `--impact=TYPE` for the symbols that name a type in a type position, `--impact=FILE` for a file's importers with `importers_tests=` and `importers_dirs=` when the tier is cut, `--grep`'s `reads=` and `vals=` for where a stored value goes, and `--arch=FILE`, which enforces layering rules from a rules file and exits 2 on a violation. That last one is the difference between a boundary rule and a paragraph about one. |
+| `principle-hygiene` | what does nothing reach | `--safe-delete=SYM` answers it in one call: callers, blast radius, uses, test coverage, a `risk=` and a `dead_code_candidate=`, plus the one pasteable follow-up in `next=`. A `risk=` of `hedged` is what a method a constructed name could reach reads, and `pattern_dispatch=N` names the sites. `--dead-code` (with `=DIR` to scope the scan) `--clones` `--lint` name each family separately. |
+| `principle-migrate-callers-then-delete-legacy-apis` | does any caller still reach the old path | `--defs=NAME` to pin which definition a name binds, then `--callers` `--whereis`. A caller list that fits 16,000 B is served whole, and a cut one names the next page in `next=`, so the follow-up starts where the page stopped. |
 | `principle-test-behavior-not-implementation` | would this test pass if every import returned undefined | `--test-gate` names the tests; the mutation itself has no verb here. `--seams` gives the complement, which is the test that should exist and does not. |
 | `principle-test-for-truth` | which defect does this test catch, and what does it cost to keep it | `--exercises=FILE` says what one test file reaches, and `--safe-delete=SYM` says what reaches the code when it goes, which is how you price the test that guards it. `--test-gate` names the tests a change has to run and the untested blast radius it leaves. The mutation, the triage order, the floor and the judgement about a low-probability scenario have no verb here. |
 | `principle-outcome-oriented-execution` | is the named end reached, and did a check at the boundary | none. Whether a declared end was reached is a fact about a plan and a diff, not about a graph. The reachability half has an instrument: `--callers` on what the end says should be gone, and `--test-gate` for the check the boundary was supposed to run. Whether the plan still means anything is a person reading it. |
 | `principle-make-operations-idempotent` | does the second run converge to the same end state | none. Convergence is a property of a run, not of a graph. The reachability half has a floor with `--exercises=FILE`; whether the second run agrees with the first has no oracle here. The check is running the thing twice, and crashing it on purpose. |
 | `code-hygiene` | does the comment say what the name does not | `--comment-coherence` |
-| `principle-guard-the-context-window` | what did this cost | `--token-budget` and `--pack-task`, whose answer states `est_tokens=` against `budget_tokens=`. `--pack-top-n` is its deprecated alias. On `--for` an explicit `--token-budget` is a soft target, not a cut: every row it drops stays reachable through `next=`. `--partition=N` carves the same task into N minimally-overlapping slices for N agents; read `overlap_max` before trusting them. |
+| `principle-guard-the-context-window` | what did this cost | `--token-budget` and `--pack-task`, whose answer states `est_tokens=` against `budget_tokens=`. `--pack-top-n` is its deprecated alias. `--recall=TASK` is the doc side and serves six documents by default, so `--top-k=8` restores the old eight. On `--for` an explicit `--token-budget` is a soft target, not a cut: every row it drops stays reachable through `next=`. `--partition=N` carves the same task into N minimally-overlapping slices for N agents; read `overlap_max` before trusting them. |
 | `grammar` | does the sentence name one actor, and is this the plainest word | `tools.spectre.prose` on the body: semicolon, phrasal verb, nominalization, marketing adjective, long sentence, passive voice. Four are hard and two advisory, so a clean run is not a clean sentence. The present perfect is advisory because it can carry a hedge the simple past cannot. Whether a sentence lands, whether a word sounds bigger than the fact, and whether a heading says what is under it are a person reading the page. |
 | `model-router` | none | none. `tools.spectre.routing` validates the allowlist, its priority and the crosscheck list, and returns both orders. |
 | `principle-attack-the-premise` | do not start the next fix before the premise is written down and the failures counted | none. The count spans sessions and no verb reads it. What a verb does give is the premise's blast radius: `--callers` on the symbol every failed fix touched, which is how you notice the fixes were all in one place. |
@@ -84,17 +94,23 @@ set and neither is obvious from its name:
 
 ## Two ways in
 
+The direct `spectre_search` tool is the front door because the Code Mode catalog renders the 33 MCP tools as none shown. The MCP server is the second hop for the graph verbs, and the `ripgrep` tool is the renamed built-in `grep` tool which already runs ripgrep.
+
 **The MCP server**, as `tools.ripwire.*`. Thirty-three tools: thirty-one verbs,
 ranked, with lazy handles, plus `batch` (sixteen read sub-queries in one turn)
 and `explore` (one-call orientation with bodies attached). Prefer it when the
-session has it, because it ranks and it batches.
+session has it, because it ranks and it batches. The server takes
+`--mcp-tools=core|no-edit|full`, and `no-edit` hides the three edit verbs, which
+is what `ripwire wrap claude` registers. `memory_recall` serves six documents by
+default, down from eight.
 
-**The CLI**, as `ripwire <dir> --flag`. Same engine, and it is the only place
-`--test-gate` lives, so the exit-code gate that `ripwire-quality-bar` pairs with
-`--quality-delta` is a shell command. Two more live only here: the `--for` body
-fold, which the MCP `for` does not serve, and `--quality-delta=A..B` with the
-`--quality-kinds` replay. Use the CLI when you need a script, an exit code, or
-one of those.
+**The CLI**, as `ripwire <dir> --flag`. Same engine, and `--test-gate` and
+`--defs` live only here, so the exit-code gate that `ripwire-quality-bar` pairs
+with `--quality-delta` is a shell command. Two more live only here: the `--for`
+body fold, which the MCP `for` does not serve, and `--quality-delta=A..B` with
+the `--quality-kinds` replay. The MCP `for` is signatures-only (`bundle="sigs"`),
+so call `fetch_body` when you need a body. Use the CLI when you need a script,
+an exit code, or one of those.
 
 A `--quality-delta=A..B` answer that ran out of memory is a partial answer and
 not a pass: it exits 2 when a kind that ran gates, 6 otherwise, and 5 when even
@@ -118,18 +134,28 @@ sentence from "it is not there". The graph verbs now publish three gauges beside
 the count, so the floor can be read rather than assumed: `graph_ambiguous=` is
 the calls split over several definitions, `graph_unresolved=` the ones with
 in-tree evidence and no edge, and `graph_unindexed=` the files no grammar could
-read. Measured with `--seams` on this repository at 0.6.8 they read 5, 232 and 4.
+read. Measured with `--seams` on this repository at 0.6.10 they read 1, 158 and 2.
 The gauge is per-verb rather than per-tree, because each verb resolves the edges
-it needs: `--safe-delete` reports the same `graph_unresolved="232"` here. Read
-the gauge on the verb you ran.
+it needs: `--safe-delete` reports the same `graph_unresolved="158"` here. The
+three move with the tree, so read the gauge on the verb you ran rather than this
+sentence's numbers.
 
 **The index is a snapshot.** It is built at a point in time. After you edit, a
 call from the server may still describe the code before your change. The server
 also ships three edit verbs (`insert_before_symbol`, `insert_after_symbol`,
 `replace_symbol_body`), so a session can change the code and keep asking the old
-graph. Re-index, or read the file.
+graph. Re-index, or read the file. Give the lean verbs (map, callers, impact)
+and the rich verbs (quality family) separate `--cache` files, because each
+refuses a file the other class wrote and re-parses, so one shared path silently
+costs the warm run.
 
-**A hedge is not an edge.** 0.6.8 names what it declined to bind, and a name is
+**A stale binary is the first false result to rule out.** `--doctor` checks the
+binary on `PATH` against the one you invoked, the grammar tags, the cache
+directory and the index identity. A `binary-path` row with `ok="0"` and
+`hint="STALE: …"` means every answer came from a build you did not mean to run.
+Run it before you doubt a verb.
+
+**A hedge is not an edge.** The index names what it declined to bind, and a name is
 not a proof. A call the resolver could not bind is a `<dc>` row, a candidate set
 rather than a call, and `--impact` prints the `<dc>` rows of the calls it
 counted and declined. A `--path` answer with no edge carries a
@@ -140,11 +166,20 @@ carries `via="name"`, one the resolver split carries `prov="split"`.
 reach, with `pattern_dispatch=N` naming the sites. A hedge is where the index
 stopped, not the edge it did not find.
 
+**An unknown coupling is not a zero.** `--deps` and `--arch` name
+`no_file_edges=` and mask the files when the language's imports are not resolved
+(Go, Java, Kotlin, C#, PHP, Swift, Dart, GDScript, Clojure). `--cochange` prints
+the same note for Go and Java, and `--impact` prints it when the symbol's file is
+in one of those languages. A zero over such a tree is unknown, not clean.
+`--export=cc.json` omits the fan-in and fan-out rather than writing 0.
+
 **The head of a `--for` answer is breadth, not score.** The first eight rows
 take one row per distinct file, so rank 1 to 8 is a tour of eight files and not
 the ranking. `<sigs files_first=N>` counts the rows that moved, and the body
 fold and the compact `<hops>` keep score order. A file that scores highest can
-sit at row 12. The fold serves a body whole or not at all: a class too big for
+sit at row 12. A prose question can also bring a `<doc_body>` row, which is the
+doc's text under the same budget and not a symbol. The fold serves a body whole
+or not at all: a class too big for
 the budget comes as a `<slice>` of its constructor and the members the question
 names, so a body in the answer is not the whole definition.
 
@@ -170,7 +205,7 @@ projects. When the question is where the risk sits, rank by churn with
 
 **A quality family can be unavailable, and absence from the report is not health.**
 `--quality-panel` joins six evidence families and names the ones it could not
-measure, with a reason each. Measured here at 0.6.8: it reports
+measure, with a reason each. Measured here at 0.6.10: it reports
 `unavailable="confusion,state"` and says why, because the `confusion` family is an
 atom pack that reads C/C++/ObjC/CUDA paths only and the `state` family analyses
 C++/ObjC only. This tree is TypeScript and indexed no such file, so four of six
@@ -179,7 +214,7 @@ Read `unavailable=` before quoting `ranked=`.
 
 **`--help-task` abstains more often than its description suggests.** It is the one
 flag whose job is to name the verb for a task, and it answers
-`status="abstain" confidence="none"`. Measured here at 0.6.8: it abstained on
+`status="abstain" confidence="none"`. Measured here at 0.6.10: it abstained on
 "which ripwire command answers can I delete this symbol" and on "is it safe to
 delete ledger", the second with `resolved_symbols="0"`, so naming an indexed
 symbol did not buy a recommendation. Ask it, and treat an abstention as the
@@ -192,17 +227,17 @@ would be reported. The flag exempts those four frameworks, and `.ripwire_config`
 extends the list. A dead-code hit in a test-heavy tree is worth one look before
 you delete anything.
 
-**A path in a doc is not always a claim about this repo.** Measured here, not
-assumed: `ripwire . --doc-drift` on this repository reports 55 failed anchors
-across nine documents, and every one of them is a path that is not this repo's.
-Fifty-three name a file that does not exist here: `features/model-routing.md`
+**A path in a doc is not always a claim about this repo.** Measured here at
+0.6.10: `ripwire . --doc-drift` on this repository reports 66 failed anchors
+across eleven documents, and every one of them is a path that is not this repo's.
+Sixty-two name a file that does not exist here: `features/model-routing.md`
 carries 22 of them, and it cites `packages/core/src/tool/plugin/subagent.ts` at
 seven rows of its table, which are OpenCode's source paths and not this repo's.
-Two name a symbol this repo does not define (`noImplicitOverride` and
+Four name a symbol this repo does not define (`noImplicitOverride` and
 `exactOptionalPropertyTypes`, a TypeScript compiler option each).
 `communication/SKILL.md` quotes two paths that are examples inside a prose rule
-(`src/auth.ts:42` and `auth.spec.ts:42`), and this file quotes one of them to
-show the class, so it keeps reporting one of its own. The verb reads a path in
+(`src/auth.ts:42` and `auth.spec.ts:42`), and this file quotes both to show the
+class, so it keeps reporting two of its own. The verb reads a path in
 backticks and looks for it here, so a doc quoting another project, or showing a
 path inside an example, comes back as rot. Open a hit before you act on it.
 `--with-history` separates the other false class, a name this repo never had,
