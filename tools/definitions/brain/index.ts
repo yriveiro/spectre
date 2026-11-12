@@ -336,8 +336,8 @@ export const DESCRIPTION = `What this project knows that the code cannot say: wh
   await tools.spectre.brain({
     action: "assert",
     kind: "gotcha",
-    subject: ["tools/definitions/canvas/store.ts"],
-    claim: "A canvas is never overwritten: save allocates the directory, the write tool writes the page.",
+    subject: ["tools/definitions/canvas/content.ts"],
+    claim: "A canvas is an artifact: publish creates, update replaces the file map at the same id, and the plugin cannot list artifacts.",
   })
 
   await tools.spectre.brain({ action: "relate", from: a, to: b, kind: "relates", why: "one feature, two surfaces" })

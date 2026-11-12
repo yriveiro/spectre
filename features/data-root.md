@@ -42,7 +42,11 @@ grant and the prefix assertion.
 | `playbook-prototype` | `prototypes/<slug>/` |
 | `playbook-orchestrate` | `orchestrates/<project-slug>/` |
 | `figure-it-out` | `decisions/<slug>/worker-<n>/` |
-| `canvas` | `canvases/<slug>/`, allocated by `tools.spectre.canvas` rather than spelled inline |
+| `canvas` | `cache/diff/<project-digest>/<token>/` — in-flight evidence, pruned at 7 days, never the delivered page |
+
+`canvas` is the one row that is a cache rather than a run. It holds no page and no
+identity, it is keyed by a content digest, and it exists only between `diff` and
+a PR publish. The delivered page lives in the artifact, not here.
 
 Each skill spells its own path inline rather than pointing here. A subagent
 carries its own agent's rules and never its parent's, which `agents/index.ts`
@@ -50,21 +54,10 @@ says in the reason the grant lives there, and an output path is the one thing a
 fan-out worker cannot be asked to go and look up. This file is for whoever
 changes the repository.
 
-`canvas` is the one row that does not spell the path, because it does not know
-one: `tools.spectre.canvas` derives it and hands the writer an absolute path back.
-That is the exception, and it costs the rule above its clarity — a skill reading
-this table cannot reconstruct the path for itself.
-
 ## Open
 
 `<worktree-name>` is undefined repo-wide. No file says how to derive it, and the
-seven rows above all carry the placeholder.
-
-`tools.spectre.canvas` picks one for its own writes: `basename(project directory)`,
-falling back to `basename(git rev-parse --show-toplevel)`. That inherits a real
-collision — `main` is a common worktree name and two repositories can each have
-one, so their canvas stores merge. pstack namespaced by origin remote
-(`github-com-y-riveiro-spectre`), which does not collide.
+rows above that carry it all hold the placeholder.
 
 Defining the placeholder properly is this file's job, not one tool's. The options
 are the basename, the repository slug, or the basename under a repository-named

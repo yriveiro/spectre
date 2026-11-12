@@ -18,7 +18,7 @@ const canvas: Claim = {
   id: "0199b600000000000000000001",
   kind: "gotcha",
   claim: "canvas save allocates a directory",
-  subject: ["tools/definitions/canvas/store.ts"],
+  subject: ["tools/definitions/canvas/content.ts"],
   at: "2026-09-01T00:00:00.000Z",
   path: "/brain/neurons/0199b600000000000000000001.md",
 };

@@ -46,7 +46,7 @@ const textOf = (messages: Array<{ content: Array<{ text?: string }> }>): string 
   messages.map((m) => m.content.map((p) => p.text ?? "").join("")).join("\n");
 
 const neuron = (id: string, kind: string, claim: string): string =>
-  `---\nkind: ${kind}\nclaim: "${claim}"\nsubject: ["tools/definitions/canvas/store.ts"]\n---\n\nBody for ${id}.\n`;
+  `---\nkind: ${kind}\nclaim: "${claim}"\nsubject: ["tools/definitions/canvas/content.ts"]\n---\n\nBody for ${id}.\n`;
 
 const seed = async (dir: string, count: number): Promise<void> => {
   for (let i = 0; i < count; i++) {
