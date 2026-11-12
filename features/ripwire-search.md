@@ -4,14 +4,15 @@ Status: designed. Slice 1 is not built.
 
 ## The problem
 
-An agent searches code with `ripgrep` because `ripgrep` is the tool it sees. The
+An agent searches code with `grep` because `grep` is the tool it sees. The
 ripwire skills wait for the model to load one, and the map has no row for the
 search moment. The ripwire MCP server is a user config entry, not a plugin
 surface. The Code Mode catalog renders it as `- ripwire (33 tools, none shown)`
 inside its 2,000-token budget, so no verb name reaches the model. In the same
-request, `ripgrep` arrives with a full description. The model picks the visible
-tool. It is the built-in `grep` tool renamed in the request by
-`session.context`, and its engine is already ripgrep (`Ripgrep.Service`).
+request, `grep` arrives with a full description. The model picks the visible
+tool. The built-in `grep` tool already runs ripgrep under the hood
+(`Ripgrep.Service`). This feature renames it to `ripgrep` in the request via
+`session.context`, so the model sees the engine it already uses.
 
 ## What this feature must do
 
@@ -254,8 +255,8 @@ rows. A code row may be a phrase, not only an identifier. The metrics:
 | Name | What it is | Today | Gate |
 | ---- | ---------- | ----- | ---- |
 | R | share of code rows answered by ripwire | 0.0 | above 0.5 for `all` |
-| G | share of code rows answered by `ripgrep` | 1.0 | below 0.5 for `all` |
-| T | share of text rows answered by `ripgrep` | about 1.0 | within 0.1 of `off` |
+| G | share of code rows answered by the plain-text tool (`grep` today, `ripgrep` after the rename) | 1.0 | below 0.5 for `all` |
+| T | share of text rows answered by the plain-text tool (`grep` today, `ripgrep` after the rename) | about 1.0 | within 0.1 of `off` |
 | C | median tool calls per code row | baseline | does not rise |
 | N | reroutes per session, by reason | 0 | `already-asked` never repeats a pattern |
 
@@ -272,7 +273,7 @@ that moves with any wording turns the suite red for a reason nobody can act on.
 | Delete `grep` outright rather than renaming it to `ripgrep` | The engine is already ripgrep, so deletion loses the plain-text half and the only tool that reads an unindexed file. The rename keeps the engine and drops the name, so a wrong decision stays recoverable. |
 | Block every code `ripgrep` with `Tool.Error` | It costs a turn and answers nothing. The model repeats the same intent. The reroute answers in the same call. |
 | Rewrite shell `grep` and `rg` commands | A shell command is the caller's. Rewriting it changes semantics the model may depend on. Count shell searches in the eval instead. |
-| Register the MCP server only | The verb names stay behind the catalog budget and `execute`. The model still uses `ripgrep`. |
+| Register the MCP server only | The verb names stay behind the catalog budget and `execute`. The model still uses `grep`. |
 | Rewrite every agent prompt | It mutates agents the user configured, and it needs an idempotent append. The per-request `session.context` hook is smaller and cannot accumulate. |
 
 ## Open questions
