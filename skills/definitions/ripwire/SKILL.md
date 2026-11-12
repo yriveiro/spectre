@@ -33,9 +33,9 @@ principle quoted at something it was never about.
 
 For a code search, call `spectre_search`. It runs ripwire's `--for`, `--grep` or
 `--regex` and returns the enclosing symbol. For plain text, logs, docs prose,
-fixtures and lock files, call `ripgrep`. A code-shaped `ripgrep` call is answered
-by `spectre_search` once, and the result says so. A second `ripgrep` for the same
-pattern is allowed, and `literal: true` always stays on `ripgrep`.
+fixtures and lock files, call `ripgrep`. `spectre_search` answers a code-shaped
+`ripgrep` call once, and the result says so. Rule 4 allows a second `ripgrep`
+for the same pattern, and `literal: true` always stays on `ripgrep`.
 
 ## The map
 
