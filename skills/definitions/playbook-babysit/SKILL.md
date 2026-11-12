@@ -17,9 +17,15 @@ s.rows       // the per-PR evidence behind the verdict
 s.problems   // PRs gh could not read
 ```
 
-**Call and read the verdict.** The same state gives the same answer every time, so a verdict you act on is one you can re-derive. Call it, read `stack`, and if it says `waiting` say
+**Call and read the verdict.** The same state gives the same answer every time, so a verdict you act on is one you can re-derive. Call it, read `stack`, and if it says `waiting` and no goal is armed, say
 which check you are waiting for and stop. No sleeping, no re-polling in a loop,
-no holding the session open.
+no holding the session open. Under a goal, start the one blocking wait command in
+the background — `gh pr checks <pr> --watch` — say which check it is, and end the
+turn. The goal wakes this session when the shell finishes.
+
+`/babysit` arms that goal through `tools.spectre.goal`, with the `stack` verdict
+as the predicate and one `tools.spectre.stack` call as the check. The loop is the
+host's. This procedure is the review. A goal never authorizes a merge.
 
 ## Start
 
@@ -112,10 +118,12 @@ This playbook never authorizes a merge, an auto-merge, or a merge-when-ready
 arm. Only an explicit "merge", "land", "ship" or "merge when ready" does, and
 that request is `playbook-shipping`.
 
-When the verdict is `waiting`, the run is over: say which check is running and
-stop. When it is `clear`, sweep the run's triage decisions once and offer any
-dismissal pattern worth keeping to the user as a rule, not as something you
-remember.
+When the verdict is `waiting` and no goal is armed, the run is over: say which
+check is running and stop. Under a goal, the background waiter is the wait and
+the next round reads the verdict again. When it is `clear`, sweep the run's
+triage decisions once and offer any dismissal pattern worth keeping to the user
+as a rule, not as something you remember. Never merge: this playbook stops at
+merge-ready.
 
 ## Outputs
 

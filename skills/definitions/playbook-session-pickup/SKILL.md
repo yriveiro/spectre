@@ -79,6 +79,10 @@ Three parts, in this order:
 The test is whether a reader could continue the work from your three parts alone. If
 they could not, the gap is in the pickup, not in the handover.
 
+A goal id in a note is a record, not a handle. Only the session that armed it can
+resume it. A new session reads the ledger and re-arms the same predicate with
+`/drive` or `/babysit`.
+
 The failure to avoid is a fresh verification pass over what the prior session already
 verified. "Let me check from scratch" treats the inherited work as untrustworthy, and
 it is how a pickup doubles a session's cost. Check what was not checked, not what

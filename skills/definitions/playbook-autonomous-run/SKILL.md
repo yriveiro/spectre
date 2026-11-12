@@ -1,9 +1,30 @@
 # Playbook autonomous-run
 
-A run does one unit of work and then stops. Nothing re-enters a session while you
-are in it, so a run is a unit of work rather than a loop, and everything a later
-run needs is written where that run will find it: the branch holds the work, the
-commit body holds why the run advanced, and a file holds the objective.
+A run drives one task to a checkable exit. Under `/drive`, the built-in goal
+loop re-enters this session when it would go idle, so the run iterates until its
+predicate is met. Without a goal the run is one unit and stops. Either way,
+everything a later round or a later session needs is written where it will find
+it: the branch holds the work, the commit body holds why the round advanced, and
+`.spectre/run.md` holds the objective and the ledger.
+
+## Goal mode
+
+`/drive` arms a goal through `tools.spectre.goal`. The goal carries the
+objective, the measured worktree and branch, the exit predicate, the exact check
+and the ledger path. When a goal is active:
+
+- The loop re-enters this session after every turn. Do one unit per turn and end
+  the turn. Do not try to finish the whole run in one turn.
+- The reviewer trusts only evidence in the conversation. Run the check and quote
+  its output before you end the turn.
+- On `continue`, read the reviewer's `reason` and `next_step` and take the next
+  unit. Do not repeat work the ledger says is done.
+- On `blocked`, write the exact ask in `.spectre/run.md` and stop.
+- The round number is the `rounds` field from
+  `tools.spectre.goal({ action: "status" })`. The kickoff is round 0; the first
+  continuation is round 1.
+- A pause is `/goal pause`, typed by the user. Resume is `/goal resume`. The goal
+  id is a handle only for the session that armed it.
 
 ## Start
 
@@ -67,11 +88,13 @@ hook that passed, not a worker's summary. When something passes suspiciously eas
 suspect the measurement before the system.
 
 If the check needs an event to complete — CI finishing, a pull request merging, somebody
-pushing a review — you cannot wait for it, because nothing here can wake you. Name that
-event in the state file's next-check line and stop. The human, or the next session, is
-the wake mechanism.
+pushing a review — start the one blocking wait command in the background, such as
+`gh pr checks <pr> --watch`, say which event it waits for, and end the turn. Under a goal
+the reviewer may answer `wait`, and the shell's completion wakes the session. Without a
+goal, name the event in the state file's next-check line and stop. The human, or the next
+session, is the wake mechanism.
 
-One watcher does exist, and it returns once rather than following: call `tools.spectre.stack({})` and read the verdict. Where a ref advances, read the branch instead of polling it.
+One watcher does exist, and it returns once rather than following: call `tools.spectre.stack({})` and read the verdict. Where a ref advances, read the branch instead of polling it. Never sleep and never re-poll in a loop: the background shell is the wait, and the goal is the re-entry.
 
 ## Phase E: Write the row down
 
@@ -91,16 +114,18 @@ finding to report rather than a failure to hide.
 
 ## Phase F: Stop and name the next check
 
-The last thing the run does is write down the next check. One
+The last thing the round does is write the next row and name the next check. One
 sentence, in `.spectre/run.md`, naming the event or condition and the exact command that
-would settle it. *"CI on `feat/queue` is still running. Next run calls
+would settle it. *"CI on `feat/queue` is still running. Next round calls
 `tools.spectre.stack({ prs: [218] })` and reads the verdict."*
 
-Then stop. Coming back is a separate invocation and it is not yours to take.
+Under a goal, end the turn. The loop re-enters you, and the reviewer answers `done` only
+when the evidence shows the predicate. Without a goal, stop: coming back is a separate
+invocation and it is not yours to take.
 
 ## Outputs
 
-`.spectre/run.md`, holding the exit condition, one row per iteration, and the next
-check. One commit per unit that advanced, each with a body carrying the hypothesis and the
-measured result. A closing message with the exit condition, the iterations run, what
-landed, what was discarded, and the predicate's state now.
+`.spectre/run.md`, holding the goal id when there is one, the exit condition, one row per
+round, and the next check. One commit per unit that advanced, each with a body carrying
+the hypothesis and the measured result. A closing message with the exit condition, the
+iterations run, what landed, what was discarded, and the predicate's state now.

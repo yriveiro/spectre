@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { attach, brain } from "./definitions/brain";
 import { canvases } from "./definitions/canvas";
 import { comments } from "./definitions/comments";
+import { goal } from "./definitions/goal";
 import { historyTool } from "./definitions/history";
 import { pr } from "./definitions/pr";
 import { prose } from "./definitions/prose";
@@ -28,6 +29,7 @@ export const update = (ctx: Plugin.Context) =>
     const why = historyTool(ctx.location.directory);
     const pages = canvases(ctx);
     const memory = brain(ctx);
+    const loop = goal(ctx);
     const solid = solidjs(ctx.location.directory);
     const found = search(ctx);
 
@@ -43,6 +45,7 @@ export const update = (ctx: Plugin.Context) =>
       editor.add(why);
       editor.add(pages);
       editor.add(memory);
+      editor.add(loop);
       editor.add(solid);
       editor.add(found);
       editor.namespace({
@@ -52,7 +55,7 @@ export const update = (ctx: Plugin.Context) =>
     });
 
     yield* Effect.logInfo("Registered tools", {
-      tools: [listed, said, route, trees, prs, opening, why, pages, memory, solid, found].map(
+      tools: [listed, said, route, trees, prs, opening, why, pages, memory, loop, solid, found].map(
         (tool) => `${tool.options?.namespace}_${tool.name}`,
       ),
     });

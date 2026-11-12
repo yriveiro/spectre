@@ -56,13 +56,17 @@ to settle it cheaply before the real procedure starts.
 `worktree-cleanup` is the twenty-third and it is not prefixed, and it is a maintenance task rather than a
 shape of work. It is in the same table under its own name.
 
-## The four that need re-invoking
+## The three that always need re-invoking
 
-`playbook-autonomous-run`, `playbook-orchestrate`, `playbook-autopilot-full` and
-`playbook-autopilot-stack` are long programmes, and a session is one unit of one.
-Each of them writes its objective, its queue and its progress to a file, so the
-next run reads state and continues rather than starting over. Ask for the next
-unit, or leave it and come back to it. Do not expect it to finish while you wait.
+`playbook-orchestrate`, `playbook-autopilot-full` and `playbook-autopilot-stack`
+are long programmes, and a session is one unit of one. Each of them writes its
+objective, its queue and its progress to a file, so the next run reads state and
+continues rather than starting over. Ask for the next unit, or leave it and come
+back to it.
+
+`playbook-autonomous-run` is the exception. Armed with `/drive`, the built-in
+goal loop re-enters the session until the exit predicate is met, and `/goal pause`
+stops it. `/babysit` is the same loop with a pull-request stack as the predicate.
 
 ## How to use one
 

@@ -361,6 +361,10 @@ describe("the set's own prose", () => {
     // The `model-router` audit moved its reference material into `references/`
     // and rewrote the body in active voice, so the one passive line in that
     // skill is gone: 339 to 338.
+    //
+    // The goal integration added eight passive lines in the `/drive` and
+    // `/babysit` prompts and the goal-mode sections, where the actor is the host
+    // or the tool and the sentence states what the run is told: 338 to 346.
     const out = await call(["."]);
     const byRule: Record<string, number> = {};
     for (const f of out.findings) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
@@ -390,7 +394,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 338,
+      passiveVoice: 346,
       otherRules: [],
     });
   }, 120_000);

@@ -76,7 +76,12 @@ const toplevel = async (path: string) => {
   return found.out;
 };
 
-const host = (projectRow: string, sessionDirectory: string) => {
+type Held = {
+  id: string;
+  status: "active" | "paused" | "complete";
+} | null;
+
+const host = (projectRow: string, sessionDirectory: string, held: Held = null) => {
   const session = { where: sessionDirectory };
 
   return {
@@ -95,6 +100,25 @@ const host = (projectRow: string, sessionDirectory: string) => {
               return {};
             }),
         },
+        rpc: Object.assign(
+          () => ({
+            get: () =>
+              Effect.succeed(
+                held === null
+                  ? null
+                  : {
+                      id: held.id,
+                      status: held.status,
+                      objective: "held",
+                      rounds: 0,
+                      maxRounds: 50,
+                      boot: "boot",
+                      updatedAt: 0,
+                    },
+              ),
+          }),
+          { register: () => Effect.die("unused") },
+        ),
         worktree: {
           remove: ({ directory, force }: { directory: string; force: boolean }) =>
             Effect.promise(async () =>
@@ -169,6 +193,41 @@ describe("removing the worktree the session is standing in", () => {
 
     // The over-reach this guards: a `remove` that drags the caller home even when the
     // caller is not in the way costs the caller its working directory for nothing.
+    expect(outcome.status).toBe("removed");
+    expect(fake.session.where).toBe(main);
+  });
+
+  test("an active goal holds the worktree it was armed in", async () => {
+    const { bare, other } = await layout();
+    const fake = host(bare, other, { id: "goal-1", status: "active" });
+
+    const outcome = await remove(fake, other);
+
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status === "rejected") {
+      expect(outcome.problems).toContain("active");
+      expect(outcome.problems).toContain("/goal clear first");
+    }
+    expect(await isDirectory(other)).toBe(true);
+  });
+
+  test("a paused goal holds the worktree until the user resumes or clears it", async () => {
+    const { bare, other } = await layout();
+    const fake = host(bare, other, { id: "goal-1", status: "paused" });
+
+    const outcome = await remove(fake, other);
+
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status === "rejected") expect(outcome.problems).toContain("paused");
+    expect(await isDirectory(other)).toBe(true);
+  });
+
+  test("a complete goal does not hold the worktree", async () => {
+    const { bare, main, other } = await layout();
+    const fake = host(bare, other, { id: "goal-1", status: "complete" });
+
+    const outcome = await remove(fake, other);
+
     expect(outcome.status).toBe("removed");
     expect(fake.session.where).toBe(main);
   });

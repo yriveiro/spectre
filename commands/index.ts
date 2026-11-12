@@ -1,10 +1,12 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Effect } from "effect";
+import { babysit } from "./definitions/babysit";
+import { drive } from "./definitions/drive";
 import { effectAlign } from "./definitions/effect-align";
 import { pr } from "./definitions/pr";
 import { wt } from "./definitions/wt";
 
-const definitions = [pr, effectAlign, wt];
+const definitions = [pr, effectAlign, wt, drive, babysit];
 
 export const update = (ctx: Pick<Plugin.Context, "command" | "session">) =>
   Effect.gen(function* () {

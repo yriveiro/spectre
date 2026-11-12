@@ -1,4 +1,5 @@
 import type { Plugin } from "@opencode/plugin/effect";
+import { Goal } from "@opencode/schema/goal";
 import { AbsolutePath } from "@opencode/schema/schema";
 import type { Session } from "@opencode/schema/session";
 import type { Tool } from "@opencode/schema/tool";
@@ -11,7 +12,6 @@ import {
   mismatch,
   refusal as policyRefusal,
   type Reads,
-  type Start as StartFacts,
 } from "./classify";
 import {
   attachBranch,
@@ -320,11 +320,6 @@ const runStart = (ctx: Plugin.Context) =>
  * deletes a path and leaves a session's own row alone, so the two have to be ordered by
  * whoever calls this, and the ordering is the whole fix.
  */
-type Escorted =
-  | { readonly kind: "clear" }
-  | { readonly kind: "moved"; readonly to: string }
-  | { readonly kind: "refused"; readonly problems: string };
-
 const runEscort = (ctx: Plugin.Context) =>
   Effect.fn("spectre.worktrees.escort")(function* (
     sessionID: Session.ID | undefined,
@@ -351,6 +346,34 @@ const runEscort = (ctx: Plugin.Context) =>
  * directory is there at all, whether git still lists it, and which branch it holds.
  * Three reads that do not depend on each other, so they are asked together.
  */
+/**
+ * A session's live goal holds the worktree it was armed in. `remove` moves the
+ * caller to `main` before deleting the directory, so a goal left active would
+ * follow the session home and keep working on the wrong tree; a paused goal
+ * would resume there later. The guard is about the caller only. A second
+ * session's goal in the target is protected by the existing buckets.
+ */
+const goalHolding = (ctx: Plugin.Context) =>
+  Effect.fn("spectre.worktrees.goal")(function* (
+    sessionID: Session.ID | undefined,
+    target: string,
+  ) {
+    if (sessionID === undefined) return undefined;
+    const where = yield* whereIs(ctx, sessionID);
+    if (where === undefined || where !== target) return undefined;
+
+    const read = yield* Effect.result(ctx.rpc(Goal.Definition).get({ sessionID }));
+    if (read._tag === "Failure")
+      return "This session's goal could not be read, and a read that did not answer is not proof that no goal is running. Run /goal to inspect it, then remove. Nothing was removed.";
+
+    const goal = read.success;
+    if (goal?.status === "active")
+      return `This session's goal ${goal.id} is active in ${target}. Run /goal clear first: removing the worktree under a live goal would move the loop to main and lose the tree it was working in. Nothing was removed.`;
+    if (goal?.status === "paused")
+      return `This session's goal ${goal.id} is paused in ${target}. Run /goal resume to continue in this tree, or /goal clear to abandon the goal before removing it. Nothing was removed.`;
+    return undefined;
+  });
+
 const runStanding = (directory: string, rows: ReadonlyArray<ListedWorktree>) =>
   Effect.gen(function* () {
     const [onDisk, named] = yield* Effect.all(
@@ -381,6 +404,11 @@ const runRemove = (ctx: Plugin.Context) =>
       return rejected(`${input.directory} is the main worktree, and it is never removed here`);
 
     const standing = yield* runStanding(input.directory, rows);
+
+    if (standing.onDisk) {
+      const holding = yield* goalHolding(ctx)(sessionID, input.directory);
+      if (holding !== undefined) return rejected(holding);
+    }
 
     if (!standing.onDisk)
       return {
