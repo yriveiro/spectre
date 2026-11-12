@@ -17,7 +17,7 @@ export interface RunResult {
 const EMPTY_NOTE =
   "No hits in the indexed tree. That is not proof of absence. Re-issue the text search with a path or include for raw text.";
 
-const TRUNCATED_AT = 32_000;
+const TRUNCATE_BYTES = 32_000;
 const HEADER_AT = 8_192;
 
 const binaryOf = (): string | null => {
@@ -111,9 +111,22 @@ export const run = (
 
     let answer = out;
     let note: string | undefined;
-    if (answer.length > TRUNCATED_AT) {
-      answer = answer.slice(0, TRUNCATED_AT);
-      note = `Output exceeded ${TRUNCATED_AT} characters and was truncated.`;
+    const encoded = new TextEncoder().encode(answer);
+    if (encoded.length > TRUNCATE_BYTES) {
+      // Back off over a cut multi-byte sequence so the slice stays valid
+      // UTF-8. Only the last character can be cut: the encoder never emits
+      // anything else incomplete.
+      let end = TRUNCATE_BYTES;
+      while (end > 0) {
+        let start = end - 1;
+        while (start > 0 && (encoded[start]! & 0xc0) === 0x80) start--;
+        const lead = encoded[start]!;
+        const width = lead < 0x80 ? 1 : lead < 0xe0 ? 2 : lead < 0xf0 ? 3 : 4;
+        if (start + width <= end) break;
+        end = start;
+      }
+      answer = new TextDecoder().decode(encoded.slice(0, end));
+      note = `Output exceeded ${TRUNCATE_BYTES} bytes and was truncated.`;
     }
 
     const unresolved = /(?:graph_unresolved|unresolved)\s*=\s*"?(0|[1-9][0-9]*)"?/.exec(
