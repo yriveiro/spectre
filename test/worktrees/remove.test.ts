@@ -76,7 +76,17 @@ const toplevel = async (path: string) => {
   return found.out;
 };
 
-const host = (projectRow: string, sessionDirectory: string) => {
+type Held =
+  | { readonly id: string; readonly status: "active" | "paused" | "complete" }
+  | { readonly status: "failed" }
+  | null;
+
+const host = (
+  projectRow: string,
+  sessionDirectory: string,
+  held: Held = null,
+  unreadable = false,
+) => {
   const session = { where: sessionDirectory };
 
   return {
@@ -88,13 +98,34 @@ const host = (projectRow: string, sessionDirectory: string) => {
           location: { directory: AbsolutePath.make(session.where) },
         },
         session: {
-          get: () => Effect.succeed({ location: { directory: session.where } }),
+          get: () =>
+            unreadable
+              ? Effect.fail(new Error("session down"))
+              : Effect.succeed({ location: { directory: session.where } }),
           move: ({ directory }: { directory: string }) =>
             Effect.sync(() => {
               session.where = directory;
               return {};
             }),
         },
+        rpc: Object.assign(
+          () => ({
+            get: () => {
+              if (held === null) return Effect.succeed(null);
+              if (held.status === "failed") return Effect.fail(new Error("rpc down"));
+              return Effect.succeed({
+                id: held.id,
+                status: held.status,
+                objective: "held",
+                rounds: 0,
+                maxRounds: 50,
+                boot: "boot",
+                updatedAt: 0,
+              });
+            },
+          }),
+          { register: () => Effect.die("unused") },
+        ),
         worktree: {
           remove: ({ directory, force }: { directory: string; force: boolean }) =>
             Effect.promise(async () =>
@@ -171,5 +202,62 @@ describe("removing the worktree the session is standing in", () => {
     // caller is not in the way costs the caller its working directory for nothing.
     expect(outcome.status).toBe("removed");
     expect(fake.session.where).toBe(main);
+  });
+
+  test("an active goal holds the worktree it was armed in", async () => {
+    const { bare, other } = await layout();
+    const fake = host(bare, other, { id: "goal-1", status: "active" });
+
+    const outcome = await remove(fake, other);
+
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status === "rejected") {
+      expect(outcome.problems).toContain("active");
+      expect(outcome.problems).toContain("/goal clear first");
+    }
+    expect(await isDirectory(other)).toBe(true);
+  });
+
+  test("a paused goal holds the worktree until the user resumes or clears it", async () => {
+    const { bare, other } = await layout();
+    const fake = host(bare, other, { id: "goal-1", status: "paused" });
+
+    const outcome = await remove(fake, other);
+
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status === "rejected") expect(outcome.problems).toContain("paused");
+    expect(await isDirectory(other)).toBe(true);
+  });
+
+  test("a complete goal does not hold the worktree", async () => {
+    const { bare, main, other } = await layout();
+    const fake = host(bare, other, { id: "goal-1", status: "complete" });
+
+    const outcome = await remove(fake, other);
+
+    expect(outcome.status).toBe("removed");
+    expect(fake.session.where).toBe(main);
+  });
+
+  test("a goal read that fails refuses rather than guesses", async () => {
+    const { bare, other } = await layout();
+    const fake = host(bare, other, { status: "failed" });
+
+    const outcome = await remove(fake, other);
+
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status === "rejected") expect(outcome.problems).toContain("could not be read");
+    expect(await isDirectory(other)).toBe(true);
+  });
+
+  test("a session read that fails refuses rather than guesses", async () => {
+    const { bare, other } = await layout();
+    const fake = host(bare, other, null, true);
+
+    const outcome = await remove(fake, other);
+
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status === "rejected") expect(outcome.problems).toContain("session could not be read");
+    expect(await isDirectory(other)).toBe(true);
   });
 });

@@ -1,10 +1,14 @@
 # Playbook orchestrate
 
 A standing programme handed to one coordinator: many units, countable, across
-days. Every run starts cold and nothing runs while you are out of the room, so a
-programme here is a sequence of runs, each reading state and doing one thing.
+days. Every run starts cold. On OpenCode 2.2.1+ with `experimental.schedules`, a
+native schedule wakes the session on the programme's cadence, so the run does not
+depend on a person coming back. Without schedules, the human is the cadence and a
+programme is a sequence of runs.
 
 ## Start
+
+Call `todowrite` with one entry per phase when the host exposes it (`experimental.todo` on a released build).
 
 The store is `orchestrates/<project-slug>/` under
 `~/.local/share/spectre/<worktree-name>/`, the root `arena` already writes to. It
@@ -17,6 +21,27 @@ is outside the project directory, so the first write asks for permission, which 
 4. Scale to a rolling window
 5. Drain and land
 6. Close
+
+## Native wake
+
+Create the audit tick with the native schedule tools:
+
+```js
+await tools.opencode.schedule_create({
+  name: "orchestrate-audit",
+  when: { every: "30 minutes" },
+  ends: { after: "8 hours" },
+  prompt:
+    "Read the programme store and playbook-orchestrate. Drain the inbox, reconcile every owner against units.tsv and ledger.tsv, regenerate status.md, then spawn the next wave. Do not start a unit while preferences.md holds a stop order.",
+})
+```
+
+The schedule runs under `opencode serve`, so the server must be up when it is due.
+The prompt must stand alone, because the schedule wakes the session with no
+conversation around it. Set `ends` to the programme's budget or the working day, and
+create it again at the next run. `tools.opencode.schedule_list` shows the id and next
+run. `tools.opencode.schedule_pause` and `tools.opencode.schedule_delete` stop it. The
+schedule runs when `experimental.schedules` is on. Without it, ask for the next run.
 
 ## Phase A: Frame
 
@@ -53,7 +78,8 @@ Every file has one writer. Readers aggregate at read time.
 - `inbox/`, one file per completion: status, branch, head SHA, PR, verdict, deviations,
   session.
 - `gates.md`, the human's questions: the question, the options, and the default when
-  nobody answers.
+  nobody answers. When the human is present, ask the gate with `question` and write
+  the answer into `preferences.md`. When they are absent, use the default.
 - `decisions.tsv`, the trail: `at`, `unit`, `head`, `decision`, `why`.
 - `status.md`, derived from the two tables at each drain, never hand-maintained and never
   narrated into.
@@ -117,7 +143,10 @@ Drain the final inbox and reconcile every spawned agent to a terminal row. Silen
 a missing child's work hides the wasted spend and the gap its result existed to close.
 Confirm the predicate on the real artifact and every landed PR's verdict for its current
 head SHA, then encode every correction you made twice as a numbered line in
-`preferences.md`. Leave the store intact; it is the postmortem for the next run.
+`preferences.md`. Find the audit schedule id with `tools.opencode.schedule_list`, then
+delete it with `tools.opencode.schedule_delete`, or pause it with
+`tools.opencode.schedule_pause` when the programme will resume. Leave the store intact;
+it is the postmortem for the next run.
 
 ## Outputs
 

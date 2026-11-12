@@ -9,6 +9,8 @@ plain file in the repository. A note kept only in your context dies with you.
 
 ## Start
 
+Call `todowrite` with one entry per phase when the host exposes it (`experimental.todo` on a released build).
+
 1. Reach a boundary
 2. Take no irreversible action
 3. Make the work durable
@@ -22,11 +24,20 @@ step you are in, or back it out entirely. Do not leave a function half-edited wi
 caller already updated, and do not leave a schema migrated with the code that writes
 the new form unwritten. A clean tree with a note beats a broken tree with a note.
 
-Start nothing new. Cancel any subagents still running, or record which ones are,
-because a background subagent writing to the tree after you commit is how a `wip:`
-snapshot stops matching the working directory. If you are mid-run on a measured loop,
-note where in the loop you are and what the last measurement said, so the next
-session restarts the loop rather than the work.
+Start nothing new. If a goal is armed, ask the user to type `/goal pause` and call
+`tools.spectre.goal({ action: "status" })` to confirm `paused` before you commit:
+a live goal re-enters this session after the commit and writes to the tree.
+
+When `experimental.schedules` is on and this session has a native schedule that will
+wake it, call `tools.opencode.schedule_list`, then `tools.opencode.schedule_pause` or
+`tools.opencode.schedule_delete` before the commit. A schedule that fires after a
+pause writes to the tree.
+
+Then cancel any subagents still running, or record which ones are, because a
+background subagent writing to the tree after you commit is how a `wip:` snapshot
+stops matching the working directory. If you are mid-run on a measured loop, note
+where in the loop you are and what the last measurement said, so the next session
+restarts the loop rather than the work.
 
 ## Phase B: Take no irreversible action
 
@@ -76,7 +87,8 @@ Seven things, and a note missing the seventh is why resumes fail:
 3. **Progress and what is verified.** Which parts are known to work, and how you
    know. An unverified part marked unverified is worth more than an implied one.
 4. **Current state.** Branch, worktree, whether the tree is clean, whether checks
-   pass.
+   pass, and the goal id and status when a goal was armed. A goal id is a record,
+   not a handle a new session can resume.
 5. **Next steps.** Ordered and concrete, the first one unambiguous.
 6. **Key files.** Paths only, no diffs.
 7. **Gotchas.** The thing that cost you the most time, because it will cost the next

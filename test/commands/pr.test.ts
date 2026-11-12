@@ -97,6 +97,12 @@ describe("registration", () => {
     };
 
     await Effect.runPromise(Effect.scoped(update(ctx as never)));
-    expect(added.map((one) => one.name).toSorted()).toEqual(["effect-align", "pr", "wt"]);
+    expect(added.map((one) => one.name).toSorted()).toEqual([
+      "babysit",
+      "drive",
+      "effect-align",
+      "pr",
+      "wt",
+    ]);
   });
 });
