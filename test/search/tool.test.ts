@@ -86,4 +86,24 @@ exit 1
       expect(result.output?.command).toBe("");
     });
   });
+
+  test("a path inside the root scopes the command to it", async () => {
+    const { dir, bin } = await makeBin(`#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.6.10 (Release, AppleClang 21.0.0.21000101, emit=std::print, built_from=test)"
+  exit 0
+fi
+printf '%s' "$1"
+exit 0
+`);
+    await withBinary(bin, async () => {
+      const tool = search(plugin(dir));
+      const result = await Effect.runPromise(
+        tool.execute({ pattern: "hello", path: "src" }, calling("call_scoped")),
+      );
+      expect(result.output?.status).toBe("answered");
+      expect(result.output?.command).toContain(`${dir}/src`);
+      expect(result.output?.answer).toContain(`${dir}/src`);
+    });
+  });
 });
