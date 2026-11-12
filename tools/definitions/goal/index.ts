@@ -61,7 +61,7 @@ const Status = Schema.Struct({
   }),
 });
 
-const Input = Schema.Union([Arm, Status]);
+export const Input = Schema.Union([Arm, Status]);
 
 const Armed = Schema.Struct({
   status: Schema.Literals(["armed"]),

@@ -58,7 +58,13 @@ type Outcome =
       readonly ledger: string;
       readonly problems?: string;
     }
-  | { readonly status: "read" }
+  | {
+      readonly status: "read";
+      readonly goal: { id: string; status: string; rounds: number } | null;
+      readonly remaining: number | null;
+      readonly ledger: string;
+      readonly ledgerExists: boolean;
+    }
   | { readonly status: "rejected"; readonly problems: string }
   | { readonly status: "failed"; readonly problems: string };
 
@@ -191,5 +197,45 @@ describe("arming a goal", () => {
     expect(outcome.status).toBe("rejected");
     if (outcome.status === "rejected") expect(outcome.problems).toContain("child session");
     expect(state.commands).toHaveLength(0);
+  });
+});
+
+describe("reading the goal", () => {
+  test("status reads no goal and the ledger path", async () => {
+    const { feature } = await layout();
+    const { ctx } = fake(feature);
+
+    const outcome = await run(ctx, { action: "status" });
+
+    expect(outcome.status).toBe("read");
+    if (outcome.status === "read") {
+      expect(outcome.goal).toBeNull();
+      expect(outcome.remaining).toBeNull();
+      expect(outcome.ledger).toBe(`${feature}/.spectre/run.md`);
+      expect(outcome.ledgerExists).toBe(false);
+    }
+  });
+
+  test("status reads the active goal and the remaining rounds", async () => {
+    const { feature } = await layout();
+    const { ctx, state } = fake(feature);
+    state.goal = {
+      id: "goal-1",
+      objective: "active work",
+      status: "active",
+      rounds: 5,
+      maxRounds: 50,
+      boot: "boot",
+      updatedAt: 0,
+    };
+
+    const outcome = await run(ctx, { action: "status" });
+
+    expect(outcome.status).toBe("read");
+    if (outcome.status === "read") {
+      expect(outcome.goal?.id).toBe("goal-1");
+      expect(outcome.goal?.status).toBe("active");
+      expect(outcome.remaining).toBe(45);
+    }
   });
 });
