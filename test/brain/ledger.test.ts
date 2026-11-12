@@ -40,7 +40,7 @@ const RELATES: Edge = {
 const DRAFT = {
   kind: "gotcha" as const,
   claim: "A canvas is never overwritten: save allocates the directory",
-  subject: ["tools/definitions/canvas/store.ts"],
+  subject: ["tools/definitions/canvas/content.ts"],
 };
 
 describe("a second identical run", () => {
@@ -220,7 +220,7 @@ describe("mint", () => {
     const claim = await run(ledger(root).mint(DRAFT));
     const text = await Bun.file(claim.path).text();
     expect(text).toContain("kind: gotcha");
-    expect(text).toContain("subject:\n  - tools/definitions/canvas/store.ts");
+    expect(text).toContain("subject:\n  - tools/definitions/canvas/content.ts");
     expect(text).toContain('claim: "A canvas is never overwritten: save allocates the directory"');
     expect(text.endsWith("\n")).toBe(true);
     expect(/[ \t]+$/m.test(text)).toBe(false);

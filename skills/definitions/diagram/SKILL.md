@@ -1,7 +1,7 @@
 # Diagram
 
-A diagram is a canvas page that binds data to marks. The work is choosing the
-mark the question needs, drawing it so nothing competes with the data, and
+A diagram is a canvas artifact that binds data to marks. The work is choosing
+the mark the question needs, drawing it so nothing competes with the data, and
 saying in one line what the reader should take from it.
 
 This is not a style guide for charts in general. It is what to do when the
@@ -36,29 +36,23 @@ before you draw anything, then take the row.
 If no row fits, the reader has a question about structure rather than about
 data, and that is a diagram of stages rather than a plot.
 
-## Get d3 on disk
+## Which arm the drawing takes
 
-A canvas page opens from the filesystem. It cannot `fetch` a library there,
-because a fetch is always CORS-mode, and it cannot `import` one either. What it
-can load is a **classic** relative script, so the vendored UMD build is what a
-page uses:
+- A structural drawing — flow, sequence, state, class, ER, gantt, timeline,
+  pie, quadrant, mindmap — is Mermaid. Publish it as a `report` when the
+  reader needs prose around it, or as a `diagram` when one figure and its
+  takeaway are the whole answer. Pele renders the Mermaid to static SVG at
+  publish time. No Mermaid and no CDN ever reaches the reader.
+- A statistical chart — line, bar, scatter, histogram, box, stacked bar — is
+  d3 in a `page`. Reference `vendor/d3.min.js`. The tool attaches the
+  installed bundle, so the page never vendors one itself and never loads one
+  from the network.
 
-```html
-<script src="vendor/d3-7.9.0.min.js"></script>
-```
+A `page` is published as an artifact, with an id and a relative URL, and a
+later change updates that same artifact. Never claim the page opened.
 
-No `type="module"`. No CDN `src`. The file name carries the version, so a page
-built against one version keeps working after the pin moves to another.
-
-Put the bundle in the canvas directory before you write the page:
-
-```sh
-bun run <the plugin directory>/scripts/sync-d3.ts <the canvas directory>
-```
-
-It prints the filename it wrote. The command checks the bytes against a pinned
-digest before it extracts anything, is safe to run twice, and refuses rather
-than overwrites a file that is not the pinned bundle.
+If Pele refuses a Mermaid type, say so and fall back to a `page` with a static
+inline SVG. Do not load Mermaid or a CDN at view time.
 
 ## Draw it
 
@@ -114,8 +108,8 @@ Titles, axis labels, legends, and the caption are prose, and a canvas is not.
 `tools.spectre.prose` reads Markdown, and a page is HTML whose inline CSS and
 JavaScript are full of semicolons it counts as prose — 97 findings on a page of
 6,574 bytes whose prose has none. The tool also reads only inside the project
-tree, and a canvas lives in the data root, so a canvas path comes back `empty`
-and scans nothing.
+tree, and an artifact URL is not a path in the tree, so scanning by path is not
+available.
 
 So check the words, not the page. Write the reader-visible strings to a Markdown
 file inside the project, run the gate on that, then delete the file:
@@ -136,17 +130,11 @@ It answers only when `spectre.jsonc` names a dictionary. A word the export does
 not list comes back `unknown`, which is not a violation: the export holds the
 headwords the standard rules on, not the whole lexicon.
 
-## Present it
-
-Allocate with `tools.spectre.canvas({ action: "save", slug })`, write
-`canvas.html` at the path it returns, and present it with
-`tools.spectre.canvas({ action: "present", id })`. The vendor folder sits beside
-the page, so copying the canvas directory copies the library with it.
-
 ## What this will not do
 
 It does not invent data. A page with no real numbers says what it has no numbers
 for, and draws the structure instead.
 
-It does not load a library from the network. The bundle is on disk, beside the
-page, or the page does not use it.
+It does not load a library from the network. The Mermaid is rendered before the
+reader ever sees the page, and the d3 bundle is attached by the tool, or the
+page does not use it.

@@ -42,7 +42,7 @@ hit.problems         // present when the budget clipped the answer, or a note is
 await tools.spectre.brain({
   action: "assert",
   kind: "gotcha",
-  subject: ["tools/definitions/canvas/store.ts"],
+  subject: ["tools/definitions/canvas/content.ts"],
   claim: "A canvas is never overwritten: save allocates the directory, the write tool writes the page.",
 })
 

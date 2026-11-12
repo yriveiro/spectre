@@ -1,5 +1,9 @@
 import { Schema } from "effect";
+import type { Cross, LocalDiffSubject, PullRequestSubject, Subject, Totals } from "./content";
 import { type ParsedFile, parseDiff } from "./parse";
+
+export type { LocalDiffSubject, PullRequestSubject, Subject, Totals };
+export type CrossCheck = Cross;
 
 /**
  * `gh` and `git` out, a verified subject and a verified diff in. The only impure
@@ -9,7 +13,7 @@ import { type ParsedFile, parseDiff } from "./parse";
  * nothing: it returns a reason and never a reassuring default.
  */
 
-export type State = "open" | "closed" | "merged";
+export type State = PullRequestSubject["state"];
 
 /**
  * `gh` reports `OPEN`, `CLOSED` and `MERGED`, and a fourth value would let a
@@ -160,55 +164,11 @@ const FactsSchema = Schema.Struct({
  * The `local-diff` arm has no `number`, `url`, `title`, `author` or `state`, and
  * not as optionals: an optional puts the field back on the type, and the field's
  * absence is what stops a local diff from implying a pull request exists.
+ *
+ * The shapes are the `content.ts` schemas, so the reader and the tool output
+ * cannot drift. `evidence.ts` decodes the cached manifest through the same
+ * schemas.
  */
-export type PullRequestSubject = {
-  readonly kind: "pull-request";
-  readonly number: number;
-  readonly repository: string;
-  readonly url: string;
-  readonly title: string;
-  readonly author: string;
-  readonly state: State;
-  readonly headSha: string;
-  readonly baseRef: string;
-  readonly headRef: string;
-  readonly additions: number;
-  readonly deletions: number;
-  readonly changedFiles: number;
-  readonly isDraft: boolean;
-  readonly body: string;
-};
-
-export type LocalDiffSubject = {
-  readonly kind: "local-diff";
-  readonly base: string;
-  readonly head: string;
-  readonly headSha: string;
-};
-
-export type Subject = PullRequestSubject | LocalDiffSubject;
-
-export type Totals = {
-  readonly files: number;
-  readonly additions: number;
-  readonly deletions: number;
-};
-
-/**
- * A cross-check that cannot be performed is its own arm rather than a passing
- * one: a local diff has no `gh` to disagree with it, and reporting that as a
- * match would say the counts were verified by something that never ran.
- */
-export type CrossCheck =
-  | { readonly kind: "matched"; readonly parsed: Totals; readonly reported: Totals }
-  | {
-      readonly kind: "mismatched";
-      readonly parsed: Totals;
-      readonly reported: Totals;
-      readonly why: string;
-    }
-  | { readonly kind: "no-oracle"; readonly parsed: Totals; readonly why: string };
-
 export type Read =
   | {
       readonly status: "read";

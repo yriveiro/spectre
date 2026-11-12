@@ -1,250 +1,46 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import type { Tool } from "@opencode/schema/tool";
-import { Effect, Schema } from "effect";
-import type { ParsedFile } from "./parse";
-import type { CrossCheck, Input as ReadInput, Subject } from "./read";
-import { read, run, totalsOf } from "./read";
-import type { EvidenceRow } from "./store";
+import { Effect } from "effect";
+import { diagram, page, report } from "./compose";
 import {
-  canvasDirectory,
-  canvasFile,
-  list as listStored,
-  present as presentStored,
-  save as saveStored,
-  slugProblem,
-  treeOf,
-  writeEvidence,
-} from "./store";
+  type Composed,
+  type Content,
+  type DiffInput,
+  Input,
+  type Input as InputType,
+  Output,
+  refused,
+} from "./content";
+import { bundle } from "./d3";
+import { load, write } from "./evidence";
+import { pr as composePr } from "./pr";
+import { create, update } from "./publish";
+import type { Read, Input as ReadInput } from "./read";
+import { read as readDiff, totalsOf } from "./read";
 
-const Save = Schema.Struct({
-  action: Schema.Literals(["save"]).annotate({
-    description: "Allocate a canvas directory and return the path to write the page at.",
-  }),
-  slug: Schema.String.annotate({
-    description:
-      "Lowercase kebab-case name for this canvas, at most 40 characters. It is the identity: `save` is idempotent on it, so the reader asks again and gets the same file.",
-  }),
-});
+const DESCRIPTION = `Publish a canvas as an OpenCode artifact, or read a pull request into evidence for a review canvas.
 
-const Diff = Schema.Struct({
-  action: Schema.Literals(["diff"]).annotate({
-    description:
-      "Read a pull request, or an explicit local base and head, into evidence files. Line numbers and counts are computed here, not estimated by the reader.",
-  }),
-  slug: Schema.String.annotate({
-    description:
-      "Lowercase kebab-case name for the canvas this diff is evidence for. Prefix a pull request with `pr-<number>-`.",
-  }),
-  pr: Schema.optional(Schema.Number).annotate({
-    description: "Pull request number. Names a pull request in the repository this was called in.",
-  }),
-  url: Schema.optional(Schema.String).annotate({
-    description: "Pull request URL, for when the number alone would not say which repository.",
-  }),
-  base: Schema.optional(Schema.String).annotate({
-    description: "Base ref of a local diff. Requires `head`. Neither ref is inferred.",
-  }),
-  head: Schema.optional(Schema.String).annotate({
-    description: "Head ref of a local diff. Requires `base`. Neither ref is inferred.",
-  }),
-});
-
-const List = Schema.Struct({
-  action: Schema.optional(Schema.Literals(["list"])).annotate({
-    description: "Inventory saved canvases. The default when `action` is omitted.",
-  }),
-});
-
-const Present = Schema.Struct({
-  action: Schema.Literals(["present"]).annotate({
-    description: "Open a saved canvas with the operating system's launcher. There is no fallback.",
-  }),
-  id: Schema.String.annotate({
-    description:
-      "The slug `save` returned. Not a path: a canvas is named by the directory it was allocated in.",
-  }),
-});
-
-const Input = Schema.Union([Save, Diff, List, Present]);
-
-const PullRequestSubject = Schema.Struct({
-  kind: Schema.Literals(["pull-request"]),
-  number: Schema.Number,
-  repository: Schema.String,
-  url: Schema.String,
-  title: Schema.String,
-  author: Schema.String,
-  state: Schema.Literals(["open", "closed", "merged"]),
-  headSha: Schema.String,
-  baseRef: Schema.String,
-  headRef: Schema.String,
-  additions: Schema.Number,
-  deletions: Schema.Number,
-  changedFiles: Schema.Number,
-  isDraft: Schema.Boolean,
-  body: Schema.String,
-});
-
-const LocalDiffSubject = Schema.Struct({
-  kind: Schema.Literals(["local-diff"]),
-  base: Schema.String,
-  head: Schema.String,
-  headSha: Schema.String,
-});
-
-const Totals = Schema.Struct({
-  files: Schema.Number,
-  additions: Schema.Number,
-  deletions: Schema.Number,
-});
-
-const Cross = Schema.Union([
-  Schema.Struct({ kind: Schema.Literals(["matched"]), parsed: Totals, reported: Totals }),
-  Schema.Struct({
-    kind: Schema.Literals(["mismatched"]),
-    parsed: Totals,
-    reported: Totals,
-    why: Schema.String,
-  }),
-  Schema.Struct({ kind: Schema.Literals(["no-oracle"]), parsed: Totals, why: Schema.String }),
-]);
-
-const FileRow = Schema.Union([
-  Schema.Struct({
-    status: Schema.Literals(["read"]),
-    index: Schema.Number,
-    path: Schema.String,
-    additions: Schema.Number,
-    deletions: Schema.Number,
-    evidence: Schema.String,
-  }),
-  Schema.Struct({
-    status: Schema.Literals(["unreadable"]),
-    index: Schema.Number,
-    path: Schema.String,
-    reason: Schema.String,
-    evidence: Schema.String,
-  }),
-]);
-
-const Stored = Schema.Struct({
-  id: Schema.String,
-  directory: Schema.String,
-  canvas: Schema.String,
-});
-
-const Output = Schema.Union([
-  Schema.Struct({ status: Schema.Literals(["saved"]), ...Stored.fields }),
-  Schema.Struct({
-    status: Schema.Literals(["taken"]).annotate({
-      description:
-        "That slug is already allocated. Nothing was overwritten, and the page at the returned path is the one to edit.",
-    }),
-    ...Stored.fields,
-  }),
-  Schema.Struct({
-    status: Schema.Literals(["read"]),
-    ...Stored.fields,
-    subject: Schema.Union([PullRequestSubject, LocalDiffSubject]),
-    files: Schema.Array(FileRow),
-    cross: Cross,
-    problems: Schema.Array(Schema.String),
-  }),
-  Schema.Struct({
-    status: Schema.Literals(["listed"]),
-    canvases: Schema.Array(
-      Schema.Struct({
-        id: Schema.String,
-        canvas: Schema.String,
-        title: Schema.optional(Schema.String),
-      }),
-    ),
-  }),
-  Schema.Struct({
-    status: Schema.Literals(["opened"]),
-    canvas: Schema.String,
-    deadLinks: Schema.Array(Schema.String),
-    remoteScripts: Schema.Array(Schema.String),
-  }),
-  Schema.Struct({
-    status: Schema.Literals(["not-opened"]).annotate({
-      description:
-        "The launcher could not open it, or the page is not there. Report this with the path; nothing else will try.",
-    }),
-    canvas: Schema.String,
-    why: Schema.String,
-  }),
-  Schema.Struct({ status: Schema.Literals(["refused"]), problem: Schema.String }),
-]);
-
-const DESCRIPTION = `Save, open and list standalone HTML pages that outlive the session that made them, and read a pull request's diff into evidence with the arithmetic done in code.
-
-A canvas is a file, not a chat reply: the reader asks again in three turns and gets the same one, edited in place. It lives outside the project tree, so it is neither committed by accident nor left as untracked dirt.
-
-  const saved = await tools.spectre.canvas({ action: "save", slug: "tool-registration" })
-  // write saved.canvas with the \`write\` tool, then:
-  await tools.spectre.canvas({ action: "present", id: "tool-registration" })
-
-Write the page yourself, with \`write\`. A canvas is a designed document with inline CSS and JavaScript, and a page of markup carried inside a \`Schema.String\` is an escaping hazard.
+A canvas is an artifact, not a chat reply: the reader gets an id and a durable URL, asks again in three turns, and the same artifact is updated in place. Publishing needs experimental.artifacts in opencode.json; when the flag is off the publish actions refuse and name it.
 
 ## What each action owns
 
-- \`save\` allocates one directory and returns the path. It refuses a taken slug rather than overwriting, so \`taken\` means edit the file already there.
-- \`diff\` reads a pull request, or an explicit local base and head, and writes one evidence file per changed file plus an \`index.json\` manifest.
-- \`list\` inventories the saved canvases, for finding one to edit or reopen.
-- \`present\` spawns \`open\`, \`xdg-open\` or \`start\`. One delivery path, so \`opened\` means the page is on a screen.
+- \`diff\` reads a pull request, or an explicit local base and head, and writes the parsed rows to a scratch cache. It returns a token, the subject, the totals and the count cross-check. The token is the input to a \`pr\` content and is content-addressed, so reading the same diff twice gives the same token.
+- \`publish\` creates a new artifact. A second publish is a second artifact.
+- \`update\` replaces the whole file map at the same artifact id and URL. It needs the id \`publish\` returned; there is no list.
 
-## Why the diff is not a payload
+## Content kinds
 
-\`diff\` returns an inventory, not the diff. Every changed file's rows — line numbers derived from the hunk headers, additions and deletions counted — are written under \`evidence/files/\` and read back with \`read\`. A 164-file pull request is a megabyte, and a diff handed over as prose is measured to come back wrong: \`gh pr diff --patch\` wraps the diff in a mail document whose commit message is full of \`-\` bullets, and counting those as deletions reports 18 deletions for a change that made 15, silently.
-
-\`cross\` is the count check, and it is not decoration. \`matched\` means the parser's totals equal the ones \`gh\` reported. \`mismatched\` carries both and says what differed. \`no-oracle\` means there was nothing to check against — a local diff has no pull request to disagree with it — which is not a pass.
-
-\`subject.kind\` decides what may be claimed. A \`pull-request\` carries a number, url, state and author. A \`local-diff\` has none of those fields at all, so it cannot be written up as a pull request that does not exist.
-
-A file with no text rows comes back \`unreadable\` with a reason — binary, submodule, mode-only, or no hunks. Never an empty row list, because empty reads as "nothing changed here".
-
-**\`problems\` is not empty when the head moved.** The analysed commit is pinned and read again after the diff, so a pull request that moved mid-gather says so rather than being described as one commit while the rows on the table are another.
+- \`report\` takes Markdown. Mermaid fences are rendered to static SVG at publish time with Pele. Code owns the page, the escaping, the headings and the table of contents.
+- \`diagram\` takes one Mermaid source and a one-sentence takeaway. It is the one-figure page; several figures belong in a report.
+- \`page\` takes one complete HTML document. This is the designed-page arm: keep CSS and JavaScript inline, and reference \`vendor/d3.min.js\` when the page needs d3. The tool attaches the installed d3 bundle.
+- \`pr\` takes the token from \`diff\` and a typed review. The code validates every cited path and line against the parsed rows, renders the diff, and leaves the story to the review.
 
 ## What it will not do
 
-It does not truncate. Every changed file is written whole, and which paths the page left out is the page's own to confess in its limits section.
+It does not present a page with the OS launcher, and it cannot build an absolute URL: the result is the artifact id and the relative URL the host reported. Say that, and never claim the page opened. It does not enumerate artifacts; the id from \`publish\` is the handle.`;
 
-It does not write the page, edit one, or delete anything.
-
-\`present\` never falls back to a browser tool. A canvas outlives its session, so delivering it through a session-scoped view ties a persistent artifact to a transient surface, and a page written but never shown reads as a bug in the code under test. \`not-opened\` is a real answer: report it with the path in hand.
-
-\`deadLinks\` lists in-page anchors that resolve to no \`id\`. It is lexical and it is a start, not a link checker.
-
-\`remoteScripts\` lists script sources that are not a plain relative path, so a page that needs a network at view time says so instead of looking self-contained. A relative \`src\` is legal and is how a vendored library beside the page is loaded.`;
-
-/**
- * `basename(project directory)`, and `basename(git rev-parse --show-toplevel)`
- * when the first is not a usable name. The git read is the fallback and costs a
- * spawn, so it runs only when the cheap answer failed.
- *
- * The collision this inherits is recorded in `features/data-root.md`: `main` is a
- * common worktree name and two repositories can each have one, so their canvas
- * stores merge. The fix belongs in that file, in the change that defines the
- * placeholder for every skill writing there.
- */
-const treeName = async (projectDirectory: string): Promise<string | undefined> => {
-  const named = treeOf(projectDirectory, undefined);
-  if (named !== undefined) return named;
-  const toplevel = await run(projectDirectory, ["git", "rev-parse", "--show-toplevel"]);
-  return toplevel.ran && toplevel.code === 0 ? treeOf(projectDirectory, toplevel.out) : undefined;
-};
-
-const unnamed = (directory: string): string =>
-  `${directory} has no usable directory name, so no canvas could be allocated there`;
-
-/**
- * Exactly one subject, named. Three flat optional fields admit five combinations
- * and four of them are wrong, so the narrowing happens once here and returns the
- * union `read` takes — no cast, and a refusal for each way of getting it wrong.
- */
 const subjectOf = (
-  input: typeof Diff.Type,
+  input: DiffInput,
 ):
   | { readonly ok: true; readonly input: ReadInput }
   | { readonly ok: false; readonly problem: string } => {
@@ -261,81 +57,122 @@ const subjectOf = (
   return { ok: true, input: { base: input.base, head: input.head } };
 };
 
+const bytesOf = (files: Readonly<Record<string, string>>): number => {
+  const encoder = new TextEncoder();
+  return Object.values(files).reduce((total, file) => total + encoder.encode(file).byteLength, 0);
+};
+
+const causeMessage = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
+
+/**
+ * Turn a rejecting promise into a value the tool can report. The filesystem and
+ * the installed d3 bundle are outside the program, so a rejection is a refusal,
+ * never a defect that reaches the host as a crash.
+ */
+const attempt = <A>(
+  run: () => Promise<A>,
+): Effect.Effect<
+  { readonly ok: true; readonly value: A } | { readonly ok: false; readonly problem: string }
+> =>
+  Effect.tryPromise({ try: run, catch: causeMessage }).pipe(
+    Effect.map((value) => ({ ok: true as const, value })),
+    Effect.catch((problem: string) => Effect.succeed({ ok: false as const, problem })),
+  );
+
+/**
+ * Compose one content arm. The switch is exhaustive: a new content kind fails
+ * the build at the `never`, so it cannot fall through to a diagram by accident.
+ */
+const buildContent = (project: string, content: Content): Effect.Effect<Composed> =>
+  Effect.gen(function* () {
+    switch (content.kind) {
+      case "pr": {
+        const evidence = yield* Effect.promise(() => load(project, content.token));
+        if (evidence === undefined)
+          return {
+            ok: false as const,
+            problem: `no evidence for token ${content.token}; run \`diff\` again and use the token it returns`,
+          };
+        return composePr(evidence, content.review);
+      }
+      case "page": {
+        const built = yield* attempt(() => page(content, bundle));
+        return built.ok ? built.value : { ok: false as const, problem: built.problem };
+      }
+      case "report":
+        return report(content);
+      case "diagram":
+        return diagram(content);
+      default: {
+        const _exhaustive: never = content;
+        return _exhaustive;
+      }
+    }
+  });
+
 export const canvases = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Output> => ({
   name: "canvas",
   description: DESCRIPTION,
   input: Input,
   output: Output,
   options: { namespace: "spectre", codemode: true, pinned: true, permission: "canvas" },
-  execute: (input) =>
-    Effect.gen(function* () {
-      const project = ctx.location.project.directory;
-      const tree = yield* Effect.promise(() => treeName(project));
-      if (tree === undefined)
-        return { output: { status: "refused" as const, problem: unnamed(project) } };
+  execute: Effect.fn("Canvas.execute")(function* (input: InputType, context: Tool.Context) {
+    const project = ctx.location.project.directory;
+    const cwd = ctx.location.directory;
 
-      if (input.action === "present") {
-        const invalid = slugProblem(input.id);
-        if (invalid !== undefined)
-          return { output: { status: "refused" as const, problem: `id: ${invalid}` } };
-        const canvas = canvasFile(canvasDirectory(tree, input.id));
-        return { output: yield* Effect.promise(() => presentStored(canvas, process.platform)) };
-      }
-
-      if (input.action !== "save" && input.action !== "diff")
-        return {
-          output: {
-            status: "listed" as const,
-            canvases: yield* Effect.promise(() => listStored(tree)),
-          },
-        };
-
-      const invalid = slugProblem(input.slug);
-      if (invalid !== undefined)
-        return { output: { status: "refused" as const, problem: invalid } };
-
-      const allocated = yield* Effect.promise(() => saveStored(tree, input.slug));
-      if (allocated.status === "refused")
-        return { output: { status: "refused" as const, problem: allocated.why } };
-
-      const directory = allocated.directory;
-      const stored = { id: input.slug, directory, canvas: canvasFile(directory) };
-
-      if (input.action === "save") return { output: { status: allocated.status, ...stored } };
-
+    if (input.action === "diff") {
       const subject = subjectOf(input);
-      if (!subject.ok) return { output: { status: "refused" as const, problem: subject.problem } };
+      if (!subject.ok) return { output: refused(subject.problem) };
 
-      const gathered = yield* Effect.promise(() => read(ctx.location.directory, subject.input));
-      if (gathered.status === "refused")
-        return { output: { status: "refused" as const, problem: gathered.problem } };
+      const read: Read = yield* Effect.promise(() => readDiff(cwd, subject.input));
+      if (read.status === "refused") return { output: refused(read.problem) };
 
-      const manifest = manifestOf(
-        gathered.subject,
-        gathered.cross,
-        gathered.problems,
-        gathered.files,
-      );
-      const files: ReadonlyArray<EvidenceRow> = yield* Effect.promise(() =>
-        writeEvidence(directory, manifest, gathered.files),
-      );
+      const wrote = yield* attempt(() => write(project, read));
+      if (!wrote.ok) return { output: refused(wrote.problem) };
 
       return {
         output: {
           status: "read" as const,
-          ...stored,
-          subject: gathered.subject,
-          files,
-          cross: gathered.cross,
-          problems: gathered.problems,
+          token: wrote.value.token,
+          subject: read.subject,
+          totals: totalsOf(read.files),
+          cross: read.cross,
+          files: wrote.value.rows,
+          warnings: read.problems,
         },
       };
-    }),
-});
+    }
 
-const manifestOf = (
-  subject: Subject,
-  cross: CrossCheck,
-  problems: ReadonlyArray<string>,
-  files: ReadonlyArray<ParsedFile>,
-) => ({ subject, cross, totals: totalsOf(files), problems });
+    if (input.action === "update" && !input.id.startsWith("art_"))
+      return { output: refused("update id must be an artifact id that starts with `art_`") };
+
+    const built: Composed = yield* buildContent(project, input.content);
+    if (!built.ok) return { output: refused(built.problem) };
+
+    const publication =
+      input.action === "update"
+        ? yield* update({
+            ctx,
+            context,
+            id: input.id,
+            title: built.title,
+            files: built.files,
+          })
+        : yield* create({ ctx, context, title: built.title, files: built.files });
+
+    if (publication.status !== "published") return { output: refused(publication.problem) };
+
+    return {
+      output: {
+        status: "published" as const,
+        id: publication.id,
+        url: publication.url,
+        provider: publication.provider,
+        title: publication.title,
+        bytes: bytesOf(built.files),
+        warnings: [...built.warnings],
+      },
+    };
+  }),
+});

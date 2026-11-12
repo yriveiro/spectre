@@ -1,68 +1,83 @@
 # Canvas
 
-Turn a requested concept into a standalone HTML page that is easy to review in
-a browser, identify later, and refine in follow-up prompts. A canvas is a saved
-artifact, not a transient chat reply: the reader asks again in three turns and
-gets the same file, edited in place.
+A canvas is an OpenCode artifact, not a file. Publishing returns an artifact
+id and a relative URL. The reader asks again in three turns and the same
+artifact is updated in place. There is no save, no list, and no present: the
+id `publish` returned is the only handle, and nothing here opens a page. Report
+the id and the relative URL, never an absolute one, and never claim the page
+opened.
 
 A request to review a pull request visually is not this. That is `pr-canvas`,
 which owns PR identity, evidence, and the review layout. This skill never names
 a PR number.
 
 A page that binds data to marks is `diagram`, which owns the choice of mark and
-the vendored library a chart loads.
+the Mermaid source or d3 chart a figure is drawn from. Load it when the answer
+is a drawing rather than a report or a designed UI.
 
-## Create a canvas
+## Pick the kind
 
-1. Treat a direct request to make a canvas or represent something as a UI as the
-   instruction to produce and present the artifact. Do not stop after describing
-   a plan or asking the reader to open a file.
-2. Allocate the canvas directory with the tool. Pick a descriptive,
-   filesystem-safe slug for the concept and call
-   `tools.spectre.canvas({ action: "save", slug })`. The tool refuses a taken
-   slug rather than overwriting. On `taken`, pick a different slug. Never
-   overwrite an existing canvas when creating a new one.
-3. Build a complete, responsive HTML document for the requested concept. Make
-   the most useful information and actions apparent in the UI, with coherent
-   hierarchy, realistic content, readable typography, and thoughtful spacing.
-   Add interactions when they help explain or explore the concept. State
-   assumptions visibly when the prompt leaves important details unspecified.
-   Do not invent real-world facts or imply mock data is live.
-4. Keep the artifact self-contained: inline CSS and JavaScript, no CDN, no
-   build step, no external image dependency, and no project-wide configuration
-   change. A library the page draws with may be **vendored beside the page** and
-   named with a relative `src`, because a page opened from the filesystem loads
-   a classic relative script and nothing else. `present` reports every script
-   source that is not one as `remoteScripts`, so a page that needs a network says
-   so. Use semantic HTML, accessible labels and contrast, responsive
-   layouts, and escape inserted content. Do not use `eval` or execute content
-   from the canvas data.
-5. Include a meaningful `<title>` and a visible canvas heading. Add a stable
-   canvas identifier in the document so the artifact remains identifiable if it
-   is copied or reopened.
-6. Write `canvas.html` at the path the tool returned, with the `write` tool,
-   then present it with `tools.spectre.canvas({ action: "present", id })`.
+- A run report, an audit, a findings page, an analysis — anything that is prose
+  with figures in it — is a `report`.
+- A designed UI, a concept, a mock, an interface the reader clicks through in
+  their head — anything where the layout itself is the point — is a `page`.
+- One figure and the sentence it carries is a `diagram`.
+- A pull request is `pr-canvas`, not any of the above.
+
+## Report
+
+Write Markdown. A figure is a ` ```mermaid ` fence inside the prose; Pele
+renders it to static SVG at publish time, and code owns the page, the escaping,
+the headings, and the table of contents. The model never writes HTML here.
+
+Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
+"report", title, markdown } }`. Report the artifact id and the relative URL the
+tool returned.
+
+## Page
+
+Write one complete HTML document with inline CSS and JavaScript. A chart the
+page draws loads d3 by referencing `vendor/d3.min.js`; the tool attaches the
+installed bundle, so the page never vendors one itself and never loads one from
+the network.
+
+Call `tools.spectre.canvas` with `{ action: "publish", content: { kind: "page",
+title, html } }`. Report the artifact id and the relative URL.
+
+## Diagram
+
+Write one Mermaid source and the one-sentence takeaway the reader takes from
+it. Several figures belong in a `report`, not here.
+
+Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
+"diagram", title, takeaway, mermaid, caption? } }`. Report the artifact id and
+the relative URL.
 
 ## Iterate and reopen
 
-- When the reader asks to change a canvas, identify the intended one from the
-  conversation or from `tools.spectre.canvas({ action: "list" })`. Edit that
-  file in place so its identity and path remain stable. Do not make a duplicate
-  unless the reader asks for a new version or a separate canvas.
-- After edits, present the updated file again with
-  `tools.spectre.canvas({ action: "present", id })`.
-- If the reader asks to reopen a canvas, locate it the same way and present
-  the saved HTML. Do not regenerate it just to reopen it.
+- When the reader asks to change a canvas, publish the full new content with
+  `{ action: "update", id, content }`. The id and the URL stay; a second
+  `publish` is a second artifact, never an edit.
+- If the id is lost, ask for it or publish a new artifact. Do not invent a
+  list: there is none, and guessing an id publishes onto somebody else's page.
+- If the reader asks to reopen a canvas, give them the id and URL again. Do not
+  regenerate it just to reopen it.
 - If several canvases could match and the intended one cannot be inferred, ask
-  which canvas to use before changing or reopening one.
+  which canvas to use before changing anything.
 
-## Present the canvas
+## The flag is off
 
-Presentation goes through the operating system's launcher, via
-`tools.spectre.canvas({ action: "present", id })`, and nothing else. Do not
-use a browser tool for canvas presentation, even if one appears in the catalog:
-a canvas outlives its session, so delivering it through a session-scoped view
-ties a persistent artifact to a transient surface, and a page that is written
-but never shown reads as a bug in the code under test. If the tool reports it
-could not open the page, report the failure and give the saved path. Do not
-fall back.
+With `experimental.artifacts` off, `diff` still works and every publish and
+update refuses with a message that names the flag. Report the refusal and the
+config line (`experimental.artifacts: true` in `opencode.json`, or
+`OPENCODE_FLAGS=artifacts`). Do not fall back to a file: a file is a second
+store, and this skill owns no store.
+
+## The sandbox
+
+- No `localStorage`, no cookies, no forms, no popups, no same-origin fetch.
+- Generated pages ship no JavaScript. A `report`, a `diagram`, and a PR
+  walkthrough are static documents.
+- A `page` is one document with inline CSS and JavaScript. `data:` images are
+  fine. A remote load is a warning the reader sees, so a page that needs the
+  network says so on the page.

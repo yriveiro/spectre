@@ -11,7 +11,7 @@ const CLAIM: Claim = {
   id: "0199b6a2-1c3d-7e5f-8a9b-0c1d2e3f4a5b",
   kind: "gotcha",
   claim: "A canvas is never overwritten: save allocates the directory",
-  subject: ["tools/definitions/canvas/store.ts"],
+  subject: ["tools/definitions/canvas/content.ts"],
   at: "2026-10-02T00:00:00.000Z",
   path: NOTE,
 };
@@ -23,7 +23,7 @@ const NOTE_TEXT = [
   "kind: gotcha",
   'claim: "A canvas is never overwritten: save allocates the directory"',
   "subject:",
-  "  - tools/definitions/canvas/store.ts",
+  "  - tools/definitions/canvas/content.ts",
   "at: 2026-10-02T00:00:00.000Z",
   "---",
   "",

@@ -778,6 +778,14 @@ export const heldOut: ReadonlyArray<Row> = [
     provenance: "judged",
   },
   { prompt: "review PR 42 visually", label: "pr-canvas", provenance: "judged" },
+  { prompt: "publish this as a report artifact", label: "canvas", provenance: "judged" },
+  {
+    prompt: "update the canvas you just made, the numbers changed",
+    label: "canvas",
+    provenance: "judged",
+  },
+  { prompt: "chart this data with d3", label: "diagram", provenance: "judged" },
+  { prompt: "diagram the publish flow for me", label: "diagram", provenance: "judged" },
   {
     prompt: "I just opened a PR, walk me through the diff in a page",
     label: "pr-canvas",
