@@ -1,5 +1,4 @@
 import { Effect } from "effect";
-import { anatomy } from "./anatomy";
 import { architect } from "./architect";
 import { arena } from "./arena";
 import { automateMe } from "./automate-me";
@@ -129,7 +128,6 @@ const definitions: ReadonlyArray<Definition> = [
   playbookTraceForensics,
   playbookVisualParity,
   prCanvas,
-  anatomy,
   arena,
   bro,
   canvas,
@@ -179,7 +177,6 @@ const definitions: ReadonlyArray<Definition> = [
  * the hub and the map itself.
  */
 export const notALeaf: ReadonlySet<string> = new Set([
-  "anatomy",
   "architect",
   "arena",
   "automate-me",
