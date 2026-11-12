@@ -21,11 +21,13 @@ describe("search context shape", () => {
 
   test("a draft with tools.grep loses grep and gains ripgrep with the ripgrep description and the same input", () => {
     const input = { type: "object" };
-    const asked = draft({ tools: { grep: { description: "old", input } } });
+    const grep = { description: "old", input };
+    const asked = draft({ tools: { grep } });
     shape(asked);
     expect("grep" in asked.tools).toBe(false);
     expect(asked.tools["ripgrep"]?.description).toBe(CONTRACT.ripgrep);
     expect(asked.tools["ripgrep"]?.input).toBe(input);
+    expect(asked.tools["ripgrep"]).toBe(grep);
   });
 
   test("a draft that already has ripgrep keeps its description and loses grep", () => {
