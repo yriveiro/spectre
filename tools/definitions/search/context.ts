@@ -18,8 +18,13 @@ export const shape = (draft: Draft, contract: Contract = CONTRACT): void => {
   if ("grep" in draft.tools) {
     const grep = draft.tools["grep"];
     delete draft.tools["grep"];
-    if (!("ripgrep" in draft.tools) && grep !== undefined) {
-      draft.tools["ripgrep"] = { description: contract.ripgrep, input: grep.input };
+    if (grep !== undefined && !("ripgrep" in draft.tools)) {
+      // The host resolves a renamed tool by object identity
+      // (v2.2.7:packages/core/src/session/model-request.ts:279-310), so the
+      // existing entry moves and its description is mutated in place. A fresh
+      // object would be dropped and the model would see neither tool.
+      grep.description = contract.ripgrep;
+      draft.tools["ripgrep"] = grep;
     }
   }
 };
