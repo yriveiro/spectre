@@ -94,7 +94,7 @@ set and neither is obvious from its name:
 
 ## Two ways in
 
-The direct `spectre_search` tool is the front door because the Code Mode catalog renders the 33 MCP verbs as none shown. The MCP server is the second hop for the graph verbs, and the `ripgrep` tool is the renamed built-in `grep` tool which already runs ripgrep.
+The direct `spectre_search` tool is the front door because the Code Mode catalog renders the 33 MCP tools as none shown. The MCP server is the second hop for the graph verbs, and the `ripgrep` tool is the renamed built-in `grep` tool which already runs ripgrep.
 
 **The MCP server**, as `tools.ripwire.*`. Thirty-three tools: thirty-one verbs,
 ranked, with lazy handles, plus `batch` (sixteen read sub-queries in one turn)

@@ -1,3 +1,6 @@
+import type { Session } from "@opencode/schema/session";
+import type { Tool } from "@opencode/schema/tool";
+
 /**
  * Per-session reroute memory for the `ripgrep` → `spectre_search` guard.
  *
@@ -11,11 +14,11 @@
 const MAX_SESSIONS = 64;
 const MAX_REROUTED = 256;
 
-export const seen: Map<string, Set<string>> = new Map();
+export const seen: Map<Session.ID, Set<string>> = new Map();
 
-export const rerouted: Set<string> = new Set();
+export const rerouted: Set<Tool.CallID> = new Set();
 
-export const sessionSeen = (sessionID: string): Set<string> => {
+export const sessionSeen = (sessionID: Session.ID): Set<string> => {
   const hit = seen.get(sessionID);
   if (hit !== undefined) return hit;
   if (seen.size >= MAX_SESSIONS) {
@@ -27,7 +30,7 @@ export const sessionSeen = (sessionID: string): Set<string> => {
   return fresh;
 };
 
-export const markRerouted = (id: string): void => {
+export const markRerouted = (id: Tool.CallID): void => {
   if (rerouted.has(id)) return;
   if (rerouted.size >= MAX_REROUTED) {
     const oldest = rerouted.values().next();

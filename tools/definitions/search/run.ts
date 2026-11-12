@@ -1,4 +1,5 @@
 import { isAbsolute, relative, resolve } from "node:path";
+import { binaryOf } from "./binary";
 
 /**
  * The process runner behind `spectre_search`. It spawns the ripwire binary
@@ -20,16 +21,9 @@ const EMPTY_NOTE =
 const TRUNCATE_BYTES = 32_000;
 const HEADER_AT = 8_192;
 
-const binaryOf = (): string | null => {
-  const env = Bun.env.SPECTRE_RIPWIRE;
-  if (env !== undefined && env !== "") return env;
-  return Bun.which("ripwire");
-};
-
 /**
- * Resolve `path` against `root` for the spawn. `undefined` means the whole
- * tree, which needs no scope. Anything that lands outside the root is
- * `undefined`, and the caller refuses it without spawning.
+ * Resolve `path` against `root` for the spawn. `undefined` means no path was
+ * given or the path escapes the root; the caller branches on the path first.
  */
 export const scope = (root: string, path?: string): string | undefined => {
   if (path === undefined) return undefined;
@@ -68,6 +62,8 @@ export const run = (
     });
 
   const runSpawn = async (): Promise<RunResult> => {
+    const timeoutMs = options?.timeoutMs ?? 20_000;
+    const signal = AbortSignal.timeout(timeoutMs);
     let out: string;
     let err: string;
     let code: number;
@@ -76,7 +72,7 @@ export const run = (
         cwd: root,
         stdout: "pipe",
         stderr: "pipe",
-        signal: AbortSignal.timeout(options?.timeoutMs ?? 20_000),
+        signal,
       });
       [out, err, code] = await Promise.all([
         new Response(proc.stdout).text(),
@@ -89,7 +85,7 @@ export const run = (
           status: "refused",
           command,
           answer: "",
-          note: `ripwire did not answer within ${options?.timeoutMs ?? 20_000}ms.`,
+          note: `ripwire did not answer within ${timeoutMs}ms.`,
         };
       return {
         status: "absent",
@@ -98,6 +94,14 @@ export const run = (
         note: `${binary} could not be started, so no code index was read.`,
       };
     }
+
+    if (signal.aborted)
+      return {
+        status: "refused",
+        command,
+        answer: out.trim(),
+        note: `ripwire did not answer within ${timeoutMs}ms.`,
+      };
 
     if (code !== 0)
       return {

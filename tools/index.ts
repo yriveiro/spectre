@@ -13,7 +13,7 @@ import { solidjs } from "./definitions/solidjs";
 import { stack } from "./definitions/stack";
 import { sessionReturn, worktrees } from "./definitions/worktrees";
 
-export const update = (ctx: Pick<Plugin.Context, "tool" | "location"> & Plugin.Context) =>
+export const update = (ctx: Plugin.Context) =>
   Effect.gen(function* () {
     // The dictionary path is config, and a config mistake must be reported to
     // whoever asked for a word rather than stopping the session. The routing tool

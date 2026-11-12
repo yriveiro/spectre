@@ -78,11 +78,13 @@ const hasCodeToken = (pattern: string): boolean =>
 const hasRegexMetacharacter = (pattern: string): boolean =>
   REGEX_METACHARACTERS.some((meta) => pattern.includes(meta));
 
-export const judge = (
-  ask: TextAsk,
-  seen: ReadonlySet<string>,
-  health: Health,
-): Verdict => {
+export type JudgeInput = {
+  readonly ask: TextAsk;
+  readonly seen: ReadonlySet<string>;
+  readonly health: Health;
+};
+
+export const judge = ({ ask, seen, health }: JudgeInput): Verdict => {
   if (ask.literal === true) {
     return { kind: "allow", why: "plain-text" };
   }
@@ -116,7 +118,13 @@ export const judge = (
   return { kind: "route", route: { kind: "regex", pattern: ask.pattern } };
 };
 
-export const argv = (route: Route, root: string, budget: number): string[] => {
+export type ArgvInput = {
+  readonly route: Route;
+  readonly root: string;
+  readonly budget: number;
+};
+
+export const argv = ({ route, root, budget }: ArgvInput): string[] => {
   switch (route.kind) {
     case "task":
       return [root, `--for=${route.task}`, "--signatures-only", `--token-budget=${budget}`];

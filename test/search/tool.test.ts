@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import type { Plugin } from "@opencode/plugin/effect";
 import type { Tool } from "@opencode/schema/tool";
 import { Effect } from "effect";
@@ -6,7 +6,10 @@ import { CONTRACT } from "../../tools/definitions/search/contract";
 import { search } from "../../tools/definitions/search";
 
 const plugin = (directory: string): Plugin.Context =>
-  ({ location: { directory } } as unknown as Plugin.Context);
+  ({
+    location: { directory },
+    permission: { assert: () => Effect.void },
+  }) as unknown as Plugin.Context;
 
 const calling = (id: string): Tool.Context =>
   ({
@@ -17,8 +20,21 @@ const calling = (id: string): Tool.Context =>
     progress: () => Effect.void,
   }) as unknown as Tool.Context;
 
-const makeBin = async (body: string): Promise<{ dir: string; bin: string }> => {
+const dirs: Array<string> = [];
+
+const tempDir = (): string => {
   const dir = Bun.spawnSync(["mktemp", "-d"]).stdout.toString().trim();
+  dirs.push(dir);
+  return dir;
+};
+
+afterEach(async () => {
+  const created = dirs.splice(0);
+  await Promise.all(created.map((dir) => Bun.spawn(["rm", "-rf", dir]).exited));
+});
+
+const makeBin = async (body: string): Promise<{ dir: string; bin: string }> => {
+  const dir = tempDir();
   const bin = `${dir}/ripwire`;
   await Bun.write(bin, body);
   const proc = Bun.spawn(["chmod", "+x", bin]);
@@ -27,13 +43,13 @@ const makeBin = async (body: string): Promise<{ dir: string; bin: string }> => {
 };
 
 const withBinary = async (bin: string, fn: () => Promise<void>): Promise<void> => {
-  const prev = process.env.SPECTRE_RIPWIRE;
+  const prev = Bun.env.SPECTRE_RIPWIRE;
   try {
-    process.env.SPECTRE_RIPWIRE = bin;
+    Bun.env.SPECTRE_RIPWIRE = bin;
     await fn();
   } finally {
-    if (prev === undefined) delete process.env.SPECTRE_RIPWIRE;
-    else process.env.SPECTRE_RIPWIRE = prev;
+    if (prev === undefined) delete Bun.env.SPECTRE_RIPWIRE;
+    else Bun.env.SPECTRE_RIPWIRE = prev;
   }
 };
 

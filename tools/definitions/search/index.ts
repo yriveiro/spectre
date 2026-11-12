@@ -120,6 +120,14 @@ export const search = (ctx: Plugin.Context): Tool.Info<typeof SearchInput, typeo
         return { output, content: output.answer };
       }
 
+      yield* ctx.permission.assert({
+        sessionID: context.sessionID,
+        agent: context.agent,
+        action: "read",
+        resources: [scoped],
+        source: { type: "tool", messageID: context.messageID, id: context.id },
+      });
+
       const health = yield* Effect.promise(() => probe());
       if (health.kind !== "ready") {
         const output = {
@@ -161,7 +169,7 @@ export const search = (ctx: Plugin.Context): Tool.Info<typeof SearchInput, typeo
       const reason = input.query !== undefined && input.query !== "" ? "query" : input.kind === "regex" ? "kind" : "pattern";
       const ignored = ignoredOf(input);
       const result = yield* Effect.promise(() =>
-        run(root, argv(route, scoped, input.budget ?? 2000), {
+        run(root, argv({ route, root: scoped, budget: input.budget ?? 2000 }), {
           ...(input.fresh === undefined ? {} : { fresh: input.fresh }),
         }),
       );

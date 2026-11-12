@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { probe } from "../../tools/definitions/search/probe";
 import { run, scope } from "../../tools/definitions/search/run";
 
@@ -10,8 +10,21 @@ import { run, scope } from "../../tools/definitions/search/run";
  * cache never collides between tests.
  */
 
-const makeBin = async (body: string): Promise<{ dir: string; bin: string }> => {
+const dirs: Array<string> = [];
+
+const tempDir = (): string => {
   const dir = Bun.spawnSync(["mktemp", "-d"]).stdout.toString().trim();
+  dirs.push(dir);
+  return dir;
+};
+
+afterEach(async () => {
+  const created = dirs.splice(0);
+  await Promise.all(created.map((dir) => Bun.spawn(["rm", "-rf", dir]).exited));
+});
+
+const makeBin = async (body: string): Promise<{ dir: string; bin: string }> => {
+  const dir = tempDir();
   const bin = `${dir}/ripwire`;
   await Bun.write(bin, body);
   const proc = Bun.spawn(["chmod", "+x", bin]);
@@ -20,34 +33,34 @@ const makeBin = async (body: string): Promise<{ dir: string; bin: string }> => {
 };
 
 const withBinary = async (bin: string, fn: () => Promise<void>): Promise<void> => {
-  const prev = process.env.SPECTRE_RIPWIRE;
+  const prev = Bun.env.SPECTRE_RIPWIRE;
   try {
-    process.env.SPECTRE_RIPWIRE = bin;
+    Bun.env.SPECTRE_RIPWIRE = bin;
     await fn();
   } finally {
-    if (prev === undefined) delete process.env.SPECTRE_RIPWIRE;
-    else process.env.SPECTRE_RIPWIRE = prev;
+    if (prev === undefined) delete Bun.env.SPECTRE_RIPWIRE;
+    else Bun.env.SPECTRE_RIPWIRE = prev;
   }
 };
 
 describe("scope keeps a path inside the root", () => {
-  test("a relative src stays", async () => {
-    const dir = Bun.spawnSync(["mktemp", "-d"]).stdout.toString().trim();
+  test("a relative src stays", () => {
+    const dir = tempDir();
     expect(scope(dir, "src")).toBe(`${dir}/src`);
   });
 
-  test("../outside escapes", async () => {
-    const dir = Bun.spawnSync(["mktemp", "-d"]).stdout.toString().trim();
+  test("../outside escapes", () => {
+    const dir = tempDir();
     expect(scope(dir, "../outside")).toBeUndefined();
   });
 
-  test("an absolute path outside the root escapes", async () => {
-    const dir = Bun.spawnSync(["mktemp", "-d"]).stdout.toString().trim();
+  test("an absolute path outside the root escapes", () => {
+    const dir = tempDir();
     expect(scope(dir, "/etc/passwd")).toBeUndefined();
   });
 
-  test("no path needs no scope", async () => {
-    const dir = Bun.spawnSync(["mktemp", "-d"]).stdout.toString().trim();
+  test("no path needs no scope", () => {
+    const dir = tempDir();
     expect(scope(dir)).toBeUndefined();
   });
 });
@@ -100,7 +113,7 @@ exit 2
 
 describe("a missing binary is absent, never a spawn crash", () => {
   test("probe and run agree when SPECTRE_RIPWIRE names nothing", async () => {
-    const dir = Bun.spawnSync(["mktemp", "-d"]).stdout.toString().trim();
+    const dir = tempDir();
     await withBinary(`${dir}/missing`, async () => {
       const health = await probe();
       expect(health.kind).toBe("absent");
@@ -201,6 +214,19 @@ exit 0
       const result = await run(dir, [dir, "--for=where"]);
       expect(result.status).toBe("partial");
       expect(result.answer).toContain('unresolved="2"');
+    });
+  });
+});
+
+describe("a timeout is refused with its own note", () => {
+  test("a sleeping script is killed and named", async () => {
+    const { dir, bin } = await makeBin(`#!/bin/sh
+exec sleep 5
+`);
+    await withBinary(bin, async () => {
+      const result = await run(dir, [dir, "--grep=slow"], { timeoutMs: 50 });
+      expect(result.status).toBe("refused");
+      expect(result.note).toContain("did not answer within 50ms");
     });
   });
 });

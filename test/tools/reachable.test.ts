@@ -53,8 +53,9 @@ describe("every registered tool is reachable from some skill", () => {
       (await import("../../tools/definitions/worktrees")).worktrees(ctx),
     ];
 
-    // Length is checked against TOOLS, not spelled out as literals, so adding a
-    // tool cannot pass by leaving this array the length it was.
+    // The list covers the ten `tools.spectre.*` Code Mode tools. The direct
+    // `spectre_search` tool is outside that namespace and is covered by
+    // `test/search/tool.test.ts`, which asserts `codemode: false`.
     expect(registered.map((tool) => tool.options?.namespace)).toEqual(TOOLS.map(() => "spectre"));
     expect(registered).toHaveLength(TOOLS.length);
     expect(registered.every((tool) => tool.options?.codemode === true)).toBe(true);

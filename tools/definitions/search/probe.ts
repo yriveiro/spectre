@@ -6,17 +6,12 @@
  */
 
 import type { Health } from "./policy";
+import { binaryOf } from "./binary";
 
 const MIN_VERSION = "0.6.10";
 
 /** One fact per binary path: a version answer does not move under a process. */
 const cache = new Map<string, Health>();
-
-const binaryOf = (): string | null => {
-  const env = Bun.env.SPECTRE_RIPWIRE;
-  if (env !== undefined && env !== "") return env;
-  return Bun.which("ripwire");
-};
 
 const versionOf = async (binary: string): Promise<Health> => {
   let out: string;
