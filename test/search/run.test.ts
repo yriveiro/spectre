@@ -157,6 +157,40 @@ exit 0
   });
 });
 
+describe("truncation counts bytes, not characters", () => {
+  test("20,000 two-byte chars exceed 32,000 bytes and truncate to 16,000 chars", async () => {
+    const { dir, bin } = await makeBin(`#!/bin/sh
+awk 'BEGIN { for (i = 0; i < 20000; i++) printf "é" }'
+exit 0
+`);
+    await withBinary(bin, async () => {
+      const result = await run(dir, [dir, "--grep=e"]);
+      expect(result.status).toBe("answered");
+      // 20,000 UTF-16 units would pass a character count; 40,000 bytes do not.
+      expect(new TextEncoder().encode(result.answer).length).toBeLessThanOrEqual(32_000);
+      expect(result.answer.length).toBe(16_000);
+      expect(result.answer).not.toContain("�");
+      expect(result.note).toContain("truncated");
+    });
+  });
+
+  test("a cut three-byte char backs off instead of splitting", async () => {
+    const { dir, bin } = await makeBin(`#!/bin/sh
+awk 'BEGIN { for (i = 0; i < 10667; i++) printf "€" }'
+exit 0
+`);
+    await withBinary(bin, async () => {
+      const result = await run(dir, [dir, "--grep=e"]);
+      expect(result.status).toBe("answered");
+      // 32,001 bytes cut mid-character; the slice keeps 10,666 whole chars.
+      expect(new TextEncoder().encode(result.answer).length).toBe(31_998);
+      expect(result.answer.length).toBe(10_666);
+      expect(result.answer).not.toContain("�");
+      expect(result.note).toContain("truncated");
+    });
+  });
+});
+
 describe("an unresolved header is partial, not answered", () => {
   test('unresolved="2" in the header is partial', async () => {
     const { dir, bin } = await makeBin(`#!/bin/sh
