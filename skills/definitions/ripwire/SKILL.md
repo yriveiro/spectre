@@ -29,6 +29,14 @@ nobody runs. If no verb answers the test, write `no instrument` and say what
 stands in for it. That is a complete answer, and it is more useful than a
 principle quoted at something it was never about.
 
+## The search moment
+
+For a code search, call `spectre_search`. It runs ripwire's `--for`, `--grep` or
+`--regex` and returns the enclosing symbol. For plain text, logs, docs prose,
+fixtures and lock files, call `ripgrep`. A code-shaped `ripgrep` call is answered
+by `spectre_search` once, and the result says so. A second `ripgrep` for the same
+pattern is allowed, and `literal: true` always stays on `ripgrep`.
+
 ## The map
 
 Keyed on the test, not the name. The test is the falsifiable half. The map is
@@ -85,6 +93,8 @@ set and neither is obvious from its name:
   is long is a function the reader must hold state for.
 
 ## Two ways in
+
+The direct `spectre_search` tool is the front door because the Code Mode catalog renders the 33 MCP verbs as none shown. The MCP server is the second hop for the graph verbs, and the `ripgrep` tool is the renamed built-in `grep` tool which already runs ripgrep.
 
 **The MCP server**, as `tools.ripwire.*`. Thirty-three tools: thirty-one verbs,
 ranked, with lazy handles, plus `batch` (sixteen read sub-queries in one turn)
