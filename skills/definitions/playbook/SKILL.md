@@ -56,15 +56,16 @@ to settle it cheaply before the real procedure starts.
 `worktree-cleanup` is the twenty-third and it is not prefixed, and it is a maintenance task rather than a
 shape of work. It is in the same table under its own name.
 
-## The three that always need re-invoking
+## Long programmes and the native wake
 
 `playbook-orchestrate`, `playbook-autopilot-full` and `playbook-autopilot-stack`
-are long programmes, and a session is one unit of one. Each of them writes its
-objective, its queue and its progress to a file, so the next run reads state and
-continues rather than starting over. Ask for the next unit, or leave it and come
-back to it.
+are long programmes, and a session is one unit of one. Each writes its objective,
+its queue and its progress to a file. On OpenCode 2.2.1+ with
+`experimental.schedules`, create an audit schedule with
+`tools.opencode.schedule_create` and the programme wakes itself. Without schedules,
+ask for the next unit.
 
-`playbook-autonomous-run` is the exception. Armed with `/drive`, the built-in
+`playbook-autonomous-run` is the continuous case. Armed with `/drive`, the built-in
 goal loop re-enters the session until the exit predicate is met, and `/goal pause`
 stops it. `/babysit` is the same loop with a pull-request stack as the predicate.
 

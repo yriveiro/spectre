@@ -9,6 +9,8 @@ plain file in the repository. A note kept only in your context dies with you.
 
 ## Start
 
+Call `todowrite` with one entry per phase.
+
 1. Reach a boundary
 2. Take no irreversible action
 3. Make the work durable
@@ -24,11 +26,17 @@ the new form unwritten. A clean tree with a note beats a broken tree with a note
 
 Start nothing new. If a goal is armed, ask the user to type `/goal pause` and call
 `tools.spectre.goal({ action: "status" })` to confirm `paused` before you commit:
-a live goal re-enters this session after the commit and writes to the tree. Then
-cancel any subagents still running, or record which ones are, because a background
-subagent writing to the tree after you commit is how a `wip:` snapshot stops
-matching the working directory. If you are mid-run on a measured loop, note where
-in the loop you are and what the last measurement said, so the next session
+a live goal re-enters this session after the commit and writes to the tree.
+
+When `experimental.schedules` is on and this session has a native schedule that will
+wake it, call `tools.opencode.schedule_list`, then `tools.opencode.schedule_pause` or
+`tools.opencode.schedule_delete` before the commit. A schedule that fires after a
+pause writes to the tree.
+
+Then cancel any subagents still running, or record which ones are, because a
+background subagent writing to the tree after you commit is how a `wip:` snapshot
+stops matching the working directory. If you are mid-run on a measured loop, note
+where in the loop you are and what the last measurement said, so the next session
 restarts the loop rather than the work.
 
 ## Phase B: Take no irreversible action

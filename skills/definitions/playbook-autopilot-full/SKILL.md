@@ -3,13 +3,14 @@
 One owner per pull request, each driven to merged, with a root verdict on every
 round. Capacity is `subagent` with `background: true`, and every worker shares
 this filesystem, so owner paths are disjoint by construction or two of them will
-collide. Nothing runs while nobody is in the room, so the audit tick is a phase
-you re-invoke.
+collide. On OpenCode 2.2.1+ with `experimental.schedules`, a native schedule runs
+the audit tick. Without schedules, the tick is when the human returns.
 
 ## Start
 
-State the plan when asked and stop: a request to state the protocol is not a go.
-Execution starts on an explicit go, and it begins by writing the objective down.
+Call `todowrite` with one entry per phase. State the plan when asked and stop: a
+request to state the protocol is not a go. Execution starts on an explicit go, and
+it begins by writing the objective down.
 
 1. Take the go, write the objective down
 2. Mark the operator's items
@@ -18,6 +19,28 @@ Execution starts on an explicit go, and it begins by writing the objective down.
 5. Merge on a clean verdict
 6. Run the audit tick
 7. Stand down
+
+## Native wake
+
+Start the audit tick with the native schedule tools:
+
+```js
+await tools.opencode.schedule_create({
+  name: "autopilot-audit",
+  when: { every: "30 minutes" },
+  ends: { after: "8 hours" },
+  prompt:
+    "Read .spectre/autopilot.md and playbook-autopilot-full. Audit every owner against the queue, count side effects since the last tick, stand down a stuck owner, dispatch a replacement, and append the rows. Do not start a round while the operator's hold is on.",
+})
+```
+
+The schedule runs under `opencode serve`, so the server must be up when it is due.
+The prompt must stand alone, because the schedule has no conversation around it. Set
+`ends` to the run's budget or the working day, and create it again at the next run.
+`tools.opencode.schedule_list` shows the id and next run.
+`tools.opencode.schedule_pause` and `tools.opencode.schedule_delete` stop it. The
+schedule runs when `experimental.schedules` is on. Without it, run the tick when you
+are next in the room.
 
 ## Phase A: Take the go, write the objective down
 
@@ -33,6 +56,8 @@ That file is all a later run reads, so a row is written when it changes.
 
 Items the operator names stay with the operator. You do not build them, verify them, or let
 an owner merge one: that owner's job stops at merge-ready and waits for the human's click.
+When the operator is present, ask which items they keep with `question`. When they are
+absent, keep the items `.spectre/autopilot.md` already marks.
 
 ## Phase C: Spawn one owner per pull request
 
@@ -86,7 +111,8 @@ other.
 
 ## Phase F: Run the audit tick
 
-Run it when you are next in the room. The cadence is the human's, not yours.
+The tick runs from `autopilot-audit`, or when the human returns without schedules.
+The schedule is the cadence, not the runner.
 
 Re-read this file from trunk, then re-read the objective in `.spectre/autopilot.md`, and
 audit the operation against both. Fix drift during that tick. Count only side effects as
@@ -99,8 +125,10 @@ The tick ends only when no delegated work is left, even after the last merge.
 ## Phase G: Stand down
 
 The operator's hold is a zero-writes order that reaches every owner the moment it is
-given. Owners hold their briefs until it is released, nothing is left mid-push, and the
-state file is written last so the next run picks the queue up where it stood.
+given. Pause `autopilot-audit` with `tools.opencode.schedule_pause` while the hold is
+on, and delete it with `tools.opencode.schedule_delete` on stand-down. Owners hold
+their briefs until the hold is released, nothing is left mid-push, and the state file
+is written last so the next run picks the queue up where it stood.
 
 ## Outputs
 

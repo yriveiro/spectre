@@ -6,8 +6,9 @@ merges: the chain is handed to a person who lands it. Capacity is `subagent` wit
 
 ## Start
 
-State the plan when asked and stop. A request to state the protocol is not a go. On an
-explicit go, the run begins by writing the objective down.
+Call `todowrite` with one entry per phase. State the plan when asked and stop. A
+request to state the protocol is not a go. On an explicit go, the run begins by writing
+the objective down.
 
 1. Take the go, write the objective down
 2. Spawn one owner per pull request
@@ -15,6 +16,27 @@ explicit go, the run begins by writing the objective down.
 4. Append on a clean verdict
 5. Absorb drift at the root
 6. Deliver the chain
+
+## Native wake
+
+Create the audit tick with the native schedule tools:
+
+```js
+await tools.opencode.schedule_create({
+  name: "autopilot-stack-audit",
+  when: { every: "30 minutes" },
+  ends: { after: "8 hours" },
+  prompt:
+    "Read .spectre/autopilot-stack.md and playbook-autopilot-stack. Probe every owner, count side effects since the last tick, re-check the chain with tools.spectre.stack, and append the rows. Do not rebase or append while an owner is mid-push.",
+})
+```
+
+The schedule runs under `opencode serve`, so the server must be up when it is due.
+The prompt must stand alone. Set `ends` to the run's budget or the working day, and
+create it again at the next run. `tools.opencode.schedule_list` shows the id and next
+run. `tools.opencode.schedule_pause` and `tools.opencode.schedule_delete` stop it. The
+schedule runs when `experimental.schedules` is on. Without it, run the tick when you
+are next in the room.
 
 ## Phase A: Take the go, write the objective down
 
@@ -88,10 +110,14 @@ The deliverable is one linear chain of verified pull requests, reviewable bottom
 forge, every link carrying its verdict in the PR body or a comment. The operator reviews
 and lands it, with their own clicks.
 
-Run the audit tick when you are next in the room, re-read this file from trunk and the objective in
-`.spectre/autopilot-stack.md`, and probe every owner. Count only side effects as progress —
-commits, pushes, PR or check deltas, reports — and treat an owner that passed its expected
-runtime with none of those as stuck. The operator's stop is a zero-writes order.
+The audit tick runs from `autopilot-stack-audit`, or when the human returns without
+schedules. Re-read this file from trunk and the objective in
+`.spectre/autopilot-stack.md`, and probe every owner. Count only side effects as
+progress — commits, pushes, PR or check deltas, reports — and treat an owner that passed
+its expected runtime with none of those as stuck. The operator's stop is a zero-writes
+order. Delete the audit schedule with `tools.opencode.schedule_delete` when the chain
+is delivered, or pause it with `tools.opencode.schedule_pause` when the operator is
+still landing it.
 
 ## Outputs
 

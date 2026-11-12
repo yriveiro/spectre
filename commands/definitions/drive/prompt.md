@@ -49,7 +49,9 @@ On the kickoff and on every continuation, do one unit:
 5. If the predicate is still false, end the turn. The loop re-enters you.
 6. If it is true, run the check once more, quote it, and end the turn. The reviewer answers `done`, not you.
 
-If you need a decision, credentials or a manual step only the user can provide, say exactly what and stop. The reviewer answers `blocked`.
+When the next step is an external event, use the native wait the playbook names. Under the goal, start `shell({ command, background: true })`. Without a goal, use `tools.opencode.schedule_create`. Never poll.
+
+If you need a decision the user must make, call `question` with the options. If you need credentials or a manual step, say exactly what and stop. The reviewer answers `blocked`.
 
 ## 6. Pause and resume
 

@@ -10,6 +10,8 @@ infer it.
 
 ## Start
 
+Call `todowrite` with one entry per phase.
+
 1. Find the work
 2. Read what landed
 3. Read what is on disk uncommitted
@@ -26,6 +28,9 @@ Locate the in-flight work before reading anything.
   buckets every worktree by whether deleting it would lose work, which shows at a
   glance that a branch exists and whether its tree is dirty.
 - **A commit range handed to you.** A base and a head.
+- **A native schedule.** When `experimental.schedules` is on, call `tools.opencode.schedule_list`. A
+  schedule that wakes this session is in-flight state, and its id, next run and status
+  belong in the resume point.
 
 If the handover names a branch, work on the branch, and do not read other people's
 working directories.
@@ -73,7 +78,8 @@ Three parts, in this order:
 
 1. **What is done.** The commits that landed, as subjects with their shas.
 2. **What is in flight.** The uncommitted changes, by file, and your read of whether
-   they are complete or partial.
+   they are complete or partial. The native schedules that will wake this session,
+   with their ids, next run and status.
 3. **What is next.** The first concrete action, named as an action.
 
 The test is whether a reader could continue the work from your three parts alone. If

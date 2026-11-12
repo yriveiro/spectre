@@ -26,7 +26,20 @@ and the ledger path. When a goal is active:
 - A pause is `/goal pause`, typed by the user. Resume is `/goal resume`. The goal
   id is a handle only for the session that armed it.
 
+## Native tools
+
+Use the host's tools where they exist. `todowrite` holds the phase list. `question`
+asks a decision only the user can make. `shell({ background: true })` starts a wait
+the goal can see. `tools.opencode.schedule_create` and its siblings start a wait no goal is holding.
+`read` takes a negative `offset` to read a log's tail. The Spectre tools stay where they
+enforce a rule: `tools.spectre.worktrees` combines the host's worktree create and session
+move and verifies the result, `tools.spectre.stack` reads the PR state,
+`tools.spectre.history` reads commits, and `tools.spectre.goal` owns the objective
+contract.
+
 ## Start
+
+Call `todowrite` with one entry per phase.
 
 Three places hold a run's state, and this playbook uses all three because no single one
 survives everything. The **branch** holds the work, and `tools.spectre.worktrees({})` is
@@ -67,8 +80,9 @@ than batching every check at the end (`principle-sequence-verifiable-units`).
 
 A missing `.spectre/run.md` is not an emergency and not a licence to start over.
 Reconstruct the predicate from the branch's commit bodies, write the reconstruction down
-so it can be corrected, and proceed. Ask only if the predicate itself is ambiguous,
-because guessing it means optimising the wrong thing for the rest of the run.
+so it can be corrected, and proceed. When the predicate itself is ambiguous, call
+`question` with the options, because guessing it means optimising the wrong thing for
+the rest of the run.
 
 ## Phase C: Change one thing
 
@@ -88,13 +102,32 @@ hook that passed, not a worker's summary. When something passes suspiciously eas
 suspect the measurement before the system.
 
 If the check needs an event to complete — CI finishing, a pull request merging, somebody
-pushing a review — start the one blocking wait command in the background, such as
-`gh pr checks <pr> --watch`, say which event it waits for, and end the turn. Under a goal
-the reviewer may answer `wait`, and the shell's completion wakes the session. Without a
-goal, name the event in the state file's next-check line and stop. The human, or the next
-session, is the wake mechanism.
+pushing a review — do not sleep and do not poll in a loop. Under a goal, start the wait
+with the native shell tool:
 
-One watcher does exist, and it returns once rather than following: call `tools.spectre.stack({})` and read the verdict. Where a ref advances, read the branch instead of polling it. Never sleep and never re-poll in a loop: the background shell is the wait, and the goal is the re-entry.
+```js
+await shell({ command: "gh pr checks <pr> --watch", background: true })
+```
+
+Say which event it waits for, and end the turn. The goal's reviewer may answer `wait`,
+and the shell's completion wakes the session. Without a goal, and with
+`experimental.schedules` on, create a one-shot native schedule:
+
+```js
+await tools.opencode.schedule_create({
+  until: {
+    run: "gh pr checks <pr> --json bucket --jq '[.[] | select(.bucket == \"pending\")] | length' || true",
+    is: "0",
+  },
+  prompt: "The event is over. Re-read .spectre/run.md and take the next unit.",
+})
+```
+
+It polls with no model call and wakes this session once. Without schedules, name the
+event in the state file's next-check line and stop. The human, or the next session, is
+the wake mechanism.
+
+One watcher does exist, and it returns once rather than following: call `tools.spectre.stack({})` and read the verdict. Where a ref advances, read the branch instead of polling it.
 
 ## Phase E: Write the row down
 
@@ -122,6 +155,13 @@ would settle it. *"CI on `feat/queue` is still running. Next round calls
 Under a goal, end the turn. The loop re-enters you, and the reviewer answers `done` only
 when the evidence shows the predicate. Without a goal, stop: coming back is a separate
 invocation and it is not yours to take.
+
+## Scripted runs
+
+`opencode run` sends a prompt, not a command, so it cannot run `/drive`. Start a
+scripted run with `opencode run -w` on 2.2.6 or later, or `--worktree=<name>` to name
+the tree. The native flag creates the worktree and starts the session in it. Then
+follow this playbook's one-unit path. Do not run `git worktree add`.
 
 ## Outputs
 

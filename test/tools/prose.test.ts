@@ -364,7 +364,8 @@ describe("the set's own prose", () => {
     //
     // The goal integration added eight passive lines in the `/drive` and
     // `/babysit` prompts and the goal-mode sections, where the actor is the host
-    // or the tool and the sentence states what the run is told: 338 to 346.
+    // or the tool and the sentence states what the run is told: 338 to 346. The
+    // native-tool rewrite added two more in the autopilot schedule prose: 346 to 348.
     const out = await call(["."]);
     const byRule: Record<string, number> = {};
     for (const f of out.findings) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
@@ -394,7 +395,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 346,
+      passiveVoice: 348,
       otherRules: [],
     });
   }, 120_000);
