@@ -14,7 +14,7 @@ for each, and what is still open. It is not a log of how we reached the design.
 | [canvas.md](./canvas.md) | built | An OpenCode artifact built from Markdown, Mermaid, or a parsed diff: publish and update, no store, no launcher. A PR canvas is that artifact built from a real diff, so a reviewer can reach the hunk a claim is about. |
 | [code-hardness.md](./code-hardness.md) | evidence, not built | What the literature says about hard code, what this repository already measures, and the four changes the evidence asks for. |
 | [ripwire-search.md](./ripwire-search.md) | slices 1-2 built, superseded by [ripwire-first.md](./ripwire-first.md) | The record of `spectre_search`, the one contract over four surfaces, the text judge and the `grep` to `ripgrep` rename. |
-| [ripwire-first.md](./ripwire-first.md) | E1-E14 built | Ripwire is the first instrument of a session: the map on the first prompt, a reroute for a code search, one refusal at the first code read and at the landing, and a usage record. The landing owes `--quality-delta` and `--affected`. |
+| [ripwire-first.md](./ripwire-first.md) | E1-E15 built | Ripwire is the first instrument of a session: the map on the first prompt, a reroute for a code search, one refusal at the first code read and at the landing, and a usage record. The landing owes `--quality-delta` and `--affected`. |
 
 The skill `skills/definitions/arena/` shares this file's name and is not the same
 thing. [FOR_AGENTS.md](../skills/FOR_AGENTS.md), rule 3, records the collision and

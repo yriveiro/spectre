@@ -1,6 +1,6 @@
 # Ripwire first
 
-Status: tasks E1 to E14 built. E15 and E16 are open.
+Status: tasks E1 to E15 built. E16 is open.
 
 Ripwire is the first instrument of a session. A code search reaches it before a
 file read, the first code read of a session waits for it once, and a landing
@@ -97,7 +97,7 @@ session.context      the rule, plus the native note
 grep, read, commit   pass, no-instrument
 ```
 
-Row 5 of the rule table sits above every gate, so nothing that depends on
+Row 3 of the rule table sits above every gate, so nothing that depends on
 ripwire fires when the binary is missing or stale.
 
 ### 5. A child session
@@ -122,7 +122,7 @@ blocks a landing.
 
 ## The rule table
 
-First match wins, in `decide`. Rows 0 to 4 sit above every gate.
+First match wins, in `decide`. Rows 0 to 3 sit above every other row.
 
 | # | Surface and condition | Verdict |
 | - | --------------------- | ------- |
@@ -132,7 +132,7 @@ First match wins, in `decide`. Rows 0 to 4 sit above every gate.
 | 3 | any other surface · ripwire absent or stale | pass, `no-instrument` |
 | 4 | text · `literal: true` | pass, `plain-text` |
 | 5 | text · pattern under 3 characters | pass, `too-broad` |
-| 6 | text · a plain extension in the path, the include or the pattern | pass, `plain-text` |
+| 6 | text · a plain extension in the path or the include | pass, `plain-text` |
 | 7 | text · a newline in the pattern | pass, `plain-text` |
 | 8 | text · this pattern was asked before | pass, `already-asked` |
 | 9 | text · a phrase with a code token / with a metacharacter / with neither | reroute task / reroute regex / pass `plain-text` |
@@ -140,13 +140,17 @@ First match wins, in `decide`. Rows 0 to 4 sit above every gate.
 | 11 | text · the request holds no `spectre_search` | pass, `search-unavailable` |
 | 12 | shell · a command this reader does not know | pass, `not-a-search` |
 | 13 | shell · a pipe, a redirect, `;`, `&&`, `$(`, a backtick, `-e`, `-f`, an unknown flag, or more than one path | pass, `unmappable` |
-| 14 | shell · one pattern and at most one path | reroute, origin `shell` |
-| 15 | shell · a `ripwire` lookup | pass, `not-a-search`, and the two measurement flags count |
-| 16 | shell · a landing command with no code edit / a spent gate / a fresh measurement | pass `nothing-edited` / pass `gate-spent` / pass `measured` |
-| 17 | shell · `git commit`, `git push`, `gh pr create`, `git merge`, `git rebase --continue` | refuse `land` once |
-| 18 | read · not code, outside the root, after a lookup, after a pass, after an edit, or the gate spent | pass with that reason |
-| 19 | read · the first code read of a session, with no lookup | refuse `read` once |
-| 20 | edit, write, subagent, a completed search | pass, observe only |
+| 14 | shell · pattern under 3 characters | pass, `too-broad` |
+| 15 | shell · a plain extension in the path, the include or the pattern | pass, `plain-text` |
+| 16 | shell · this pattern was asked before | pass, `already-asked` |
+| 17 | shell · the request holds no `spectre_search` | pass, `search-unavailable` |
+| 18 | shell · one pattern and at most one path | reroute, origin `shell` |
+| 19 | shell · a `ripwire` lookup | pass, `not-a-search`, and the two measurement flags count |
+| 20 | shell · a landing command with no code edit / a spent gate / a fresh measurement | pass `nothing-edited` / pass `gate-spent` / pass `measured` |
+| 21 | shell · `git commit`, `git push`, `gh pr create`, `git merge`, `git rebase --continue` | refuse `land` once |
+| 22 | read · not code, outside the root, after a lookup, after a pass, after an edit, or the gate spent | pass with that reason |
+| 23 | read · the first code read of a session, with no lookup | refuse `read` once |
+| 24 | edit, write, subagent, a completed search | pass, observe only |
 
 `Memory` holds the session state: the attach bit, the search bit, the lookups,
 the asked patterns with their outcome, the reads, the edited paths, the code
@@ -235,7 +239,7 @@ both.
 | E12 | `spectre_ripwire_report` names the session and the missing verb | `report.ts`, `test/search/report.test.ts` |
 | E13 | the goal contract, the two playbooks and the PR template name both measurements | `goal/contract.ts`, `playbook-autonomous-run`, `playbook-opening-a-pr`, `pr/fields.ts`, `test/goal/contract.test.ts`, `test/pr/compose.test.ts` |
 | E14 | one decision in the docs, and the old feature note points here | this file, `ripwire-search.md`, `features/README.md` |
-| E15 | one integration test over every decision row, with the absent-binary fallback | not built: `test/ripwire-first.test.ts` |
+| E15 | one integration test over every decision row, with the absent-binary fallback | `test/ripwire-first.test.ts` |
 | E16 | the change lands as one reviewable PR with both measurements in the body | not built |
 
 ## Open questions
