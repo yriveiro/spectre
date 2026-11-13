@@ -29,6 +29,15 @@ const capture = async (typed: string) => {
 
 const body = join(import.meta.dir, "..", "..", "commands", "definitions", "wt", "prompt.md");
 const factory = join(import.meta.dir, "..", "..", "commands", "definition.ts");
+const worktreePlaybook = join(
+  import.meta.dir,
+  "..",
+  "..",
+  "skills",
+  "definitions",
+  "playbook-worktree",
+  "SKILL.md",
+);
 
 /**
  * The marker `promptCommand` writes in front of whatever the user typed.
@@ -88,10 +97,10 @@ describe("the /wt command", () => {
     expect(seen[0]?.text).toBe(await Bun.file(body).text());
   });
 
-  test("the prompt delegates the status handling to the playbook", async () => {
+  test("the prompt delegates the status handling to the worktree playbook", async () => {
     const text = await Bun.file(body).text();
-    expect(text).toContain("playbook-opening-a-pr");
-    expect(text).toContain("Phase A");
+    expect(text).toContain("playbook-worktree");
+    expect(await Bun.file(worktreePlaybook).text()).toContain("## Phase A: Pick the tree");
   });
 });
 

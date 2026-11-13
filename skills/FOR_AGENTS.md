@@ -3,11 +3,11 @@
 Read this before writing a leaf: which of three shapes you are writing, the
 template, the measurements behind it, and what a leaf owes the map and the hub.
 
-A **leaf** is a skill this set routes to: 32 of the 83 definitions. 28 are
+A **leaf** is a skill this set routes to: 32 of the 84 definitions. 28 are
 `principle-*`, and the other 4 are `code-hygiene`, `grammar`, `model-router`
 and `look-first`.
-The remaining 51 ids are in the `notALeaf` set in `skills/definitions/index.ts` —
-the hub, the map, 24 `playbook-*`, and 25 more procedures — and they are
+The remaining 52 ids are in the `notALeaf` set in `skills/definitions/index.ts` —
+the hub, the map, 25 `playbook-*`, and 25 more procedures — and they are
 registered and read on demand, carrying no row.
 
 ## What you are writing
@@ -176,7 +176,7 @@ one means four things, and skipping any of them is how a port rots.
 
    Two facts they need, kept here so they are not copied into the definition
    files. They are registered only because `load()` dies on a body it does not
-   list. And nothing in this set is auto-invoked — all 82 definitions carry
+   list. And nothing in this set is auto-invoked — all 84 definitions carry
    `autoinvoke: false` — so the hub's trigger table is the only router there is,
    and a skill in neither the table nor the index is reached only by a reader who
    asks for it by name, which is why its description is written for that reader.

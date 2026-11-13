@@ -1,6 +1,6 @@
 Open a worktree for the unit of work the user names, and keep building in it.
 
-Load `playbook-opening-a-pr` and follow Phase A only.
+Load `playbook-worktree` and follow it.
 
 ## Read the name from the marker
 
@@ -21,6 +21,5 @@ user names a `branch` or a `base`.
 
 ## Report the status
 
-On `opened`, report `directory`, `branch` and `cut`, then keep building. Phase A covers
-`unverified`. `rejected` created nothing: report `problems` and stop. `failed` may have left a
-directory on disk: report `problems` and read it before any retry.
+On `opened`, report `directory`, `branch` and `cut`, then keep building. The playbook covers
+every other status.
