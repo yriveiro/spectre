@@ -44,7 +44,7 @@ import { playbookSessionPickup } from "./playbook-session-pickup";
 import { playbookShipping } from "./playbook-shipping";
 import { playbookTraceForensics } from "./playbook-trace-forensics";
 import { playbookVisualParity } from "./playbook-visual-parity";
-import { playbookWorktree } from "./playbook-worktree";
+import { playbookWorktreeInit } from "./playbook-worktree-init";
 import { prCanvas } from "./pr-canvas";
 import { principleAttackThePremise } from "./principle-attack-the-premise";
 import { principleBoundaryDiscipline } from "./principle-boundary-discipline";
@@ -131,7 +131,7 @@ const definitions: ReadonlyArray<Definition> = [
   playbookShipping,
   playbookTraceForensics,
   playbookVisualParity,
-  playbookWorktree,
+  playbookWorktreeInit,
   prCanvas,
   arena,
   bro,
@@ -223,7 +223,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "playbook-shipping",
   "playbook-trace-forensics",
   "playbook-visual-parity",
-  "playbook-worktree",
+  "playbook-worktree-init",
   "pr-canvas",
   "ripwire",
   "ripwire-first",

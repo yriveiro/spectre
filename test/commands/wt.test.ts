@@ -35,7 +35,7 @@ const worktreePlaybook = join(
   "..",
   "skills",
   "definitions",
-  "playbook-worktree",
+  "playbook-worktree-init",
   "SKILL.md",
 );
 
@@ -99,8 +99,8 @@ describe("the /wt command", () => {
 
   test("the prompt delegates the status handling to the worktree playbook", async () => {
     const text = await Bun.file(body).text();
-    expect(text).toContain("playbook-worktree");
-    expect(await Bun.file(worktreePlaybook).text()).toContain("## Phase A: Pick the tree");
+    expect(text).toContain("playbook-worktree-init");
+    expect(await Bun.file(worktreePlaybook).text()).toContain("## Phase A: Pick the name");
   });
 });
 

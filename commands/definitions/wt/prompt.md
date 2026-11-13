@@ -1,6 +1,6 @@
 Open a worktree for the unit of work the user names, and keep building in it.
 
-Load `playbook-worktree` and follow it.
+Load `playbook-worktree-init` and follow it.
 
 ## Read the name from the marker
 

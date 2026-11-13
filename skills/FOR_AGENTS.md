@@ -3,11 +3,11 @@
 Read this before writing a leaf: which of three shapes you are writing, the
 template, the measurements behind it, and what a leaf owes the map and the hub.
 
-A **leaf** is a skill this set routes to: 32 of the 84 definitions. 28 are
+A **leaf** is a skill this set routes to: 32 of the 86 definitions. 28 are
 `principle-*`, and the other 4 are `code-hygiene`, `grammar`, `model-router`
 and `look-first`.
-The remaining 52 ids are in the `notALeaf` set in `skills/definitions/index.ts` —
-the hub, the map, 25 `playbook-*`, and 25 more procedures — and they are
+The remaining 54 ids are in the `notALeaf` set in `skills/definitions/index.ts` —
+the hub, the map, 25 `playbook-*`, and 27 more procedures — and they are
 registered and read on demand, carrying no row.
 
 ## What you are writing
@@ -169,16 +169,16 @@ one means four things, and skipping any of them is how a port rots.
 3. **Do not import a mode or a workflow as a principle.** `architect`, `teach`,
    `swarm`, `why`, `how`, `automate-me` and their neighbours are procedures for a
    different harness: a leaf states a test and a moment you load it on, and a
-   procedure has neither. Fifty-one ids are registered and never indexed, which
+   procedure has neither. Fifty-four ids are registered and never indexed, which
    is the shape to reach for when a port is worth having and is not a principle,
    and it costs the set nothing: the map and the index are what the leaf count
    and the routing surface are made of.
 
    Two facts they need, kept here so they are not copied into the definition
    files. They are registered only because `load()` dies on a body it does not
-   list. And nothing in this set is auto-invoked — all 84 definitions carry
-   `autoinvoke: false` — so the hub's trigger table is the only router there is,
-   and a skill in neither the table nor the index is reached only by a reader who
+   list. `ripwire` is the one auto-invoked definition, and the other 85 carry
+   `autoinvoke: false`, so the hub's trigger table is the router for them, and
+   a skill in neither the table nor the index is reached only by a reader who
    asks for it by name, which is why its description is written for that reader.
    Their ids are in `notALeaf`, which a map row is checked against.
 
