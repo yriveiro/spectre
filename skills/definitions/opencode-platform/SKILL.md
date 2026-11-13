@@ -23,7 +23,7 @@ export default Plugin.define({
 
 `effect` is a peer dependency plus a dev pin. `@opencode/plugin` is a runtime dependency (`plugins/effect.mdx`, Publish). OpenCode redirects `effect`, every public `effect/*` subpath, and `@opencode/plugin` plus every public `@opencode/plugin/*` subpath to the host's runtime instances. The redirect covers imports from the plugin's own `node_modules` too, so fibers, loggers, and `Schema` parsers share one copy (`plugins/effect.mdx`, Publish). The doc page prints `effect@4.0.1`. The tag's catalog pins `4.1.0`, and that is the build the host ships (`package.json` at `v2.2.7` → `workspaces.catalog.effect`).
 
-Resolution has two paths. `.opencode/plugins/<name>/` loads automatically (`plugins/index.mdx`, Load). A configured local path must name a directory. OpenCode skips a configured `./plugin/local.ts` file with a warning (`plugins/migrate-v1.mdx`). A local directory with `package.json` `name` and `exports` resolves through them. Without them it uses file names at its root: `server` else `index`, then `tui`, then `rpc` (`plugins/index.mdx`, Load). The exports map at the tag is `.`, `./effect`, `./host`, `./runtime`, `./tui`, and the `./gui` entrypoints. It carries no explicit `./rpc` entry, so that name resolves only through the `./*` fallback to `src/*.ts` (`packages/plugin/package.json`). A local directory without `name` and `exports` probes `server` else `index`, then `tui`, then `rpc`. It also probes `gui-experimental.cjs` or `.js` for the GUI part (`packages/plugin/src/host.ts`). A plugin's GUI part is `./gui-experimental` in its own package: one prebuilt CommonJS file (`plugins/gui/index.mdx`, Package). Local discovery is `.opencode/plugins/` (plural). A TUI-only package belongs in `cli.json`, and the desktop app loads GUI parts from the global config (`plugins/index.mdx`, Load).
+Resolution has two paths. `.opencode/plugins/<name>/` loads automatically (`plugins/index.mdx`, Load). A configured local path must name a directory. OpenCode skips a configured `./plugin/local.ts` file with a warning (`plugins/migrate-v1.mdx`). A local directory with `package.json` `name` and `exports` resolves through them. Without them it uses file names at its root: `server` (else `index`), `tui`, and `rpc`. Each carries a `.ts`, `.tsx`, or `.js` extension (`plugins/index.mdx`, Load). The exports map at the tag is `.`, `./effect`, `./host`, `./runtime`, `./tui`, and the `./gui` entrypoints. It carries no explicit `./rpc` entry, so that name resolves only through the `./*` fallback to `src/*.ts` (`packages/plugin/package.json`). A local directory without `name` and `exports` probes `server` else `index`, then `tui`, then `rpc`. It also probes `gui-experimental.cjs` or `.js` for the GUI part (`packages/plugin/src/host.ts`). A plugin's GUI part is `./gui-experimental` in its own package: one prebuilt CommonJS file (`plugins/gui/index.mdx`, Package). Local discovery is `.opencode/plugins/` (plural). A TUI-only package belongs in `cli.json`, and the desktop app loads GUI parts from the global config (`plugins/index.mdx`, Load).
 
 ### The Promise API
 
@@ -49,14 +49,14 @@ One row per domain of the `Context` interface. An **editor** registers a synchro
 | `credential` | `activate` | write | `packages/plugin/src/effect/plugin.ts` |
 | `event` | `subscribe({ types })`, which returns a `Stream` | stream | `packages/plugin/src/effect/event.ts` |
 | `experimental` | `terminal.read`, `generate`, `artifact.transform` | mixed | `packages/plugin/src/effect/{plugin,artifact}.ts` |
-| `generate` (deprecated) | `text` only; use `experimental.generate` | read | `packages/plugin/src/effect/plugin.ts` |
+| `generate` (deprecated) | `text` only; use `experimental.generate.text` | read | `packages/plugin/src/effect/plugin.ts` |
 | `integration` | the API minus deprecated `wellknown`, `transform`, `reload`, and `connection.active`/`resolve`/`status` | editor | `packages/plugin/src/effect/integration.ts` |
 | `mcp` | `list`, `transform`, `reload` | editor | `packages/plugin/src/effect/mcp.ts` |
 | `model` | `list`, `default`, `transform`, `reload` | editor | `packages/plugin/src/effect/model.ts` |
 | `permission` | `list`, `get`, `reply`, `hook("evaluate")`, `assert` | editor | `packages/plugin/src/effect/permission.ts` |
 | `plugin` | `list` only | read | `packages/plugin/src/effect/plugin.ts` |
 | `provider` | `list`, `get`, `transform`, `reload` | editor | `packages/plugin/src/effect/provider.ts` |
-| `reference` | `list`, `transform`, `reload` | editor | `packages/plugin/src/effect/reference.ts` |
+| `reference` | `list`, `transform`, `reload` (`get` is editor-only) | editor | `packages/plugin/src/effect/reference.ts` |
 | `rpc` | `register(definition, handlers)`, then `ctx.rpc(Definition)` | write | `packages/plugin/src/effect/rpc.ts` |
 | `session` | the operations in "Sessions and prompts", plus `hook` | mixed | `packages/plugin/src/effect/session.ts` |
 | `shell` | `hook("create.before")`, and no client method at this tag | hook | `packages/plugin/src/effect/shell.ts` |
@@ -73,7 +73,7 @@ The context carries no OpenCode Core service (`plugins/effect.mdx`, Context). Tw
 
 `hook(name, callback)` returns `Effect<Registration, never, Scope>`, so a registration lives as long as the plugin scope. Several plugins may register one hook. OpenCode runs them in plugin order, and later hooks see earlier changes (`plugins/effect.mdx`, Hooks). The callback takes one mutable event and returns `Effect<void>` (`packages/plugin/src/effect/registration.ts`). The failure channel is `never` unless the hook declares otherwise. Only `tool.execute.before` does (`packages/plugin/src/effect/tool.ts`).
 
-OpenCode accepts the optional third argument `{ providerID }` only where the event carries a `model` field. That is `experimental.model.resolve`, `model.request`, `http.request`, `http.response`, `experimental.ws.*`, and `retry` (`packages/plugin/src/effect/registration.ts`, `ModelHooks`).
+OpenCode accepts the optional third argument `{ providerID }` wherever the event carries a `model` field. The session hooks are `context`, `compaction`, `generate`, `title`, `experimental.model.resolve`, `model.request`, `http.request`, `http.response`, `experimental.ws.*`, and `retry`. The `aisdk` `sdk` and `language` hooks accept it too (`packages/plugin/src/effect/registration.ts`, `ModelHooks`).
 
 | Hook | When it runs | What it may change |
 | --- | --- | --- |
