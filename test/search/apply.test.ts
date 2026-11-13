@@ -137,7 +137,7 @@ describe("the catalogue's verdict", () => {
 });
 
 describe("attachSearch composes the surfaces", () => {
-  test("it registers the prompt, the context and the tool hooks", async () => {
+  test("it registers the prompt, the context and both tool hooks", async () => {
     const names: Array<string> = [];
     const hook =
       (surface: string) =>
@@ -149,9 +149,15 @@ describe("attachSearch composes the surfaces", () => {
       session: { hook: hook("session"), get: () => Effect.succeed({}) },
       tool: { hook: hook("tool") },
       skill: { list: () => Effect.succeed({ location: {}, data: [] }) },
+      storage: { get: () => Effect.succeed(undefined) },
     } as unknown as Plugin.Context;
 
     await Effect.runPromise(Effect.scoped(attachSearch(ctx)));
-    expect(names).toEqual(["session:prompt", "session:context", "tool:execute.before"]);
+    expect(names).toEqual([
+      "session:prompt",
+      "session:context",
+      "tool:execute.before",
+      "tool:execute.after",
+    ]);
   });
 });

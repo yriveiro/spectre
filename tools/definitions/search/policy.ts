@@ -145,6 +145,7 @@ export type ShellAsk =
       readonly lookup: boolean;
       readonly delta: boolean;
       readonly affected: boolean;
+      readonly fanout: boolean;
     }
   | { readonly kind: "other" };
 
@@ -155,7 +156,8 @@ export type Ask =
   | { readonly surface: "shell"; readonly command: string; readonly parsed: ShellAsk }
   | { readonly surface: "read"; readonly path: string; readonly code: boolean; readonly insideRoot: boolean }
   | { readonly surface: "mutate"; readonly tool: "edit" | "write"; readonly path: string }
-  | { readonly surface: "subagent"; readonly child: string };
+  | { readonly surface: "subagent"; readonly child: string }
+  | { readonly surface: "complete"; readonly text: string; readonly outcome: Outcome };
 
 /** One arm of `Ask`, so a reader can name the surface it read. */
 export type SurfaceAsk<Surface extends Ask["surface"]> = Extract<Ask, { readonly surface: Surface }>;
@@ -421,6 +423,7 @@ export const shellParse = (command: string): ShellAsk => {
       lookup: !words.some((word) => word === "--help" || word === "--version"),
       delta: hasFlag(words, "--quality-delta"),
       affected: hasFlag(words, "--affected"),
+      fanout: hasFlag(words, "--pack-task") || hasFlag(words, "--partition"),
     };
   }
   if (LANDING.some((prefix) => startsWith(words, prefix))) return { kind: "landing", command };
@@ -578,11 +581,21 @@ const onSubagent = (memory: Memory): Decision => ({
   next: { ...memory, subagents: memory.subagents + 1 },
 });
 
+const onComplete = (ask: SurfaceAsk<"complete">, memory: Memory): Decision => {
+  const asked = new Map(memory.asked);
+  if (ask.text !== "") asked.set(ask.text, { kind: "answered", outcome: ask.outcome });
+  return {
+    verdict: { kind: "pass", why: "not-a-gate" },
+    next: { ...memory, touched: memory.touched + 1, asked },
+  };
+};
+
 /**
  * The rule, first match wins. Absent or stale ripwire passes every gate as
  * `no-instrument`; discovery and the prose rule do not depend on the instrument,
  * so they run first. The read refusal and the landing refusal each spend once,
- * and the second call is native.
+ * and the second call is native. The completion row records a search that ran,
+ * which is what makes the first code read after it `already-used`.
  */
 export const decide = (ask: Ask, memory: Memory, env: Env): Decision => {
   if (ask.surface === "prompt") return onPrompt(memory, env);
@@ -599,6 +612,8 @@ export const decide = (ask: Ask, memory: Memory, env: Env): Decision => {
       return onMutate(ask, memory);
     case "subagent":
       return onSubagent(memory);
+    case "complete":
+      return onComplete(ask, memory);
   }
 };
 

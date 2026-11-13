@@ -3,10 +3,13 @@ import { Tool } from "@opencode/schema/tool";
 import { Effect, Schema, type Scope } from "effect";
 import { attachCatalogue, attachDiscovery, attachGuard } from "./apply";
 import { CONTRACT, INSTALL } from "./contract";
+import { attachMeasure } from "./measure";
 import { argv, type Route } from "./policy";
 import { probe } from "./probe";
 import { run, scope } from "./run";
 import { rerouted } from "./state";
+
+export { report } from "./report";
 
 export const SearchInput = Schema.Struct({
   query: Schema.optional(Schema.String).annotate({
@@ -194,4 +197,5 @@ export const attachSearch = (ctx: Plugin.Context): Effect.Effect<void, never, Sc
     yield* attachDiscovery(ctx);
     yield* attachCatalogue(ctx);
     yield* attachGuard(ctx);
+    yield* attachMeasure(ctx);
   });

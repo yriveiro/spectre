@@ -56,6 +56,7 @@ describe("shellAsk reads the command", () => {
         lookup: true,
         delta: true,
         affected: false,
+        fanout: false,
       },
     });
   });
@@ -143,15 +144,27 @@ describe("mutateAsk reads the edit and write payload", () => {
   });
 });
 
-describe("subagentAsk reads the child", () => {
-  test("a session id reads as the child", () => {
-    expect(subagentAsk({ sessionID: "ses_child" })).toEqual({ surface: "subagent", child: "ses_child" });
+describe("subagentAsk reads the child a spawn created", () => {
+  test("a spawn reads the child its output names", () => {
+    expect(subagentAsk({ agent: "explore", prompt: "x" }, { sessionID: "ses_child" })).toEqual({
+      surface: "subagent",
+      child: "ses_child",
+    });
   });
 
-  test("a payload that names no child reads nothing", () => {
-    expect(subagentAsk({})).toBeUndefined();
-    expect(subagentAsk({ sessionID: 3 })).toBeUndefined();
-    expect(subagentAsk(null)).toBeUndefined();
+  test("a follow-up is not a spawn", () => {
+    expect(subagentAsk({ sessionID: "ses_child" }, { sessionID: "ses_child" })).toBeUndefined();
+    expect(subagentAsk({ sessionID: "" }, { sessionID: "ses_child" })).toEqual({
+      surface: "subagent",
+      child: "ses_child",
+    });
+  });
+
+  test("a call that named no child reads nothing", () => {
+    expect(subagentAsk({}, {})).toBeUndefined();
+    expect(subagentAsk({}, { sessionID: 3 })).toBeUndefined();
+    expect(subagentAsk({ sessionID: 3 }, { sessionID: "ses_child" })).toBeUndefined();
+    expect(subagentAsk(null, undefined)).toBeUndefined();
   });
 });
 

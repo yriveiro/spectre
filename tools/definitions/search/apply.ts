@@ -35,7 +35,7 @@ interface ToolBefore {
 }
 
 /** The text surface reads `health` alone; `skill` and `parentID` are the prompt's facts. */
-const envOf = (health: Health): Env => ({ health, skill: true, parentID: false });
+export const envOf = (health: Health): Env => ({ health, skill: true, parentID: false });
 
 /**
  * The prompt row runs above the health gate, so no instrument is probed for it:

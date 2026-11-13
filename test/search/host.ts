@@ -1,8 +1,9 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Tool } from "@opencode/schema/tool";
-import { Effect } from "effect";
+import { Effect, type Schema } from "effect";
 import { attachCatalogue, attachGuard } from "../../tools/definitions/search/apply";
+import { attachMeasure } from "../../tools/definitions/search/measure";
 
 /**
  * The shared host fixture for the guard tests: a stub ripwire binary, a
@@ -111,3 +112,102 @@ export const captureContext = async (): Promise<((event: unknown) => Effect.Effe
   if (callback === undefined) throw new Error("catalogue did not register");
   return callback;
 };
+
+/** One project, and the storage domain the usage record reads and writes. */
+export const PROJECT = "prj_measure_test";
+
+export const locationOf = (project: string) => ({
+  directory: "/tmp",
+  project: { id: project, directory: "/tmp", canonical: "/tmp" },
+});
+
+/** A `ctx.storage` over a map, ordered the way the host's KV scan orders keys. */
+export const makeStorage = (values: Map<string, Schema.Json>): Plugin.Context["storage"] => ({
+  get: (key) => Effect.sync(() => values.get(key)),
+  set: (key, value) =>
+    Effect.sync(() => {
+      values.set(key, value);
+    }),
+  remove: (key) =>
+    Effect.sync(() => {
+      values.delete(key);
+    }),
+  scan: (options) =>
+    Effect.sync(() => {
+      const keys = [...values.keys()]
+        .filter((key) => key.startsWith(options.prefix))
+        .filter((key) => options.after === undefined || key > options.after)
+        .sort();
+      const kept = options.limit === undefined ? keys : keys.slice(0, options.limit);
+      return {
+        entries: kept.map((key) => ({ key, value: values.get(key) ?? null })),
+        ...(options.limit !== undefined && keys.length > options.limit ? { next: keys[options.limit] } : {}),
+      };
+    }),
+});
+
+export interface After {
+  readonly callback: (event: unknown) => Effect.Effect<void>;
+  readonly values: Map<string, Schema.Json>;
+  readonly project: string;
+}
+
+/** The `execute.after` hook, captured with the storage its writes land in. */
+export const captureAfter = async (
+  project: string = PROJECT,
+  values: Map<string, Schema.Json> = new Map(),
+): Promise<After> => {
+  let callback: ((event: unknown) => Effect.Effect<void>) | undefined;
+  const ctx = {
+    location: locationOf(project),
+    storage: makeStorage(values),
+    tool: {
+      hook: (_name: string, cb: (event: unknown) => Effect.Effect<void>) => {
+        callback = cb;
+        return Effect.succeed({ dispose: Effect.void });
+      },
+    },
+  } as unknown as Plugin.Context;
+  await Effect.runPromise(Effect.scoped(attachMeasure(ctx)));
+  if (callback === undefined) throw new Error("measure did not register");
+  return { callback, values, project };
+};
+
+/** A `Plugin.Context` for a tool that only reads storage, such as the report. */
+export const readingContext = (
+  project: string,
+  values: Map<string, Schema.Json> = new Map(),
+): Plugin.Context =>
+  ({ location: locationOf(project), storage: makeStorage(values) }) as unknown as Plugin.Context;
+
+/** A completed `execute.after` event, with the output the tool returned. */
+export const afterEvent = (tool: string, input: unknown, session: string, id: string, output?: unknown): unknown => ({
+  tool,
+  sessionID: Session.ID.make(session),
+  agent: "build",
+  messageID: "msg_measure_rows",
+  id: Tool.CallID.make(id),
+  input,
+  status: "completed",
+  result: output === undefined ? {} : { output },
+});
+
+/** A failed `execute.after` event: the tool ran and returned a `Tool.Error`. */
+export const failedEvent = (tool: string, input: unknown, session: string, id: string): unknown => ({
+  tool,
+  sessionID: Session.ID.make(session),
+  agent: "build",
+  messageID: "msg_measure_rows",
+  id: Tool.CallID.make(id),
+  input,
+  status: "error",
+  error: new Tool.Error({ message: "the tool failed" }),
+});
+
+export const toolContext = (session: string): Tool.Context => ({
+  sessionID: Session.ID.make(session),
+  agent: "build" as Tool.Context["agent"],
+  messageID: "msg_report_rows" as Tool.Context["messageID"],
+  id: Tool.CallID.make("call_report_rows"),
+  progress: () => Effect.void,
+});

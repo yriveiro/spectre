@@ -9,7 +9,7 @@ import { pr } from "./definitions/pr";
 import { prose } from "./definitions/prose";
 import { routing } from "./definitions/routing";
 import { load } from "./definitions/routing/load";
-import { attachSearch, search } from "./definitions/search";
+import { attachSearch, report, search } from "./definitions/search";
 import { solidjs } from "./definitions/solidjs";
 import { stack } from "./definitions/stack";
 import { sessionReturn, worktrees } from "./definitions/worktrees";
@@ -32,6 +32,7 @@ export const update = (ctx: Plugin.Context) =>
     const loop = goal(ctx);
     const solid = solidjs(ctx.location.directory);
     const found = search(ctx);
+    const reported = report(ctx);
 
     // Not looped: `add` is generic, so a union of the two schemas instantiates to
     // neither and the call will not typecheck.
@@ -48,6 +49,7 @@ export const update = (ctx: Plugin.Context) =>
       editor.add(loop);
       editor.add(solid);
       editor.add(found);
+      editor.add(reported);
       editor.namespace({
         name: "spectre",
         description: "Code search is spectre_search; the rest are Spectre's own tools.",
@@ -55,9 +57,9 @@ export const update = (ctx: Plugin.Context) =>
     });
 
     yield* Effect.logInfo("Registered tools", {
-      tools: [listed, said, route, trees, prs, opening, why, pages, memory, loop, solid, found].map(
-        (tool) => `${tool.options?.namespace}_${tool.name}`,
-      ),
+      tools: [
+        listed, said, route, trees, prs, opening, why, pages, memory, loop, solid, found, reported,
+      ].map((tool) => `${tool.options?.namespace}_${tool.name}`),
     });
 
     yield* sessionReturn(ctx);

@@ -3,6 +3,7 @@ export interface Contract {
   readonly search: string;
   readonly ripgrep: string;
   readonly sentinel: string;
+  readonly report: string;
 }
 
 export const CONTRACT: Contract = {
@@ -20,6 +21,11 @@ any file the code index does not hold. It takes ripgrep's regular expression
 syntax or literal text matching. For a symbol, a definition, a call site, or
 "where is this implemented", call \`spectre_search\` first.`,
   sentinel: `[spectre_search] this ripgrep was a code search, so spectre_search answered it.`,
+  report: `List the sessions that skipped ripwire in this project: edits with no
+\`--quality-delta\` after the last one, code reads with no lookup, and \`subagent\`
+spawns with no \`--pack-task --partition\` fan-out. Each finding names the session
+id, the count and the missing verb. It reads the durable usage record, not the
+transcript, so it is one read.`,
 };
 
 /** The nudge the context part carries once the tree holds an unmeasured edit. */

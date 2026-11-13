@@ -77,10 +77,14 @@ const ReadInput = Schema.Struct({ path: Schema.String });
 
 const SubagentInput = Schema.Struct({ sessionID: Schema.optional(Schema.String) });
 
+/** The `subagent` tool's output: the child it created, however the call ended. */
+const SpawnedOutput = Schema.Struct({ sessionID: Schema.String });
+
 const decodeGrep = Schema.decodeUnknownOption(GrepInput);
 const decodeShell = Schema.decodeUnknownOption(ShellInput);
 const decodeRead = Schema.decodeUnknownOption(ReadInput);
 const decodeSubagent = Schema.decodeUnknownOption(SubagentInput);
+const decodeSpawned = Schema.decodeUnknownOption(SpawnedOutput);
 
 const isTextID = (tool: string): tool is "grep" | "ripgrep" => tool === "grep" || tool === "ripgrep";
 
@@ -128,11 +132,17 @@ export const mutateAsk = (input: unknown, tool: string): SurfaceAsk<"mutate"> | 
   return { surface: "mutate", tool, path: ask.path };
 };
 
-/** The `subagent` payload. A payload that names no child names no session. */
-export const subagentAsk = (input: unknown): SurfaceAsk<"subagent"> | undefined => {
+/**
+ * The `subagent` payload, read with the call's output. A follow-up names a child
+ * and is not a spawn; a spawn names its child only in the output.
+ */
+export const subagentAsk = (input: unknown, output: unknown): SurfaceAsk<"subagent"> | undefined => {
   const ask = Option.getOrUndefined(decodeSubagent(input));
-  if (ask?.sessionID === undefined) return undefined;
-  return { surface: "subagent", child: ask.sessionID };
+  if (ask === undefined) return undefined;
+  if (ask.sessionID !== undefined && ask.sessionID !== "") return undefined;
+  const spawned = Option.getOrUndefined(decodeSpawned(output));
+  if (spawned === undefined) return undefined;
+  return { surface: "subagent", child: spawned.sessionID };
 };
 
 /** The `prompt` event. Discovery reads no field of the prompt itself. */
