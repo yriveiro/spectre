@@ -1,6 +1,6 @@
 # Playbook
 
-Twenty-two procedures, one per shape of task. This file is the index and the
+Twenty-three procedures, one per shape of task. This file is the index and the
 selection rule. Each playbook is a folder beside it.
 
 `principle-*` tells you how to hold yourself while you work. These tell you what
@@ -46,6 +46,7 @@ to settle it cheaply before the real procedure starts.
 | `playbook-babysit` | driving a PR to merge-ready | a pull request is open and something is outstanding |
 | `playbook-shipping` | landing a verified stack | everything is green and the job is getting it in |
 | `playbook-opening-a-pr` | the last step of most playbooks | small ordered commits, ready, never draft |
+| `playbook-worktree-init` | opening a fresh worktree | a change needs its own directory and branch, and the session must move into it |
 | `playbook-session-pickup` | taking over interrupted work | you are resuming something that was not finished |
 | `playbook-pause-safely` | suspending work | you must stop now and the work has to resume cleanly |
 | `playbook-autonomous-run` | one task to a condition | it has a checkable exit and you want it driven to it |
@@ -53,7 +54,7 @@ to settle it cheaply before the real procedure starts.
 | `playbook-autopilot-full` | a queue of PRs to merged | each item has an owner and the queue drains |
 | `playbook-autopilot-stack` | one stack for a human to land | the stack is built and verified and a person merges it |
 
-`worktree-cleanup` is the twenty-third and it is not prefixed, and it is a maintenance task rather than a
+`worktree-cleanup` is the twenty-fourth and it is not prefixed, and it is a maintenance task rather than a
 shape of work. It is in the same table under its own name.
 
 ## Long programmes and the native wake

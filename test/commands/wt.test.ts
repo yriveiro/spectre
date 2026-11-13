@@ -29,6 +29,15 @@ const capture = async (typed: string) => {
 
 const body = join(import.meta.dir, "..", "..", "commands", "definitions", "wt", "prompt.md");
 const factory = join(import.meta.dir, "..", "..", "commands", "definition.ts");
+const worktreePlaybook = join(
+  import.meta.dir,
+  "..",
+  "..",
+  "skills",
+  "definitions",
+  "playbook-worktree-init",
+  "SKILL.md",
+);
 
 /**
  * The marker `promptCommand` writes in front of whatever the user typed.
@@ -86,6 +95,12 @@ describe("the /wt command", () => {
   test("a bare /wt adds nothing, so the prompt sees no name to invent", async () => {
     const { seen } = await capture("");
     expect(seen[0]?.text).toBe(await Bun.file(body).text());
+  });
+
+  test("the prompt delegates the status handling to the worktree playbook", async () => {
+    const text = await Bun.file(body).text();
+    expect(text).toContain("playbook-worktree-init");
+    expect(await Bun.file(worktreePlaybook).text()).toContain("## Phase A: Pick the name");
   });
 });
 
