@@ -229,6 +229,16 @@ node's ambient declarations. `Bun.Blob` and the `BunFile` type both stop
 resolving. Both entries are load-bearing: `bun` supplies the Bun globals, `node`
 supplies the ambient declarations and `node:*` compatibility that Bun implements.
 
+## Before changing plugin code
+
+Load the `opencode-platform` skill. It is the host contract at `v2.2.7`: the
+plugin shape and its scope, every `ctx` domain, every hook and its event, the
+tool, command, agent, skill and MCP editors, and the route families. It is
+`autoinvoke: false` on purpose. The body is 22 KB, so a session that does not
+touch host code pays nothing for it. Read it before a `ctx.*` call, a hook, or a
+tool definition, and read the fact at the tag when the skill and a doc page
+disagree.
+
 ## Every skill, tool and command definition is a folder
 
 One rule under `skills/definitions/`, `tools/definitions/` and `commands/definitions/`,
