@@ -21,9 +21,18 @@ export default Plugin.define({
 });
 ```
 
-`effect` is a peer dependency plus a dev pin. `@opencode/plugin` is a runtime dependency (`plugins/effect.mdx`, Publish). OpenCode redirects `effect`, every `effect/*` subpath, and `@opencode/plugin` to the host's runtime instances. The redirect covers imports from the plugin's own `node_modules` too, so fibers, loggers, and `Schema` parsers share one copy (`plugins/effect.mdx`, Publish). The doc page prints `effect@4.0.1`. The tag's catalog pins `4.1.0`, and that is the build the host ships (`package.json` at `v2.2.7` → `workspaces.catalog.effect`).
+`effect` is a peer dependency plus a dev pin. `@opencode/plugin` is a runtime dependency (`plugins/effect.mdx`, Publish). OpenCode redirects `effect`, every public `effect/*` subpath, and `@opencode/plugin` plus every public `@opencode/plugin/*` subpath to the host's runtime instances. The redirect covers imports from the plugin's own `node_modules` too, so fibers, loggers, and `Schema` parsers share one copy (`plugins/effect.mdx`, Publish). The doc page prints `effect@4.0.1`. The tag's catalog pins `4.1.0`, and that is the build the host ships (`package.json` at `v2.2.7` → `workspaces.catalog.effect`).
 
-Resolution has two paths. `.opencode/plugins/<name>/` loads automatically (`plugins/index.mdx`, Load). A configured local path must name a directory. OpenCode skips a configured `./plugin/local.ts` file with a warning (`plugins/migrate-v1.mdx`). A local directory with `package.json` `name` and `exports` resolves through them. Without them it uses file names at its root: `server` else `index`, then `tui`, then `rpc` (`plugins/index.mdx`, Load). The exports map at the tag is `.` and `./effect`. It also carries `./rpc`, `./host`, `./runtime`, `./tui`, the `./gui*` entrypoints, and a `./*` fallback to `src/*.ts` (`packages/plugin/package.json`).
+Resolution has two paths. `.opencode/plugins/<name>/` loads automatically (`plugins/index.mdx`, Load). A configured local path must name a directory. OpenCode skips a configured `./plugin/local.ts` file with a warning (`plugins/migrate-v1.mdx`). A local directory with `package.json` `name` and `exports` resolves through them. Without them it uses file names at its root: `server` else `index`, then `tui`, then `rpc` (`plugins/index.mdx`, Load). The exports map at the tag is `.`, `./effect`, `./host`, `./runtime`, `./tui`, and the `./gui` entrypoints. It carries no explicit `./rpc` entry, so that name resolves only through the `./*` fallback to `src/*.ts` (`packages/plugin/package.json`). A local directory without `name` and `exports` probes `server` else `index`, then `tui`, then `rpc`. It also probes `gui-experimental.cjs` or `.js` for the GUI part (`packages/plugin/src/host.ts`). A plugin's GUI part is `./gui-experimental` in its own package: one prebuilt CommonJS file (`plugins/gui/index.mdx`, Package). Local discovery is `.opencode/plugins/` (plural). A TUI-only package belongs in `cli.json`, and the desktop app loads GUI parts from the global config (`plugins/index.mdx`, Load).
+
+### The Promise API
+
+The root import is the Promise form. `Plugin.define({ id, setup })` takes a `setup(ctx)` that returns `void` or a cleanup.
+
+- `transform`, `hook`, `reload`, and `list` return Promises.
+- `transform` returns `Promise<Registration>`, and `dispose()` returns `Promise<void>` (`packages/plugin/src/promise/{plugin,registration}.ts`).
+- A tool's `execute` returns `Promise<Result>`. Its context adds `signal: AbortSignal` (`packages/plugin/src/promise/tool.ts`).
+- `ctx.event.subscribe` returns an `AsyncIterable`, not a `Stream` (`packages/plugin/src/promise/adapter.ts`). The Effect form is `@opencode/plugin/effect`.
 
 ## The context, by domain
 
@@ -40,13 +49,14 @@ One row per domain of the `Context` interface. An **editor** registers a synchro
 | `credential` | `activate` | write | `packages/plugin/src/effect/plugin.ts` |
 | `event` | `subscribe({ types })`, which returns a `Stream` | stream | `packages/plugin/src/effect/event.ts` |
 | `experimental` | `terminal.read`, `generate`, `artifact.transform` | mixed | `packages/plugin/src/effect/{plugin,artifact}.ts` |
-| `integration` | the API, `transform`, `reload`, and `connection.active`/`resolve`/`status` | editor | `packages/plugin/src/effect/integration.ts` |
+| `generate` (deprecated) | `text` only; use `experimental.generate` | read | `packages/plugin/src/effect/plugin.ts` |
+| `integration` | the API minus deprecated `wellknown`, `transform`, `reload`, and `connection.active`/`resolve`/`status` | editor | `packages/plugin/src/effect/integration.ts` |
 | `mcp` | `list`, `transform`, `reload` | editor | `packages/plugin/src/effect/mcp.ts` |
 | `model` | `list`, `default`, `transform`, `reload` | editor | `packages/plugin/src/effect/model.ts` |
 | `permission` | `list`, `get`, `reply`, `hook("evaluate")`, `assert` | editor | `packages/plugin/src/effect/permission.ts` |
 | `plugin` | `list` only | read | `packages/plugin/src/effect/plugin.ts` |
 | `provider` | `list`, `get`, `transform`, `reload` | editor | `packages/plugin/src/effect/provider.ts` |
-| `reference` | `list`, `get`, `transform`, `reload` | editor | `packages/plugin/src/effect/reference.ts` |
+| `reference` | `list`, `transform`, `reload` | editor | `packages/plugin/src/effect/reference.ts` |
 | `rpc` | `register(definition, handlers)`, then `ctx.rpc(Definition)` | write | `packages/plugin/src/effect/rpc.ts` |
 | `session` | the operations in "Sessions and prompts", plus `hook` | mixed | `packages/plugin/src/effect/session.ts` |
 | `shell` | `hook("create.before")`, and no client method at this tag | hook | `packages/plugin/src/effect/shell.ts` |
@@ -123,13 +133,13 @@ type ToolAfter = {
 
 ## Tools
 
-`ctx.tool.transform((editor) => { ... })` registers tools. The callback is synchronous. It returns nothing, not an `Effect` or a `Promise`, so load external data before you register or reload (`plugins/effect.mdx`, Tools). The editor offers `add`, `update`, `remove`, `namespace`, `list`, and `get` (`packages/plugin/src/effect/tool.ts`). `add` needs a complete definition: `name`, `input`, `description`, `execute`, and optionally `output` and `options`. `update` and `remove` take an effective name and ignore a missing one (`packages/schema/src/tool.ts`).
+`ctx.tool.transform((editor) => { ... })` registers tools. The callback is synchronous. It returns nothing, not an `Effect` or a `Promise`, so load external data before you register or reload (`plugins/effect.mdx`, Tools). The editor offers `add`, `update`, `remove`, `namespace`, `list`, and `get` (`packages/plugin/src/effect/tool.ts`). `add` needs `name`, `description`, and `execute`, plus `input` for a typed tool. Core defaults a missing `input` to `{}` for a JS plugin (`packages/core/src/tool.ts`). `update` and `remove` take an effective name and ignore a missing one (`packages/plugin/src/effect/tool.ts`, `packages/core/src/tool.ts`).
 
 `execute(input, context)` returns `Effect<Result<Output>, Tool.Error>`. `Result` is `{ output?, content?, metadata? }`, and the context is `{ sessionID, agent, messageID, id, progress }` (`packages/schema/src/tool.ts`). `input` and `output` are a `Tool.ValueSchema`: an Effect `Schema.Codec`, a Standard Schema, or a JSON Schema. The decoded value and the declared type then come from one place (`packages/schema/src/tool.ts`). A tool that declares `output` must return it. A tool that returns an undeclared `output` dies (`packages/core/src/tool/runtime.ts`).
 
 `options.codemode` defaults to true. Only `codemode: false` keeps a tool on the provider's native tool list. Every other tool is reachable solely through the `execute` tool (`packages/core/src/tool.ts`, `packages/schema/src/tool.ts`). When a permission disables the `execute` tool, OpenCode exposes the code-mode tools as direct tools instead. The default is therefore not a silent hiding (`packages/core/src/tool.ts`). `pinned: true` keeps a tool in a partial catalog. The type allows it only while `codemode` is not `false` (`packages/schema/src/tool.ts`, `packages/core/src/codemode/catalog.ts`).
 
-The effective name is `namespace.replaceAll(".", "_") + "_" + name.replace(/[^a-zA-Z0-9_-]/g, "_")`. `get`, `update`, and `remove` all take it, as in `acme_greeting` rather than `greeting` (`packages/core/src/tool/runtime.ts`). An update preserves the name and the namespace. OpenCode logs an invalid update and leaves the previous definition in place (`packages/plugin/src/effect/tool.ts`).
+The effective name is `namespace.replaceAll(".", "_") + "_" + name.replace(/[^a-zA-Z0-9_-]/g, "_")`. `get`, `update`, and `remove` all take it, as in `acme_greeting` rather than `greeting` (`packages/core/src/tool/runtime.ts`). An update preserves the name and the namespace. OpenCode logs an invalid update and leaves the previous definition in place (`packages/core/src/tool.ts`).
 
 Every model request captures a snapshot of the advertised definitions and their executors. `reload` and `dispose` affect later snapshots only. A captured executor still sees mutable state that it closes over. Capture a value inside the transform when it must stay tied to that definition (`plugins/effect.mdx`, Tools).
 
@@ -137,7 +147,7 @@ Freeform input is not a plugin surface at this tag. The `Tool.Info` declaration 
 
 ## Commands, agents, skills, MCP
 
-The command transform is add-only. Its executor receives `{ sessionID, prompt, delivery }` and returns `Effect<void, unknown>`. That is enough to forward the invocation into `ctx.session.prompt` (`packages/plugin/src/effect/command.ts`). `session.command({ sessionID, name, text })` runs a command callback immediately (`packages/protocol/src/groups/session.ts`).
+The command transform is add-only. Its executor receives `{ sessionID, prompt, delivery }` and returns `Effect<void, unknown>`. That is enough to forward the invocation into `ctx.session.prompt` (`packages/plugin/src/effect/command.ts`). `session.command({ sessionID, name, ...PromptInput.Prompt, delivery? })` runs a command callback immediately (`packages/protocol/src/groups/session.ts`).
 
 The agent transform edits a mutable draft. It can set the default with `editor.default(id)`, and `undefined` clears it (`packages/plugin/src/effect/agent.ts`). A skill transform adds a full `Skill.Info`: `{ id, name, description?, autoinvoke?, path, content }`. It updates a draft of the same shape, and `reload` replays the transforms (`packages/schema/src/skill.ts`, `packages/plugin/src/effect/skill.ts`).
 
@@ -156,7 +166,15 @@ The MCP editor uses `set` to add or replace a server, `update` to edit one, and 
 
 ## The API and SDK
 
-The HTTP surface is one group file per family under `packages/protocol/src/groups/`. Server is `/api/info` and `/api/pair`. Location, agent, plugin, session, model, provider, integration, and credential own a first path segment. So do project, permission, command, skill, rpc, event, pty, shell, worktree, vcs, and config. Filesystem lives at `/api/fs/*` plus `/api/experimental/fs/*`. Generation lives at `/api/experimental/generate/{text,image,decisions}`. MCP lives at `/api/mcp` plus `/api/experimental/mcp/*`, and `experimental` collects the rest (`packages/protocol/src/groups/`). The OpenAPI document is `packages/protocol/openapi.json`.
+The HTTP surface is one group file per family under `packages/protocol/src/groups/`. The reference is 170 operations over 139 paths and 497 schemas at `v2.2.7`.
+
+Server is `/api/info` and `/api/pair`, plus `GET /auth/connect/:code` for pairing. Location, agent, plugin, session, model, provider, integration, and credential own a first path segment. So do project, permission, command, skill, rpc, event, pty, shell, worktree, vcs, reference, form, and config.
+
+`message` nests under `/api/session/:sessionID/message`. `debug` owns `/api/debug/*`. Config owns `/api/config`, `/api/config/shell`, and `/api/experimental/config`.
+
+Filesystem lives at `/api/fs/*` plus `/api/experimental/fs/*`. Generation lives at `/api/experimental/generate` plus `/text`, `/image`, and `/decisions`. MCP lives at `/api/mcp`, `/api/mcp/resource`, `/api/experimental/mcp/:server/*`, and `/api/experimental/client-mcp/*`.
+
+Artifact, job, media, migration, persistent-pty, schedule, usage, and voice live under `/api/experimental/`. Project, config, fs, pty, shell (beyond the hook), voice, usage, debug, and migration are reachable only through the raw client. So are job, schedule, media, message, and form. No `ctx` domain covers them. The OpenAPI document is `packages/protocol/openapi.json`.
 
 A plugin uses `ctx`. That context is the Effect client for the connected server, plus the plugin-only transforms and hooks (`plugins/effect.mdx`, Context). A separate application uses `@opencode/client`. Its Promise client is `OpenCode.make({ baseUrl })` over the network (`client/index.mdx`). The Effect client is `@opencode/client/effect`, the same surface as Effects and Streams, and it needs an `HttpClient` (`client/effect.mdx`). An application that hosts OpenCode in process uses `@opencode/sdk`. The `OpenCode.create()` call assembles the server and routes calls through its router in memory. It opens no listener (`sdk/index.mdx`). The Layer form is `@opencode/sdk/effect` (`sdk/effect.mdx`). The client exports at the tag are `.`, `./promise`, `./promise/api`, `./effect`, and `./effect/api`. They also include `./effect/service`, `./solid`, `./service`, and `./mcp`. The SDK exports are `.`, `./effect`, `./workerd`, and `./workerd/effect` (`packages/client/package.json`, `packages/sdk/package.json`).
 
