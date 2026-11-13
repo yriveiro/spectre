@@ -87,6 +87,12 @@ describe("the /wt command", () => {
     const { seen } = await capture("");
     expect(seen[0]?.text).toBe(await Bun.file(body).text());
   });
+
+  test("the prompt delegates the status handling to the playbook", async () => {
+    const text = await Bun.file(body).text();
+    expect(text).toContain("playbook-opening-a-pr");
+    expect(text).toContain("Phase A");
+  });
 });
 
 describe("the call the /wt prompt tells the session to make", () => {
