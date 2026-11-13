@@ -86,6 +86,9 @@ const isTextID = (tool: string): tool is "grep" | "ripgrep" => tool === "grep" |
 
 const isMutateID = (tool: string): tool is "edit" | "write" => tool === "edit" || tool === "write";
 
+/** A skill body is a prompt asset, not a source file, whatever its extension. */
+const SKILL_SCHEME = "skill://";
+
 /** The `grep` or `ripgrep` payload, decoded at the edge. Unknown keys are dropped. */
 export const grepAsk = (input: unknown, tool: string): SurfaceAsk<"text"> | undefined => {
   if (!isTextID(tool)) return undefined;
@@ -112,7 +115,7 @@ export const readAsk = (input: unknown, root: string): SurfaceAsk<"read"> | unde
   return {
     surface: "read",
     path: ask.path,
-    code: codePath(ask.path),
+    code: !ask.path.startsWith(SKILL_SCHEME) && codePath(ask.path),
     insideRoot: scope(root, ask.path) !== undefined,
   };
 };

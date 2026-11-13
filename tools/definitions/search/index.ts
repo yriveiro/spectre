@@ -2,7 +2,7 @@ import type { Plugin } from "@opencode/plugin/effect";
 import { Tool } from "@opencode/schema/tool";
 import { Effect, Schema, type Scope } from "effect";
 import { attachCatalogue, attachDiscovery, attachGuard } from "./apply";
-import { CONTRACT } from "./contract";
+import { CONTRACT, INSTALL } from "./contract";
 import { argv, type Route } from "./policy";
 import { probe } from "./probe";
 import { run, scope } from "./run";
@@ -139,7 +139,7 @@ export const search = (ctx: Plugin.Context): Tool.Info<typeof SearchInput, typeo
           note:
             health.kind === "stale"
               ? `${health.binary} is version ${health.version}, older than 0.6.10. Run ripwire --doctor.`
-              : health.why,
+              : `${health.why}. Install it:\n${INSTALL}`,
         };
         return { output, content: output.answer };
       }

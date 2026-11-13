@@ -117,6 +117,15 @@ describe("judge", () => {
     });
   });
 
+  test("a regex that holds a space routes as a regex, not as prose", () => {
+    expect(
+      judge({ ask: { pattern: "CallID|namespace Session|ID =" }, seen: empty, health: ready }),
+    ).toEqual({
+      kind: "route",
+      route: { kind: "regex", pattern: "CallID|namespace Session|ID =" },
+    });
+  });
+
   test("a bare symbol routes as a literal", () => {
     expect(judge({ ask: { pattern: "resolveTool" }, seen: empty, health: ready })).toEqual({
       kind: "route",
@@ -309,12 +318,20 @@ describe("decide, the shell surface", () => {
     ).toEqual({ kind: "pass", why: "measured" });
   });
 
-  test("a landing with nothing measured passes as not-a-gate until the gate lands", () => {
-    expect(shell("git push", { mutation: 2 }).verdict).toEqual({ kind: "pass", why: "not-a-gate" });
-    expect(shell("git push", { mutation: 2, measured: { delta: 2 } }).verdict).toEqual({
+  test("a landing with nothing measured refuses once, then the second call passes", () => {
+    const first = shell("git push", { mutation: 2 });
+    expect(first.verdict.kind).toBe("refuse");
+    expect(first.next.spent.has("land")).toBe(true);
+    expect(first.next.mutation).toBe(2);
+    expect(shell("git push", { mutation: 2, spent: new Set(["land"]) }).verdict).toEqual({
       kind: "pass",
-      why: "not-a-gate",
+      why: "gate-spent",
     });
+  });
+
+  test("a delta older than the last mutation does not count as fresh", () => {
+    const first = shell("git push", { mutation: 3, measured: { delta: 2, affected: 3 } });
+    expect(first.verdict.kind).toBe("refuse");
   });
 });
 
@@ -342,9 +359,12 @@ describe("decide, the read surface", () => {
     expect(read({ touched: 1 }).next.reads).toBe(1);
   });
 
-  test("a first code read passes as not-a-gate until the gate lands", () => {
-    expect(read().verdict).toEqual({ kind: "pass", why: "not-a-gate" });
-    expect(read().next.reads).toBe(0);
+  test("a first code read refuses once, and the second call passes", () => {
+    const first = read();
+    expect(first.verdict.kind).toBe("refuse");
+    expect(first.next.spent.has("read")).toBe(true);
+    expect(first.next.reads).toBe(0);
+    expect(read({ spent: new Set(["read"]) }).verdict).toEqual({ kind: "pass", why: "gate-spent" });
   });
 });
 

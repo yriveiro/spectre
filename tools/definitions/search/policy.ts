@@ -1,5 +1,5 @@
 import { Skill } from "@opencode/plugin/effect";
-import { CONTRACT } from "./contract";
+import { CONTRACT, END_OF_WORK, landRefusal, readRefusal } from "./contract";
 
 export type TextAsk = {
   readonly pattern: string;
@@ -82,6 +82,19 @@ const hasCodeToken = (pattern: string): boolean =>
 const hasRegexMetacharacter = (pattern: string): boolean =>
   REGEX_METACHARACTERS.some((meta) => pattern.includes(meta));
 
+type PhraseRoute = Route | { readonly kind: "plain" };
+
+/**
+ * A pattern that holds a space is prose unless a code token or a regex
+ * metacharacter says otherwise. `undefined` means it does not hold a space.
+ */
+const phraseRoute = (pattern: string): PhraseRoute | undefined => {
+  if (!hasWhitespace(pattern)) return undefined;
+  if (hasCodeToken(pattern)) return { kind: "task", task: pattern };
+  if (hasRegexMetacharacter(pattern)) return { kind: "regex", pattern };
+  return { kind: "plain" };
+};
+
 export type JudgeInput = {
   readonly ask: TextAsk;
   readonly seen: ReadonlySet<string>;
@@ -111,11 +124,10 @@ export const judge = ({ ask, seen, health }: JudgeInput): JudgeVerdict => {
   if (seen.has(ask.pattern)) {
     return { kind: "allow", why: "already-asked" };
   }
-  if (hasWhitespace(ask.pattern)) {
-    if (hasCodeToken(ask.pattern)) {
-      return { kind: "route", route: { kind: "task", task: ask.pattern } };
-    }
-    return { kind: "allow", why: "plain-text" };
+  const phrase = phraseRoute(ask.pattern);
+  if (phrase !== undefined) {
+    if (phrase.kind === "plain") return { kind: "allow", why: "plain-text" };
+    return { kind: "route", route: phrase };
   }
   if (!hasRegexMetacharacter(ask.pattern)) {
     return { kind: "route", route: { kind: "literal", text: ask.pattern } };
@@ -124,7 +136,8 @@ export const judge = ({ ask, seen, health }: JudgeInput): JudgeVerdict => {
 };
 
 export type ShellAsk =
-  | { readonly kind: "search"; readonly pattern: string; readonly path?: string; readonly include?: string }
+  | { readonly kind: "search"; readonly pattern: string; readonly path?: string }
+  | { readonly kind: "unmappable" }
   | { readonly kind: "landing"; readonly command: string }
   | {
       readonly kind: "ripwire";
@@ -226,8 +239,176 @@ const startsWith = (words: ReadonlyArray<string>, prefix: ReadonlyArray<string>)
   prefix.every((word, index) => words[index] === word);
 
 /**
- * Read a shell command into the shapes the rule can act on: a ripwire lookup, a
- * landing command, or nothing this reader recognises.
+ * The flags a bare search may carry. Every one is value-less, so the next token
+ * is a pattern or a path. Any other flag is `unmappable`: a flag this reader
+ * does not know could consume the next token and move the pattern.
+ */
+const RG_FLAGS: ReadonlySet<string> = new Set([
+  "-n",
+  "-i",
+  "-S",
+  "-w",
+  "-l",
+  "-L",
+  "-c",
+  "-v",
+  "-s",
+  "-h",
+  "-H",
+  "-o",
+  "-q",
+  "-F",
+  "--line-number",
+  "--no-line-number",
+  "--column",
+  "--no-column",
+  "--ignore-case",
+  "--case-sensitive",
+  "--smart-case",
+  "--word-regexp",
+  "--files-with-matches",
+  "--files-without-match",
+  "--count",
+  "--count-matches",
+  "--invert-match",
+  "--hidden",
+  "--no-ignore",
+  "--no-messages",
+  "--no-heading",
+  "--fixed-strings",
+  "--literal",
+]);
+
+const GIT_GREP_FLAGS: ReadonlySet<string> = new Set([
+  "-n",
+  "-i",
+  "-I",
+  "-l",
+  "-L",
+  "-w",
+  "-c",
+  "-v",
+  "-h",
+  "-H",
+  "-F",
+  "--line-number",
+  "--ignore-case",
+  "--word-regexp",
+  "--files-with-matches",
+  "--files-without-match",
+  "--count",
+  "--invert-match",
+  "--cached",
+  "--untracked",
+]);
+
+type Lexed =
+  | { readonly tokens: ReadonlyArray<string>; readonly composed: boolean }
+  | { readonly broken: true };
+
+/**
+ * Split a command the way a shell would for the shapes this reader accepts.
+ * Quotes hold a space and hide a metacharacter, a backslash escapes the next
+ * character, and an unquoted `|`, `&`, `;`, `<`, `>`, `$(`, backtick or newline
+ * marks the command as composed. An unbalanced quote is `broken`.
+ */
+const lex = (command: string): Lexed => {
+  const tokens: Array<string> = [];
+  let current = "";
+  let started = false;
+  let quote: '"' | "'" | undefined;
+  let composed = false;
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index] ?? "";
+    if (quote !== undefined) {
+      if (char === quote) {
+        quote = undefined;
+        continue;
+      }
+      if (char === "\\" && quote === '"' && index + 1 < command.length) {
+        current += command[index + 1] ?? "";
+        index += 1;
+        started = true;
+        continue;
+      }
+      current += char;
+      started = true;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      started = true;
+      continue;
+    }
+    if (char === "\\" && index + 1 < command.length) {
+      current += command[index + 1] ?? "";
+      index += 1;
+      started = true;
+      continue;
+    }
+    if (char === "|" || char === "&" || char === ";" || char === "<" || char === ">" || char === "`" || char === "\n") {
+      composed = true;
+      continue;
+    }
+    if (char === "$" && command[index + 1] === "(") {
+      composed = true;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (started) {
+        tokens.push(current);
+        current = "";
+        started = false;
+      }
+      continue;
+    }
+    current += char;
+    started = true;
+  }
+  if (quote !== undefined) return { broken: true };
+  if (started) tokens.push(current);
+  return { tokens, composed };
+};
+
+const isGitGrep = (command: string): boolean => /^\s*git\s+grep(?:\s|$)/.test(command);
+
+/**
+ * Read one bare `rg` or `git grep` into a pattern and at most one path. A
+ * composed command, a flag this reader does not know, `-e`, `-f`, or a second
+ * path is `unmappable`: the native command runs and answers in the same call.
+ */
+const parseSearch = (command: string, kind: "rg" | "git"): ShellAsk => {
+  const lexed = lex(command);
+  if ("broken" in lexed || lexed.composed) return { kind: "unmappable" };
+  const flags = kind === "rg" ? RG_FLAGS : GIT_GREP_FLAGS;
+  const words = lexed.tokens.slice(kind === "rg" ? 1 : 2);
+  const positional: Array<string> = [];
+  let pathsOnly = false;
+  for (const word of words) {
+    if (pathsOnly) {
+      positional.push(word);
+      continue;
+    }
+    if (word === "--") {
+      pathsOnly = true;
+      continue;
+    }
+    if (word.startsWith("-")) {
+      if (!flags.has(word)) return { kind: "unmappable" };
+      continue;
+    }
+    positional.push(word);
+  }
+  const [pattern, ...paths] = positional;
+  if (pattern === undefined || pattern === "") return { kind: "unmappable" };
+  if (paths.length > 1) return { kind: "unmappable" };
+  const path = paths[0];
+  return path === undefined ? { kind: "search", pattern } : { kind: "search", pattern, path };
+};
+
+/**
+ * Read a shell command into the shapes the rule can act on: a bare search, a
+ * ripwire lookup, a landing command, or nothing this reader recognises.
  */
 export const shellParse = (command: string): ShellAsk => {
   const words = command.trim().split(/\s+/).filter((word) => word !== "");
@@ -243,8 +424,14 @@ export const shellParse = (command: string): ShellAsk => {
     };
   }
   if (LANDING.some((prefix) => startsWith(words, prefix))) return { kind: "landing", command };
+  if (name === "rg") return parseSearch(command, "rg");
+  if (name === "git" && isGitGrep(command)) return parseSearch(command, "git");
   return { kind: "other" };
 };
+
+/** A pattern's route. The shell reader and the text reader agree on what a metacharacter means. */
+export const patternRoute = (pattern: string): Route =>
+  hasRegexMetacharacter(pattern) ? { kind: "regex", pattern } : { kind: "literal", text: pattern };
 
 const passed = (why: Why, memory: Memory): Decision => ({
   verdict: { kind: "pass", why },
@@ -285,8 +472,20 @@ const onPrompt = (memory: Memory, env: Env): Decision => {
   return passed("no-skill", next);
 };
 
+const measuredFresh = (memory: Memory): boolean => {
+  const { delta, affected } = memory.measured;
+  return delta !== undefined && affected !== undefined && delta >= memory.mutation && affected >= memory.mutation;
+};
+
+/** The context part: the rule alone, with the end-of-work nudge while an edit is unmeasured. */
+const contextProse = (memory: Memory, health: Health): Extract<Verdict, { readonly kind: "prose" }> => {
+  const rule = contextRule(health);
+  if (memory.mutation === 0 || measuredFresh(memory)) return { kind: "prose", key: "rule", text: rule };
+  return { kind: "prose", key: "end-of-work", text: `${END_OF_WORK}\n\n${rule}` };
+};
+
 const onContext = (tools: ReadonlyArray<string>, memory: Memory, health: Health): Decision => ({
-  verdict: { kind: "prose", key: "rule", text: contextRule(health) },
+  verdict: contextProse(memory, health),
   next: { ...memory, search: tools.includes("spectre_search") },
 });
 
@@ -302,12 +501,36 @@ const onText = (ask: TextAsk, memory: Memory, health: Health): Decision => {
   };
 };
 
+const onShellSearch = (parsed: Extract<ShellAsk, { readonly kind: "search" }>, memory: Memory): Decision => {
+  const route = patternRoute(parsed.pattern);
+  const input: Record<string, unknown> = {
+    pattern: parsed.pattern,
+    ...(parsed.path === undefined ? {} : { path: parsed.path }),
+    ...(route.kind === "regex" ? { kind: "regex" } : {}),
+  };
+  return { verdict: { kind: "reroute", origin: "shell", input }, next: memory };
+};
+
+const onLanding = (memory: Memory): Decision => {
+  if (memory.mutation === 0) return passed("nothing-edited", memory);
+  if (memory.spent.has("land")) return passed("gate-spent", memory);
+  if (measuredFresh(memory)) return passed("measured", memory);
+  const spent = new Set(memory.spent);
+  spent.add("land");
+  return {
+    verdict: { kind: "refuse", gate: "land", message: landRefusal([...memory.edited]) },
+    next: { ...memory, spent },
+  };
+};
+
 const onShell = (parsed: ShellAsk, memory: Memory): Decision => {
   switch (parsed.kind) {
     case "other":
       return passed("not-a-search", memory);
-    case "search":
+    case "unmappable":
       return passed("unmappable", memory);
+    case "search":
+      return onShellSearch(parsed, memory);
     case "ripwire": {
       if (!parsed.lookup) return passed("not-a-search", memory);
       const measured = {
@@ -320,15 +543,8 @@ const onShell = (parsed: ShellAsk, memory: Memory): Decision => {
         next: { ...memory, touched: memory.touched + 1, measured },
       };
     }
-    case "landing": {
-      if (memory.mutation === 0) return passed("nothing-edited", memory);
-      if (memory.spent.has("land")) return passed("gate-spent", memory);
-      const { delta, affected } = memory.measured;
-      const fresh =
-        delta !== undefined && affected !== undefined && delta >= memory.mutation && affected >= memory.mutation;
-      if (fresh) return passed("measured", memory);
-      return passed("not-a-gate", memory);
-    }
+    case "landing":
+      return onLanding(memory);
   }
 };
 
@@ -340,7 +556,12 @@ const onRead = (ask: SurfaceAsk<"read">, memory: Memory): Decision => {
   if (memory.reads > 0) return passed("already-read", counted);
   if (memory.edited.has(ask.path)) return passed("already-edit", counted);
   if (memory.spent.has("read")) return passed("gate-spent", counted);
-  return passed("not-a-gate", memory);
+  const spent = new Set(memory.spent);
+  spent.add("read");
+  return {
+    verdict: { kind: "refuse", gate: "read", message: readRefusal(ask.path) },
+    next: { ...memory, spent },
+  };
 };
 
 const onMutate = (ask: SurfaceAsk<"mutate">, memory: Memory): Decision => {
@@ -360,8 +581,8 @@ const onSubagent = (memory: Memory): Decision => ({
 /**
  * The rule, first match wins. Absent or stale ripwire passes every gate as
  * `no-instrument`; discovery and the prose rule do not depend on the instrument,
- * so they run first. The read refusal and the landing refusal are not written
- * yet: until they are, the row below each passes as `not-a-gate`.
+ * so they run first. The read refusal and the landing refusal each spend once,
+ * and the second call is native.
  */
 export const decide = (ask: Ask, memory: Memory, env: Env): Decision => {
   if (ask.surface === "prompt") return onPrompt(memory, env);

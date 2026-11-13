@@ -3,11 +3,11 @@ import type { Plugin } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Tool } from "@opencode/schema/tool";
 import { Effect, Exit } from "effect";
-import { attachCatalogue, attachGuard } from "../../tools/definitions/search/apply";
 import { attachSearch } from "../../tools/definitions/search/index";
 import { contextRule, judge, rerouteInput, type Health } from "../../tools/definitions/search/policy";
 import { probe } from "../../tools/definitions/search/probe";
 import { memories, rerouted } from "../../tools/definitions/search/state";
+import { captureContext, captureGuard, guardEvent } from "./host";
 
 const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
 
@@ -51,44 +51,16 @@ describe("rerouteInput carries the verdict's route into the renamed call", () =>
 
 const RIPWIRE = Bun.which("ripwire");
 
-const event = (pattern: string, id: string = "call_guard_test"): unknown => ({
-  tool: "ripgrep",
-  sessionID: Session.ID.make("ses_guard_test_c"),
-  agent: "build",
-  messageID: "msg_guard_test",
-  id: Tool.CallID.make(id),
-  input: { pattern },
-});
-
-const capture = async (
-  assert: () => Effect.Effect<void, Tool.Error>,
-): Promise<(event: unknown) => Effect.Effect<void, Tool.Error>> => {
-  let callback: ((event: unknown) => Effect.Effect<void, Tool.Error>) | undefined;
-  const ctx = {
-    location: { directory: "/tmp" },
-    tool: {
-      hook: (_name: string, cb: (event: unknown) => Effect.Effect<void, Tool.Error>) => {
-        callback = cb;
-        return Effect.succeed({ dispose: Effect.void });
-      },
-    },
-    permission: { assert },
-  } as unknown as Plugin.Context;
-  await Effect.runPromise(Effect.scoped(attachGuard(ctx)));
-  if (callback === undefined) throw new Error("guard did not register");
-  return callback;
-};
-
 describe("the guard's permission path", () => {
   test.skipIf(!RIPWIRE)("a plain permission decline is not swallowed", async () => {
-    const callback = await capture(() => Effect.die(new Error("declined")));
-    const exit = await Effect.runPromiseExit(callback(event("resolveTool")));
+    const { callback } = await captureGuard(() => Effect.die(new Error("declined")));
+    const exit = await Effect.runPromiseExit(callback(guardEvent("resolveTool")));
     expect(Exit.isFailure(exit)).toBe(true);
   });
 
   test.skipIf(!RIPWIRE)("a successful assert renames the tool and carries the route", async () => {
-    const callback = await capture(() => Effect.void);
-    const asked = event("resolveTool") as { tool: string; input: Record<string, unknown> };
+    const { callback } = await captureGuard();
+    const asked = guardEvent("resolveTool") as { tool: string; input: Record<string, unknown> };
     await Effect.runPromise(callback(asked));
     expect(asked.tool).toBe("spectre_search");
     expect(asked.input["pattern"]).toBe("resolveTool");
@@ -97,10 +69,10 @@ describe("the guard's permission path", () => {
   });
 
   test.skipIf(!RIPWIRE)("a pattern the session already asked stays native", async () => {
-    const callback = await capture(() => Effect.void);
-    const first = event("resolveTool", "call_guard_test_first");
+    const { callback } = await captureGuard();
+    const first = guardEvent("resolveTool", "call_guard_test_first");
     await Effect.runPromise(callback(first));
-    const second = event("resolveTool", "call_guard_test_second");
+    const second = guardEvent("resolveTool", "call_guard_test_second");
     await Effect.runPromise(callback(second));
     expect((second as { tool: string }).tool).toBe("ripgrep");
     rerouted.delete(Tool.CallID.make("call_guard_test_first"));
@@ -108,28 +80,13 @@ describe("the guard's permission path", () => {
   });
 
   test.skipIf(!RIPWIRE)("a too-broad pattern stays native", async () => {
-    const callback = await capture(() => Effect.void);
-    const asked = event("ab", "call_guard_test_broad") as { tool: string };
+    const { callback } = await captureGuard();
+    const asked = guardEvent("ab", "call_guard_test_broad") as { tool: string };
     await Effect.runPromise(callback(asked));
     expect(asked.tool).toBe("ripgrep");
     memories.delete(Session.ID.make("ses_guard_test_c"));
   });
 });
-
-const captureContext = async (): Promise<(event: unknown) => Effect.Effect<void, never>> => {
-  let callback: ((event: unknown) => Effect.Effect<void, never>) | undefined;
-  const ctx = {
-    session: {
-      hook: (_name: string, cb: (event: unknown) => Effect.Effect<void, never>) => {
-        callback = cb;
-        return Effect.succeed({ dispose: Effect.void });
-      },
-    },
-  } as unknown as Plugin.Context;
-  await Effect.runPromise(Effect.scoped(attachCatalogue(ctx)));
-  if (callback === undefined) throw new Error("catalogue did not register");
-  return callback;
-};
 
 describe("the catalogue's defect path", () => {
   test("a defect is logged, never thrown, so the step continues", async () => {
