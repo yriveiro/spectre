@@ -5,7 +5,7 @@ import { Effect, Exit } from "effect";
 import { decide, type Health, type Memory } from "../../tools/definitions/search/policy";
 import { grepAsk } from "../../tools/definitions/search/signals";
 import { memories, rerouted } from "../../tools/definitions/search/state";
-import { captureGuard, cleanupDirs, makeBin, READY_BIN, tempDir, toolEvent, withBinary } from "./host";
+import { captureGuard, cleanupDirs, forget, makeBin, READY_BIN, tempDir, toolEvent, withBinary } from "./host";
 
 /**
  * The text rows and the guard's applier, against a stub binary. The guard runs
@@ -34,12 +34,6 @@ const held = (overrides?: Partial<Memory>): Memory => ({
 afterEach(cleanupDirs);
 
 const session = (name: string): Session.ID => Session.ID.make(name);
-
-const clean = (...names: Array<string>): void => {
-  for (const name of names) {
-    memories.delete(session(name));
-  }
-};
 
 describe("both search ids are read", () => {
   test("grep and ripgrep decode to the same text ask", () => {
@@ -74,7 +68,7 @@ describe("the guard's text rows", () => {
       expect(memories.get(session("ses_guard_grep"))?.asked.get("resolveTool")).toEqual({ kind: "pending" });
       expect(asserts.map((one) => one.action)).toEqual(["grep", "read"]);
       rerouted.delete(Tool.CallID.make("call_guard_grep"));
-      clean("ses_guard_grep");
+      forget("ses_guard_grep");
     });
   });
 
@@ -88,7 +82,7 @@ describe("the guard's text rows", () => {
       await Effect.runPromise(callback(asked));
       expect(asked.tool).toBe("spectre_search");
       rerouted.delete(Tool.CallID.make("call_guard_rg"));
-      clean("ses_guard_rg");
+      forget("ses_guard_rg");
     });
   });
 
@@ -105,7 +99,7 @@ describe("the guard's text rows", () => {
       await Effect.runPromise(callback(asked));
       expect(asked.tool).toBe("grep");
       expect(memories.get(session("ses_guard_plain"))?.asked.size).toBe(0);
-      clean("ses_guard_plain");
+      forget("ses_guard_plain");
     });
   });
 
@@ -121,7 +115,7 @@ describe("the guard's text rows", () => {
       await Effect.runPromise(callback(second));
       expect(second.tool).toBe("grep");
       rerouted.delete(Tool.CallID.make("call_guard_first"));
-      clean("ses_guard_twice");
+      forget("ses_guard_twice");
     });
   });
 
@@ -132,7 +126,7 @@ describe("the guard's text rows", () => {
       const asked = toolEvent("grep", { pattern: "ab" }, "ses_guard_broad", "call_guard_broad") as { tool: string };
       await Effect.runPromise(callback(asked));
       expect(asked.tool).toBe("grep");
-      clean("ses_guard_broad");
+      forget("ses_guard_broad");
     });
   });
 
@@ -145,7 +139,7 @@ describe("the guard's text rows", () => {
       };
       await Effect.runPromise(callback(asked));
       expect(asked.tool).toBe("grep");
-      clean("ses_guard_absent");
+      forget("ses_guard_absent");
     });
   });
 
@@ -160,7 +154,7 @@ echo "ripwire 0.1.0 (Release, built_from=test)"
       };
       await Effect.runPromise(callback(asked));
       expect(asked.tool).toBe("grep");
-      clean("ses_guard_stale");
+      forget("ses_guard_stale");
     });
   });
 
@@ -190,7 +184,7 @@ describe("the guard remembers every allow", () => {
       const after = memories.get(session(name));
       expect(after?.touched).toBe(1);
       expect(after?.measured.delta).toBe(4);
-      clean(name);
+      forget(name);
     });
   });
 });
@@ -214,7 +208,7 @@ describe("the guard's shell reroute", () => {
         { action: "read", resources: ["src"] },
       ]);
       rerouted.delete(Tool.CallID.make("call_guard_shell"));
-      clean("ses_guard_shell");
+      forget("ses_guard_shell");
     });
   });
 
@@ -235,7 +229,7 @@ describe("the guard's shell reroute", () => {
         await Effect.runPromise(callback(asked));
         expect(asked.tool).toBe("shell");
       }
-      clean("ses_guard_native");
+      forget("ses_guard_native");
     });
   });
 
@@ -252,7 +246,7 @@ describe("the guard's shell reroute", () => {
       await Effect.runPromise(callback(asked));
       expect(asked.tool).toBe("spectre_search");
       rerouted.delete(Tool.CallID.make("call_guard_grep_shell"));
-      clean("ses_guard_grep");
+      forget("ses_guard_grep");
     });
   });
 
@@ -265,7 +259,7 @@ describe("the guard's shell reroute", () => {
       };
       await Effect.runPromise(callback(asked));
       expect(asked.tool).toBe("shell");
-      clean("ses_guard_other");
+      forget("ses_guard_other");
     });
   });
 });
@@ -279,7 +273,7 @@ describe("the guard's failure channel", () => {
       const exit = await Effect.runPromiseExit(callback(asked));
       expect(Exit.isFailure(exit)).toBe(true);
       expect(memories.get(session("ses_guard_decline"))?.asked.size ?? 0).toBe(0);
-      clean("ses_guard_decline");
+      forget("ses_guard_decline");
     });
   });
 });
@@ -304,7 +298,7 @@ describe("the applier depends on the reader", () => {
       expect(memories.get(session("ses_guard_reader_off"))).toBeUndefined();
 
       rerouted.delete(Tool.CallID.make("call_guard_on"));
-      clean("ses_guard_reader_on");
+      forget("ses_guard_reader_on");
     });
   });
 
@@ -323,7 +317,7 @@ describe("the applier depends on the reader", () => {
       );
       expect(memories.get(session("ses_guard_edit_off"))).toBeUndefined();
 
-      clean("ses_guard_edit_on");
+      forget("ses_guard_edit_on");
     });
   });
 });

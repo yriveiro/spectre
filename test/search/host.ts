@@ -2,9 +2,10 @@ import type { Plugin } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Tool } from "@opencode/schema/tool";
 import { Effect, type Schema } from "effect";
-import { attachCatalogue, attachGuard } from "../../tools/definitions/search/apply";
+import { attachCatalogue, attachDiscovery, attachGuard } from "../../tools/definitions/search/apply";
 import { attachMeasure } from "../../tools/definitions/search/measure";
 import type { Ask } from "../../tools/definitions/search/policy";
+import { memories } from "../../tools/definitions/search/state";
 
 /**
  * The shared host fixture for the guard tests: a stub ripwire binary, a
@@ -89,7 +90,21 @@ export const captureGuard = async (
   return { callback, asserts };
 };
 
-export const toolEvent = (tool: string, input: unknown, session: string, id: string): unknown => ({
+export interface ToolEvent {
+  tool: string;
+  readonly sessionID: Session.ID;
+  readonly agent: string;
+  readonly messageID: string;
+  readonly id: Tool.CallID;
+  input: Record<string, unknown>;
+}
+
+export const toolEvent = (
+  tool: string,
+  input: Record<string, unknown>,
+  session: string,
+  id: string,
+): ToolEvent => ({
   tool,
   sessionID: Session.ID.make(session),
   agent: "build",
@@ -101,6 +116,53 @@ export const toolEvent = (tool: string, input: unknown, session: string, id: str
 /** The `apply.test.ts` text event: the default session, so a cleanup can name it. */
 export const guardEvent = (pattern: string, id: string = "call_guard_test"): unknown =>
   toolEvent("ripgrep", { pattern }, "ses_guard_test_c", id);
+
+export interface PromptEvent {
+  readonly sessionID: Session.ID;
+  prompt: { text: string; skills?: Array<{ readonly id: string }> };
+}
+
+export const promptEvent = (session: string): PromptEvent => ({
+  sessionID: Session.ID.make(session),
+  prompt: { text: "carry on" },
+});
+
+export interface PromptListing {
+  readonly skills?: ReadonlyArray<string>;
+  readonly parentID?: string;
+  readonly broken?: boolean;
+}
+
+/** The `session.prompt` hook, captured with the skill listing and the parent it reports. */
+export const capturePrompt = async (
+  listing: PromptListing = {},
+): Promise<(event: unknown) => Effect.Effect<void, never>> => {
+  let callback: ((event: unknown) => Effect.Effect<void, never>) | undefined;
+  const data = (listing.skills ?? []).map((id) => ({ id }));
+  const ctx = {
+    skill: {
+      list: () =>
+        listing.broken === true
+          ? Effect.die(new Error("the skill registry did not answer"))
+          : Effect.succeed({ location: {}, data }),
+    },
+    session: {
+      hook: (_name: string, cb: (event: unknown) => Effect.Effect<void, never>) => {
+        callback = cb;
+        return Effect.succeed({ dispose: Effect.void });
+      },
+      get: () => Effect.succeed(listing.parentID === undefined ? {} : { parentID: listing.parentID }),
+    },
+  } as unknown as Plugin.Context;
+  await Effect.runPromise(Effect.scoped(attachDiscovery(ctx)));
+  if (callback === undefined) throw new Error("discovery did not register");
+  return callback;
+};
+
+/** Drop the in-process memories a test seeded, so a later case starts clean. */
+export const forget = (...names: Array<string>): void => {
+  for (const name of names) memories.delete(Session.ID.make(name));
+};
 
 /** The `session.context` hook, captured for a test that seeds a session's memory. */
 export const captureContext = async (): Promise<((event: unknown) => Effect.Effect<void, never>)> => {
