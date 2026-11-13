@@ -3,8 +3,8 @@
 A run drives one task to a checkable exit. Under `/drive`, the built-in goal
 loop re-enters this session when it would go idle, so the run iterates until its
 predicate is met. Without a goal the run is one unit and stops. Either way,
-everything a later round or a later session needs is written where it will find
-it: the branch holds the work, the commit body holds why the round advanced, and
+everything a later round or a later session needs lands where it will find it:
+the branch holds the work, the commit body holds why the round advanced, and
 `.spectre/run.md` holds the objective and the ledger.
 
 ## Goal mode
@@ -18,7 +18,7 @@ and the ledger path. When a goal is active:
 - The reviewer trusts only evidence in the conversation. Run the check and quote
   its output before you end the turn.
 - On `continue`, read the reviewer's `reason` and `next_step` and take the next
-  unit. Do not repeat work the ledger says is done.
+  unit. Do not repeat work the ledger records as complete.
 - On `blocked`, write the exact ask in `.spectre/run.md` and stop.
 - The round number is the `rounds` field from
   `tools.spectre.goal({ action: "status" })`. The kickoff is round 0; the first
@@ -61,9 +61,9 @@ after. Read it at the top of every run, before anything else.
 
 Write the predicate before the first unit, not after the third failure. It has to be
 something that can come out false, and it has to name the check that evaluates it:
-`bun test` returns zero failures, the reproduction script no longer reproduces, these
-seven pull requests are merged, the pixel diff is zero at `images/after/`. "The code is
-better" is not a predicate.
+`bun test` returns zero failures, the reproduction script no longer reproduces, `gh pr list`
+reports these seven pull requests as merged, the pixel diff is zero at `images/after/`. "The
+code is better" is not a predicate.
 
 Put the predicate and the exact command in `.spectre/run.md` in a form a run that has
 never seen this conversation can act on: no pronouns, no "as discussed", no "the above".
@@ -101,6 +101,10 @@ Run the check named in Phase A, on the real artifact. Not a self-report, not a p
 hook that passed, not a worker's summary. When something passes suspiciously easily,
 suspect the measurement before the system.
 
+A round that changed a code file owes the two ripwire measurements too. Run
+`ripwire . --quality-delta` and `ripwire . --affected=PATH` on the tree after the
+last code edit, and quote both outputs. A round that changed no file skips both.
+
 If the check needs an event to complete — CI finishing, a pull request merging, somebody
 pushing a review — do not sleep and do not poll in a loop. Under a goal, start the wait
 with the native shell tool:
@@ -132,7 +136,8 @@ One watcher does exist, and it returns once rather than following: call `tools.s
 ## Phase E: Write the row down
 
 Append one row per round to `.spectre/run.md`: the round number, what changed, the check
-output in one line, whether the predicate moved, and the head SHA. That is the ledger
+output in one line, whether the predicate moved, and the head SHA. A round that changed a
+code file also carries both measurement outputs in its row. That is the ledger
 `show-me-your-work` asks for, and a run that cannot be audited by a person who was not
 here has not kept a trail.
 
@@ -168,4 +173,4 @@ follow this playbook's one-unit path. Do not run `git worktree add`.
 `.spectre/run.md`, holding the goal id when there is one, the exit condition, one row per
 round, and the next check. One commit per unit that advanced, each with a body carrying
 the hypothesis and the measured result. A closing message with the exit condition, the
-iterations run, what landed, what was discarded, and the predicate's state now.
+iterations run, what landed, what you discarded, and the predicate's state now.

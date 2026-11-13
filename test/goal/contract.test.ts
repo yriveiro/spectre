@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   compose,
   type Feature,
+  FORBIDDEN,
   MAX_OBJECTIVE,
   parseContract,
   type RawContract,
@@ -70,6 +71,36 @@ describe("the goal contract", () => {
     expect(result.value).toContain("playbook-autonomous-run");
     expect(result.value).toContain("tools.spectre.routing");
     expect(result.value).toContain("does not count");
+  });
+
+  test("the evidence line names both measurements, and a round with no file change owes neither", () => {
+    const result = compose(parsed(), place);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value).toContain("Evidence also required:");
+    expect(result.value).toContain("ripwire . --quality-delta");
+    expect(result.value).toContain("ripwire . --affected=PATH");
+    expect(result.value).toContain("A round that changed no file skips both.");
+  });
+
+  test("a caller's evidence keeps its place, and the measurements follow it", () => {
+    const result = compose(parsed({ evidence: "Post the CI run on the branch." }), place);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value).toContain(
+      "Evidence also required: Post the CI run on the branch. Run `ripwire . --quality-delta`",
+    );
+  });
+
+  test("the composed objective stays under the host's cap", () => {
+    const result = compose(parsed(), place);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.length).toBeLessThan(MAX_OBJECTIVE);
+    for (const char of FORBIDDEN) expect(result.value).not.toContain(char);
   });
 
   test("a babysit contract names the babysit playbook", () => {

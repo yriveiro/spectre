@@ -2,7 +2,7 @@
 
 Notes for things we design now and build later. Each file is a requirements
 document: what the feature must do, the platform facts it relies on with a source
-for each, and what is still open. It is not a log of how the design was reached.
+for each, and what is still open. It is not a log of how we reached the design.
 
 | File | Status | In one line |
 | ---- | ------ | ----------- |
@@ -13,11 +13,12 @@ for each, and what is still open. It is not a log of how the design was reached.
 | [session-return.md](./session-return.md) | built, unverified live | A session whose worktree was collected moves itself back to main and is told what happened to its work. No fetch: the user updates main. |
 | [canvas.md](./canvas.md) | built | An OpenCode artifact built from Markdown, Mermaid, or a parsed diff: publish and update, no store, no launcher. A PR canvas is that artifact built from a real diff, so a reviewer can reach the hunk a claim is about. |
 | [code-hardness.md](./code-hardness.md) | evidence, not built | What the literature says about hard code, what this repository already measures, and the four changes the evidence asks for. |
-| [ripwire-search.md](./ripwire-search.md) | slices 1-2 built, eval arms not built | A direct `spectre_search` tool and a request-time contract make ripwire the code-search default. `grep` keeps plain text and unindexed files, renamed to `ripgrep` in the request. |
+| [ripwire-search.md](./ripwire-search.md) | slices 1-2 built, superseded by [ripwire-first.md](./ripwire-first.md) | The record of `spectre_search`, the one contract over four surfaces, the text judge and the `grep` to `ripgrep` rename. |
+| [ripwire-first.md](./ripwire-first.md) | E1-E14 built | Ripwire is the first instrument of a session: the map on the first prompt, a reroute for a code search, one refusal at the first code read and at the landing, and a usage record. The landing owes `--quality-delta` and `--affected`. |
 
 The skill `skills/definitions/arena/` shares this file's name and is not the same
-thing. The collision, and which one gives way, is recorded once in
-[FOR_AGENTS.md](../skills/FOR_AGENTS.md), rule 3.
+thing. [FOR_AGENTS.md](../skills/FOR_AGENTS.md), rule 3, records the collision and
+which one gives way.
 
 ## How the two files fit together
 
@@ -44,7 +45,8 @@ what it may do.** Profiles carry no permissions, because permissions are an agen
 body property and a profile is not a body. A profile that needs a different write
 scope names a different `agent`. That is the escape hatch, not a config key.
 
-Three parts of spectre read the same config. Nothing is written twice. The arena is
+Three parts of spectre read the same config, and the config holds one copy of
+each value. The arena is
 just the third reader of a list we already have, which is why we can leave it for
 later without blocking anything.
 

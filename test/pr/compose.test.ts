@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Fields } from "../../tools/definitions/pr/fields";
+import { DESCRIPTION, type Fields } from "../../tools/definitions/pr/fields";
 import { lint } from "../../tools/definitions/pr/lint";
 import { compose } from "../../tools/definitions/pr/render";
 
@@ -53,6 +53,27 @@ describe("the composition is the literal bytes", () => {
     expect(compose(fields()).body).toContain(
       "## Validation\n\n- bun test test/pr → 38 pass, 0 fail",
     );
+  });
+
+  test("each measurement gets its own validation row, with the output quoted", () => {
+    const { body } = compose(
+      fields({
+        validation: [
+          { check: "bun test test/pr", result: "38 pass, 0 fail" },
+          { check: "ripwire . --quality-delta", result: "regressions=0 gating=0" },
+          { check: "ripwire . --affected=tools/definitions/pr", result: "tests=30 reached=168" },
+        ],
+      }),
+    );
+    expect(body).toContain("- bun test test/pr → 38 pass, 0 fail");
+    expect(body).toContain("- ripwire . --quality-delta → regressions=0 gating=0");
+    expect(body).toContain("- ripwire . --affected=tools/definitions/pr → tests=30 reached=168");
+  });
+
+  test("the tool's own example names both measurements, so a caller sees them", () => {
+    expect(DESCRIPTION).toContain("ripwire . --quality-delta");
+    expect(DESCRIPTION).toContain("ripwire . --affected=");
+    expect(DESCRIPTION).toContain("A branch that changed no code file");
   });
 
   test("the same fields compose to the same bytes twice", () => {
