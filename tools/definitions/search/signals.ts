@@ -129,7 +129,7 @@ export const mutateAsk = (input: unknown, tool: string): SurfaceAsk<"mutate"> | 
   if (!isMutateID(tool)) return undefined;
   const ask = Option.getOrUndefined(decodeRead(input));
   if (ask === undefined) return undefined;
-  return { surface: "mutate", tool, path: ask.path };
+  return { surface: "mutate", tool, path: ask.path, code: codePath(ask.path) };
 };
 
 /**

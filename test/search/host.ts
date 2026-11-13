@@ -4,6 +4,7 @@ import { Tool } from "@opencode/schema/tool";
 import { Effect, type Schema } from "effect";
 import { attachCatalogue, attachGuard } from "../../tools/definitions/search/apply";
 import { attachMeasure } from "../../tools/definitions/search/measure";
+import type { Ask } from "../../tools/definitions/search/policy";
 
 /**
  * The shared host fixture for the guard tests: a stub ripwire binary, a
@@ -61,7 +62,10 @@ export interface Guard {
   readonly asserts: ReadonlyArray<Asserts>;
 }
 
-export const captureGuard = async (assert: () => Effect.Effect<void, unknown> = () => Effect.void): Promise<Guard> => {
+export const captureGuard = async (
+  assert: () => Effect.Effect<void, unknown> = () => Effect.void,
+  read?: (event: unknown) => Ask | undefined,
+): Promise<Guard> => {
   const asserts: Array<Asserts> = [];
   let callback: ((event: unknown) => Effect.Effect<void, Tool.Error>) | undefined;
   const ctx = {
@@ -79,7 +83,8 @@ export const captureGuard = async (assert: () => Effect.Effect<void, unknown> = 
       },
     },
   } as unknown as Plugin.Context;
-  await Effect.runPromise(Effect.scoped(attachGuard(ctx)));
+  const registered = read === undefined ? attachGuard(ctx) : attachGuard(ctx, read);
+  await Effect.runPromise(Effect.scoped(registered));
   if (callback === undefined) throw new Error("guard did not register");
   return { callback, asserts };
 };

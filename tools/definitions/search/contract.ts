@@ -28,17 +28,17 @@ id, the count and the missing verb. It reads the durable usage record, not the
 transcript, so it is one read.`,
 };
 
-/** The nudge the context part carries once the tree holds an unmeasured edit. */
-export const END_OF_WORK = `This session holds edits and no measurement since the last one. Before the change lands, run \`ripwire . --quality-delta\` and \`ripwire . --affected=\` with the paths you edited. The landing gate refuses the first commit, push or PR until both ran after the last mutation.`;
+/** The nudge the context part carries once the tree holds an unmeasured code edit. */
+export const END_OF_WORK = `This session holds code edits and no measurement since the last one. Before the change lands, run \`ripwire . --quality-delta\` and \`ripwire . --affected=\` with the paths you edited. The landing gate refuses the first commit, push or PR until both ran after the last mutation.`;
 
 /** The install line the absent answer carries, quoted from the ripwire README. */
 export const INSTALL = `RIPWIRE_REPO=redhat-et/ripwire bash -c "$(curl -fsSL https://raw.githubusercontent.com/redhat-et/ripwire/main/scripts/install.sh)"`;
 
 /** The read gate's one refusal: name the instrument, then let the second call through. */
-export const readRefusal = (path: string): string => `\`${path}\` is a code file, and this session has not searched the code index yet. Ask \`spectre_search\` first: a \`query\` for a question, a \`pattern\` for a symbol. Re-issue the read if the symbol's body is still what you need, because this gate refuses once.`;
+export const readRefusal = (path: string): string => `\`${path}\` is a code file, and this session has not searched the code index yet. Ask \`spectre_search\` first: a \`query\` for a question, a \`pattern\` for a symbol. Re-issue the read if the symbol's body is still what you need. The gate refuses once, then it is advisory by design, because a blocked model must be able to read.`;
 
 /** The landing gate's one refusal: the two commands it watched for, and the paths it watched. */
 export const landRefusal = (paths: ReadonlyArray<string>): string => {
   const affected = paths.length === 0 ? "." : [...paths].sort().join(",");
-  return `This change cannot land yet: the tree holds edits and neither measurement ran against them. Run \`ripwire . --quality-delta\` and \`ripwire . --affected=${affected}\`, then re-issue the command. The gate checks that both commands ran after the last mutation, and it refuses once.`;
+  return `This change cannot land yet: the tree holds code edits and neither measurement ran against them. Run \`ripwire . --quality-delta\` and \`ripwire . --affected=${affected}\`, then re-issue the command. The gate checks that both commands ran after the last mutation. It refuses once, then it is advisory by design, because a blocked model must be able to land.`;
 };

@@ -133,6 +133,7 @@ describe("mutateAsk reads the edit and write payload", () => {
       surface: "mutate",
       tool: "edit",
       path: "src/retry.ts",
+      code: true,
     });
     expect(mutateAsk({ path: "src/retry.ts" }, "write")?.tool).toBe("write");
   });

@@ -25,7 +25,7 @@ interface PromptBefore {
 }
 
 /** The `execute.before` event, as far as the applier reads it. */
-interface ToolBefore {
+export interface ToolBefore {
   tool: string;
   readonly sessionID: Session.ID;
   readonly agent: Agent.ID;
@@ -120,6 +120,9 @@ const applyReroute = (
     event.tool = "spectre_search";
   });
 
+/** One reader per call: the shipped `askOf`, or a test that proves the gate depends on it. */
+export type AskReader = (event: ToolBefore) => Ask | undefined;
+
 /** The surface this call names, or `undefined` when the call is not one the rule reads. */
 const askOf = (ctx: Plugin.Context, event: ToolBefore): Ask | undefined => {
   const text = grepAsk(event.input, event.tool);
@@ -155,11 +158,11 @@ const healthOf = (): Effect.Effect<Health | undefined> =>
  * `v2.2.7:packages/core/src/permission.ts:273-278`, so it must reach the host
  * and end the step. Catching it here would turn a "no" into a search.
  */
-export const attachGuard = (ctx: Plugin.Context): Effect.Effect<void, never, Scope.Scope> =>
+export const attachGuard = (ctx: Plugin.Context, read: AskReader = (event) => askOf(ctx, event)): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
     yield* ctx.tool.hook("execute.before", (event) =>
       Effect.gen(function* () {
-        const ask = askOf(ctx, event);
+        const ask = read(event);
         if (ask === undefined) return;
 
         const health = yield* healthOf();

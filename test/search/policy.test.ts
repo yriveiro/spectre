@@ -25,6 +25,7 @@ const held = (overrides?: Partial<Memory>): Memory => ({
   asked: new Map(),
   reads: 0,
   edited: new Set(),
+  editedCode: new Set(),
   mutation: 0,
   measured: {},
   spent: new Set(),
@@ -284,8 +285,11 @@ describe("decide, the shell surface", () => {
   const shell = (command: string, overrides?: Partial<Memory>) =>
     decide({ surface: "shell", command, parsed: shellParse(command) }, held(overrides), env());
 
-  test("a ripwire lookup counts and records the measurement at the current mutation", () => {
-    const decision = shell("ripwire . --quality-delta --affected=src/a.ts", { mutation: 3 });
+  test("a ripwire lookup counts and records the measurement at the current code edit count", () => {
+    const decision = shell("ripwire . --quality-delta --affected=src/a.ts", {
+      mutation: 5,
+      editedCode: new Set(["src/a.ts", "src/b.ts", "src/c.ts"]),
+    });
     expect(decision.verdict).toEqual({ kind: "pass", why: "not-a-search" });
     expect(decision.next.touched).toBe(1);
     expect(decision.next.measured).toEqual({ delta: 3, affected: 3 });
@@ -306,7 +310,13 @@ describe("decide, the shell surface", () => {
   });
 
   test("a landing whose gate is spent passes", () => {
-    expect(shell("git commit -m land", { mutation: 2, spent: new Set(["land"]) }).verdict).toEqual({
+    expect(
+      shell("git commit -m land", {
+        mutation: 2,
+        editedCode: new Set(["src/a.ts"]),
+        spent: new Set(["land"]),
+      }).verdict,
+    ).toEqual({
       kind: "pass",
       why: "gate-spent",
     });
@@ -314,23 +324,37 @@ describe("decide, the shell surface", () => {
 
   test("a landing with both measurements fresh passes as measured", () => {
     expect(
-      shell("git push", { mutation: 2, measured: { delta: 2, affected: 2 } }).verdict,
+      shell("git push", {
+        mutation: 2,
+        editedCode: new Set(["src/a.ts"]),
+        measured: { delta: 1, affected: 1 },
+      }).verdict,
     ).toEqual({ kind: "pass", why: "measured" });
   });
 
   test("a landing with nothing measured refuses once, then the second call passes", () => {
-    const first = shell("git push", { mutation: 2 });
+    const first = shell("git push", { mutation: 2, editedCode: new Set(["src/a.ts"]) });
     expect(first.verdict.kind).toBe("refuse");
     expect(first.next.spent.has("land")).toBe(true);
     expect(first.next.mutation).toBe(2);
-    expect(shell("git push", { mutation: 2, spent: new Set(["land"]) }).verdict).toEqual({
+    expect(
+      shell("git push", {
+        mutation: 2,
+        editedCode: new Set(["src/a.ts"]),
+        spent: new Set(["land"]),
+      }).verdict,
+    ).toEqual({
       kind: "pass",
       why: "gate-spent",
     });
   });
 
-  test("a delta older than the last mutation does not count as fresh", () => {
-    const first = shell("git push", { mutation: 3, measured: { delta: 2, affected: 3 } });
+  test("a delta older than the last code edit does not count as fresh", () => {
+    const first = shell("git push", {
+      mutation: 4,
+      editedCode: new Set(["src/a.ts", "src/b.ts", "src/c.ts"]),
+      measured: { delta: 2, affected: 3 },
+    });
     expect(first.verdict.kind).toBe("refuse");
   });
 });
@@ -370,9 +394,14 @@ describe("decide, the read surface", () => {
 
 describe("decide, mutate and subagent", () => {
   test("a mutation records the path and bumps the count", () => {
-    const decision = decide({ surface: "mutate", tool: "edit", path: "src/retry.ts" }, held(), env());
+    const decision = decide(
+      { surface: "mutate", tool: "edit", path: "src/retry.ts", code: true },
+      held(),
+      env(),
+    );
     expect(decision.verdict).toEqual({ kind: "pass", why: "not-a-gate" });
     expect(decision.next.edited.has("src/retry.ts")).toBe(true);
+    expect(decision.next.editedCode.has("src/retry.ts")).toBe(true);
     expect(decision.next.mutation).toBe(1);
   });
 

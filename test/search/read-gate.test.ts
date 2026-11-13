@@ -11,7 +11,9 @@ import { captureGuard, cleanupDirs, makeBin, READY_BIN, toolEvent, withBinary } 
 /**
  * The read gate: the first code-file read with no ripwire call in the session
  * refuses once, and the second call is native. A doc, a config, a directory, a
- * skill body and a path outside the root all pass.
+ * skill body and a path outside the root all pass as `not-code` or
+ * `outside-root`. A refused read does not count as a pass, so `already-read`
+ * means a read after a pass, and the post-refusal pass is `gate-spent`.
  */
 
 const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
@@ -25,6 +27,7 @@ const held = (overrides?: Partial<Memory>): Memory => ({
   asked: new Map(),
   reads: 0,
   edited: new Set(),
+  editedCode: new Set(),
   mutation: 0,
   measured: {},
   spent: new Set(),
@@ -58,7 +61,7 @@ describe("readAsk separates a code read from a prompt asset", () => {
     expect(readAsk({ path: "src" }, "/work/project")?.code).toBe(false);
   });
 
-  test("a skill body is not code, whatever its extension", () => {
+  test("a skill body is not-code, read the same way as a README", () => {
     expect(readAsk({ path: "skill://ripwire/SKILL.md" }, "/work/project")?.code).toBe(false);
     expect(readAsk({ path: "skill://x/fake.ts" }, "/work/project")?.code).toBe(false);
   });
@@ -74,6 +77,13 @@ describe("decide, the read passes", () => {
     expect(
       decide(
         { surface: "read", path: "README.md", code: false, insideRoot: true },
+        held(),
+        { health: ready, skill: true, parentID: false },
+      ).verdict,
+    ).toEqual({ kind: "pass", why: "not-code" });
+    expect(
+      decide(
+        { surface: "read", path: "skill://x/fake.ts", code: false, insideRoot: true },
         held(),
         { health: ready, skill: true, parentID: false },
       ).verdict,
@@ -149,7 +159,7 @@ describe("the read gate on the host", () => {
     });
   });
 
-  test("a README read completes without spending the gate", async () => {
+  test("the README read completes without spending the gate", async () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
       const callback = await capture();
@@ -158,6 +168,25 @@ describe("the read gate on the host", () => {
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(memories.get(Session.ID.make("ses_read_doc"))?.spent.has("read")).toBe(false);
       memories.delete(Session.ID.make("ses_read_doc"));
+    });
+  });
+
+  test("the refusal depends on the reader", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const enforced = await captureGuard();
+      const refused = await Effect.runPromiseExit(
+        enforced.callback(readEvent("ses_read_absent_enforced", "call_read_absent_one")),
+      );
+      expect(Exit.isFailure(refused)).toBe(true);
+
+      const absent = await captureGuard(undefined, () => undefined);
+      const passed = await Effect.runPromiseExit(
+        absent.callback(readEvent("ses_read_absent_off", "call_read_absent_two")),
+      );
+      expect(Exit.isSuccess(passed)).toBe(true);
+      expect(memories.get(Session.ID.make("ses_read_absent_off"))).toBeUndefined();
+      memories.delete(Session.ID.make("ses_read_absent_enforced"));
     });
   });
 });

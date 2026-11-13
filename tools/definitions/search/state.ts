@@ -34,6 +34,7 @@ const fresh = (): Memory => ({
   asked: new Map(),
   reads: 0,
   edited: new Set(),
+  editedCode: new Set(),
   mutation: 0,
   measured: {},
   spent: new Set(),

@@ -23,6 +23,7 @@ const held = (overrides?: Partial<Memory>): Memory => ({
   asked: new Map(),
   reads: 0,
   edited: new Set(),
+  editedCode: new Set(),
   mutation: 0,
   measured: {},
   spent: new Set(),
@@ -179,7 +180,10 @@ describe("the guard remembers every allow", () => {
     await withBinary(bin, async () => {
       const { callback } = await captureGuard();
       const name = "ses_guard_remember";
-      memories.set(session(name), held({ mutation: 4 }));
+      memories.set(
+        session(name),
+        held({ mutation: 4, editedCode: new Set(["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"]) }),
+      );
       await Effect.runPromise(
         callback(toolEvent("shell", { command: "ripwire . --quality-delta" }, name, "call_guard_remember")),
       );
@@ -214,7 +218,7 @@ describe("the guard's shell reroute", () => {
     });
   });
 
-  test("a pipe, a second path and an unknown flag stay native", async () => {
+  test("a pipe, a second path, an unknown flag and a plain-text path stay native", async () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
       const { callback } = await captureGuard();
@@ -222,6 +226,8 @@ describe("the guard's shell reroute", () => {
         "rg -n resolveTool src | head",
         "rg -n resolveTool src docs",
         "rg -g '*.ts' resolveTool",
+        "rg -n ERROR app.log",
+        "rg ab resolveTool",
       ].entries()) {
         const asked = toolEvent("shell", { command }, "ses_guard_native", `call_guard_native_${index}`) as {
           tool: string;
@@ -230,6 +236,23 @@ describe("the guard's shell reroute", () => {
         expect(asked.tool).toBe("shell");
       }
       clean("ses_guard_native");
+    });
+  });
+
+  test("a shell grep reroutes like rg", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const { callback } = await captureGuard();
+      const asked = toolEvent(
+        "shell",
+        { command: "grep -rn resolveTool src" },
+        "ses_guard_grep",
+        "call_guard_grep_shell",
+      ) as { tool: string };
+      await Effect.runPromise(callback(asked));
+      expect(asked.tool).toBe("spectre_search");
+      rerouted.delete(Tool.CallID.make("call_guard_grep_shell"));
+      clean("ses_guard_grep");
     });
   });
 
@@ -257,6 +280,50 @@ describe("the guard's failure channel", () => {
       expect(Exit.isFailure(exit)).toBe(true);
       expect(memories.get(session("ses_guard_decline"))?.asked.size ?? 0).toBe(0);
       clean("ses_guard_decline");
+    });
+  });
+});
+
+describe("the applier depends on the reader", () => {
+  test("the text reroute depends on the reader", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const enforced = await captureGuard();
+      const routed = toolEvent("grep", { pattern: "resolveTool" }, "ses_guard_reader_on", "call_guard_on") as {
+        tool: string;
+      };
+      await Effect.runPromise(enforced.callback(routed));
+      expect(routed.tool).toBe("spectre_search");
+
+      const absent = await captureGuard(undefined, () => undefined);
+      const kept = toolEvent("grep", { pattern: "resolveTool" }, "ses_guard_reader_off", "call_guard_off") as {
+        tool: string;
+      };
+      await Effect.runPromise(absent.callback(kept));
+      expect(kept.tool).toBe("grep");
+      expect(memories.get(session("ses_guard_reader_off"))).toBeUndefined();
+
+      rerouted.delete(Tool.CallID.make("call_guard_on"));
+      clean("ses_guard_reader_on");
+    });
+  });
+
+  test("the edit observation depends on the reader", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const enforced = await captureGuard();
+      await Effect.runPromise(
+        enforced.callback(toolEvent("edit", { path: "src/retry.ts" }, "ses_guard_edit_on", "call_edit_on")),
+      );
+      expect(memories.get(session("ses_guard_edit_on"))?.mutation).toBe(1);
+
+      const absent = await captureGuard(undefined, () => undefined);
+      await Effect.runPromise(
+        absent.callback(toolEvent("edit", { path: "src/retry.ts" }, "ses_guard_edit_off", "call_edit_off")),
+      );
+      expect(memories.get(session("ses_guard_edit_off"))).toBeUndefined();
+
+      clean("ses_guard_edit_on");
     });
   });
 });

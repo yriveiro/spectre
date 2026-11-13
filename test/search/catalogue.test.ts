@@ -21,6 +21,7 @@ const held = (overrides?: Partial<Memory>): Memory => ({
   asked: new Map(),
   reads: 0,
   edited: new Set(),
+  editedCode: new Set(),
   mutation: 0,
   measured: {},
   spent: new Set(),
@@ -79,7 +80,7 @@ describe("the context row above the landing", () => {
     await withBinary(bin, async () => {
       const callback = await captureContext();
       const name = Session.ID.make("ses_catalogue_end");
-      memories.set(name, held({ mutation: 2 }));
+      memories.set(name, held({ mutation: 2, editedCode: new Set(["src/retry.ts"]) }));
       const asked = {
         sessionID: name,
         system: [] as Array<{ type: "text"; text: string }>,
