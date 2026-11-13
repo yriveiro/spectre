@@ -208,7 +208,8 @@ export interface Env {
 
 export type Decision = { readonly verdict: Verdict; readonly next: Memory };
 
-const MAP: Skill.ID = Skill.ID.make("ripwire-first");
+/** The compact map: the body the first prompt attaches, and the id that attachment names. */
+export const MAP: Skill.ID = Skill.ID.make("ripwire-first");
 
 const LANDING: ReadonlyArray<ReadonlyArray<string>> = [
   ["git", "commit"],
@@ -250,6 +251,14 @@ const passed = (why: Why, memory: Memory): Decision => ({
   next: memory,
 });
 
+/** The half the rule cannot say: with no instrument every gate passes and the native tools run. */
+const NATIVE =
+  "ripwire is not on PATH, so this session is native: `spectre_search` answers `absent` with the install line, and the native tools complete the task.";
+
+/** The rule the context part carries. A session with no instrument is told so on every request. */
+export const contextRule = (health: Health): string =>
+  health.kind === "ready" ? CONTRACT.rule : `${CONTRACT.rule}\n\n${NATIVE}`;
+
 /**
  * Carry the verdict's route into the renamed call. The search tool re-derives
  * its route from the payload, which carries no `kind`, so without this every
@@ -276,8 +285,8 @@ const onPrompt = (memory: Memory, env: Env): Decision => {
   return passed("no-skill", next);
 };
 
-const onContext = (tools: ReadonlyArray<string>, memory: Memory): Decision => ({
-  verdict: { kind: "prose", key: "rule", text: CONTRACT.rule },
+const onContext = (tools: ReadonlyArray<string>, memory: Memory, health: Health): Decision => ({
+  verdict: { kind: "prose", key: "rule", text: contextRule(health) },
   next: { ...memory, search: tools.includes("spectre_search") },
 });
 
@@ -356,7 +365,7 @@ const onSubagent = (memory: Memory): Decision => ({
  */
 export const decide = (ask: Ask, memory: Memory, env: Env): Decision => {
   if (ask.surface === "prompt") return onPrompt(memory, env);
-  if (ask.surface === "context") return onContext(ask.tools, memory);
+  if (ask.surface === "context") return onContext(ask.tools, memory, env.health);
   if (env.health.kind !== "ready") return passed("no-instrument", memory);
   switch (ask.surface) {
     case "text":

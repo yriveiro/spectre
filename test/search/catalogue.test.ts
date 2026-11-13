@@ -42,8 +42,11 @@ describe("search context shape", () => {
     expect(asked.tools["ripgrep"]?.description).toBe("kept");
   });
 
-  test("the rule names both spectre_search and ripgrep", () => {
-    expect(CONTRACT.rule).toContain("spectre_search");
-    expect(CONTRACT.rule).toContain("ripgrep");
+  test("the appended rule names both spectre_search and ripgrep", () => {
+    const asked = draft();
+    shape(asked);
+    const rule = asked.system.at(-1)?.text ?? "";
+    expect(rule).toContain("spectre_search");
+    expect(rule).toContain("ripgrep");
   });
 });

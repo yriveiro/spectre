@@ -4,8 +4,10 @@ import { Session } from "@opencode/schema/session";
 import { Tool } from "@opencode/schema/tool";
 import { Effect, Exit } from "effect";
 import { attachCatalogue, attachGuard } from "../../tools/definitions/search/apply";
-import { judge, rerouteInput, type Health } from "../../tools/definitions/search/policy";
-import { markRerouted, memories, rerouted } from "../../tools/definitions/search/state";
+import { attachSearch } from "../../tools/definitions/search/index";
+import { contextRule, judge, rerouteInput, type Health } from "../../tools/definitions/search/policy";
+import { probe } from "../../tools/definitions/search/probe";
+import { memories, rerouted } from "../../tools/definitions/search/state";
 
 const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
 
@@ -112,13 +114,6 @@ describe("the guard's permission path", () => {
     expect(asked.tool).toBe("ripgrep");
     memories.delete(Session.ID.make("ses_guard_test_c"));
   });
-
-  test("markRerouted records the call id and its origin", () => {
-    const call = Tool.CallID.make("guard-test-call");
-    markRerouted(call, "grep");
-    expect(rerouted.get(call)).toBe("grep");
-    rerouted.delete(call);
-  });
 });
 
 const captureContext = async (): Promise<(event: unknown) => Effect.Effect<void, never>> => {
@@ -149,5 +144,57 @@ describe("the catalogue's defect path", () => {
     };
     const exit = await Effect.runPromiseExit(callback(broken) as Effect.Effect<void, never>);
     expect(Exit.isSuccess(exit)).toBe(true);
+  });
+});
+
+const context = (session: string, tools: ReadonlyArray<string>) => ({
+  sessionID: Session.ID.make(session),
+  system: [] as Array<{ type: "text"; text: string }>,
+  tools: Object.fromEntries(tools.map((name) => [name, { description: name, input: {} }])),
+});
+
+describe("the catalogue's verdict", () => {
+  test("a non-gating verdict persists its next memory: the search bit follows the request", async () => {
+    const callback = await captureContext();
+    const session = Session.ID.make("ses_catalogue_search");
+
+    await Effect.runPromise(callback(context("ses_catalogue_search", ["spectre_search"])));
+    expect(memories.get(session)?.search).toBe(true);
+
+    await Effect.runPromise(callback(context("ses_catalogue_search", ["grep"])));
+    expect(memories.get(session)?.search).toBe(false);
+
+    memories.delete(session);
+  });
+
+  test("the rule the part carries is the one the probe chose", async () => {
+    const callback = await captureContext();
+    const session = Session.ID.make("ses_catalogue_rule");
+    const asked = context("ses_catalogue_rule", ["spectre_search"]);
+
+    await Effect.runPromise(callback(asked));
+    expect(asked.system.at(-1)?.text).toBe(contextRule(await probe()));
+
+    memories.delete(session);
+  });
+});
+
+describe("attachSearch composes the surfaces", () => {
+  test("it registers the prompt, the context and the tool hooks", async () => {
+    const names: Array<string> = [];
+    const hook =
+      (surface: string) =>
+      (name: string): Effect.Effect<{ dispose: Effect.Effect<void> }, never> => {
+        names.push(`${surface}:${name}`);
+        return Effect.succeed({ dispose: Effect.void });
+      };
+    const ctx = {
+      session: { hook: hook("session"), get: () => Effect.succeed({}) },
+      tool: { hook: hook("tool") },
+      skill: { list: () => Effect.succeed({ location: {}, data: [] }) },
+    } as unknown as Plugin.Context;
+
+    await Effect.runPromise(Effect.scoped(attachSearch(ctx)));
+    expect(names).toEqual(["session:prompt", "session:context", "tool:execute.before"]);
   });
 });

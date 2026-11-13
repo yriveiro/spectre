@@ -3,6 +3,7 @@ import { Skill } from "@opencode/plugin/effect";
 import { CONTRACT } from "../../tools/definitions/search/contract";
 import {
   argv,
+  contextRule,
   decide,
   type Env,
   judge,
@@ -251,10 +252,21 @@ describe("decide, the context surface", () => {
   });
 
   test("it writes the rule", () => {
-    expect(decide({ surface: "context", tools: [] }, held(), env({ health: absent })).verdict).toEqual({
+    expect(decide({ surface: "context", tools: [] }, held(), env()).verdict).toEqual({
       kind: "prose",
       key: "rule",
       text: CONTRACT.rule,
+    });
+  });
+
+  test("a session with no instrument is told that it is native", () => {
+    expect(contextRule(ready)).toBe(CONTRACT.rule);
+    expect(contextRule(absent)).toContain("this session is native");
+    expect(contextRule(stale)).toContain("this session is native");
+    expect(decide({ surface: "context", tools: [] }, held(), env({ health: absent })).verdict).toEqual({
+      kind: "prose",
+      key: "rule",
+      text: contextRule(absent),
     });
   });
 });
