@@ -19,6 +19,7 @@ import { interrogate } from "./interrogate";
 import { lookFirst } from "./look-first";
 import { maintainVerificationSkill } from "./maintain-verification-skill";
 import { modelRouter } from "./model-router";
+import { opencodePlatform } from "./opencode-platform";
 import { playbook } from "./playbook";
 import { playbookAuthoringASkill } from "./playbook-authoring-a-skill";
 import { playbookAutonomousRun } from "./playbook-autonomous-run";
@@ -103,6 +104,7 @@ const definitions: ReadonlyArray<Definition> = [
   effectBestPractices,
   elysiaBestPractices,
   solidjsBestPractices,
+  opencodePlatform,
   playbook,
   playbookAuthoringASkill,
   playbookAutonomousRun,
@@ -192,6 +194,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "how",
   "interrogate",
   "maintain-verification-skill",
+  "opencode-platform",
   "playbook",
   "playbook-authoring-a-skill",
   "playbook-autonomous-run",
