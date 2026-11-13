@@ -1,9 +1,8 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Tool } from "@opencode/schema/tool";
 import { Effect, Schema, type Scope } from "effect";
-import { attachContext } from "./context";
+import { attachCatalogue, attachGuard } from "./apply";
 import { CONTRACT } from "./contract";
-import { attachGuard } from "./guard";
 import { argv, type Route } from "./policy";
 import { probe } from "./probe";
 import { run, scope } from "./run";
@@ -192,6 +191,6 @@ export const search = (ctx: Plugin.Context): Tool.Info<typeof SearchInput, typeo
 
 export const attachSearch = (ctx: Plugin.Context): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
-    yield* attachContext(ctx);
+    yield* attachCatalogue(ctx);
     yield* attachGuard(ctx);
   });

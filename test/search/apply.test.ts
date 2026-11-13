@@ -3,9 +3,9 @@ import type { Plugin } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Tool } from "@opencode/schema/tool";
 import { Effect, Exit } from "effect";
-import { attachGuard, readAsk, rerouteInput } from "../../tools/definitions/search/guard";
-import { judge, type Health } from "../../tools/definitions/search/policy";
-import { markRerouted, rerouted, seen, sessionSeen } from "../../tools/definitions/search/state";
+import { attachCatalogue, attachGuard } from "../../tools/definitions/search/apply";
+import { judge, rerouteInput, type Health } from "../../tools/definitions/search/policy";
+import { markRerouted, memories, rerouted } from "../../tools/definitions/search/state";
 
 const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
 
@@ -47,60 +47,14 @@ describe("rerouteInput carries the verdict's route into the renamed call", () =>
   });
 });
 
-describe("readAsk guards the ripgrep payload", () => {
-  test("a full payload reads", () => {
-    expect(
-      readAsk({ pattern: "x", path: "src", include: "*.ts", literal: false }),
-    ).toEqual({ pattern: "x", path: "src", include: "*.ts", literal: false });
-  });
-
-  test("a bare pattern reads", () => {
-    expect(readAsk({ pattern: "x" })).toEqual({ pattern: "x" });
-  });
-
-  test("a non-object, a missing pattern, and mistyped fields do not read", () => {
-    expect(readAsk(null)).toBeUndefined();
-    expect(readAsk("pattern")).toBeUndefined();
-    expect(readAsk({})).toBeUndefined();
-    expect(readAsk({ pattern: 3 })).toBeUndefined();
-    expect(readAsk({ pattern: "x", path: 3 })).toBeUndefined();
-    expect(readAsk({ pattern: "x", include: 3 })).toBeUndefined();
-    expect(readAsk({ pattern: "x", literal: "yes" })).toBeUndefined();
-  });
-});
-
-describe("once-per-pattern state", () => {
-  test("a session keeps one seen set, and a second session keeps another", () => {
-    const first = Session.ID.make("ses_guard_test_a");
-    const second = Session.ID.make("ses_guard_test_b");
-    const seenFirst = sessionSeen(first);
-    expect(sessionSeen(first)).toBe(seenFirst);
-    expect(sessionSeen(second)).not.toBe(seenFirst);
-    seenFirst.add("resolveTool");
-    expect(judge({ ask: { pattern: "resolveTool" }, seen: seenFirst, health: ready })).toEqual({
-      kind: "allow",
-      why: "already-asked",
-    });
-    seen.delete(first);
-    seen.delete(second);
-  });
-
-  test("markRerouted records the call id", () => {
-    const call = Tool.CallID.make("guard-test-call");
-    markRerouted(call);
-    expect(rerouted.has(call)).toBe(true);
-    rerouted.delete(call);
-  });
-});
-
 const RIPWIRE = Bun.which("ripwire");
 
-const event = (pattern: string): unknown => ({
+const event = (pattern: string, id: string = "call_guard_test"): unknown => ({
   tool: "ripgrep",
   sessionID: Session.ID.make("ses_guard_test_c"),
   agent: "build",
   messageID: "msg_guard_test",
-  id: Tool.CallID.make("call_guard_test"),
+  id: Tool.CallID.make(id),
   input: { pattern },
 });
 
@@ -137,6 +91,63 @@ describe("the guard's permission path", () => {
     expect(asked.tool).toBe("spectre_search");
     expect(asked.input["pattern"]).toBe("resolveTool");
     rerouted.delete(Tool.CallID.make("call_guard_test"));
-    seen.delete(Session.ID.make("ses_guard_test_c"));
+    memories.delete(Session.ID.make("ses_guard_test_c"));
+  });
+
+  test.skipIf(!RIPWIRE)("a pattern the session already asked stays native", async () => {
+    const callback = await capture(() => Effect.void);
+    const first = event("resolveTool", "call_guard_test_first");
+    await Effect.runPromise(callback(first));
+    const second = event("resolveTool", "call_guard_test_second");
+    await Effect.runPromise(callback(second));
+    expect((second as { tool: string }).tool).toBe("ripgrep");
+    rerouted.delete(Tool.CallID.make("call_guard_test_first"));
+    memories.delete(Session.ID.make("ses_guard_test_c"));
+  });
+
+  test.skipIf(!RIPWIRE)("a too-broad pattern stays native", async () => {
+    const callback = await capture(() => Effect.void);
+    const asked = event("ab", "call_guard_test_broad") as { tool: string };
+    await Effect.runPromise(callback(asked));
+    expect(asked.tool).toBe("ripgrep");
+    memories.delete(Session.ID.make("ses_guard_test_c"));
+  });
+
+  test("markRerouted records the call id and its origin", () => {
+    const call = Tool.CallID.make("guard-test-call");
+    markRerouted(call, "grep");
+    expect(rerouted.get(call)).toBe("grep");
+    rerouted.delete(call);
+  });
+});
+
+const captureContext = async (): Promise<(event: unknown) => Effect.Effect<void, never>> => {
+  let callback: ((event: unknown) => Effect.Effect<void, never>) | undefined;
+  const ctx = {
+    session: {
+      hook: (_name: string, cb: (event: unknown) => Effect.Effect<void, never>) => {
+        callback = cb;
+        return Effect.succeed({ dispose: Effect.void });
+      },
+    },
+  } as unknown as Plugin.Context;
+  await Effect.runPromise(Effect.scoped(attachCatalogue(ctx)));
+  if (callback === undefined) throw new Error("catalogue did not register");
+  return callback;
+};
+
+describe("the catalogue's defect path", () => {
+  test("a defect is logged, never thrown, so the step continues", async () => {
+    const callback = await captureContext();
+    const broken = {
+      system: [] as Array<{ type: "text"; text: string }>,
+      tools: {
+        get grep() {
+          throw new Error("broken tools");
+        },
+      },
+    };
+    const exit = await Effect.runPromiseExit(callback(broken) as Effect.Effect<void, never>);
+    expect(Exit.isSuccess(exit)).toBe(true);
   });
 });

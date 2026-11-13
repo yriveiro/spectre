@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { shape, type Draft } from "../../tools/definitions/search/catalogue";
 import { CONTRACT } from "../../tools/definitions/search/contract";
-import { shape, type Draft } from "../../tools/definitions/search/context";
 
 const draft = (overrides?: Partial<Draft>): Draft => ({
   system: [],
