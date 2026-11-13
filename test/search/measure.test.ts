@@ -74,10 +74,18 @@ describe("the record is written on execute.after", () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
       const after = await captureAfter();
+      const name = "ses_measure_failed";
+
+      await Effect.runPromise(after.callback(afterEvent("edit", { path: "src/a.ts" }, name, "call_m_ok")));
       await Effect.runPromise(
-        after.callback(failedEvent("edit", { path: "src/a.ts" }, "ses_measure_failed", "call_m_failed")),
+        after.callback(failedEvent("edit", { path: "src/b.ts" }, name, "call_m_failed")),
       );
-      expect(await records(after)).toEqual([]);
+
+      const all = await records(after);
+      expect(all.length).toBe(1);
+      expect(all[0]?.session).toBe(name);
+      expect(all[0]?.edits).toBe(1);
+      memories.delete(Session.ID.make(name));
     });
   });
 
@@ -246,18 +254,33 @@ describe("a spawn is counted and a follow-up is not", () => {
     await withBinary(bin, async () => {
       const after = await captureAfter();
       const name = "ses_measure_follow";
+      const child = "ses_measure_follow_child";
+
       await Effect.runPromise(
         after.callback(
-          afterEvent("subagent", { sessionID: "ses_measure_child", prompt: "more" }, name, "call_m_follow", {
-            sessionID: "ses_measure_child",
+          afterEvent("subagent", { agent: "explore", prompt: "x" }, name, "call_m_follow_spawn", {
+            sessionID: child,
+            status: "completed",
+            output: "done",
+          }),
+        ),
+      );
+      expect(memoryOf(Session.ID.make(name)).subagents).toBe(1);
+
+      await Effect.runPromise(
+        after.callback(
+          afterEvent("subagent", { sessionID: child, prompt: "more" }, name, "call_m_follow", {
+            sessionID: child,
             status: "completed",
             output: "more",
           }),
         ),
       );
 
-      expect(memoryOf(Session.ID.make(name)).subagents).toBe(0);
-      expect(await stored(after, name)).toBeUndefined();
+      expect(memoryOf(Session.ID.make(name)).subagents).toBe(1);
+      expect((await stored(after, name))?.subagents).toBe(1);
+      expect((await records(after)).length).toBe(2);
+      expect((await stored(after, child))?.parent).toBe(name);
       memories.delete(Session.ID.make(name));
     });
   });
