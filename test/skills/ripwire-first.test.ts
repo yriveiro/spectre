@@ -29,10 +29,13 @@ const body = async () => Bun.file(BODY).text();
 
 const rows = async () => {
   const text = await body();
-  return [...text.matchAll(/^\| ([a-z][a-z -]+) \| (.+?) \|$/gm)].map((match) => ({
-    moment: match[1]!,
-    answer: match[2]!,
-  }));
+  return [...text.matchAll(/^\| ([a-z][a-z -]+) \| (.+?) \| `(ripwire-[a-z-]+)` \|$/gm)].map(
+    (match) => ({
+      moment: match[1]!,
+      answer: match[2]!,
+      depth: match[3]!,
+    }),
+  );
 };
 
 const RIPWIRE = Bun.which("ripwire");
@@ -75,9 +78,7 @@ describe("the skill resolves by id", () => {
   });
 
   test("the body stays a compact map", async () => {
-    const lines = (await body()).split("\n");
-
     expect((await rows()).length).toBe(MOMENTS.length);
-    expect(lines.length).toBeLessThanOrEqual(30);
+    expect(Bun.file(BODY).size).toBeLessThan(3000);
   });
 });

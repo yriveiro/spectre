@@ -190,7 +190,7 @@ The shell row is a tool rename on `tool.execute.before`, not a rewrite in
 | `--quality-delta` | enforced, the act | the landing gate asks for it after the last code edit |
 | `--affected` | enforced, the act | the landing gate asks for it after the last code edit, and prints the paths it watched |
 | `--impact` | taught | the `ripwire-first` map row; no hook can name the symbol a change is about |
-| `--callers` | taught | the same row; the answer points back at `spectre_search` |
+| `--callers` | taught | the edit-contract row, which says one hop and a different question; the leaf carries the verb |
 | `--edit-check` | taught | the map row and the landing message, because the hook cannot name the symbol |
 | `--exemplar` | taught | the map row before a new symbol; the report records whether it ran |
 | `--stray-content` | taught | the branch-cleanup row |
