@@ -19,6 +19,7 @@ import { interrogate } from "./interrogate";
 import { lookFirst } from "./look-first";
 import { maintainVerificationSkill } from "./maintain-verification-skill";
 import { modelRouter } from "./model-router";
+import { opencodePlatform } from "./opencode-platform";
 import { playbook } from "./playbook";
 import { playbookAuthoringASkill } from "./playbook-authoring-a-skill";
 import { playbookAutonomousRun } from "./playbook-autonomous-run";
@@ -73,6 +74,7 @@ import { principleTestForTruth } from "./principle-test-for-truth";
 import { principleTypeSystemDiscipline } from "./principle-type-system-discipline";
 import { principleVerification } from "./principle-verification";
 import { ripwire } from "./ripwire";
+import { ripwireFirst } from "./ripwire-first";
 import { showMeYourWork } from "./show-me-your-work";
 import { solidjsBestPractices } from "./solidjs-best-practices";
 import { spectreMode } from "./spectre-mode";
@@ -103,6 +105,7 @@ const definitions: ReadonlyArray<Definition> = [
   effectBestPractices,
   elysiaBestPractices,
   solidjsBestPractices,
+  opencodePlatform,
   playbook,
   playbookAuthoringASkill,
   playbookAutonomousRun,
@@ -167,14 +170,15 @@ const definitions: ReadonlyArray<Definition> = [
   spectreMode,
   principleGuardTheContextWindow,
   ripwire,
+  ripwireFirst,
   swarm,
 ];
 
 /**
  * Registered and reader-called rather than indexed, so they carry no row in the
  * ripwire map and do not move its `none` count: `skills/FOR_AGENTS.md`,
- * "Porting a principle from elsewhere", item 3. `spectre-mode` and `ripwire` are
- * the hub and the map itself.
+ * "Porting a principle from elsewhere", item 3. `spectre-mode` is the hub;
+ * `ripwire` and `ripwire-first` are the map and its compact form.
  */
 export const notALeaf: ReadonlySet<string> = new Set([
   "architect",
@@ -192,6 +196,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "how",
   "interrogate",
   "maintain-verification-skill",
+  "opencode-platform",
   "playbook",
   "playbook-authoring-a-skill",
   "playbook-autonomous-run",
@@ -218,6 +223,7 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "playbook-visual-parity",
   "pr-canvas",
   "ripwire",
+  "ripwire-first",
   "show-me-your-work",
   "solidjs-best-practices",
   "spectre-mode",

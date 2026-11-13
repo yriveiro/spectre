@@ -1,13 +1,15 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Tool } from "@opencode/schema/tool";
 import { Effect, Schema, type Scope } from "effect";
-import { attachContext } from "./context";
-import { CONTRACT } from "./contract";
-import { attachGuard } from "./guard";
+import { attachCatalogue, attachDiscovery, attachGuard } from "./apply";
+import { CONTRACT, INSTALL } from "./contract";
+import { attachMeasure } from "./measure";
 import { argv, type Route } from "./policy";
 import { probe } from "./probe";
 import { run, scope } from "./run";
 import { rerouted } from "./state";
+
+export { report } from "./report";
 
 export const SearchInput = Schema.Struct({
   query: Schema.optional(Schema.String).annotate({
@@ -140,7 +142,7 @@ export const search = (ctx: Plugin.Context): Tool.Info<typeof SearchInput, typeo
           note:
             health.kind === "stale"
               ? `${health.binary} is version ${health.version}, older than 0.6.10. Run ripwire --doctor.`
-              : health.why,
+              : `${health.why}. Install it:\n${INSTALL}`,
         };
         return { output, content: output.answer };
       }
@@ -192,6 +194,8 @@ export const search = (ctx: Plugin.Context): Tool.Info<typeof SearchInput, typeo
 
 export const attachSearch = (ctx: Plugin.Context): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
-    yield* attachContext(ctx);
+    yield* attachDiscovery(ctx);
+    yield* attachCatalogue(ctx);
     yield* attachGuard(ctx);
+    yield* attachMeasure(ctx);
   });

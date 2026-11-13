@@ -89,9 +89,9 @@ something. The `!` before the colon marks it.
 
 Write one to four bullets, each naming a change visible in the diff. Use `add`,
 `remove`, `update`, `replace`, `rename`, `refactor`, `correct`. Do not claim
-behavior is preserved, compatible, safe, or unaffected. Do not list files, line
-numbers, or implementation trivia unless that is the material change. Do not
-infer motivation or runtime effects the diff does not show.
+behavior stays the same, and do not claim the change is safe or compatible. Do not
+list files, line numbers, or implementation trivia unless that is the material
+change. Do not infer motivation or runtime effects the diff does not show.
 
 ## Phase C: Split
 
@@ -129,7 +129,7 @@ For each useful subagent lane, load `model-router` and call
 `tools.spectre.routing({ task: "<one lane>" })`. A grep, read, run, or report task
 usually fits the `mechanical` profile or its equivalent. Use a profile with more
 effort for semantic review, scope analysis, or risk analysis. Follow the judge's
-choice when it is used. When it skips, match the task to the profile's `match` line.
+choice when it answers. When it skips, match the task to the profile's `match` line.
 If you are unsure between profiles, follow `model-router` and choose more effort.
 Follow `model-router` for `setup`, `declined`, or `problems`. Never choose a profile
 by array position or guess a model. Pass the selected profile's `agent` and exact
@@ -154,7 +154,11 @@ const pr = await tools.spectre.pr({
   summary: "A row gh could not read looked like a clean row, so a stack read as clear.",
   review: "Is unknown distinguishable from good news here, or does it still read as clear?",
   scopeItems: ["tools/definitions/stack/read.ts"],
-  validation: [{ check: "bun test test/stack", result: "17 pass, 0 fail" }],
+  validation: [
+    { check: "bun test test/stack", result: "17 pass, 0 fail" },
+    { check: "ripwire . --quality-delta", result: "regressions=0 gating=0" },
+    { check: "ripwire . --affected=tools/definitions/stack", result: "tests=12 reached=64" },
+  ],
   risk: "Changes the `threads` default. Reverting the file restores 0.",
   tradeoffs: "A sentinel number over a fourth state, because the state is read in three places.",
   breaking: "The `threads` field becomes a string.",
@@ -210,6 +214,8 @@ one or leave a section filled with `None.`:
 
 ## Validation
 - <command or check> → <what it returned>
+- ripwire . --quality-delta → <what it printed>
+- ripwire . --affected=<paths> → <what it printed>
 
 ## Risk and Rollback
 <What it touches, how to revert it, and what stays broken on trunk if it does not land.>
@@ -228,6 +234,11 @@ are always present. Drop `tradeoffs` and `breaking` when there is nothing to say
 heading holding `None.` is a line a reviewer spends reading nothing, and it is
 refused. Desired feedback is the type that best predicts acceptance (arXiv
 2602.14611, 80,000 pull requests across 156 projects).
+
+Run `ripwire . --quality-delta` and `ripwire . --affected=<paths>` after the last
+code change, and give each its own validation bullet with the output it printed. A
+branch that changed no code file states that fact in the bullet that carries its
+test result.
 
 **The body describes the change, not the commits.** A commit SHA or a numbered list
 in any field is a refusal: `git log` already holds that text, and three commit
@@ -267,8 +278,8 @@ await tools.spectre.pr({ /* … */ base: "<parent-branch>" })
 Branch from the trunk only for work that is genuinely independent. Rebase on the
 trunk before substantial stack work, not after it.
 
-The forge is `gh`, and the tool drives it. Check that it is authenticated before the
-first call, with `gh auth status`. `tools.spectre.stack` reports an unauthenticated
+The forge is `gh`, and the tool drives it. Run `gh auth status` before the
+first call. `tools.spectre.stack` reports an unauthenticated
 `gh` in `problems` rather than as a clear stack, so read `problems` before trusting a
 `clear`.
 

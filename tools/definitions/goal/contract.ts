@@ -21,6 +21,14 @@ export const MAX_OBJECTIVE = 4_000;
  */
 export const FORBIDDEN = ["&", "<", ">"] as const;
 
+/**
+ * The two measurements every landing owes. `compose` puts this sentence on the
+ * evidence line, so an objective carries the demand without a caller repeating it.
+ * It holds no forbidden character, and a round with no file change owes neither.
+ */
+export const MEASUREMENTS =
+  "Run `ripwire . --quality-delta` and `ripwire . --affected=PATH` on the tree after the last code edit of the round, and quote both outputs. A round that changed no file skips both.";
+
 declare const objectiveBrand: unique symbol;
 declare const predicateBrand: unique symbol;
 declare const checkBrand: unique symbol;
@@ -142,7 +150,9 @@ export const compose = (contract: Contract, place: Feature): Parsed<Composed> =>
     "",
     `Exit predicate: ${contract.predicate}`,
     `Check: ${contract.check}. Run it after your last change of every round, and quote its output. The reviewer sees only this conversation.`,
-    ...(contract.evidence === undefined ? [] : [`Evidence also required: ${contract.evidence}`]),
+    ...(contract.evidence === undefined
+      ? [`Evidence also required: ${MEASUREMENTS}`]
+      : [`Evidence also required: ${contract.evidence} ${MEASUREMENTS}`]),
     "",
     `Ledger: ${ledger}. Append one row per round: the round number, what changed, the check output in one line, whether the predicate moved, and the head SHA. Never rewrite a row.`,
     "",

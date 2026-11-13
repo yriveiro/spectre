@@ -1,4 +1,14 @@
-# Ripwire as the code-search default
+# The ripwire search slice
+
+Superseded by [ripwire-first.md](./ripwire-first.md). The search design grew into
+a session-wide decision: the map on the first prompt, the first-read gate, the
+landing gate and the usage record. The new note holds the decision, the rule
+table and the task list.
+
+This file keeps the record of slices 1 and 2: the `spectre_search` tool, the one
+contract over four surfaces, the text judge and the `grep` to `ripgrep` rename.
+Those parts still ship, and the new note folds them in. This file states no
+default of its own.
 
 Status: slices 1 and 2 built, except the scripted eval gate. Slice 3 and the live eval arms are not built.
 

@@ -122,4 +122,18 @@ exit 0
       expect(result.output?.answer).toContain(`${dir}/src`);
     });
   });
+
+  test("an absent binary answers with the install line the native note promises", async () => {
+    const { dir } = await makeBin(`#!/bin/sh
+exit 0
+`);
+    const missing = `${dir}/missing-ripwire`;
+    await withBinary(missing, async () => {
+      const tool = search(plugin(dir));
+      const result = await Effect.runPromise(tool.execute({ pattern: "hello" }, calling("call_absent")));
+      expect(result.output?.status).toBe("absent");
+      expect(result.output?.note).toContain("Install it:");
+      expect(result.output?.note).toContain("https://raw.githubusercontent.com/redhat-et/ripwire");
+    });
+  });
 });

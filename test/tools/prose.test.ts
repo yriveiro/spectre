@@ -367,6 +367,10 @@ describe("the set's own prose", () => {
     // or the tool and the sentence states what the run is told: 338 to 346. The
     // native-tool rewrite added two in the autopilot schedule prose, and the review
     // pass took one back: 346 to 347.
+    //
+    // The ripwire-first contract and design slice rewrote the passive voice out of the
+    // two playbooks and `features/README.md`, because E13 and E14 require 0 hard and 0
+    // advisory on every file they touch: 347 to 337.
     const out = await call(["."]);
     const byRule: Record<string, number> = {};
     for (const f of out.findings) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
@@ -396,7 +400,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 347,
+      passiveVoice: 337,
       otherRules: [],
     });
   }, 120_000);

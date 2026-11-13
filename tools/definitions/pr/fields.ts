@@ -58,7 +58,7 @@ const Fields = Schema.Struct({
   }),
   validation: Schema.Array(Check).annotate({
     description:
-      "The `## Validation` bullets. One entry per command that ran, and what it returned. At least one; an empty list is a claim of evidence that does not exist.",
+      "The `## Validation` bullets. One entry per command that ran, and what it returned. At least one; an empty list is a claim of evidence that does not exist. A branch that changed a code file adds one entry for `ripwire . --quality-delta` and one for `ripwire . --affected=<paths>`, both run after the last change.",
   }),
   risk: Schema.String.annotate({
     description:
@@ -91,7 +91,11 @@ export const DESCRIPTION = `Open a pull request whose title and body are compose
     summary: "Agents wrote pull requests by hand, so the shape of one was whatever the run produced.",
     review: "Is the lint fail-closed, or does it only warn?",
     scopeItems: ["tools/definitions/pr/render.ts"],
-    validation: [{ check: "bun test test/pr", result: "38 pass, 0 fail" }],
+    validation: [
+      { check: "bun test test/pr", result: "38 pass, 0 fail" },
+      { check: "ripwire . --quality-delta", result: "regressions=0 gating=0" },
+      { check: "ripwire . --affected=tools/definitions/pr", result: "tests=30 reached=168" },
+    ],
     risk: "Adds a tool. Reverting the folder removes it.",
   })
   pr.status === "created"                                                // the URL is in pr.url
@@ -99,6 +103,11 @@ export const DESCRIPTION = `Open a pull request whose title and body are compose
 The title and body reach GitHub exactly as this tool wrote them. No text the caller
 sends is passed through as prose: the fields are assembled into the playbook's shape,
 and the lint refuses rather than repairs.
+
+The \`## Validation\` rows carry one entry per command that ran, with the output it
+printed. A branch that changed a code file carries the two ripwire measurements as
+their own entries. A branch that changed no code file states that fact in the entry
+holding its test result.
 
 ## The order, and why it is that order
 
