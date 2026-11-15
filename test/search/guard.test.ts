@@ -53,6 +53,28 @@ describe("both search ids are read", () => {
   });
 });
 
+describe("a stock agent's tools are left alone", () => {
+  test("grep keeps its name and the first code read is not refused", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const { callback, asserts } = await captureGuard();
+      const name = "ses_guard_stock";
+
+      const grep = toolEvent("grep", { pattern: "resolveTool" }, name, "call_stock_grep", "build");
+      await Effect.runPromise(callback(grep));
+      expect(grep.tool).toBe("grep");
+
+      const read = toolEvent("read", { path: "src/retry.ts" }, name, "call_stock_read", "build");
+      const exit = await Effect.runPromiseExit(callback(read));
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(read.tool).toBe("read");
+
+      expect(asserts).toEqual([]);
+      expect(memories.get(session(name))).toBeUndefined();
+    });
+  });
+});
+
 describe("the guard's text rows", () => {
   test("a code-shaped grep reroutes and records the pattern", async () => {
     const bin = await makeBin(READY_BIN);

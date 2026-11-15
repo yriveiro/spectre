@@ -105,6 +105,22 @@ describe("the record is written on execute.after", () => {
     });
   });
 
+  test("a stock agent's call writes no row", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const after = await captureAfter();
+
+      await Effect.runPromise(
+        after.callback(
+          afterEvent("edit", { path: "src/a.ts" }, "ses_measure_stock", "call_m_stock", undefined, "build"),
+        ),
+      );
+
+      expect(await records(after)).toEqual([]);
+      expect(memories.get(Session.ID.make("ses_measure_stock"))).toBeUndefined();
+    });
+  });
+
   test("a second project reads none of the first project's rows", async () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {

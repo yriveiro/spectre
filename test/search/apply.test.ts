@@ -92,6 +92,7 @@ describe("the catalogue's defect path", () => {
   test("a defect is logged, never thrown, so the step continues", async () => {
     const callback = await captureContext();
     const broken = {
+      agent: "spectre",
       system: [] as Array<{ type: "text"; text: string }>,
       tools: {
         get grep() {
@@ -106,6 +107,7 @@ describe("the catalogue's defect path", () => {
 
 const context = (session: string, tools: ReadonlyArray<string>) => ({
   sessionID: Session.ID.make(session),
+  agent: "spectre",
   system: [] as Array<{ type: "text"; text: string }>,
   tools: Object.fromEntries(tools.map((name) => [name, { description: name, input: {} }])),
 });

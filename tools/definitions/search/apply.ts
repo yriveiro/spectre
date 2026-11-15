@@ -4,6 +4,7 @@ import type { Session } from "@opencode/schema/session";
 import type { SessionMessage } from "@opencode/schema/session-message";
 import { Tool } from "@opencode/schema/tool";
 import { Effect, type Scope } from "effect";
+import { factsOf, isSpectre } from "./agents";
 import { shape } from "./catalogue";
 import { CONTRACT } from "./contract";
 import { decide, type Ask, type Env, type Health, MAP, type ShellAsk, type TextAsk, type Verdict } from "./policy";
@@ -16,6 +17,10 @@ import { markRerouted, memoryOf, remember } from "./state";
  * the two permission asserts and the tool rename for a reroute, the prose rule
  * and the catalogue for a request, the skill attachment for the first prompt.
  * `decide` never touches the host.
+ *
+ * Each applier reads the session's agent first and returns on anything this
+ * plugin did not register. That is not a verdict: `decide` never sees a stock
+ * agent, because the session is not Spectre's to shape.
  */
 
 /** The `session.prompt` event, as far as the applier reads it. */
@@ -162,6 +167,9 @@ export const attachGuard = (ctx: Plugin.Context, read: AskReader = (event) => as
   Effect.gen(function* () {
     yield* ctx.tool.hook("execute.before", (event) =>
       Effect.gen(function* () {
+        // A stock agent's tools are its own, so no gate here is its.
+        if (!isSpectre(event.agent)) return;
+
         const ask = read(event);
         if (ask === undefined) return;
 
@@ -204,6 +212,10 @@ export const attachCatalogue = (ctx: Plugin.Context): Effect.Effect<void, never,
   Effect.gen(function* () {
     yield* ctx.session.hook("context", (event) =>
       Effect.gen(function* () {
+        // A stock agent's request is handed back as the host built it: no rule,
+        // and its `grep` keeps its own name and description.
+        if (!isSpectre(event.agent)) return;
+
         const ask = contextAsk(event);
         if (ask === undefined) return shape(event);
 
@@ -239,28 +251,26 @@ const holdsSkill = (ctx: Plugin.Context, skill: Skill.ID): Effect.Effect<boolean
     ),
   );
 
-/** A child session is a new context, so it pays its own attachment and the memory records that it did. */
-const childOf = (ctx: Plugin.Context, sessionID: Session.ID): Effect.Effect<boolean> =>
-  ctx.session.get({ sessionID }).pipe(
-    Effect.map((info) => info.parentID !== undefined),
-    Effect.catchCause(() => Effect.succeed(false)),
-  );
-
 /**
- * The first user prompt of every session, child included, carries the compact
- * `ripwire-first` map: the host resolves the body once and persists it in that
- * message. `decide` owns the once-per-session rule, so a second prompt attaches
- * nothing. A session already holding the skill was attached by the user, and the
- * body is not attached twice.
+ * The first user prompt of every session running as a Spectre agent, child
+ * included, carries the compact `ripwire-first` map: the host resolves the body
+ * once and persists it in that message. `decide` owns the once-per-session rule,
+ * so a second prompt attaches nothing. A session already holding the skill was
+ * attached by the user, and the body is not attached twice.
+ *
+ * A session on any other agent attaches nothing and writes no memory, so a
+ * switch to a Spectre agent attaches the map on that prompt.
  */
 const discover = (ctx: Plugin.Context, event: PromptBefore): Effect.Effect<void> =>
   Effect.gen(function* () {
+    const facts = yield* factsOf(ctx, event.sessionID);
+    if (facts.agent === undefined || !isSpectre(facts.agent)) return;
+
     const memory = memoryOf(event.sessionID);
     if (memory.attached) return;
 
     const skill = yield* holdsSkill(ctx, MAP);
-    const parentID = yield* childOf(ctx, event.sessionID);
-    const decision = decide({ surface: "prompt" }, memory, promptEnv(skill, parentID));
+    const decision = decide({ surface: "prompt" }, memory, promptEnv(skill, facts.parentID));
     const { verdict } = decision;
 
     if (verdict.kind === "attach") {
