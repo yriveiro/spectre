@@ -137,7 +137,6 @@ export interface PromptListing {
   readonly broken?: boolean;
 }
 
-/** The `session.prompt` hook, captured with the skill listing, the parent and the agent it reports. */
 export const capturePrompt = async (
   listing: PromptListing = {},
 ): Promise<(event: unknown) => Effect.Effect<void, never>> => {

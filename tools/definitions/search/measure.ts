@@ -222,8 +222,6 @@ const readEvent = (event: ToolAfter, root: string): Observation | undefined => {
 
 const observe = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
   Effect.gen(function* () {
-    // A stock agent is not a session that skipped ripwire, so it earns no row
-    // and the report never names it.
     if (!isSpectre(event.agent)) return;
 
     const observation = readEvent(event, ctx.location.directory);
