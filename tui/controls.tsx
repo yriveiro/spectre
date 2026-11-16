@@ -15,7 +15,6 @@ import {
   JEV_MODEL,
   judgeRef,
   KNOWN_ORDER,
-  type Known,
   ladderOf,
   proposeAlias,
   resolveProfile,
@@ -27,7 +26,6 @@ import {
   formatCost,
   isProfileEnabled,
   type Model,
-  modelInfo,
   normalizeCost,
   type Profile,
   type Resolution,
@@ -236,19 +234,6 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
 
 const refOf = (one: Model): string => `${one.providerID}/${one.id}`;
 
-const knownOf = (one: Model): Known => ({
-  providerID: one.providerID,
-  id: one.id,
-  name: one.name,
-  family: one.family,
-  rungs: one.rungs,
-  costInput: one.costInput,
-  costOutput: one.costOutput,
-  enabled: one.enabled,
-  status: one.deprecated ? "deprecated" : "active",
-  tools: true,
-});
-
 const rungsOf = (one: Model): ReadonlyArray<string> =>
   rungs(ladderOf(one.rungs.map((id) => ({ id }))));
 
@@ -265,7 +250,7 @@ export const availableProviders = (models: ReadonlyArray<Model>): ReadonlyArray<
   const spendable = new Set<string>();
   const anyEnabled = new Set<string>();
   for (const one of models) {
-    if (!one.enabled || one.deprecated) continue;
+    if (!one.enabled || one.status === "deprecated") continue;
     anyEnabled.add(one.providerID);
     if (one.tools) spendable.add(one.providerID);
   }
@@ -287,7 +272,7 @@ export const isModelUsable = (
   provider?: string | undefined,
 ): model is Model => {
   if (model === undefined) return false;
-  if (!model.enabled || model.deprecated || !model.tools) return false;
+  if (!model.enabled || model.status === "deprecated" || !model.tools) return false;
   if (provider !== undefined && model.providerID !== provider) return false;
   return true;
 };
@@ -839,7 +824,7 @@ export const crosscheckEffortOptionsFor = (
   const declared = pinModel === undefined ? [] : rungsOf(pinModel);
   const kept = candidates(
     clean.models.map((one) => ({ alias: one.alias, ref: one.ref, pinned: undefined })),
-    models.map(modelInfo),
+    models,
   ).kept;
 
   const trial = (
@@ -1334,7 +1319,7 @@ export const providerOptionsFor = (
   }
   return allNames.map((name): ProviderOptionRow => {
     const providerModels = models.filter((one) => isModelUsable(one, name));
-    const freeCount = providerModels.filter((one) => isFree(knownOf(one))).length;
+    const freeCount = providerModels.filter((one) => isFree(one)).length;
     return {
       name,
       available: available.includes(name),
@@ -1791,7 +1776,7 @@ export const modelPicker = async (input: {
   const alias = await aliasPrompt({
     dialog: input.dialog,
     ref,
-    proposed: proposeAlias(knownOf(model), taken),
+    proposed: proposeAlias(model, taken),
     taken,
   });
   if (alias === undefined) return undefined;

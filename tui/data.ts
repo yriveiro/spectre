@@ -1,7 +1,7 @@
-import type { ModelInfo, SessionInfo } from "@opencode/client";
-import type { Model as Schema } from "@opencode/plugin/effect";
+import type { SessionInfo } from "@opencode/client";
+import { Model as ModelSchema } from "@opencode/plugin/effect";
 import type { Route } from "@opencode/plugin/tui/context";
-import { Effect } from "effect";
+import { Effect, Option, Schema } from "effect";
 import {
   candidates,
   crosscheckOf,
@@ -10,6 +10,7 @@ import {
   FILE_NAME,
   isDefaultProfile,
   type JudgeConfig,
+  type Known,
   known,
   loadProject,
   modelNames,
@@ -23,18 +24,7 @@ import {
 
 export { DEFAULT_PROFILES, isDefaultProfile };
 
-export type Model = {
-  readonly providerID: string;
-  readonly id: string;
-  readonly name: string;
-  readonly family: string | undefined;
-  readonly rungs: ReadonlyArray<string>;
-  readonly costInput: number;
-  readonly costOutput: number;
-  readonly enabled: boolean;
-  readonly deprecated: boolean;
-  readonly tools: boolean;
-};
+export type Model = Known;
 
 export type Profile = {
   readonly name: string;
@@ -232,39 +222,20 @@ export const read = async (directory: string): Promise<Draft> => {
   };
 };
 
-type Row = Model & {
-  readonly status?: string;
-  readonly tools?: boolean;
-};
+const decodeInfo = Schema.decodeUnknownOption(ModelSchema.Info);
 
-export const catalogue = (models: ReadonlyArray<ModelInfo>): ReadonlyArray<Model> => {
-  const rows: Array<Row> = [];
-  for (const info of models) {
-    const one = known(info as unknown as Schema.Info);
-    rows.push({ ...one, deprecated: one.status === "deprecated" });
-  }
-  return rows;
-};
-
-export const modelInfo = (one: Model): Schema.Info => {
-  const row = one as Row;
-  return {
-    providerID: one.providerID,
-    id: one.id,
-    name: one.name,
-    family: one.family,
-    variants: one.rungs.map((id) => ({ id })),
-    cost: [{ input: one.costInput, output: one.costOutput }],
-    enabled: one.enabled,
-    status: one.deprecated ? "deprecated" : (row.status ?? "active"),
-    capabilities: { tools: row.tools ?? true },
-  } as unknown as Schema.Info;
-};
+export const catalogue = (models: ReadonlyArray<unknown>): ReadonlyArray<Model> =>
+  models.flatMap((info) =>
+    Option.match(decodeInfo(info), {
+      onNone: () => [],
+      onSome: (decoded) => [known(decoded)],
+    }),
+  );
 
 export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArray<Resolution> => {
   const kept = candidates(
     draft.models.map((one) => ({ alias: one.alias, ref: one.ref, pinned: undefined })),
-    models.map(modelInfo),
+    models,
   );
 
   return configuredProfiles(draft).map((profile): Resolution => {
