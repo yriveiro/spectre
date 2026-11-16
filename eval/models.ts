@@ -1,4 +1,4 @@
-import type { Model, ModelInfo } from "./opencode";
+import type { ModelInfo, ModelRef } from "@opencode/client";
 
 /**
  * The one model the eval runs on, and the reason it is the only one. The
@@ -20,11 +20,11 @@ import type { Model, ModelInfo } from "./opencode";
 export const PINNED = "opencode-go/minimax-m3.1-flash-free";
 
 export type Selection = {
-  readonly models: ReadonlyArray<Model>;
+  readonly models: ReadonlyArray<ModelRef>;
   readonly skipped: ReadonlyArray<{ ref: string; why: string }>;
 };
 
-export const ref = (model: Model) =>
+export const ref = (model: ModelRef) =>
   `${model.providerID}/${model.id}${model.variant === undefined ? "" : `#${model.variant}`}`;
 
 const wanted = (list: string | undefined) =>
@@ -46,14 +46,14 @@ export const select = (all: ReadonlyArray<ModelInfo>, options: Options = {}): Se
   const asked = wanted(options.models);
   const target = asked.length > 0 ? asked : [PINNED];
   const skip = wanted(options.skip);
-  const models: Array<Model> = [];
+  const models: Array<ModelRef> = [];
   const skipped: Array<{ ref: string; why: string }> = [];
 
   for (const info of all) {
     const name = `${info.providerID}/${info.id}`;
     if (!target.some((entry) => name === entry || name.includes(entry))) continue;
 
-    const variants = (info.variants ?? []).map((v) => v.id);
+    const variants = info.variants.map((v) => v.id);
     if (options.variant !== undefined) {
       if (variants.includes(options.variant))
         models.push({ providerID: info.providerID, id: info.id, variant: options.variant });
