@@ -1,7 +1,7 @@
 import type { Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect, Schema } from "effect";
 import { agentIds } from "../../../agents";
-import { candidates } from "./catalogue";
+import { candidates, known } from "./catalogue";
 import { check } from "./check";
 import { hostCatalogue, sessionDirectory } from "./host";
 import { jevJudge } from "./jev";
@@ -472,7 +472,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
         pinned: undefined,
       }));
       const rankOf = new Map(ordered.ranked.map((one) => [one.alias, one.priority]));
-      const kept = candidates(allowed, listed.models);
+      const kept = candidates(allowed, listed.models.map(known));
 
       const asRow = (one: Candidate, priority: number): typeof Row.Type => ({
         name: one.alias,

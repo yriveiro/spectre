@@ -61,7 +61,7 @@ const models: ReadonlyArray<Model> = [
     costInput: 0.1,
     costOutput: 0.2,
     enabled: true,
-    deprecated: false,
+    status: "active",
     tools: true,
   },
   {
@@ -73,7 +73,7 @@ const models: ReadonlyArray<Model> = [
     costInput: 0.15,
     costOutput: 0.5,
     enabled: true,
-    deprecated: false,
+    status: "active",
     tools: true,
   },
 ];
@@ -482,7 +482,7 @@ describe("the modal draws what the session would spend", () => {
           costInput: 0.1,
           costOutput: 0.2,
           enabled: true,
-          deprecated: false,
+          status: "active",
           tools: true,
         },
       },
@@ -517,7 +517,7 @@ describe("the modal draws what the session would spend", () => {
         costInput: 0.2,
         costOutput: 0.4,
         enabled: true,
-        deprecated: false,
+        status: "active",
         tools: true,
       },
       {
@@ -529,7 +529,7 @@ describe("the modal draws what the session would spend", () => {
         costInput: 0.2,
         costOutput: 0.4,
         enabled: false,
-        deprecated: false,
+        status: "active",
         tools: true,
       },
     ];
@@ -1479,6 +1479,7 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
               {
                 providerID: "acme",
                 id: "muse-spark-1.3",
+                modelID: "muse-spark-1.3",
                 name: "Muse Spark",
                 family: "muse",
                 variants: [{ id: "high" }],
@@ -1486,6 +1487,8 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
                 enabled: true,
                 status: "active",
                 capabilities: { tools: true, input: [], output: [] },
+                time: { released: 0 },
+                limit: { context: 200_000, output: 32_000 },
               },
             ],
           },

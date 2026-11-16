@@ -84,7 +84,7 @@ const refused = (model: Known, variant: string | undefined): string | undefined 
  */
 export const candidates = (
   allowed: ReadonlyArray<Allowed>,
-  catalogue: ReadonlyArray<Model.Info>,
+  catalogue: ReadonlyArray<Known>,
 ): {
   readonly kept: ReadonlyArray<Candidate>;
   readonly missing: ReadonlyArray<{
@@ -117,8 +117,8 @@ export const candidates = (
         ? formatRef(ref)
         : formatRef({ ...ref, variant: Model.VariantID.make(variant) });
 
-    const info = catalogue.find((one) => one.providerID === ref.providerID && one.id === ref.id);
-    if (info === undefined) {
+    const model = catalogue.find((one) => one.providerID === ref.providerID && one.id === ref.id);
+    if (model === undefined) {
       missing.push({
         alias: entry.alias,
         ref: written,
@@ -127,7 +127,6 @@ export const candidates = (
       continue;
     }
 
-    const model = known(info);
     const why = refused(model, variant);
     if (why !== undefined) {
       missing.push({ alias: entry.alias, ref: written, reason: why });
