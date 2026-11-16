@@ -267,10 +267,11 @@ export const pullRequests = async (cwd: string): Promise<PullRequests> => {
  * that names the guard is worth more than a stringified unknown.
  */
 export const hostRefusal = (cause: unknown): { message: string; forceRequired: boolean } => {
-  const decoded = Schema.decodeUnknownOption(Schema.Struct({ message: Schema.String }))(cause);
+  const decoded = Schema.decodeUnknownOption(
+    Schema.Struct({ message: Schema.String, forceRequired: Schema.optional(Schema.Boolean) }),
+  )(cause);
   if (decoded._tag === "None") return { message: String(cause), forceRequired: false };
-  const forced = (cause as { readonly forceRequired?: unknown }).forceRequired === true;
-  return { message: decoded.value.message, forceRequired: forced };
+  return { message: decoded.value.message, forceRequired: decoded.value.forceRequired === true };
 };
 
 export { Effect, Worktree };
