@@ -11,17 +11,17 @@
  * profiles in its own text, and this process reads the config through the
  * tool's own loader, so nothing the run measures depends on the plugin.
  */
-import type { Model } from "@opencode/plugin/effect";
-import { Effect } from "effect";
+import { Model } from "@opencode/plugin/effect";
+import { Effect, Schema } from "effect";
 import {
   candidates,
   DEFAULT_AGENT,
-  DEFAULT_TIMEOUT_MS,
+  type Decide,
   jevJudge,
+  judgeRef,
+  known,
   load,
   resolveProfile,
-  SYSTEMONE_ENDPOINT,
-  SYSTEMONE_KEY_ENV,
 } from "../../tools/definitions/routing";
 import { boot } from "../boot";
 import { head, systemic } from "../guard";
@@ -153,12 +153,8 @@ booting.advance();
 booting.finish("listening");
 
 try {
-  // The route answers `Location.response(Schema.Array(Model.Info))`
-  // (`packages/protocol/src/groups/model.ts:10-12` at `v2.1.1`), so the wire
-  // carries cost, family, status and tools. The local `ModelInfo` type names
-  // only the fields the skill eval reads, hence the cast.
-  const listed = (await client.models()) as ReadonlyArray<Model.Info>;
-  const kept = candidates(allowed, listed);
+  const listed = Schema.decodeUnknownSync(Schema.Array(Model.Info))(await client.models());
+  const kept = candidates(allowed, listed.map(known));
   if (kept.missing.length > 0)
     refuse(
       kept.missing
@@ -245,30 +241,17 @@ try {
     { name: "lex:match", report: score(corpus, lexical(described, prompts), priceList) },
   ];
 
-  // The System One arm, when the config asks for a judge and the key is
-  // there. It is the third arm the feature file names, and it is the one that
-  // carries a probability.
   if (judgeSettings !== undefined) {
-    const key = judgeSettings.key ?? SYSTEMONE_KEY_ENV;
-    if (Bun.env[key] === undefined) say(`\n  jev arm: skipped, ${key} is not in the environment\n`);
-    else {
-      say(`\n  jev arm: ${judgeSettings.model ?? "the configured model"}`);
-      // The arm reads the key from the environment itself, so the settings
-      // carry the variable's name and not its value. The second argument is
-      // the surface: the profile names and their match lines.
-      const judge = jevJudge(
-        {
-          model: judgeSettings.model ?? "jev-1.13-free",
-          endpoint: judgeSettings.endpoint ?? SYSTEMONE_ENDPOINT,
-          keyEnv: key,
-          timeout: judgeSettings.timeout ?? DEFAULT_TIMEOUT_MS,
-        },
-        Object.fromEntries(
-          Object.entries(tables.profiles).map(([name, entry]) => [name, entry.match]),
-        ),
-      );
-      arms.push({ name: "jev", report: score(corpus, await jev(judge, prompts), priceList) });
-    }
+    say(`\n  jev arm: ${judgeRef(judgeSettings.model)}`);
+    const decide: Decide = (await client.effect()).experimental.generate.decisions;
+    const judge = jevJudge(
+      { model: judgeSettings.model, timeout: judgeSettings.timeout },
+      Object.fromEntries(
+        Object.entries(tables.profiles).map(([name, entry]) => [name, entry.match]),
+      ),
+      decide,
+    );
+    arms.push({ name: "jev", report: score(corpus, await jev(judge, prompts), priceList) });
   }
 
   if (!NO_MODEL) {
@@ -296,17 +279,11 @@ try {
       else inFlight -= 1;
     };
 
-    // The route is the one-shot generation the server holds
-    // (`packages/protocol/src/groups/generate.ts:8-14` at `v2.1.1`): one call,
-    // one reply, no session, and the model named in the payload. One attempt,
-    // thrown on anything that is not a reply, so the retry loop has exactly
-    // one caller and the failure reason is raised in one place.
     const once = async (prompt: string): Promise<string> => {
-      const out = await client.raw<{ text: string }>("/api/experimental/generate", {
-        method: "POST",
-        body: JSON.stringify({ prompt, model: armRef }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
+      const out = await client.experimental.generate.text(
+        { prompt, model: armRef },
+        { signal: AbortSignal.timeout(TIMEOUT_MS) },
+      );
       if (out.text.trim() === "") throw new Error("an empty reply");
       return out.text;
     };

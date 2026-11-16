@@ -3,7 +3,7 @@ import type { ResolvedTheme } from "@opencode/theme/tui";
 import { type KeyEvent, type RGBA, TextAttributes } from "@opentui/core";
 import { type JSX, useRenderer } from "@opentui/solid";
 import { createSignal } from "solid-js";
-import { FILE_NAME, KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
+import { FILE_NAME, JEV_MODEL, judgeRef, KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
 import {
   addProfilePrompt,
   applied,
@@ -12,10 +12,8 @@ import {
   DEFAULT_PROVIDER,
   type Edit,
   effortPicker,
-  isJevAvailable,
   isModelUsable,
   isProviderAvailable,
-  JEV_MODEL,
   modelPicker,
   pinPicker,
   preview,
@@ -71,7 +69,7 @@ export type PageInput = {
   readonly onRowChange?: ((row: number) => void) | undefined;
   /** True while the directory's config is being read. */
   readonly loading?: boolean | undefined;
-  readonly jevAvailable?: boolean | undefined;
+  readonly jevAvailable: boolean;
   readonly terminalWidth?: number | undefined;
   readonly terminalHeight?: number | undefined;
   readonly onChange: (next: Draft) => void;
@@ -481,7 +479,7 @@ const jevToggleBar = (input: {
 }): JSX.Element => {
   const { colors, available, enabled } = input;
   const radioText = !available
-    ? "(○) Disabled (no OPENCODE_KEY)"
+    ? "(○) Disabled (model not available)"
     : enabled
       ? "(●) On  ( ) Off"
       : "( ) On  (●) Off";
@@ -1277,7 +1275,7 @@ export const page = (input: PageInput): JSX.Element => {
   const [selectedProfileListRow, setSelectedProfileListRow] = createSignal(0);
   const [selectedEntryRow, setSelectedEntryRow] = createSignal(0);
   const [selectedCrosscheckRow, setSelectedCrosscheckRow] = createSignal(0);
-  const jevAvailable = input.jevAvailable ?? isJevAvailable(input.draft);
+  const jevAvailable = input.jevAvailable;
   const jevEnabled =
     jevAvailable && input.draft.judge !== undefined && input.draft.judge.kind !== "lexical";
   const jevModel = input.draft.judge?.model ?? JEV_MODEL;
@@ -1647,7 +1645,7 @@ export const page = (input: PageInput): JSX.Element => {
           if (!jevAvailable) {
             context.ui.toast.show({
               title: "Routing",
-              message: "Set OPENCODE_API_KEY to enable the Jev judge",
+              message: `Connect the provider of ${judgeRef(jevModel)} to enable the Jev judge`,
               variant: "warning",
             });
             return;

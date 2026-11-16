@@ -7,15 +7,12 @@ import { failureOf } from "../opencode";
  * threw and the sweep reported zero failures over 54 rows that never happened.
  */
 const RATE_LIMITED = {
-  id: "msg_1",
-  type: "assistant",
-  finish: "error",
+  finish: "error" as const,
   error: {
     type: "provider.quota",
     message: "Rate limit exceeded. Please try again later.",
     status: 429,
   },
-  content: [],
 };
 
 describe("failureOf", () => {
@@ -29,16 +26,19 @@ describe("failureOf", () => {
   });
 
   test("a turn that finished is not a failure, whatever its content", () => {
-    expect(failureOf({ type: "assistant", finish: "stop", content: [] })).toBeUndefined();
-    expect(failureOf({ type: "assistant", finish: "tool-calls", content: [] })).toBeUndefined();
+    expect(failureOf({ finish: "stop" })).toBeUndefined();
+    expect(failureOf({ finish: "tool-calls" })).toBeUndefined();
   });
 
   test("a turn with no finish at all is not a failure", () => {
-    expect(failureOf({ type: "assistant", content: [] })).toBeUndefined();
+    expect(failureOf({})).toBeUndefined();
   });
 
-  test("an error with no message still names its kind", () => {
-    const failure = failureOf({ finish: "error", error: { type: "provider.overloaded" } });
+  test("an error with an empty message still names its kind", () => {
+    const failure = failureOf({
+      finish: "error",
+      error: { type: "provider.overloaded", message: "" },
+    });
     expect(failure?.kind).toBe("provider.overloaded");
     expect(failure?.reason).toBe("provider.overloaded");
   });

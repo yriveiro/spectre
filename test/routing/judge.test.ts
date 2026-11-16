@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { lexicalJudge, rank, surface, type Verdict } from "../../tools/definitions/routing/judge";
 import type { Profile } from "../../tools/definitions/routing/types";
 
@@ -21,7 +22,7 @@ const described: Record<string, Profile> = table({
 
 /** The verdict for a task, from the lexical arm. */
 const verdict = (task: string, profiles: Record<string, Profile> = described): Promise<Verdict> =>
-  lexicalJudge(profiles).judge(task);
+  Effect.runPromise(lexicalJudge(profiles).judge(task));
 
 describe("the lexical arm", () => {
   test("it names the profile the task fits", async () => {

@@ -1,32 +1,54 @@
 import { describe, expect, test } from "bun:test";
-import type { Message } from "../../opencode";
+import type {
+  JsonValue,
+  SessionMessageAssistant,
+  SessionMessageAssistantTool,
+} from "@opencode/client";
 import { assertScenario, observed, subagentCalls, type SubagentCall } from "../observe";
 import { loadScenario } from "../scenario";
 
 const correction = await loadScenario(`${import.meta.dir}/../scenarios/correction.json`);
 const newUnit = await loadScenario(`${import.meta.dir}/../scenarios/new-unit.json`);
 
-const part = (input: {
-  readonly sessionID?: string;
-  readonly output?: string;
-  readonly status?: string;
-}) => ({
-  type: "tool",
-  name: "subagent",
-  state: {
-    status: input.status ?? "completed",
-    input: {
-      agent: "spectre",
-      description: "task",
-      prompt: "do it",
-      ...(input.sessionID === undefined ? {} : { sessionID: input.sessionID }),
-    },
-    ...(input.output === undefined ? {} : { metadata: { sessionID: input.output } }),
+const part = (
+  input: {
+    readonly sessionID?: string;
+    readonly output?: string;
+    readonly at?: number;
   },
-});
+  index = 0,
+): SessionMessageAssistantTool => {
+  const args: Record<string, JsonValue> = {
+    agent: "spectre",
+    description: "task",
+    prompt: "do it",
+    ...(input.sessionID === undefined ? {} : { sessionID: input.sessionID }),
+  };
+  return {
+    type: "tool",
+    id: `call_${index}`,
+    name: "subagent",
+    time: { created: input.at ?? index },
+    state: {
+      status: "completed",
+      input: args,
+      content: [{ type: "text", text: "spawned" }],
+      ...(input.output === undefined ? {} : { metadata: { sessionID: input.output } }),
+    },
+  };
+};
 
-const transcript = (parts: ReadonlyArray<ReturnType<typeof part>>): ReadonlyArray<Message> =>
-  parts.map((one) => ({ content: [one] })) as unknown as ReadonlyArray<Message>;
+const transcript = (
+  parts: ReadonlyArray<SessionMessageAssistantTool>,
+): ReadonlyArray<SessionMessageAssistant> =>
+  parts.map((one, index) => ({
+    id: `msg_${index}`,
+    type: "assistant",
+    agent: "spectre",
+    model: { providerID: "mock", id: "resume" },
+    time: { created: index },
+    content: [one],
+  }));
 
 describe("the parent transcript yields the subagent calls", () => {
   test("a first call has an output id and no input id", () => {

@@ -1,10 +1,11 @@
+import type { ModelRef } from "@opencode/client";
 import { boot } from "./boot";
 import { verify } from "./catalogue";
 import { blind, heldOut, type Row, rows } from "./fixture";
 import { complete, head, systemic } from "./guard";
 import { ref, select } from "./models";
 import { observe } from "./observe";
-import type { Model, Opencode } from "./opencode";
+import type { Opencode } from "./opencode";
 import { plan } from "./progress";
 import { deltas, deltaTable, flips, type Run, snapshot } from "./record";
 import { reporter } from "./reporter";
@@ -47,7 +48,7 @@ const log = reporter();
 
 const evaluate = async (
   client: Opencode,
-  model: Model,
+  model: ModelRef,
   corpus: ReadonlyArray<Row>,
   ids: ReadonlyArray<string>,
 ): Promise<ReadonlyArray<Prediction>> => {
@@ -63,17 +64,24 @@ const evaluate = async (
       const index = next++;
       if (index >= corpus.length) return;
       const row = corpus[index]!;
-      const session = await client.session(model);
+      const session = await client.session.create({
+        title: "skill-eval",
+        model,
+        location: { directory: client.directory },
+      });
       try {
-        await client.prompt(session.id, `${ASK}\n\nRequest: ${row.prompt}`);
-        await client.wait(session.id);
+        await client.session.prompt({
+          sessionID: session.id,
+          text: `${ASK}\n\nRequest: ${row.prompt}`,
+        });
+        await client.experimental.session.wait({ sessionID: session.id });
         const transcript = await client.transcript(session.id);
         if (transcript.failure !== undefined) throw new Error(transcript.failure.reason);
         const seen = observe(transcript, ids);
         out[index] = { prompt: row.prompt, ...seen };
         bar.advance(seen.via === "silent" ? "no assistant text or skill call" : undefined);
       } catch (cause) {
-        const why = (cause as Error).message.slice(0, 80);
+        const why = (cause instanceof Error ? cause.message : String(cause)).slice(0, 80);
         out[index] = { prompt: row.prompt, got: `(failed: ${why})`, via: "silent" };
         bar.fail(why);
         reasons.push(why);
@@ -84,7 +92,7 @@ const evaluate = async (
           );
         bar.advance(why);
       } finally {
-        await client.remove(session.id).catch(() => {});
+        await client.session.remove({ sessionID: session.id }).catch(() => {});
       }
     }
   };
@@ -122,9 +130,13 @@ try {
   // once it actually carries one of our ids: on a fresh project it answers with
   // the global catalogue first, and taking that at face value reports thirteen
   // missing leaves when the plugin has simply not loaded yet.
-  const probe = await client.session({ providerID: "opencode", id: "mimo-v2.6-flash-free" });
-  await client.prompt(probe.id, "reply with the single word: ok");
-  await client.wait(probe.id);
+  const probe = await client.session.create({
+    title: "skill-eval",
+    model: { providerID: "opencode", id: "mimo-v2.6-flash-free" },
+    location: { directory: client.directory },
+  });
+  await client.session.prompt({ sessionID: probe.id, text: "reply with the single word: ok" });
+  await client.experimental.session.wait({ sessionID: probe.id });
 
   const deadline = Date.now() + 30_000;
   let source: "log" | "route" | "none" = "none";
@@ -136,7 +148,10 @@ try {
       registeredIds = logged;
       break;
     }
-    const viaRoute = (await client.skills().catch(() => [])).map((s) => s.id);
+    const viaRoute = await client.skill.list({ location: { directory: client.directory } }).then(
+      (res) => res.data.map((s) => s.id),
+      () => [],
+    );
     if (viaRoute.some((id) => ours.includes(id))) {
       source = "route";
       registeredIds = viaRoute;
@@ -144,7 +159,7 @@ try {
     if (Date.now() > deadline) break;
     await Bun.sleep(400);
   }
-  await client.remove(probe.id).catch(() => {});
+  await client.session.remove({ sessionID: probe.id }).catch(() => {});
 
   const problems = verify(registeredIds, ours, source);
   if (problems.length > 0) {

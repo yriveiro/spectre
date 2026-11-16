@@ -61,7 +61,7 @@ const models: ReadonlyArray<Model> = [
     costInput: 0.1,
     costOutput: 0.2,
     enabled: true,
-    deprecated: false,
+    status: "active",
     tools: true,
   },
   {
@@ -73,7 +73,7 @@ const models: ReadonlyArray<Model> = [
     costInput: 0.15,
     costOutput: 0.5,
     enabled: true,
-    deprecated: false,
+    status: "active",
     tools: true,
   },
 ];
@@ -205,7 +205,7 @@ const frame = async (input: {
             draft: input.draft ?? draft,
             tab: input.tab,
             loading: input.loading,
-            jevAvailable: input.jevAvailable,
+            jevAvailable: input.jevAvailable ?? false,
             onTabChange: input.onTabChange,
             onChange: input.onChange ?? (() => {}),
             onProviderChange: input.onProviderChange,
@@ -232,7 +232,7 @@ describe("the modal draws what the session would spend", () => {
     expect(drawn).toContain("acme");
     expect(drawn).toContain("Judge:");
     expect(drawn).toContain("jev-1.13-free");
-    expect(drawn).toContain("(○) Disabled (no OPENCODE_KEY)");
+    expect(drawn).toContain("(○) Disabled (model not available)");
     expect(drawn).toContain("Configured (2)");
     expect(drawn).toContain("Profiles (2)");
     expect(drawn).toContain("Allowlist (2)");
@@ -376,7 +376,7 @@ describe("the modal draws what the session would spend", () => {
     await setup.dispose();
   });
 
-  test("the Jev toggle appears disabled without OPENCODE_KEY and toggles the judge when available", async () => {
+  test("the Jev toggle appears disabled while the host lists no judge model, and toggles the judge when it does", async () => {
     let changed: Draft | undefined;
     const { setup: disabledSetup } = await frame({
       jevAvailable: false,
@@ -405,7 +405,7 @@ describe("the modal draws what the session would spend", () => {
     await availableSetup.mockMouse.click(10, availableRow);
     await availableSetup.flush();
     expect(changed?.judge?.kind).toBe("jev");
-    expect(changed?.judge?.model).toBe("jev-1.13-free");
+    expect(changed?.judge?.model).toBe("opencode/jev-1.13-free");
     await availableSetup.dispose();
 
     const { setup: enabledSetup } = await frame({
@@ -482,7 +482,7 @@ describe("the modal draws what the session would spend", () => {
           costInput: 0.1,
           costOutput: 0.2,
           enabled: true,
-          deprecated: false,
+          status: "active",
           tools: true,
         },
       },
@@ -517,7 +517,7 @@ describe("the modal draws what the session would spend", () => {
         costInput: 0.2,
         costOutput: 0.4,
         enabled: true,
-        deprecated: false,
+        status: "active",
         tools: true,
       },
       {
@@ -529,7 +529,7 @@ describe("the modal draws what the session would spend", () => {
         costInput: 0.2,
         costOutput: 0.4,
         enabled: false,
-        deprecated: false,
+        status: "active",
         tools: true,
       },
     ];
@@ -1479,6 +1479,7 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
               {
                 providerID: "acme",
                 id: "muse-spark-1.3",
+                modelID: "muse-spark-1.3",
                 name: "Muse Spark",
                 family: "muse",
                 variants: [{ id: "high" }],
@@ -1486,11 +1487,21 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
                 enabled: true,
                 status: "active",
                 capabilities: { tools: true, input: [], output: [] },
+                time: { released: 0 },
+                limit: { context: 200_000, output: 32_000 },
               },
             ],
           },
         },
         session: { get: () => undefined },
+      },
+      client: {
+        model: {
+          list: async () => ({
+            location: { directory: tempDir },
+            data: [{ providerID: "opencode", id: "jev-1.13-free" }],
+          }),
+        },
       },
       keymap: {
         layer: (factory: () => { mode?: string; commands: ReadonlyArray<{ run: () => void }> }) => {

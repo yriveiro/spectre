@@ -1,4 +1,4 @@
-import { Opencode } from "../opencode";
+import { connect, type Opencode } from "../opencode";
 
 export type Live = {
   readonly client: Opencode;
@@ -82,7 +82,7 @@ export const startLive = async (input: {
   }
   if (assigned === undefined) return abort("the live server did not start");
 
-  const client = new Opencode(input.directory, `http://127.0.0.1:${assigned}`, password);
+  const client = connect(input.directory, `http://127.0.0.1:${assigned}`, password);
   let models: Awaited<ReturnType<Opencode["models"]>> | undefined;
   let failure: unknown;
   for (let attempt = 0; attempt < 60; attempt++) {
@@ -105,7 +105,7 @@ export const startLive = async (input: {
     (model) =>
       model.providerID === providerID &&
       model.id === id &&
-      (variant === undefined || (model.variants ?? []).some((one) => one.id === variant)),
+      (variant === undefined || model.variants.some((one) => one.id === variant)),
   );
   if (!known)
     return abort(

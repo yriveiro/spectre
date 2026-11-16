@@ -1,11 +1,19 @@
 import { describe, expect, test } from "bun:test";
+import type { ModelInfo } from "@opencode/client";
 import { PINNED, ref, select } from "../models";
-import type { ModelInfo } from "../opencode";
 
-const info = (providerID: string, id: string, variants?: ReadonlyArray<string>): ModelInfo => ({
+const info = (providerID: string, id: string, variants: ReadonlyArray<string> = []): ModelInfo => ({
   providerID,
   id,
-  variants: variants?.map((v) => ({ id: v })),
+  modelID: id,
+  name: id,
+  capabilities: { tools: true, input: ["text"], output: ["text"] },
+  variants: variants.map((v) => ({ id: v })),
+  time: { released: 0 },
+  cost: [],
+  status: "active",
+  enabled: true,
+  limit: { context: 128_000, output: 8_192 },
 });
 
 const free = info("opencode-go", "minimax-m3.1-flash-free", [

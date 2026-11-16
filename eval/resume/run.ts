@@ -63,13 +63,17 @@ const runOne = async (scenario: Scenario, mode: Mode): Promise<Result> => {
     const client = server.client;
     const model = live ? parseRef(LIVE_MODEL) : { providerID: "mock", id: "resume" };
 
-    const session = await client.session(model);
+    const session = await client.session.create({
+      title: scenario.id,
+      model,
+      location: { directory: client.directory },
+    });
     for (const turn of scenario.turns) {
       // The fixture names the container's mount. A live run stands on the host,
       // so the same prompt has to name the host's directory.
       const prompt = live ? turn.prompt.replaceAll("/workspace", workspace) : turn.prompt;
-      await client.prompt(session.id, prompt);
-      await client.wait(session.id);
+      await client.session.prompt({ sessionID: session.id, text: prompt });
+      await client.experimental.session.wait({ sessionID: session.id });
     }
 
     const parent = await client.transcript(session.id);
