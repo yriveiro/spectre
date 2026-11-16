@@ -104,10 +104,11 @@ export const toolEvent = (
   input: Record<string, unknown>,
   session: string,
   id: string,
+  agent = "spectre",
 ): ToolEvent => ({
   tool,
   sessionID: Session.ID.make(session),
-  agent: "build",
+  agent,
   messageID: "msg_guard_rows",
   id: Tool.CallID.make(id),
   input,
@@ -130,15 +131,19 @@ export const promptEvent = (session: string): PromptEvent => ({
 export interface PromptListing {
   readonly skills?: ReadonlyArray<string>;
   readonly parentID?: string;
+  /** The agent the session holds. `null` is a session holding none, which runs as `defaultAgent`. */
+  readonly agent?: string | null;
+  readonly defaultAgent?: string;
   readonly broken?: boolean;
 }
 
-/** The `session.prompt` hook, captured with the skill listing and the parent it reports. */
+/** The `session.prompt` hook, captured with the skill listing, the parent and the agent it reports. */
 export const capturePrompt = async (
   listing: PromptListing = {},
 ): Promise<(event: unknown) => Effect.Effect<void, never>> => {
   let callback: ((event: unknown) => Effect.Effect<void, never>) | undefined;
   const data = (listing.skills ?? []).map((id) => ({ id }));
+  const agent = listing.agent === undefined ? "spectre" : listing.agent;
   const ctx = {
     skill: {
       list: () =>
@@ -146,12 +151,23 @@ export const capturePrompt = async (
           ? Effect.die(new Error("the skill registry did not answer"))
           : Effect.succeed({ location: {}, data }),
     },
+    agent: {
+      list: () =>
+        Effect.succeed({
+          location: {},
+          data: listing.defaultAgent === undefined ? [] : [{ id: listing.defaultAgent }],
+        }),
+    },
     session: {
       hook: (_name: string, cb: (event: unknown) => Effect.Effect<void, never>) => {
         callback = cb;
         return Effect.succeed({ dispose: Effect.void });
       },
-      get: () => Effect.succeed(listing.parentID === undefined ? {} : { parentID: listing.parentID }),
+      get: () =>
+        Effect.succeed({
+          ...(listing.parentID === undefined ? {} : { parentID: listing.parentID }),
+          ...(agent === null ? {} : { agent }),
+        }),
     },
   } as unknown as Plugin.Context;
   await Effect.runPromise(Effect.scoped(attachDiscovery(ctx)));
@@ -248,10 +264,17 @@ export const readingContext = (
   ({ location: locationOf(project), storage: makeStorage(values) }) as unknown as Plugin.Context;
 
 /** A completed `execute.after` event, with the output the tool returned. */
-export const afterEvent = (tool: string, input: unknown, session: string, id: string, output?: unknown): unknown => ({
+export const afterEvent = (
+  tool: string,
+  input: unknown,
+  session: string,
+  id: string,
+  output?: unknown,
+  agent = "spectre",
+): unknown => ({
   tool,
   sessionID: Session.ID.make(session),
-  agent: "build",
+  agent,
   messageID: "msg_measure_rows",
   id: Tool.CallID.make(id),
   input,
@@ -263,7 +286,7 @@ export const afterEvent = (tool: string, input: unknown, session: string, id: st
 export const failedEvent = (tool: string, input: unknown, session: string, id: string): unknown => ({
   tool,
   sessionID: Session.ID.make(session),
-  agent: "build",
+  agent: "spectre",
   messageID: "msg_measure_rows",
   id: Tool.CallID.make(id),
   input,

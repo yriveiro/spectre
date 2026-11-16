@@ -53,6 +53,37 @@ describe("the first prompt carries the map once", () => {
   });
 });
 
+describe("a stock agent carries nothing", () => {
+  test("a build session attaches nothing, and a spectre prompt on it attaches the map", async () => {
+    const stock = await capturePrompt({ skills: ["ripwire-first"], agent: "build" });
+    const first = promptEvent("ses_attach_stock");
+    await Effect.runPromise(stock(first));
+    expect(first.prompt.skills).toBeUndefined();
+    expect(memories.get(Session.ID.make("ses_attach_stock"))).toBeUndefined();
+
+    const ours = await capturePrompt({ skills: ["ripwire-first"] });
+    const second = promptEvent("ses_attach_stock");
+    await Effect.runPromise(ours(second));
+    expect(second.prompt.skills).toEqual([{ id: "ripwire-first" }]);
+
+    forget("ses_attach_stock");
+  });
+
+  test("a session holding no agent runs as the host default, whichever that is", async () => {
+    const stock = await capturePrompt({ skills: ["ripwire-first"], agent: null, defaultAgent: "build" });
+    const untouched = promptEvent("ses_attach_default_stock");
+    await Effect.runPromise(stock(untouched));
+    expect(untouched.prompt.skills).toBeUndefined();
+
+    const ours = await capturePrompt({ skills: ["ripwire-first"], agent: null, defaultAgent: "spectre" });
+    const attached = promptEvent("ses_attach_default_ours");
+    await Effect.runPromise(ours(attached));
+    expect(attached.prompt.skills).toEqual([{ id: "ripwire-first" }]);
+
+    forget("ses_attach_default_stock", "ses_attach_default_ours");
+  });
+});
+
 describe("a session with no map passes unchanged", () => {
   test("a missing skill id leaves the prompt unchanged", async () => {
     const callback = await capturePrompt({ skills: ["another-skill"] });

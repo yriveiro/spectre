@@ -6,7 +6,7 @@
     "beam": "opencode-go/beam-free",
     "ds41f": "opencode-go/deepseek-v4.1-flash"
   },
-  "priority": ["muse13", "iceman", "beam", "ds41f"],
+  "priority": ["muse13", "iceman", "beam", "ds41f", "longcat25"],
   "crosscheck": ["muse13", "beam", "ds41f"],
   "profiles": {
     "mechanical": {

@@ -74,6 +74,24 @@ describe("search context shape", () => {
   });
 });
 
+describe("a stock agent's request is left as the host built it", () => {
+  test("no rule is appended, grep keeps its name, and ripgrep gains nothing", async () => {
+    const callback = await captureContext();
+    const asked = {
+      sessionID: Session.ID.make("ses_catalogue_stock"),
+      agent: "build",
+      system: [] as Array<{ type: "text"; text: string }>,
+      tools: { grep: { description: "grep", input: {} } },
+    };
+
+    await Effect.runPromise(callback(asked));
+
+    expect(asked.system).toEqual([]);
+    expect(asked.tools["grep"]?.description).toBe("grep");
+    expect("ripgrep" in asked.tools).toBe(false);
+  });
+});
+
 describe("the context row above the landing", () => {
   test("an unmeasured edit puts the end-of-work nudge in the request", async () => {
     const bin = await makeBin(READY_BIN);
@@ -83,6 +101,7 @@ describe("the context row above the landing", () => {
       memories.set(name, held({ mutation: 2, editedCode: new Set(["src/retry.ts"]) }));
       const asked = {
         sessionID: name,
+        agent: "spectre",
         system: [] as Array<{ type: "text"; text: string }>,
         tools: { spectre_search: { description: "search", input: {} } },
       };

@@ -1,7 +1,9 @@
 import type { Plugin } from "@opencode/plugin/effect";
+import type { Agent } from "@opencode/schema/agent";
 import { Session } from "@opencode/schema/session";
 import type { Tool } from "@opencode/schema/tool";
 import { Effect, Option, Schema, Semaphore, type Scope } from "effect";
+import { isSpectre } from "./agents";
 import { envOf } from "./apply";
 import { decide, type Outcome, type SurfaceAsk } from "./policy";
 import { probe } from "./probe";
@@ -172,6 +174,7 @@ const decodeSearchAnswer = Schema.decodeUnknownOption(SearchAnswer);
 type ToolAfter = {
   readonly tool: string;
   readonly sessionID: Session.ID;
+  readonly agent: Agent.ID;
   readonly input: unknown;
 } & ({ readonly status: "completed"; readonly result: Tool.Result } | { readonly status: "error" });
 
@@ -219,6 +222,10 @@ const readEvent = (event: ToolAfter, root: string): Observation | undefined => {
 
 const observe = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
   Effect.gen(function* () {
+    // A stock agent is not a session that skipped ripwire, so it earns no row
+    // and the report never names it.
+    if (!isSpectre(event.agent)) return;
+
     const observation = readEvent(event, ctx.location.directory);
     if (observation === undefined) return;
 

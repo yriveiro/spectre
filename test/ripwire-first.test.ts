@@ -27,12 +27,14 @@ const session = (name: string): Session.ID => Session.ID.make(name);
 
 interface ContextEvent {
   readonly sessionID: Session.ID;
+  readonly agent: string;
   system: Array<{ type: "text"; text: string }>;
   tools: Record<string, { description: string; input: unknown }>;
 }
 
 const contextEvent = (name: string): ContextEvent => ({
   sessionID: session(name),
+  agent: "spectre",
   system: [],
   tools: { spectre_search: { description: "search", input: {} } },
 });

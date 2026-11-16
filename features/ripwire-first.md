@@ -17,9 +17,10 @@ policy has one home and no hook holds a rule of its own.
 Three parts of the design follow from that shape:
 
 - **Discovery is a prompt attachment.** `session.prompt` attaches the compact
-  `ripwire-first` map to the first user prompt of every session, once. The full
-  `ripwire` skill stays visible through `autoinvoke: true`, and the short rule
-  rides in `session.context` for every request after a compaction.
+  `ripwire-first` map to the first user prompt of every session running as a
+  Spectre agent, once. The full `ripwire` skill stays visible through
+  `autoinvoke: true`, and the short rule rides in `session.context` for every
+  request after a compaction.
 - **The search surface moves the call.** The plugin renames a code-shaped `grep`
   or a bare shell `rg` to `spectre_search` and rewrites its input, so the model
   gets the answer in the same turn. The plugin teaches the 531 shell calls of the
@@ -33,6 +34,26 @@ Two candidates lost. A rename of `spectre_search` to `spectre_ripgrep` claims
 ownership of a host built-in and changes its permission action. A shell deny
 costs a turn and answers nothing, because the reroute answers in the same call.
 
+## The agent gate
+
+The feature belongs to the agents this plugin registers. `agents.ts` answers
+whether a session runs as one of them, and every surface asks first. A session
+on any other agent — `build`, `plan`, `general`, `explore`, or one the user
+wrote — keeps what the host gave it: `grep` keeps its name and its description,
+no rule joins the request, the first code read goes through, the commit lands,
+and nothing writes a usage row. A child spawned as a Spectre agent carries the
+feature, and a `general` child does not.
+
+A session holds the agent the user switched in, and that field stays empty until
+they do. An empty selection runs as the host default, and `agent.list` answers
+the default first (`packages/core/src/agent.ts` at v2.2.7, `list`), so discovery
+reads the default from the head of that list. A read that fails gives no agent,
+and the session goes untouched rather than guessed at.
+
+The gate is not a verdict. `decide` never sees a stock agent, because the
+question is whose session this is rather than what the search surface should do,
+and a rule inside `decide` would claim a policy that no `Ask` describes.
+
 ## The surfaces
 
 | Surface | What it reads | What it does |
@@ -43,6 +64,10 @@ costs a turn and answers nothing, because the reroute answers in the same call.
 | `tool.execute.before` | `grep`, `ripgrep`, shell, `read`, `edit`, `write`, `subagent` | reroutes a search, and refuses a gate once |
 | `tool.execute.after` | a completed call | writes the durable usage record |
 | `spectre_ripwire_report` | the usage record | names the session and the missing verb |
+
+Every row above runs only when the session's agent is one `agents/index.ts`
+registers. The tool itself is the exception, because a call to it is the model's
+own.
 
 `spectre_search` stays `codemode: false`. A Code Mode tool is reachable only
 through `execute`, and that catalog is the surface that hid the verb names. The
@@ -108,7 +133,8 @@ child's first prompt  attach once
 ```
 
 A child is a new context, so it pays for the map once. Two prompts in that child
-attach one body.
+attach one body. The child carries it only when it runs as a Spectre agent: a
+`general` or `explore` child is a stock session and none of this reaches it.
 
 ### 6. A session that changed no code file
 
@@ -229,7 +255,7 @@ both.
 | E2 | one `Memory`, one `remember`, one reroute map, caps kept | `state.ts`, `test/search/state.test.ts` |
 | E3 | pure readers for prompt, context, text, shell, read, mutate, subagent, completion | `signals.ts`, `test/search/signals.test.ts` |
 | E4 | one applier per verdict; `context.ts` and `guard.ts` gone | `apply.ts`, `catalogue.ts`, `test/search/apply.test.ts` |
-| E5 | the map attached once per session, child included | `apply.ts`, `test/search/attach.test.ts` |
+| E5 | the map attached once per session running as a Spectre agent, child included | `apply.ts`, `agents.ts`, `test/search/attach.test.ts` |
 | E6 | the compact map skill, registered and not a leaf | `skills/definitions/ripwire-first/`, `test/skills/ripwire-first.test.ts` |
 | E7 | the full `ripwire` skill visible in every request | `skills/definitions/ripwire/index.ts`, `test/skills/ripwire-map.test.ts` |
 | E8 | both text ids reroute, a bare shell search reroutes, the rest passes | `apply.ts`, `policy.ts`, `signals.ts`, `test/search/guard.test.ts`, `test/search/shell.test.ts` |
