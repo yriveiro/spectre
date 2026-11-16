@@ -12,14 +12,14 @@ import {
   fit,
   isDefaultProfile,
   isFree,
+  JEV_MODEL,
+  judgeRef,
   KNOWN_ORDER,
   type Known,
   ladderOf,
   proposeAlias,
   resolveProfile,
   rungs,
-  SYSTEMONE_ENDPOINT,
-  SYSTEMONE_KEY_ENV,
 } from "../tools/definitions/routing/index.ts";
 import {
   type Draft,
@@ -36,13 +36,10 @@ import {
 } from "./data.ts";
 import { bindKeyboard, field, h, palette, show } from "./render.ts";
 
-export const JEV_MODEL = "jev-1.13-free";
 export const DEFAULT_PROVIDER = "opencode-go";
 
-export const isJevAvailable = (draft: Draft): boolean => {
-  const keyName = draft.judge?.key ?? SYSTEMONE_KEY_ENV;
-  return Boolean(Bun.env[keyName] || Bun.env.OPENCODE_API_KEY || Bun.env.OPENCODE_KEY);
-};
+export const isJevAvailable = (draft: Draft, decisions: ReadonlySet<string>): boolean =>
+  decisions.has(judgeRef(draft.judge?.model));
 
 export type Edit =
   | {
@@ -161,8 +158,6 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
         ? {
             kind: "jev",
             model: draft.judge?.model ?? JEV_MODEL,
-            endpoint: draft.judge?.endpoint ?? SYSTEMONE_ENDPOINT,
-            key: draft.judge?.key ?? SYSTEMONE_KEY_ENV,
             timeout: draft.judge?.timeout ?? DEFAULT_TIMEOUT_MS,
             threshold: draft.judge?.threshold,
           }

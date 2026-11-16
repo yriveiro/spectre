@@ -3,7 +3,13 @@ import { TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import { FILE_NAME } from "../tools/definitions/routing/index.ts";
-import { applied, isProviderAvailable, providerPicker, usableDraft } from "./controls.tsx";
+import {
+  applied,
+  isJevAvailable,
+  isProviderAvailable,
+  providerPicker,
+  usableDraft,
+} from "./controls.tsx";
 import {
   catalogue,
   configuredProfiles,
@@ -403,6 +409,25 @@ export default Plugin.define({
       return empty(target);
     };
 
+    // The decision models the host lists as available, by directory. The host
+    // lists a model only when its provider is connected or enabled
+    // (`packages/core/src/provider.ts` at v2.3.0), so a listed judge can be asked.
+    const decisions = new Map<string, ReadonlySet<string>>();
+    const decisionsFor = (directory: string): ReadonlySet<string> => {
+      const listed = decisions.get(directory);
+      if (listed !== undefined) return listed;
+      const none: ReadonlySet<string> = new Set();
+      decisions.set(directory, none);
+      void context.client.model
+        .list({ location: { directory }, types: ["decision"] })
+        .then((found) => {
+          decisions.set(directory, new Set(found.data.map((one) => `${one.providerID}/${one.id}`)));
+          if (modalOpen) showModal();
+        })
+        .catch(() => decisions.delete(directory));
+      return none;
+    };
+
     let activeTab: TabId = "configured";
     let selectedRow = 0;
 
@@ -475,6 +500,7 @@ export default Plugin.define({
         models: allow,
         catalogue: models,
         draft: clean,
+        jevAvailable: isJevAvailable(clean, decisionsFor(target)),
         tab: activeTab,
         selectedRow,
         loading: loading === target,
@@ -524,6 +550,8 @@ export default Plugin.define({
       // directory before the modal decides whether a provider is available, so
       // the page never offers a choice over the directory the session left.
       await ensure(directoryFor(routeSession()));
+      // A provider connected since the last open changes which decision models the host lists.
+      decisions.clear();
       const models = catalogue(listed(routeSession()));
       if (!isProviderAvailable(draft.provider, models)) {
         void providerPicker({

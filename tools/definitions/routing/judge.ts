@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import type { Profile } from "./types";
 
 /**
@@ -47,7 +48,7 @@ export type Verdict =
  * ask, and the agent picks the profile itself.
  */
 export type Judge = {
-  readonly judge: (task: string) => Promise<Verdict>;
+  readonly judge: (task: string) => Effect.Effect<Verdict>;
 };
 
 /** One profile, and the text an arm ranks it by: its `match` line. */
@@ -154,16 +155,17 @@ export const surface = (profiles: Readonly<Record<string, Profile>>): ReadonlyAr
  * read as calibrated.
  */
 export const lexicalJudge = (profiles: Readonly<Record<string, Profile>>): Judge => ({
-  judge: async (task) => {
-    const described = surface(profiles);
-    if (described.length === 0)
-      return { kind: "quiet", why: "no profile has a match line, so no profile can be ranked" };
-    const profile = rank(described, task);
-    if (profile === undefined)
-      return { kind: "quiet", why: "the task shares no term with a profile's match line" };
-    // A lexical arm ranks, so it has one answer and no distribution. The
-    // alternatives are the ones it did not choose, and it has no probability
-    // for any of them, so the list is empty.
-    return { kind: "profile", profile, confidence: undefined, alternatives: [] };
-  },
+  judge: (task) =>
+    Effect.sync((): Verdict => {
+      const described = surface(profiles);
+      if (described.length === 0)
+        return { kind: "quiet", why: "no profile has a match line, so no profile can be ranked" };
+      const profile = rank(described, task);
+      if (profile === undefined)
+        return { kind: "quiet", why: "the task shares no term with a profile's match line" };
+      // A lexical arm ranks, so it has one answer and no distribution. The
+      // alternatives are the ones it did not choose, and it has no probability
+      // for any of them, so the list is empty.
+      return { kind: "profile", profile, confidence: undefined, alternatives: [] };
+    }),
 });

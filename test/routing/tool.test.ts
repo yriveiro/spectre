@@ -35,9 +35,10 @@ const call = async (
   input: { profile?: string; task?: string; setup?: "accepted" | "declined" } = {},
   list?: () => Effect.Effect<unknown, unknown>,
   session?: { readonly id: string; readonly sessions: Record<string, string> },
+  decide?: () => Effect.Effect<unknown, unknown>,
 ) => {
   const sessions = session?.sessions ?? { ses_project: directory };
-  const run = routing(context(directory, list, sessions)).execute as unknown as (
+  const run = routing(context(directory, list, sessions, decide)).execute as unknown as (
     given: typeof input,
     context: { readonly sessionID: string },
   ) => Effect.Effect<{
@@ -622,8 +623,22 @@ describe("tools.spectre.routing", () => {
     const out = at(await call(scratch.projectDir(), { task: EXPLORE }), "resolved");
 
     expect(out.judge.status).toBe("skipped");
-    // The System One arm with no endpoint never touches the network.
-    if (out.judge.status === "skipped") expect(out.judge.reason).toContain("names no endpoint");
+    if (out.judge.status === "skipped")
+      expect(out.judge.reason).toContain("Model not found: opencode/jev-1.13-free");
+    expect(out.profiles).toHaveLength(2);
+  });
+
+  test("a judge that dies is skipped, and the tool still answers", async () => {
+    await scratch.writeProject(withJudge({ kind: "jev" }));
+    const out = at(
+      await call(scratch.projectDir(), { task: EXPLORE }, undefined, undefined, () =>
+        Effect.die(new Error("the host crashed")),
+      ),
+      "resolved",
+    );
+
+    expect(out.judge.status).toBe("skipped");
+    if (out.judge.status === "skipped") expect(out.judge.reason).toContain("the host crashed");
     expect(out.profiles).toHaveLength(2);
   });
 
