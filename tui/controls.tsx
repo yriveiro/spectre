@@ -1134,6 +1134,7 @@ export const profileInfoModal = (input: {
       "box",
       {
         flexDirection: "column",
+        flexShrink: 0,
         paddingLeft: 3,
         paddingRight: 3,
         paddingTop: 1,
@@ -1178,11 +1179,12 @@ export const profileInfoModal = (input: {
         field(dialogTheme, "Selected model", () => modelText),
         field(dialogTheme, "Cost", () => costText),
       ),
-      field(dialogTheme, "Crosscheck", () =>
-        resolution?.crosscheck !== undefined
-          ? `${crosscheckConfig} → ${resolution.crosscheck}`
-          : crosscheckConfig,
-      ),
+      field(dialogTheme, "Crosscheck", () => {
+        if (resolution?.crosscheck === undefined) return crosscheckConfig;
+        const cost = normalizeCost(resolution.crosscheckCost);
+        const spend = `${crosscheckConfig} → ${resolution.crosscheck}`;
+        return cost === undefined ? spend : `${spend} · ${cost}`;
+      }),
     ),
     h(
       "scrollbox",
@@ -1264,6 +1266,7 @@ export const profileInfoModal = (input: {
       {
         flexDirection: "row",
         justifyContent: "space-between",
+        flexShrink: 0,
         backgroundColor: colors.insetBg,
         border: ["top"],
         borderColor: colors.border,

@@ -101,6 +101,7 @@ export type Resolution = {
   readonly rung: string | undefined;
   readonly cost: string | undefined;
   readonly crosscheck: string | undefined;
+  readonly crosscheckCost: string | undefined;
   /** Why a configured crosscheck found no model. Absent when none was asked for. */
   readonly crosscheckProblem: string | undefined;
   readonly problem: string | undefined;
@@ -297,6 +298,7 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
         rung: undefined,
         cost: undefined,
         crosscheck: undefined,
+        crosscheckCost: undefined,
         crosscheckProblem: undefined,
         problem: found.problem,
       };
@@ -310,6 +312,10 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
       rung: primary.rung,
       cost: formatCost(primary.costInput, primary.costOutput),
       crosscheck: crosscheck === undefined ? undefined : spendRef(crosscheck),
+      crosscheckCost:
+        crosscheck === undefined
+          ? undefined
+          : formatCost(crosscheck.costInput, crosscheck.costOutput),
       crosscheckProblem: found.resolution.crosscheckProblem,
       problem: undefined,
     };

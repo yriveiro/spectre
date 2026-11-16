@@ -197,7 +197,12 @@ export const layoutMetrics = (input: {
   const pEffort = Math.max(12, Math.min(15, maxEffort + 4));
 
   const maxProfileCost = input.rows.reduce(
-    (max, one) => Math.max(max, (normalizeCost(one.resolution?.cost) ?? "-").length),
+    (max, one) =>
+      Math.max(
+        max,
+        (normalizeCost(one.resolution?.cost) ?? "-").length,
+        (normalizeCost(one.resolution?.crosscheckCost) ?? "-").length,
+      ),
     4,
   );
   const pCost = Math.max(8, Math.min(14, maxProfileCost));
@@ -693,6 +698,8 @@ const profileRow = (
   const [hovered, setHovered] = createSignal(false);
   const costText = normalizeCost(row.resolution?.cost) ?? "-";
   const costTone = isExpensiveCost(costText) ? colors.yellow : colors.muted;
+  const crossCostText = normalizeCost(row.resolution?.crosscheckCost) ?? "-";
+  const crossCostTone = isExpensiveCost(crossCostText) ? colors.yellow : colors.muted;
   const effort = profile.effort ?? (profile.pinned !== undefined ? "Pinned" : "-");
   const ref = row.resolution?.ref ?? "-";
   const nameProps = {
@@ -767,7 +774,7 @@ const profileRow = (
         tone: profile.crosscheck === undefined ? colors.muted : undefined,
         onOpen: actions.crosscheckEffort,
       }),
-      h("box", { width: cols.cost, flexShrink: 0 }),
+      costCell(cols.cost, () => crossCostText, crossCostTone),
     ),
     show(
       () => row.resolution?.crosscheckProblem !== undefined,
