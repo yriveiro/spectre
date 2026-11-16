@@ -192,7 +192,7 @@ const allow = (alias: string, ref: string, pinned?: string): Allowed => ({ alias
 const kept = (
   entries: ReadonlyArray<Allowed>,
   catalogue: ReadonlyArray<Model.Info> = MODELS,
-): ReadonlyArray<Candidate> => candidates(entries, catalogue).kept;
+): ReadonlyArray<Candidate> => candidates(entries, catalogue.map(known)).kept;
 
 describe("known", () => {
   test("a row is reduced to the fields a decision reads", () => {
@@ -262,7 +262,7 @@ describe("candidates", () => {
         allow("free", "opencode-go/minimax-m3.1-flash-free"),
         allow("glm", "opencode-go/glm-5.3-flash"),
       ],
-      MODELS,
+      MODELS.map(known),
     );
     expect(found.missing).toEqual([]);
     expect(found.kept.map((one) => one.alias)).toEqual(["kimi", "free", "glm"]);
@@ -278,7 +278,7 @@ describe("candidates", () => {
         allow("mute", "acme/falcon-mute"),
         allow("light", "acme/falcon-mini"),
       ],
-      MODELS,
+      MODELS.map(known),
     );
     expect(found.kept.map((one) => one.alias)).toEqual(["light"]);
     expect(found.missing.map((one) => one.alias)).toEqual(["ghost", "off", "old", "mute"]);
@@ -302,14 +302,14 @@ describe("candidates", () => {
   });
 
   test("a variant the model does not declare is missing, with the ones it has", () => {
-    const found = candidates([allow("light", "acme/falcon-mini#extreme")], MODELS);
+    const found = candidates([allow("light", "acme/falcon-mini#extreme")], MODELS.map(known));
     expect(found.kept).toEqual([]);
     expect(found.missing[0]?.reason).toContain('has no variant "extreme"');
     expect(found.missing[0]?.reason).toContain("Variants: none, high");
   });
 
   test("a ref of the wrong shape is a reason, not a crash", () => {
-    const found = candidates([allow("bad", "no-provider")], MODELS);
+    const found = candidates([allow("bad", "no-provider")], MODELS.map(known));
     expect(found.kept).toEqual([]);
     expect(found.missing[0]?.reason).toContain("Invalid model reference");
   });

@@ -25,6 +25,7 @@ const row = (input: {
 }) => ({
   providerID: "opencode-go",
   id: input.id,
+  modelID: input.id,
   name: input.name,
   family: input.family,
   variants: input.rungs.map((id) => ({ id })),
@@ -32,6 +33,8 @@ const row = (input: {
   enabled: input.enabled ?? true,
   status: (input.status ?? "active") as "active" | "deprecated" | "alpha" | "beta",
   capabilities: { tools: input.tools ?? true, input: [], output: [] },
+  time: { released: 0 },
+  limit: { context: 200_000, output: 32_000 },
 });
 
 const models = [
@@ -344,6 +347,38 @@ describe("the page reads the directory the session is in", () => {
         fallback: "/",
       }),
     ).toBe("/");
+  });
+});
+
+describe("the page decodes the host's catalogue rows", () => {
+  test("a complete row becomes the row the resolver reads", () => {
+    const [one] = models;
+    if (one === undefined) throw new Error("the fixture holds no row");
+    expect(catalogue([one])).toEqual([
+      {
+        providerID: "opencode-go",
+        id: "deepseek-v4.1-flash",
+        name: "DeepSeek",
+        family: "deepseek-flash",
+        rungs: ["low", "high", "max"],
+        costInput: 0.15,
+        costOutput: 0.6,
+        enabled: true,
+        status: "active",
+        tools: true,
+      },
+    ]);
+  });
+
+  test("a row the schema refuses is left out, not guessed", () => {
+    const { limit: _limit, ...partial } = row({
+      id: "glm-5.3-flash",
+      family: "glm-flash",
+      name: "GLM",
+      rungs: [],
+      cost: [0, 0],
+    });
+    expect(catalogue([partial])).toEqual([]);
   });
 });
 

@@ -19,6 +19,7 @@ import {
   type Decide,
   jevJudge,
   judgeRef,
+  known,
   load,
   resolveProfile,
 } from "../../tools/definitions/routing";
@@ -153,7 +154,7 @@ booting.finish("listening");
 
 try {
   const listed = Schema.decodeUnknownSync(Schema.Array(Model.Info))(await client.models());
-  const kept = candidates(allowed, listed);
+  const kept = candidates(allowed, listed.map(known));
   if (kept.missing.length > 0)
     refuse(
       kept.missing
