@@ -150,6 +150,7 @@ describe("subagentAsk reads the child a spawn created", () => {
     expect(subagentAsk({ agent: "explore", prompt: "x" }, { sessionID: "ses_child" })).toEqual({
       surface: "subagent",
       child: "ses_child",
+      agent: "explore",
     });
   });
 

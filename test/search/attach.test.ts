@@ -96,6 +96,31 @@ describe("a session with no map passes unchanged", () => {
     forget("ses_attach_missing");
   });
 
+  test("a session read that fails attaches nothing", async () => {
+    const callback = await capturePrompt({ skills: ["ripwire-first"], agent: null, brokenSession: true });
+
+    const alone = promptEvent("ses_attach_broken_session");
+    await Effect.runPromise(callback(alone));
+    expect(alone.prompt.skills).toBeUndefined();
+
+    forget("ses_attach_broken_session");
+  });
+
+  test("an agent list that fails attaches nothing", async () => {
+    const callback = await capturePrompt({
+      skills: ["ripwire-first"],
+      agent: null,
+      defaultAgent: "spectre",
+      brokenAgents: true,
+    });
+
+    const alone = promptEvent("ses_attach_broken_agents");
+    await Effect.runPromise(callback(alone));
+    expect(alone.prompt.skills).toBeUndefined();
+
+    forget("ses_attach_broken_agents");
+  });
+
   test("a skill list that cannot answer leaves the prompt unchanged", async () => {
     const callback = await capturePrompt({ broken: true });
 

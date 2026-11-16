@@ -135,6 +135,8 @@ export interface PromptListing {
   readonly agent?: string | null;
   readonly defaultAgent?: string;
   readonly broken?: boolean;
+  readonly brokenSession?: boolean;
+  readonly brokenAgents?: boolean;
 }
 
 export const capturePrompt = async (
@@ -152,10 +154,12 @@ export const capturePrompt = async (
     },
     agent: {
       list: () =>
-        Effect.succeed({
-          location: {},
-          data: listing.defaultAgent === undefined ? [] : [{ id: listing.defaultAgent }],
-        }),
+        listing.brokenAgents === true
+          ? Effect.die(new Error("the agent list did not answer"))
+          : Effect.succeed({
+              location: {},
+              data: listing.defaultAgent === undefined ? [] : [{ id: listing.defaultAgent }],
+            }),
     },
     session: {
       hook: (_name: string, cb: (event: unknown) => Effect.Effect<void, never>) => {
@@ -163,10 +167,12 @@ export const capturePrompt = async (
         return Effect.succeed({ dispose: Effect.void });
       },
       get: () =>
-        Effect.succeed({
-          ...(listing.parentID === undefined ? {} : { parentID: listing.parentID }),
-          ...(agent === null ? {} : { agent }),
-        }),
+        listing.brokenSession === true
+          ? Effect.die(new Error("the session read did not answer"))
+          : Effect.succeed({
+              ...(listing.parentID === undefined ? {} : { parentID: listing.parentID }),
+              ...(agent === null ? {} : { agent }),
+            }),
     },
   } as unknown as Plugin.Context;
   await Effect.runPromise(Effect.scoped(attachDiscovery(ctx)));

@@ -191,7 +191,7 @@ describe("the report names the reads and the spawns with no verb", () => {
       const child = "ses_report_child_edits";
       await Effect.runPromise(
         after.callback(
-          afterEvent("subagent", { agent: "explore", prompt: "x" }, parent, "call_report_birth", {
+          afterEvent("subagent", { agent: "spectre", prompt: "x" }, parent, "call_report_birth", {
             sessionID: child,
             status: "completed",
             output: "done",
@@ -202,6 +202,35 @@ describe("the report names the reads and the spawns with no verb", () => {
 
       const findings = (await read(after.values)).output?.findings ?? [];
       expect(findings).toContainEqual({ session: child, parent, count: 1, missing: DELTA });
+      memories.delete(parent as never);
+      memories.delete(child as never);
+    });
+  });
+
+  test("a stock child writes no row of its own", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const after = await captureAfter();
+      const parent = "ses_report_stock_parent";
+      const child = "ses_report_stock_child";
+      await Effect.runPromise(
+        after.callback(
+          afterEvent("subagent", { agent: "explore", prompt: "x" }, parent, "call_report_stock_birth", {
+            sessionID: child,
+            status: "completed",
+            output: "done",
+          }),
+        ),
+      );
+      await Effect.runPromise(
+        after.callback(
+          afterEvent("edit", { path: "src/stock.ts" }, child, "call_report_stock_edit", undefined, "explore"),
+        ),
+      );
+
+      const out = (await read(after.values)).output;
+      expect(out?.sessions).toBe(1);
+      expect(out?.findings).toEqual([{ session: parent, count: 1, missing: FANOUT }]);
       memories.delete(parent as never);
       memories.delete(child as never);
     });

@@ -248,7 +248,7 @@ describe("a spawn is counted and a follow-up is not", () => {
       const name = "ses_measure_spawn";
       await Effect.runPromise(
         after.callback(
-          afterEvent("subagent", { agent: "explore", prompt: "x" }, name, "call_m_spawn", {
+          afterEvent("subagent", { agent: "spectre", prompt: "x" }, name, "call_m_spawn", {
             sessionID: "ses_measure_child",
             status: "completed",
             output: "done",
@@ -265,6 +265,29 @@ describe("a spawn is counted and a follow-up is not", () => {
     });
   });
 
+  test("a stock child is counted and seeds no row", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const after = await captureAfter();
+      const name = "ses_measure_stock_spawn";
+
+      await Effect.runPromise(
+        after.callback(
+          afterEvent("subagent", { agent: "explore", prompt: "x" }, name, "call_m_stock_spawn", {
+            sessionID: "ses_measure_stock_child",
+            status: "completed",
+            output: "done",
+          }),
+        ),
+      );
+
+      expect((await stored(after, name))?.subagents).toBe(1);
+      expect(await stored(after, "ses_measure_stock_child")).toBeUndefined();
+      expect((await records(after)).length).toBe(1);
+      memories.delete(Session.ID.make(name));
+    });
+  });
+
   test("a follow-up names a child and is not a spawn", async () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
@@ -274,7 +297,7 @@ describe("a spawn is counted and a follow-up is not", () => {
 
       await Effect.runPromise(
         after.callback(
-          afterEvent("subagent", { agent: "explore", prompt: "x" }, name, "call_m_follow_spawn", {
+          afterEvent("subagent", { agent: "spectre", prompt: "x" }, name, "call_m_follow_spawn", {
             sessionID: child,
             status: "completed",
             output: "done",
