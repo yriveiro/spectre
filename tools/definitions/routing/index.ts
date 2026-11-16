@@ -1,10 +1,10 @@
-import { Integration, type Plugin, type Tool } from "@opencode/plugin/effect";
+import type { Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect, Schema } from "effect";
 import { agentIds } from "../../../agents";
 import { candidates } from "./catalogue";
 import { check } from "./check";
 import { hostCatalogue, sessionDirectory } from "./host";
-import { jevJudge, SYSTEMONE_KEY_ENV } from "./jev";
+import { jevJudge } from "./jev";
 import { type Judge, lexicalJudge, surface, type Verdict } from "./judge";
 import { decode, load } from "./load";
 import { FILE_NAME, projectPath } from "./locate";
@@ -291,67 +291,16 @@ const judged = (verdict: Verdict): typeof Judged.Type =>
 const criteria = (profiles: Tables["profiles"]): Record<string, string> =>
   Object.fromEntries(surface(profiles).map((one) => [one.profile, one.text]));
 
-/**
- * The judge the config asks for, or `undefined` when it asks for none.
- *
- * `kind` names the arm. An absent `kind` is the System One arm, which is the one
- * the feature's own config example writes: it names an endpoint and a model and
- * no `kind`. The lexical arm is asked for by name, because it reads no settings,
- * and a config that names a setting expects the arm that uses it.
- */
-const judgeFor = (ctx: Plugin.Context, tables: Tables): Effect.Effect<Judge | undefined> =>
-  Effect.gen(function* () {
-    const settings = tables.judge;
-    if (settings === undefined) return undefined;
-    if (settings.kind === "lexical") return lexicalJudge(tables.profiles);
-    // The key the arm carries. The config's `key` names a variable, and that
-    // variable wins. When it names none, the arm asks for the Console key,
-    // because the Console key is the one that authenticates the Console's own
-    // inference host, and a person who has connected the Console already has
-    // it. The credential comes from the host's integration API and not from a
-    // file, so the plugin does not depend on where the host keeps it.
-    const keyEnv = settings.key ?? SYSTEMONE_KEY_ENV;
-    const named = yield* Effect.sync(() => Bun.env[keyEnv]);
-    const held = named ?? (yield* consoleKey(ctx));
-    return jevJudge(
-      {
-        endpoint: settings.endpoint,
-        model: settings.model,
-        keyEnv,
-        timeout: settings.timeout,
-      },
-      criteria(tables.profiles),
-      { env: (name: string) => (name === keyEnv ? held : Bun.env[name]) },
-    );
-  });
-
-/**
- * The Console's own credential, when the host holds one.
- *
- * A provider without its own integration id uses its provider id as the
- * integration id, which is how the host resolves every provider's credential
- * (`packages/core/src/model-resolver.ts:373-376` at `v2.1.1`). The Console
- * provider is the integration `opencode`.
- */
-const consoleKey = (ctx: Plugin.Context): Effect.Effect<string | undefined> =>
-  Effect.gen(function* () {
-    // A context without the integration domain cannot answer, and a host that
-    // does not have one is not a failure: the arm asks the environment
-    // instead.
-    const integration = (ctx as { readonly integration?: Plugin.Context["integration"] })
-      .integration;
-    if (integration === undefined) return undefined;
-    const connection = yield* integration.connection
-      .active(Integration.ID.make("opencode"))
-      .pipe(Effect.catch(() => Effect.succeed(undefined)));
-    if (connection === undefined) return undefined;
-    const value = yield* integration.connection
-      .resolve(connection)
-      .pipe(Effect.catch(() => Effect.succeed(undefined)));
-    if (value === null || typeof value !== "object") return undefined;
-    const key = (value as { readonly key?: unknown }).key;
-    return typeof key === "string" ? key : undefined;
-  });
+const judgeFor = (ctx: Plugin.Context, tables: Tables): Judge | undefined => {
+  const settings = tables.judge;
+  if (settings === undefined) return undefined;
+  if (settings.kind === "lexical") return lexicalJudge(tables.profiles);
+  return jevJudge(
+    { model: settings.model, endpoint: settings.endpoint, timeout: settings.timeout },
+    criteria(tables.profiles),
+    ctx.experimental.generate.decisions,
+  );
+};
 
 /**
  * The judge's answer, or the reason there is none.
@@ -373,15 +322,14 @@ const ask = (
     if (profile !== undefined)
       return skipped("The call names a profile, so the choice is already made.");
 
-    const verdict = yield* Effect.match(
-      Effect.tryPromise({ try: () => judge.judge(task), catch: (cause) => cause }),
-      {
-        onFailure: (cause): Verdict => ({
-          kind: "quiet",
-          why: `The judge stopped with an error: ${text(cause)}`,
-        }),
-        onSuccess: (one) => one,
-      },
+    const verdict = yield* judge.judge(task).pipe(
+      Effect.catchDefect(
+        (cause): Effect.Effect<Verdict> =>
+          Effect.succeed({
+            kind: "quiet",
+            why: `The judge stopped with an error: ${text(cause)}`,
+          }),
+      ),
     );
     return judged(verdict);
   });
@@ -607,7 +555,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
 
       // The judge is asked last, so a config with a problem never spends a
       // request.
-      let judgement = yield* ask(yield* judgeFor(ctx, found.tables), input.task, input.profile);
+      let judgement = yield* ask(judgeFor(ctx, found.tables), input.task, input.profile);
 
       // An unsure judge plays safe.
       //
@@ -705,8 +653,8 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
  */
 export { candidates, isFree, known, ladder } from "./catalogue";
 export { effortOf, fit, KNOWN_ORDER, ladderOf, rungs } from "./effort";
-export type { JevDeps, JevSettings } from "./jev";
-export { DEFAULT_TIMEOUT_MS, jevJudge, SYSTEMONE_ENDPOINT, SYSTEMONE_KEY_ENV } from "./jev";
+export type { Decide, JevSettings } from "./jev";
+export { DEFAULT_TIMEOUT_MS, JEV_MODEL, jevJudge, judgeRef } from "./jev";
 export type { Description, Judge, Verdict } from "./judge";
 export { lexicalJudge, rank, surface } from "./judge";
 export { load, loadProject } from "./load";

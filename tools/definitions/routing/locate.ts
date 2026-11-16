@@ -21,7 +21,8 @@ const set = (name: string): string | undefined => {
  * The directory holding the global config, or `undefined` when the environment
  * cannot name one. Never guesses a path it was not given.
  *
- * Precedence, measured at `v2.1.1`:
+ * No plugin context domain names this directory, so the host's precedence is
+ * repeated here, read at `v2.3.0`:
  *   - `util/src/global.ts:79` — `OPENCODE_CONFIG_DIR ?? Path.config`
  *   - `util/src/global-roots.ts:7` — `XDG_CONFIG_HOME || home/.config`, and
  *     `roots(app)` joins that with `"opencode"` at line 15

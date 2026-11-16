@@ -1,6 +1,7 @@
 import { rename } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { Effect } from "effect";
+import { isLegacyEndpoint } from "./jev";
 import { decode } from "./load";
 import type { File, Known } from "./types";
 
@@ -35,6 +36,10 @@ export const serialise = (config: File): string => {
     "setup",
   ] as const)
     if (config[key] !== undefined) ordered[key] = config[key];
+  if (config.judge && !isLegacyEndpoint(config.judge.endpoint)) {
+    const { endpoint: _endpoint, key: _key, ...judge } = config.judge;
+    ordered.judge = judge;
+  }
   return `${JSON.stringify(ordered, null, 2)}\n`;
 };
 

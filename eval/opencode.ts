@@ -5,6 +5,12 @@ import {
   type SessionMessageAssistant,
   type SessionMessageInfo,
 } from "@opencode/client";
+import {
+  OpenCode as OpenCodeEffect,
+  type OpenCodeClient as OpenCodeEffectClient,
+} from "@opencode/client/effect";
+import { Effect } from "effect";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 
 export type Transcript = {
   readonly activated: ReadonlyArray<string>;
@@ -51,18 +57,33 @@ export type Opencode = OpenCodeClient & {
   readonly directory: string;
   models(): Promise<ReadonlyArray<ModelInfo>>;
   transcript(sessionID: string): Promise<Transcript>;
+  effect(): Promise<OpenCodeEffectClient>;
 };
 
+const connectEffect = (baseUrl: string, authorization: string): Promise<OpenCodeEffectClient> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const http = yield* HttpClient.HttpClient;
+      return yield* OpenCodeEffect.make({ baseUrl }).pipe(
+        Effect.provideService(
+          HttpClient.HttpClient,
+          HttpClient.mapRequest(http, (request) =>
+            HttpClientRequest.setHeaders(request, { authorization }),
+          ),
+        ),
+      );
+    }).pipe(Effect.provide(FetchHttpClient.layer)),
+  );
+
 export const connect = (directory: string, baseUrl: string, password: string): Opencode => {
-  const client = OpenCode.make({
-    baseUrl,
-    headers: { authorization: `Basic ${btoa(`opencode:${password}`)}` },
-  });
+  const authorization = `Basic ${btoa(`opencode:${password}`)}`;
+  const client = OpenCode.make({ baseUrl, headers: { authorization } });
   const location = { directory };
 
   return {
     ...client,
     directory,
+    effect: () => connectEffect(baseUrl, authorization),
     models: () =>
       untilNonEmpty(async () => (await client.model.list({ location })).data, "/api/model"),
     transcript: async (sessionID: string): Promise<Transcript> => {
