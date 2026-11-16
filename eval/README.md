@@ -45,7 +45,7 @@ the pinned model, pin one variant, or drop one by name.
 | --- | --- |
 | `fixture.ts` | The corpus: prompt, permitted labels, provenance, and the three slices |
 | `mirror.ts` | Writes descriptions to a directory ripwire can index |
-| `opencode.ts` | The only file that knows the HTTP API |
+| `opencode.ts` | Connects `@opencode/client` and assembles transcripts |
 | `boot.ts` | Starts `opencode serve`, reads the registration line |
 | `catalogue.ts` | Checks our skills against what OpenCode says it registered |
 | `observe.ts` | Extracts the decision: the activation, the tool call, or the prose |
@@ -173,10 +173,6 @@ assumed:
 - **The project initialises lazily.** The first `/api/skill` or `/api/model`
   for a fresh server answers 200 with an empty array. Reading one call as the
   truth skips the whole sweep and says nothing about why.
-- **`directory` is a query parameter** on every call. Sending
-  `x-opencode-directory` alongside it makes the route return an empty catalogue.
-- **`wait` and `remove` answer 204 with no body.** Parsing every response as
-  JSON turns every row into "Unexpected end of JSON input".
 - **The scratch directory and its config must exist before the spawn**, because
   the directory becomes the child's cwd and the plugin is loaded from there. And
   `OPENCODE_CONFIG_DIR` is deliberately not set, because it replaces the whole

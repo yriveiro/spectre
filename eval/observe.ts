@@ -1,54 +1,26 @@
-import type { Message, Part } from "./opencode";
+import type { SessionMessageAssistant } from "@opencode/client";
+import type { Transcript } from "./opencode";
 import { NONE, type Via } from "./score";
 
-/**
- * The decision is the `skill` activation, not the prose. A model that says "I
- * would load code-hygiene" has stated a preference; a model that activates the
- * skill has done the thing OpenCode routes on. `via` records which was observed,
- * so a model that never activates anything is visible as its own measurement
- * rather than folded into the same column.
- */
 export type Observed = { readonly got: string; readonly via: Via };
-
-export type Transcript = {
-  /** Ids from `Session.Message.Skill`, which the message list already carries. */
-  readonly activated: ReadonlyArray<string>;
-  /** Assistant turns, fetched for their `content`. */
-  readonly messages: ReadonlyArray<Message>;
-};
 
 const SKILL_TOOLS = new Set(["skill", "skills"]);
 
-/**
- * The field is `content`, not `parts`. Measured on a live assistant turn: the
- * per-message route answers with `content` holding `reasoning`, `tool`, and
- * `text` entries, and no `parts` key exists anywhere in the response. Reading
- * `parts` yields nothing, which scored every row as a silent miss.
- */
-const partsOf = (message: Message): ReadonlyArray<Part> =>
-  Array.isArray(message.content) ? message.content : [];
-
-const fromTool = (message: Message): string | undefined => {
-  for (const part of partsOf(message)) {
-    if (part.type !== "tool" || part.name === undefined) continue;
-    if (!SKILL_TOOLS.has(part.name)) continue;
-    const input = part.state?.input;
-    if (input === undefined) continue;
+const fromTool = (message: SessionMessageAssistant): string | undefined => {
+  for (const part of message.content) {
+    if (part.type !== "tool" || !SKILL_TOOLS.has(part.name)) continue;
+    if (part.state.status === "streaming") continue;
     for (const key of ["id", "skill", "name"]) {
-      const value = input[key];
+      const value = part.state.input[key];
       if (typeof value === "string" && value !== "") return value;
     }
   }
   return undefined;
 };
 
-const textOf = (message: Message) =>
-  partsOf(message)
-    .filter((part) => part.type === "text" && part.text !== undefined)
-    .map((part) => part.text!)
-    .join("\n");
+const textOf = (message: SessionMessageAssistant) =>
+  message.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
 
-/** Graded on the first catalogue id a reply mentions, so an explained answer still counts. */
 export const fromText = (raw: string, catalogue: ReadonlyArray<string>): string => {
   const text = raw.trim();
   if (text === "") return "";

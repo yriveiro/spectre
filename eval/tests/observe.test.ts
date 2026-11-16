@@ -1,19 +1,36 @@
 import { describe, expect, test } from "bun:test";
-import { fromText, observe, type Transcript } from "../observe";
-import type { Message } from "../opencode";
+import type { JsonValue, SessionMessageAssistant } from "@opencode/client";
+import { fromText, observe } from "../observe";
+import type { Transcript } from "../opencode";
 import { NONE } from "../score";
 
 const catalogue = ["code-hygiene", "principle-evidence", "principle-hygiene"];
 
-const text = (body: string): Message => ({
+const assistant = (content: SessionMessageAssistant["content"]): SessionMessageAssistant => ({
+  id: "msg_1",
   type: "assistant",
-  content: [{ type: "text", text: body }],
+  agent: "spectre",
+  model: { providerID: "opencode", id: "test" },
+  time: { created: 0 },
+  content,
 });
 
-const tool = (name: string, input: Record<string, unknown>): Message => ({
-  type: "assistant",
-  content: [{ type: "tool", name, state: { status: "completed", input } }],
-});
+const text = (body: string): SessionMessageAssistant => assistant([{ type: "text", text: body }]);
+
+const tool = (name: string, input: Record<string, JsonValue>): SessionMessageAssistant =>
+  assistant([
+    {
+      type: "tool",
+      id: "call_1",
+      name,
+      time: { created: 0 },
+      state: {
+        status: "completed",
+        input,
+        content: [{ type: "text", text: "loaded" }],
+      },
+    },
+  ]);
 
 const turn = (
   parts: Transcript["messages"],
@@ -94,19 +111,29 @@ describe("observe", () => {
     });
   });
 
+  test("a streaming tool call with unparsed input falls through to the prose", () => {
+    const streaming = assistant([
+      {
+        type: "tool",
+        id: "call_1",
+        name: "skill",
+        time: { created: 0 },
+        state: { status: "streaming", input: '{"id":"principle-hygiene"' },
+      },
+      { type: "text", text: "code-hygiene" },
+    ]);
+    expect(observe(turn([streaming]), catalogue)).toEqual({
+      got: "code-hygiene",
+      via: "text",
+    });
+  });
+
   test("prose alone is reported as text, so it is never counted as an activation", () => {
     expect(observe(turn([text("code-hygiene")]), catalogue).via).toBe("text");
   });
 
   test("a turn with nothing in it is silent", () => {
-    expect(observe(turn([{ type: "assistant", content: [] }]), catalogue).via).toBe("silent");
-  });
-
-  test("a turn with no content at all is silent, not a crash", () => {
-    expect(observe(turn([{ id: "msg_1", type: "assistant" }]), catalogue)).toEqual({
-      got: "",
-      via: "silent",
-    });
+    expect(observe(turn([assistant([])]), catalogue).via).toBe("silent");
   });
 
   test("no turn at all is silent, and is scored as a miss", () => {
@@ -114,10 +141,7 @@ describe("observe", () => {
   });
 
   test("reasoning parts are not mistaken for an answer", () => {
-    const reasoning: Message = {
-      type: "assistant",
-      content: [{ type: "reasoning", text: "code-hygiene seems right" }],
-    };
+    const reasoning = assistant([{ type: "reasoning", text: "code-hygiene seems right" }]);
     expect(observe(turn([reasoning]), catalogue).via).toBe("silent");
   });
 });
