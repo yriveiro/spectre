@@ -18,7 +18,13 @@ import {
   providerModal,
   usableDraft,
 } from "../../tui/controls";
-import { type Draft, type Model, type Resolution, resolve as resolveDraft } from "../../tui/data";
+import {
+  type Draft,
+  type Model,
+  type Profile,
+  type Resolution,
+  resolve as resolveDraft,
+} from "../../tui/data";
 import { sidebarSection, subagentFooter, subagentLine } from "../../tui/index";
 import { type EntryRow, layoutMetrics, type ProfileRow, page, type TabId } from "../../tui/page";
 
@@ -111,6 +117,7 @@ const spent: Resolution = {
   rung: "high",
   cost: "$0.1/$0.2",
   crosscheck: undefined,
+  crosscheckCost: undefined,
   crosscheckProblem: undefined,
   problem: undefined,
 };
@@ -129,6 +136,7 @@ const rows = [
       rung: undefined,
       cost: undefined,
       crosscheck: undefined,
+      crosscheckCost: undefined,
       crosscheckProblem: undefined,
       problem: 'profiles.pinned.model: "ghost" is not an allowed model in this session.',
     },
@@ -304,7 +312,11 @@ describe("the modal draws what the session would spend", () => {
         {
           ...firstRow,
           profile: firstProfile,
-          resolution: { ...spent, crosscheck: "acme/glm-5.3-flash#high" },
+          resolution: {
+            ...spent,
+            crosscheck: "acme/glm-5.3-flash#high",
+            crosscheckCost: "$0.15/$0.5",
+          },
         },
         rows[1] ?? firstRow,
       ],
@@ -327,6 +339,13 @@ describe("the modal draws what the session would spend", () => {
     expect(header.indexOf("Info")).toBeLessThan(header.indexOf("Profile"));
     // The crosscheck effort select sits in the same column as the primary's.
     expect(cross.lastIndexOf("high")).toBe(header.indexOf("Effort") + 1);
+
+    const primaryCost = "$0.1/$0.2";
+    const crossCost = "$0.15/$0.5";
+    const primaryEnd = name.indexOf(primaryCost) + primaryCost.length;
+    const crossEnd = cross.indexOf(crossCost) + crossCost.length;
+    expect(cross).toContain(crossCost);
+    expect(crossEnd).toBe(primaryEnd);
 
     await setup.dispose();
   });
@@ -815,7 +834,7 @@ describe("the page changes the draft and writes it only when asked", () => {
             });
           },
         }),
-      { width: 88, height: 26 },
+      { width: 88, height: 40 },
     );
     await infoSetup.renderOnce();
     const infoFrame = infoSetup.captureCharFrame();
@@ -830,6 +849,34 @@ describe("the page changes the draft and writes it only when asked", () => {
     infoSetup.mockInput.pressKey("i");
     await infoSetup.flush();
     expect(closed).toBe(1);
+    await infoSetup.dispose();
+  });
+
+  test("the profile info modal shows the crosscheck model's cost beside its effort", async () => {
+    const cross: Profile = { ...first, crosscheck: { effort: "high", pinned: undefined } };
+    const { context } = host();
+    const infoSetup = await testRender(
+      () =>
+        createComponent(PluginContextProvider, {
+          value: context as never,
+          get children() {
+            return profileInfoModal({
+              profile: cross,
+              resolution: {
+                ...spent,
+                crosscheck: "acme/glm-5.3-flash#high",
+                crosscheckCost: "$0.15/$0.5",
+              },
+              draft,
+              models,
+              onClose: () => {},
+            });
+          },
+        }),
+      { width: 88, height: 26 },
+    );
+    await infoSetup.renderOnce();
+    expect(infoSetup.captureCharFrame()).toContain("high → acme/glm-5.3-flash#high · $0.15/$0.5");
     await infoSetup.dispose();
   });
 
@@ -1217,6 +1264,7 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
       rung: undefined,
       cost: undefined,
       crosscheck: undefined,
+      crosscheckCost: undefined,
       crosscheckProblem: undefined,
       problem: 'profiles.pinned.model: "ghost" is not an allowed model in this session.',
     },

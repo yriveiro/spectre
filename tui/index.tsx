@@ -95,6 +95,7 @@ const absent = (name: string): Resolution => ({
   rung: undefined,
   cost: undefined,
   crosscheck: undefined,
+  crosscheckCost: undefined,
   crosscheckProblem: undefined,
   problem: "The resolver returned no row",
 });

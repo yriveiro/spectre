@@ -83,10 +83,11 @@ the model reads.
   arrows in that column, and moves a model up or down. The crosscheck tab lists
   the allowlist models with a toggle and the same priority controls. The enabled
   models, in order, are the crosscheck fallback. A profile row carries its
-  crosscheck as two controls, in the Model and Effort columns: a model control
-  (off, the fallback list, or a pinned model) and an effort control (the
-  profile's own effort or a named one). A configured crosscheck that no model
-  in the fallback can serve shows its reason beside the row.
+  crosscheck as three cells, in the Model, Effort and Cost columns: a model
+  control (off, the fallback list, or a pinned model), an effort control (the
+  profile's own effort or a named one), and the cost of the model that serves
+  it. A configured crosscheck that no model in the fallback can serve shows its
+  reason beside the row.
 - **R8. The resolver reports what it chose and what it could not reach.** A
   profile that asks for an effort no allowed model reaches is a problem, and
   a model that had to step up to meet one says so.

@@ -232,9 +232,9 @@ describe("the page reads the repository's own file", () => {
     };
     const worker = pinned.profiles.find((one) => one.name === "worker");
     expect(worker?.crosscheck?.pinned).toBe("glm-flash");
-    expect(
-      resolve(pinned, catalogue(models)).find((one) => one.profile === "worker")?.crosscheck,
-    ).toBe("opencode-go/glm-5.3-flash#high");
+    const resolved = resolve(pinned, catalogue(models)).find((one) => one.profile === "worker");
+    expect(resolved?.crosscheck).toBe("opencode-go/glm-5.3-flash#high");
+    expect(resolved?.crosscheckCost).toBe("$0.15/$0.5");
 
     await save(pinned);
     const written = (await Bun.file(`${at}/spectre.json`).json()) as {
