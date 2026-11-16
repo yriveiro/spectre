@@ -10,7 +10,7 @@ once per project instance. Everything Spectre adds to OpenCode (skills, agents,
 tools, commands) is registered from inside that `effect`,
 through the domains on the plugin context.
 
-Minimum supported OpenCode version: **2.2.7**. The installed CLI is the only
+Minimum supported OpenCode version: **2.3.0**. The installed CLI is the only
 runtime. There is no build step, and TypeScript source is shipped as-is.
 
 ## Runtime: Bun first
@@ -20,7 +20,7 @@ for the Bun API first. Use a Node API only when Bun has no equivalent.**
 
 The replacements below were read off `docs/runtime/bun-apis.mdx` in the Bun
 repository, confirmed at runtime on Bun 1.4.2, and re-probed on 1.4.4 — the
-version OpenCode ships at 2.2.7 (`packageManager` in its root `package.json` and
+version OpenCode ships at 2.2.7 and 2.3.0 (`packageManager` in its root `package.json` and
 `.github/workflows/release.yml`) and the version this plugin runs on. Do not add a dependency for
 anything in this table.
 
@@ -132,11 +132,11 @@ The version floor is not a guess. It is the npm dist-tag:
 curl -s https://registry.npmjs.org/@opencode/cli | grep -o '"latest":"[^"]*"'
 ```
 
-At the time of writing that is `2.2.7`, published 2026-11-10. The version appears
+At the time of writing that is `2.3.0`, published 2026-11-13. The version appears
 in several places that mean different things. `engines.opencode` is the **floor**
-(`>=2.2.7`). `@opencode/ai`, `@opencode/plugin` and `@opencode/schema` are
+(`>=2.3.0`). `@opencode/ai`, `@opencode/plugin` and `@opencode/schema` are
 **exact** runtime pins, and `@opencode/client` and `@opencode/theme` are exact
-dev pins. `@opencode/theme` is also a `>=2.2.7` optional peer. The `opencode`
+dev pins. `@opencode/theme` is also a `>=2.3.0` optional peer. The `opencode`
 field in `verified.ts` is the stamp a reader has to remember. The runtime pins and
 the dev pins are what source-reading must match, because they are what resolves
 into `node_modules`. Only the runtime pins are what the host is handed. Re-run the
@@ -231,7 +231,7 @@ supplies the ambient declarations and `node:*` compatibility that Bun implements
 
 ## Before changing plugin code
 
-Load the `opencode-platform` skill. It is the host contract at `v2.2.7`: the
+Load the `opencode-platform` skill. It is the host contract at `v2.3.0`: the
 plugin shape and its scope, every `ctx` domain, every hook and its event, the
 tool, command, agent, skill and MCP editors, and the route families. It is
 `autoinvoke: false` on purpose. The body is 22 KB, so a session that does not
@@ -322,7 +322,7 @@ The pins below are exact, with two deliberate exceptions, and they are not incid
   update path. `bun run d3.check` reports when the installed version is behind
   the registry. An artifact keeps the bytes it was built with.
 - `effect` is a `^4.0.0` peer with an exact `4.1.0` dev pin, matching the build
-  OpenCode ships at 2.2.7. The plugin's `effect` values are handed straight to
+  OpenCode ships at 2.3.0. The plugin's `effect` values are handed straight to
   OpenCode's Effect runtime, so the dev pin tracks the host build exactly, while
   the peer range only says which hosts the plugin can run on.
 - `@opencode/plugin` tracks the OpenCode version whose plugin contract we target.

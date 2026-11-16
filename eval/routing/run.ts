@@ -11,7 +11,7 @@
  * profiles in its own text, and this process reads the config through the
  * tool's own loader, so nothing the run measures depends on the plugin.
  */
-import type { Model } from "@opencode/schema/model";
+import type { Model } from "@opencode/plugin/effect";
 import { Effect } from "effect";
 import {
   candidates,

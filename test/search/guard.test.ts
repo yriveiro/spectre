@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
-import { Tool } from "@opencode/schema/tool";
 import { Effect, Exit } from "effect";
 import { decide, type Health, type Memory } from "../../tools/definitions/search/policy";
 import { grepAsk } from "../../tools/definitions/search/signals";

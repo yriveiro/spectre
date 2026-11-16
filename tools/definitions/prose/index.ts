@@ -1,6 +1,6 @@
 import { relative, resolve } from "node:path";
+import type { Tool } from "@opencode/plugin/effect";
 import type { AbsolutePath } from "@opencode/schema/schema";
-import type { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
 import { approves, deciding, type Loaded, loadDictionary, lookup } from "./dictionary";
 import { lint, RULE_NAMES } from "./rules";

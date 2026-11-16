@@ -10,7 +10,7 @@ export interface Draft {
  * The prose rule and the tool catalogue for one request.
  *
  * The catalogue replaces `grep` with `ripgrep` in place. The host resolves a
- * renamed tool by object identity (`v2.2.7:packages/core/src/session/model-request.ts:274-308`),
+ * renamed tool by object identity (`v2.3.0:packages/core/src/session/model-request.ts:283-317`),
  * so the existing entry moves and its description is mutated in place. A fresh
  * object would be dropped and the model would see neither tool.
  */

@@ -13,7 +13,7 @@ export interface Facts {
 /**
  * A session holds the agent that was switched in, and that field is empty until
  * one is. An empty selection runs as the host default, and `agent.list` answers
- * the default first (`packages/core/src/agent.ts` at v2.2.7, `list`), so the
+ * the default first (`packages/core/src/agent.ts` at v2.3.0, `list`), so the
  * head of that list settles it.
  */
 export const factsOf = (ctx: Plugin.Context, sessionID: Session.ID): Effect.Effect<Facts> =>

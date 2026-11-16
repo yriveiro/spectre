@@ -41,7 +41,7 @@ has gone wrong: the two features have quietly merged.
 
 ## Two ways to run several at once
 
-|  | `task` with `background: true` | `ctx.generate.text({ prompt, model })` |
+|  | `subagent`, which always runs in the background | `ctx.experimental.generate.text({ prompt, model })` |
 | --- | --- | --- |
 | Sessions | N real child sessions | none |
 | Tools | the agent's full toolset | none |
@@ -82,7 +82,7 @@ That is fine, and free, and the judge already has the whole conversation. It is
 just not visible anywhere, so here it is in writing.
 
 If the judge ever needs to be a *different* model from the one you are chatting
-with, `ctx.generate.text` does it: put the candidates' answers into one prompt and
+with, `ctx.experimental.generate.text` does it: put the candidates' answers into one prompt and
 send it to the model you want.
 
 ## What it costs

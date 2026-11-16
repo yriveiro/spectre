@@ -1,7 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import type { Plugin } from "@opencode/plugin/effect";
+import type { Plugin, Tool } from "@opencode/plugin/effect";
 import { AbsolutePath } from "@opencode/schema/schema";
-import type { Tool } from "@opencode/schema/tool";
 import { Effect } from "effect";
 import { worktrees } from "../../tools/definitions/worktrees";
 import { isDirectory } from "../../tools/definitions/worktrees/return/standing";

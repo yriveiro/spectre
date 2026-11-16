@@ -2,7 +2,7 @@
 
 ## What this is
 
-The host contract that Spectre code targets, at OpenCode 2.2.7. Read it before you write a plugin `effect`. Read it before any `ctx.*` call, hook, tool, command, agent, skill, MCP transform, session prompt, or RPC method. Every fact below comes from the tag `v2.2.7` of `anomalyco/opencode`, not from the `dev` checkout. A doc path is relative to `services/site/src/docs/content/build/`. A source path keeps its `packages/` prefix. Where a doc page and the tag disagree, this skill follows the tag and names the stale page.
+The host contract that Spectre code targets, at OpenCode 2.3.0. Read it before you write a plugin `effect`. Read it before any `ctx.*` call, hook, tool, command, agent, skill, MCP transform, session prompt, or RPC method. Every fact below comes from the tag `v2.3.0` of `anomalyco/opencode`, not from the `dev` checkout. A doc path is relative to `services/site/src/docs/content/build/`. A source path keeps its `packages/` prefix. Where a doc page and the tag disagree, this skill follows the tag and names the stale page.
 
 ## The plugin shape
 
@@ -21,7 +21,7 @@ export default Plugin.define({
 });
 ```
 
-`effect` is a peer dependency plus a dev pin. `@opencode/plugin` is a runtime dependency (`plugins/effect.mdx`, Publish). OpenCode redirects `effect`, every public `effect/*` subpath, and `@opencode/plugin` plus every public `@opencode/plugin/*` subpath to the host's runtime instances. The redirect covers imports from the plugin's own `node_modules` too, so fibers, loggers, and `Schema` parsers share one copy (`plugins/effect.mdx`, Publish). The doc page prints `effect@4.0.1`. The tag's catalog pins `4.1.0`, and that is the build the host ships (`package.json` at `v2.2.7` → `workspaces.catalog.effect`).
+`effect` is a peer dependency plus a dev pin. `@opencode/plugin` is a runtime dependency (`plugins/effect.mdx`, Publish). OpenCode redirects `effect`, every public `effect/*` subpath, and `@opencode/plugin` plus every public `@opencode/plugin/*` subpath to the host's runtime instances. The redirect covers imports from the plugin's own `node_modules` too, so fibers, loggers, and `Schema` parsers share one copy (`plugins/effect.mdx`, Publish). The doc page prints `effect@4.0.1`. The tag's catalog pins `4.1.0`, and that is the build the host ships (`package.json` at `v2.3.0` → `workspaces.catalog.effect`).
 
 Resolution has two paths. `.opencode/plugins/<name>/` loads automatically (`plugins/index.mdx`, Load). A configured local path must name a directory. OpenCode skips a configured `./plugin/local.ts` file with a warning (`plugins/migrate-v1.mdx`). A local directory with `package.json` `name` and `exports` resolves through them. Without them it uses file names at its root: `server` (else `index`), `tui`, and `rpc`. Each carries a `.ts`, `.tsx`, or `.js` extension (`plugins/index.mdx`, Load). The exports map at the tag is `.`, `./effect`, `./host`, `./runtime`, `./tui`, and the `./gui` entrypoints. It carries no explicit `./rpc` entry, so that name resolves only through the `./*` fallback to `src/*.ts` (`packages/plugin/package.json`). A local directory without `name` and `exports` probes `server` else `index`, then `tui`, then `rpc`. It also probes `gui-experimental.cjs` or `.js` for the GUI part (`packages/plugin/src/host.ts`). A plugin's GUI part is `./gui-experimental` in its own package: one prebuilt CommonJS file (`plugins/gui/index.mdx`, Package). Local discovery is `.opencode/plugins/` (plural). A TUI-only package belongs in `cli.json`, and the desktop app loads GUI parts from the global config (`plugins/index.mdx`, Load).
 
@@ -88,6 +88,7 @@ OpenCode accepts the optional third argument `{ providerID }` wherever the event
 | `experimental.ws.handshake`, `send`, `receive` | once per model call, then per outbound and inbound `frame` | `url`, `headers`, `frame` |
 | `retry` | after OpenCode classifies a failure, before it schedules a retry | `decision` |
 | `experimental.idle` | when model work ends and no input is pending | nothing. It reads `background` |
+| `fork` | after OpenCode copies the history into a fork, before the fork call returns | nothing. It reads the new `sessionID` |
 
 Three of those rows need more than a cell. `prompt` does not run for synthetic, shell, compaction, or move items. Its edits become the persisted input (`packages/plugin/src/effect/session.ts`, `plugins/server.mdx`, Prompt admission). Native bodies are one-shot streams, so clone a body before you read it (`packages/plugin/src/effect/session.ts`). `decision` is `{ retry: false }` or `{ retry: true, delay }`. Attempt `1` is the first request. A delay of `NaN`, infinity, or a negative number falls back to the computed one (`packages/plugin/src/effect/session.ts`).
 
@@ -98,14 +99,18 @@ interface SessionContext {
   readonly sessionID: Session.ID;
   readonly model: Model.Ref;
   system: Array<SystemPart>;
-  messages: Array<Message>;
+  messages: Array<SessionRequestMessage>;
   options: Types.DeepMutable<GenerationOptionsFields> & Record<string, unknown>;
   readonly agent: Agent.ID;
   tools: Record<string, { description: string; input: JsonSchema.JsonSchema }>;
 }
+
+type SessionRequestMessage = Message & { readonly metadata?: Record<string, unknown> };
 ```
 
-The Effect page lists eleven session hooks. It omits `prompt`, `experimental.model.resolve`, and `experimental.idle`, which the tag defines (`plugins/effect.mdx`, `packages/plugin/src/effect/session.ts`). The Promise page documents `prompt` and `experimental.model.resolve` under the same names (`plugins/server.mdx`).
+A message in the `context`, `compaction`, and `generate` events carries the stored message's `metadata`, such as what a `prompt` hook set. It is for reading. OpenCode strips it before the request, so it never reaches the provider (`packages/core/src/session/model-request.ts`, `plugins/effect.mdx`, Sessions). Read per-message state there rather than keeping a second copy keyed by message id.
+
+The Effect page lists eleven session hooks. It omits `fork`, `prompt`, `experimental.model.resolve`, and `experimental.idle`, which the tag defines (`plugins/effect.mdx`, `packages/plugin/src/effect/session.ts`). The Promise page documents `fork`, `prompt`, and `experimental.model.resolve` under the same names (`plugins/server.mdx`).
 
 `ctx.shell` has one hook, `"create.before"`. Its event is `{ command, cwd, timeout, shell, env }`, and all five fields are mutable (`packages/plugin/src/effect/shell.ts`).
 
@@ -135,7 +140,9 @@ type ToolAfter = {
 
 `ctx.tool.transform((editor) => { ... })` registers tools. The callback is synchronous. It returns nothing, not an `Effect` or a `Promise`, so load external data before you register or reload (`plugins/effect.mdx`, Tools). The editor offers `add`, `update`, `remove`, `namespace`, `list`, and `get` (`packages/plugin/src/effect/tool.ts`). `add` needs `name`, `description`, and `execute`, plus `input` for a typed tool. Core defaults a missing `input` to `{}` for a JS plugin (`packages/core/src/tool.ts`). `update` and `remove` take an effective name and ignore a missing one (`packages/plugin/src/effect/tool.ts`, `packages/core/src/tool.ts`).
 
-`execute(input, context)` returns `Effect<Result<Output>, Tool.Error>`. `Result` is `{ output?, content?, metadata? }`, and the context is `{ sessionID, agent, messageID, id, progress }` (`packages/schema/src/tool.ts`). `input` and `output` are a `Tool.ValueSchema`: an Effect `Schema.Codec`, a Standard Schema, or a JSON Schema. The decoded value and the declared type then come from one place (`packages/schema/src/tool.ts`). A tool that declares `output` must return it. A tool that returns an undeclared `output` dies (`packages/core/src/tool/runtime.ts`).
+`execute(input, context)` returns `Effect<Result<Output>, Tool.Error>`. `Result` is `{ output?, content?, metadata? }`, and the context is `{ sessionID, agent, messageID, id, progress, cancel? }` (`packages/schema/src/tool.ts`). `cancel` is an `Effect<void>` that completes when the user asks the call to stop. A tool that awaits it can stop its work and fail with what it has. A tool that ignores it is interrupted. A call nested inside Code Mode always gets `cancel: undefined`, because the stop belongs to the `execute` call (`packages/core/src/codemode/tool.ts`). `input` and `output` are a `Tool.ValueSchema`: an Effect `Schema.Codec`, a Standard Schema, or a JSON Schema. The decoded value and the declared type then come from one place (`packages/schema/src/tool.ts`). A tool that declares `output` must return it. A tool that returns an undeclared `output` dies (`packages/core/src/tool/runtime.ts`).
+
+`Tool` is exported from `@opencode/plugin/effect` at this tag, beside `Agent`, `Model`, `Skill`, `Vcs`, `Worktree` and the other schema namespaces (`packages/plugin/src/effect/index.ts`). Import a schema from the barrel whenever the barrel exports it. The redirect makes the barrel's `Tool.Error` the host's class, so the host's `instanceof Tool.Error` holds and `metadata` survives. A `Tool.Error` built from a plugin-local `@opencode/schema/tool` fails that test, and the host re-wraps it with the message only (`packages/core/src/tool/runtime.ts`).
 
 `options.codemode` defaults to true. Only `codemode: false` keeps a tool on the provider's native tool list. Every other tool is reachable solely through the `execute` tool (`packages/core/src/tool.ts`, `packages/schema/src/tool.ts`). When a permission disables the `execute` tool, OpenCode exposes the code-mode tools as direct tools instead. The default is therefore not a silent hiding (`packages/core/src/tool.ts`). `pinned: true` keeps a tool in a partial catalog. The type allows it only while `codemode` is not `false` (`packages/schema/src/tool.ts`, `packages/core/src/codemode/catalog.ts`).
 
@@ -143,7 +150,7 @@ The effective name is `namespace.replaceAll(".", "_") + "_" + name.replace(/[^a-
 
 Every model request captures a snapshot of the advertised definitions and their executors. `reload` and `dispose` affect later snapshots only. A captured executor still sees mutable state that it closes over. Capture a value inside the transform when it must stay tied to that definition (`plugins/effect.mdx`, Tools).
 
-Freeform input is not a plugin surface at this tag. The `Tool.Info` declaration has no `freeform` field, and no plugin doc at `v2.2.7` offers one (`packages/schema/src/tool.ts`). The option exists only in the AI SDK layer (`packages/ai/src/tool.ts`). Nothing in `packages/core` sets it, so a plugin cannot reach it. Do not write `freeform` in a plugin against 2.2.7.
+`freeform` lets the model write the single required string field of a tool without a JSON wrapper. It is `{ type: "text" }`, `{ type: "regex", pattern }`, or `{ type: "lark", grammar }` (`packages/schema/src/tool.ts`, `Tool.Freeform`). Core sends it only when the selected model's `capabilities.freeform` lists that format, and otherwise drops only `freeform`, so the tool keeps its object input (`packages/core/src/session/model-request.ts`). The executor receives the object either way. In Code Mode a freeform tool also takes its string directly, as in `tools.ticket("OPS-42")` (`plugins/server.mdx`, Freeform tool input).
 
 ## Commands, agents, skills, MCP
 
@@ -166,7 +173,7 @@ The MCP editor uses `set` to add or replace a server, `update` to edit one, and 
 
 ## The API and SDK
 
-The HTTP surface is one group file per family under `packages/protocol/src/groups/`. The reference is 170 operations over 139 paths and 497 schemas at `v2.2.7`.
+The HTTP surface is one group file per family under `packages/protocol/src/groups/`. The reference is 170 operations over 139 paths and 501 schemas at `v2.3.0`.
 
 Server is `/api/info` and `/api/pair`, plus `GET /auth/connect/:code` for pairing. Location, agent, plugin, session, model, provider, integration, and credential own a first path segment. So do project, permission, command, skill, rpc, event, pty, shell, worktree, vcs, reference, form, and config.
 

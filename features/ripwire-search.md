@@ -227,13 +227,13 @@ choice happens. The cost is one schema in every request, an estimate of about
 
 | Fact | Source |
 | ---- | ------ |
-| The `session.context` hook exposes mutable `system` and `tools`, rebuilt per request | `node_modules/@opencode/plugin/dist/effect/session.d.ts:22-39`; `v2.2.7:packages/core/src/session/model-request.ts:274-308` |
-| The host maps a renamed request key back to the real tool | `v2.2.7:packages/core/src/session/model-request.ts:274-308` |
-| `execute.before` may rename the tool and rewrite the input, and the model path uses the event | `v2.2.7:packages/core/src/tool.ts:311-321`; `node_modules/@opencode/plugin/dist/effect/tool.d.ts:20-28` |
-| The grep registry id is `grep`; `opencode.tool.grep` is the plugin id, and an update with a missing id is a no-op | `v2.2.7:packages/core/src/tool/plugin/grep.ts:16,66,77`; `tool.ts:216-222`; `tool/runtime.ts:288-293` |
-| The built-in grep description invites code use | `v2.2.7:packages/core/src/tool/plugin/grep.ts:79-80` |
-| The Code Mode catalog truncates and budgets, and a namespace can render as "none shown" | `v2.2.7:packages/core/src/codemode/catalog.ts:50-52,82-113` |
-| Only `tool.execute.before` may fail, and session hooks are total | `v2.2.7:packages/core/src/plugin/hooks.ts:23-30` |
+| The `session.context` hook exposes mutable `system` and `tools`, rebuilt per request | `node_modules/@opencode/plugin/dist/effect/session.d.ts:22-43`; `v2.3.0:packages/core/src/session/model-request.ts:283-317` |
+| The host maps a renamed request key back to the real tool | `v2.3.0:packages/core/src/session/model-request.ts:283-317` |
+| `execute.before` may rename the tool and rewrite the input, and the model path uses the event | `v2.3.0:packages/core/src/tool.ts:311-321`; `node_modules/@opencode/plugin/dist/effect/tool.d.ts:20-28` |
+| The grep registry id is `grep`; `opencode.tool.grep` is the plugin id, and an update with a missing id is a no-op | `v2.3.0:packages/core/src/tool/plugin/grep.ts:16,66,77`; `tool.ts:216-222`; `tool/runtime.ts:289-294` |
+| The built-in grep description invites code use | `v2.3.0:packages/core/src/tool/plugin/grep.ts:79-80` |
+| The Code Mode catalog truncates and budgets, and a namespace can render as "none shown" | `v2.3.0:packages/core/src/codemode/catalog.ts:50-52,82-113` |
+| Only `tool.execute.before` may fail, and session hooks are total | `v2.3.0:packages/core/src/plugin/hooks.ts:23-30` |
 | The existing rejection shape and `catchDefect` discipline | `tools/definitions/worktrees/return/index.ts:51-73` |
 | The existing `session.context` use | `skills/definitions/effect-best-practices/watch.ts:115-134` |
 | A local MCP server is `{ type: "local", command, cwd?, environment?, codemode? }` | `node_modules/@opencode/schema/dist/mcp.d.ts:12-22` |

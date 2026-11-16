@@ -1,7 +1,5 @@
-import type { Plugin } from "@opencode/plugin/effect";
-import type { Agent } from "@opencode/schema/agent";
+import type { Agent, Plugin, Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
-import type { Tool } from "@opencode/schema/tool";
 import { Effect, Option, Schema, Semaphore, type Scope } from "effect";
 import { isSpectre } from "./agents";
 import { envOf } from "./apply";

@@ -1,6 +1,4 @@
-import type { Plugin } from "@opencode/plugin/effect";
-import { Integration } from "@opencode/plugin/effect";
-import type { Tool } from "@opencode/schema/tool";
+import { Integration, type Plugin, type Tool } from "@opencode/plugin/effect";
 import { Effect, Schema } from "effect";
 import { agentIds } from "../../../agents";
 import { candidates } from "./catalogue";

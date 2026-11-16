@@ -1,5 +1,4 @@
-import { Artifact, type Plugin } from "@opencode/plugin/effect";
-import type { Tool } from "@opencode/schema/tool";
+import { Artifact, type Plugin, type Tool } from "@opencode/plugin/effect";
 import { Effect, Schema } from "effect";
 
 /**

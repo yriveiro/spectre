@@ -1,8 +1,6 @@
-import type { Plugin, Skill } from "@opencode/plugin/effect";
-import type { Agent } from "@opencode/schema/agent";
+import { type Agent, type Plugin, type Skill, Tool } from "@opencode/plugin/effect";
 import type { Session } from "@opencode/schema/session";
 import type { SessionMessage } from "@opencode/schema/session-message";
-import { Tool } from "@opencode/schema/tool";
 import { Effect, type Scope } from "effect";
 import { factsOf, isSpectre } from "./agents";
 import { shape } from "./catalogue";
@@ -156,7 +154,7 @@ const healthOf = (): Effect.Effect<Health | undefined> =>
  * record, because the landing gate reads that count.
  *
  * Only the probe is defect-protected. A plain permission decline is a defect at
- * `v2.2.7:packages/core/src/permission.ts:273-278`, so it must reach the host
+ * `v2.3.0:packages/core/src/permission.ts:273-278`, so it must reach the host
  * and end the step. Catching it here would turn a "no" into a search.
  */
 export const attachGuard = (ctx: Plugin.Context, read: AskReader = (event) => askOf(ctx, event)): Effect.Effect<void, never, Scope.Scope> =>

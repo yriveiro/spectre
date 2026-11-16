@@ -1,5 +1,5 @@
+import type { Tool } from "@opencode/plugin/effect";
 import type { Session } from "@opencode/schema/session";
-import type { Tool } from "@opencode/schema/tool";
 import type { Memory } from "./policy";
 
 /**

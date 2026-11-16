@@ -1,6 +1,5 @@
-import type { Plugin } from "@opencode/plugin/effect";
+import { type Plugin, Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
-import { Tool } from "@opencode/schema/tool";
 import { Effect, type Schema } from "effect";
 import { attachCatalogue, attachDiscovery, attachGuard } from "../../tools/definitions/search/apply";
 import { attachMeasure } from "../../tools/definitions/search/measure";

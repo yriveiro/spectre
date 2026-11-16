@@ -76,7 +76,7 @@ valid answer, so say so in the brief and nobody pads the review to look thorough
 
 ## Phase E: Fan out
 
-Spawn every reviewer in one message with `background: true`. If one produces
+Spawn every reviewer in one message. Each one runs in the background. If one produces
 nothing, carry on and name the dropout rather than running a smaller review than
 the one you announced.
 

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Plugin } from "@opencode/plugin/effect";
+import { type Plugin, Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
-import { Tool } from "@opencode/schema/tool";
 import { Effect, Exit } from "effect";
 import { attachSearch } from "../../tools/definitions/search/index";
 import { contextRule, judge, rerouteInput, type Health } from "../../tools/definitions/search/policy";

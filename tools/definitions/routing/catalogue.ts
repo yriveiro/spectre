@@ -1,4 +1,4 @@
-import { Model } from "@opencode/schema/model";
+import { Model } from "@opencode/plugin/effect";
 import { type Ladder, ladderOf } from "./effort";
 import { type Allowed, type Candidate, formatRef, type Known } from "./types";
 

@@ -54,8 +54,8 @@ The transcripts are not available here, so mine what is:
   and none of them need rediscovering.
 
 Fan this out when the history is long. Call `tools.spectre.routing({})`, take one
-model per slice from the profiles, and spawn the readers with `subagent` and
-`background: true`. Each reader takes a slice and returns the patterns it saw
+model per slice from the profiles, and spawn the readers with `subagent`,
+which runs each one in the background. Each reader takes a slice and returns the patterns it saw
 with the commit that shows each one. Never write a model id by hand.
 
 Cross-check before believing anything. A pattern in two or more slices is real.

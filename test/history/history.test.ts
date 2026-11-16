@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import type { Tool } from "@opencode/schema/tool";
+import type { Tool } from "@opencode/plugin/effect";
 import { Effect } from "effect";
 import { historyTool } from "../../tools/definitions/history";
 import { parse, parsePorcelain, parseShort } from "../../tools/definitions/history/parse";

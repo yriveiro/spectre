@@ -115,7 +115,7 @@ A field you cannot fill is a unit you have not scoped yet.
 Spawn a rolling window of up to about ten workers in flight. A blocking batch pays the
 slowest child of the whole batch, so the cap is a window and not a wall.
 
-`subagent` with `background: true` is the entire parallel capacity, and it is not a
+`subagent`, whose children always run in the background, is the entire parallel capacity, and it is not a
 machine: every worker shares this filesystem, so two workers writing the same path
 collide and neither of you will be told. Give one writer per branch and one per path, and
 treat any path named in two briefs as a scheduling bug

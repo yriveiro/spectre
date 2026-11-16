@@ -113,7 +113,8 @@ the model reads.
 ## Platform facts
 
 Every fact here comes from the tag `v2.1.1`, the version floor at the time. The
-floor is now 2.2.7, and the ladder table below was re-read there. Each row cites
+floor is now 2.3.0. The ladder table below was re-read at 2.2.7, and 2.3.0
+ships the same catalogue snapshot. Each row cites
 the tag it comes from, so read a row as a claim about that tag, not about the
 current floor.
 

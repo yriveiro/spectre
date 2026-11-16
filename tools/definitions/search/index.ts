@@ -1,5 +1,4 @@
-import type { Plugin } from "@opencode/plugin/effect";
-import { Tool } from "@opencode/schema/tool";
+import { type Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect, Schema, type Scope } from "effect";
 import { attachCatalogue, attachDiscovery, attachGuard } from "./apply";
 import { CONTRACT, INSTALL } from "./contract";

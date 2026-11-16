@@ -1,8 +1,8 @@
 # Playbook autopilot-stack
 
 As `playbook-autopilot-full`, but every item builds and verifies rather than
-merges: the chain is handed to a person who lands it. Capacity is `subagent` with
-`background: true` and every worker shares this filesystem, so owner paths are disjoint by construction.
+merges: the chain is handed to a person who lands it. Capacity is `subagent`, whose
+children always run in the background, and every worker shares this filesystem, so owner paths are disjoint by construction.
 
 ## Start
 
@@ -71,8 +71,8 @@ never closes.
 ## Phase C: Verify each round
 
 A round starts at the owner's code-ready head SHA and again at each later push that
-changes the patch. At that SHA, fan out independent verifiers in one message with
-`background: true`, one model per verifier from `tools.spectre.routing({})`, and aggregate
+changes the patch. At that SHA, fan out independent verifiers in one message,
+one model per verifier from `tools.spectre.routing({})`, and aggregate
 to one verdict. The lanes: re-run the gates at that SHA, prove the load-bearing behaviour
 on the real surface the change touches, audit the diff and distrust the pull request body,
 and run the same scenario against trunk — where trunk lacks the feature, record that fact

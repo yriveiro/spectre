@@ -45,7 +45,7 @@ The candidates get the same prompt, so the prompt is the contract.
 
 ## Phase B: Fan out
 
-Spawn every candidate in one message with `background: true`. Each gets the `agent`
+Spawn every candidate in one message. A `subagent` child always runs in the background. Each gets the `agent`
 from its seat, the task, its own output path, and a request for the artifact plus
 a short rationale naming the alternatives it considered and what it rejected.
 

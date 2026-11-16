@@ -1,5 +1,4 @@
-import type { Plugin } from "@opencode/plugin/effect";
-import type { Tool } from "@opencode/schema/tool";
+import type { Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect, Schema } from "effect";
 import { CONTRACT } from "./contract";
 import { recordsOf, type UsageRecord } from "./measure";

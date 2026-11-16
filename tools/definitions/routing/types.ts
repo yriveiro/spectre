@@ -1,4 +1,4 @@
-import type { Model } from "@opencode/schema/model";
+import type { Model } from "@opencode/plugin/effect";
 import { Schema } from "effect";
 
 /**

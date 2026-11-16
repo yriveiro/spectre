@@ -48,7 +48,7 @@ can report on.
 
 A session holds the agent the user switched in, and that field stays empty until
 they do. An empty selection runs as the host default, and `agent.list` answers
-the default first (`packages/core/src/agent.ts` at v2.2.7, `list`), so discovery
+the default first (`packages/core/src/agent.ts` at v2.3.0, `list`), so discovery
 reads the default from the head of that list. A read that fails gives no agent,
 and the session goes untouched rather than guessed at.
 
