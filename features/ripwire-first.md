@@ -42,7 +42,9 @@ on any other agent — `build`, `plan`, `general`, `explore`, or one the user
 wrote — keeps what the host gave it: `grep` keeps its name and its description,
 no rule joins the request, the first code read goes through, the commit lands,
 and nothing writes a usage row. A child spawned as a Spectre agent carries the
-feature, and a `general` child does not.
+feature, and a `general` child does not. A spawn of a stock child seeds no
+usage row either, so the report's session count holds only sessions the feature
+can report on.
 
 A session holds the agent the user switched in, and that field stays empty until
 they do. An empty selection runs as the host default, and `agent.list` answers

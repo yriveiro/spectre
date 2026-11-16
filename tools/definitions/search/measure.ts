@@ -213,7 +213,14 @@ const readEvent = (event: ToolAfter, root: string): Observation | undefined => {
     case "subagent": {
       const ask = subagentAsk(event.input, outputOf(event));
       if (ask === undefined) return undefined;
-      return { change: { kind: "spawn" }, ask, child: Session.ID.make(ask.child) };
+      // A stock child never writes a row, so a seed would be a tombstone: it
+      // inflates the report's session count and takes a slot at the cap.
+      const seed = ask.agent !== undefined && isSpectre(ask.agent);
+      return {
+        change: { kind: "spawn" },
+        ask,
+        ...(seed ? { child: Session.ID.make(ask.child) } : {}),
+      };
     }
     default:
       return undefined;
@@ -222,8 +229,6 @@ const readEvent = (event: ToolAfter, root: string): Observation | undefined => {
 
 const observe = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
   Effect.gen(function* () {
-    // A stock agent is not a session that skipped ripwire, so it earns no row
-    // and the report never names it.
     if (!isSpectre(event.agent)) return;
 
     const observation = readEvent(event, ctx.location.directory);

@@ -162,7 +162,7 @@ export type Ask =
   | { readonly surface: "shell"; readonly command: string; readonly parsed: ShellAsk }
   | { readonly surface: "read"; readonly path: string; readonly code: boolean; readonly insideRoot: boolean }
   | { readonly surface: "mutate"; readonly tool: "edit" | "write"; readonly path: string; readonly code: boolean }
-  | { readonly surface: "subagent"; readonly child: string }
+  | { readonly surface: "subagent"; readonly child: string; readonly agent?: string }
   | { readonly surface: "complete"; readonly text: string; readonly outcome: Outcome };
 
 /** One arm of `Ask`, so a reader can name the surface it read. */

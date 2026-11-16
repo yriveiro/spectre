@@ -75,7 +75,10 @@ const ShellInput = Schema.Struct({ command: Schema.String });
 
 const ReadInput = Schema.Struct({ path: Schema.String });
 
-const SubagentInput = Schema.Struct({ sessionID: Schema.optional(Schema.String) });
+const SubagentInput = Schema.Struct({
+  sessionID: Schema.optional(Schema.String),
+  agent: Schema.optional(Schema.String),
+});
 
 /** The `subagent` tool's output: the child it created, however the call ended. */
 const SpawnedOutput = Schema.Struct({ sessionID: Schema.String });
@@ -142,7 +145,11 @@ export const subagentAsk = (input: unknown, output: unknown): SurfaceAsk<"subage
   if (ask.sessionID !== undefined && ask.sessionID !== "") return undefined;
   const spawned = Option.getOrUndefined(decodeSpawned(output));
   if (spawned === undefined) return undefined;
-  return { surface: "subagent", child: spawned.sessionID };
+  return {
+    surface: "subagent",
+    child: spawned.sessionID,
+    ...(ask.agent === undefined ? {} : { agent: ask.agent }),
+  };
 };
 
 /** The `prompt` event. Discovery reads no field of the prompt itself. */
