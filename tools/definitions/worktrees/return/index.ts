@@ -1,6 +1,5 @@
-import type { Plugin } from "@opencode/plugin/effect";
+import { type Plugin, Tool } from "@opencode/plugin/effect";
 import type { Session } from "@opencode/schema/session";
-import { Tool } from "@opencode/schema/tool";
 import { Effect } from "effect";
 import { home, type Standing, say } from "./home";
 import { ask } from "./standing";

@@ -135,7 +135,7 @@ Follow `model-router` for `setup`, `declined`, or `problems`. Never choose a pro
 by array position or guess a model. Pass the selected profile's `agent` and exact
 `model.ref`.
 
-Launch all independent subagents together with `background: true`. Give each a
+Launch all independent subagents together. Each one runs in the background. Give each a
 bounded, read-only task and ask for evidence. No subagent edits or commits on the
 branch, or calls `tools.spectre.pr`. Wait for each result, verify its evidence, and
 resolve dependent fixes before you write the fields.

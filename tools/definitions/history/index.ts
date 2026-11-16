@@ -1,4 +1,4 @@
-import type { Tool } from "@opencode/schema/tool";
+import type { Tool } from "@opencode/plugin/effect";
 import { Effect, Schema } from "effect";
 import { DEFAULT_LIMIT, history } from "./read";
 

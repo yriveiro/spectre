@@ -1,7 +1,7 @@
 # Playbook autopilot-full
 
 One owner per pull request, each driven to merged, with a root verdict on every
-round. Capacity is `subagent` with `background: true`, and every worker shares
+round. Capacity is `subagent`, whose children always run in the background, and every worker shares
 this filesystem, so owner paths are disjoint by construction or two of them will
 collide. On OpenCode 2.2.1+ with `experimental.schedules`, a native schedule runs
 the audit tick. Without schedules, the tick is when the human returns.
@@ -81,8 +81,8 @@ Never stack here. Self-contained PRs branch off trunk. Sequenced work is merge-t
 ## Phase D: Verify each round
 
 A round starts at the owner's code-ready head SHA, and again at each later push that
-changes the patch. At that SHA, fan out independent verifiers in one message with
-`background: true`, one model per verifier from `tools.spectre.routing({})`, and aggregate
+changes the patch. At that SHA, fan out independent verifiers in one message,
+one model per verifier from `tools.spectre.routing({})`, and aggregate
 to one verdict. The lanes:
 
 - Re-run the gates at that exact SHA.

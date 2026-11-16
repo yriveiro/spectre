@@ -1,7 +1,6 @@
-import type { Plugin } from "@opencode/plugin/effect";
+import type { Plugin, Tool } from "@opencode/plugin/effect";
 import { Goal } from "@opencode/schema/goal";
 import type { Session } from "@opencode/schema/session";
-import type { Tool } from "@opencode/schema/tool";
 import { Cause, Effect, Schema } from "effect";
 import { compose, type GoalView, ledgerPath, parseContract, refusal } from "./contract";
 import { ensureHeader } from "./ledger";

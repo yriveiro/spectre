@@ -5,7 +5,7 @@ as an OpenCode plugin.
 
 ## Requirements
 
-- OpenCode `>= 2.2.7`
+- OpenCode `>= 2.3.0`
 - `experimental.todo: true` in `opencode.jsonc` when you want the skills'
   multi-step tracking. OpenCode 2.1.1 ships the `todowrite` tool behind that
   flag, and twenty playbooks open a todolist with one entry per phase. Without
@@ -161,7 +161,7 @@ script rather than as a direct tool call:
 
 ```ts title="tools/definitions/comments.ts"
 import { Effect, Schema } from "effect";
-import { Tool } from "@opencode/schema/tool";
+import type { Tool } from "@opencode/plugin/effect";
 
 export const comments = (directory: AbsolutePath): Tool.Info<typeof Input, typeof Output> => ({
   name: "comments",

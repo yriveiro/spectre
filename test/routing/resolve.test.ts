@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { Model } from "@opencode/schema/model";
+import { Model, Provider } from "@opencode/plugin/effect";
 import { Money } from "@opencode/schema/money";
-import { Provider } from "@opencode/schema/provider";
 import { candidates, isFree, known, ladder } from "../../tools/definitions/routing/catalogue";
 import { effortOf, rungs } from "../../tools/definitions/routing/effort";
 import { resolve, rungFor } from "../../tools/definitions/routing/resolve";

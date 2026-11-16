@@ -1,4 +1,4 @@
-import { Tool } from "@opencode/schema/tool";
+import { Tool } from "@opencode/plugin/effect";
 import { Effect, Schema } from "effect";
 import { type Blocker, decide, decideStack, type Snapshot } from "./classify";
 import { listingFor, readPr, repo } from "./read";

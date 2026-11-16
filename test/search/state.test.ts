@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Session } from "@opencode/schema/session";
-import { Tool } from "@opencode/schema/tool";
+import { Tool } from "@opencode/plugin/effect";
 import { type Health, type Memory, decide } from "../../tools/definitions/search/policy";
 import { markRerouted, memories, memoryOf, remember, rerouted } from "../../tools/definitions/search/state";
 

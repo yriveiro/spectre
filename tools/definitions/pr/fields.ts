@@ -1,4 +1,4 @@
-import type { Tool } from "@opencode/schema/tool";
+import type { Tool } from "@opencode/plugin/effect";
 import { Schema } from "effect";
 
 /**

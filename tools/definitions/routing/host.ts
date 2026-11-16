@@ -1,5 +1,4 @@
-import type { Plugin } from "@opencode/plugin/effect";
-import type { Model } from "@opencode/schema/model";
+import type { Model, Plugin } from "@opencode/plugin/effect";
 import type { Session } from "@opencode/schema/session";
 import { Effect } from "effect";
 

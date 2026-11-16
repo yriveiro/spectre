@@ -1,6 +1,6 @@
 import type { ModelInfo, SessionInfo } from "@opencode/client";
+import type { Model as Schema } from "@opencode/plugin/effect";
 import type { Route } from "@opencode/plugin/tui/context";
-import type { Model as Schema } from "@opencode/schema/model";
 import { Effect } from "effect";
 import {
   candidates,

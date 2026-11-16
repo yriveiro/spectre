@@ -1,6 +1,5 @@
-import type { Plugin } from "@opencode/plugin/effect";
+import { type Plugin, Tool } from "@opencode/plugin/effect";
 import { AbsolutePath } from "@opencode/schema/schema";
-import { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
 import { evidence } from "./evidence";
 import { type Edge, ledger, live } from "./ledger";

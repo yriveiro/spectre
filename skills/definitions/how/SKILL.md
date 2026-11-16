@@ -59,7 +59,7 @@ For a single module or a narrow question, trace it yourself and go to Phase D.
 
 For a subsystem spanning several files or services, split it into two to four
 angles, each a distinct slice, and spawn one read-only explorer per angle in a
-single message with `background: true`. Each gets the question, its one angle,
+single message. Each one runs in the background. Each gets the question, its one angle,
 and the report shape below. The angle is narrow on purpose: an explorer that
 covers the whole subsystem returns a shallower version of the same answer four
 times.

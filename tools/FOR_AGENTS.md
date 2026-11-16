@@ -63,8 +63,8 @@ Two schemas, so a declaration can be wrong in a way nothing at the call reports:
 
 `Schema.Int` is the row to read twice. Effect emits the safe-integer bounds
 (`{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`),
-and the host strips exactly those two keys at 2.2.7
-(`packages/core/src/tool/runtime.ts:195-207`), so the model sees
+and the host strips exactly those two keys at 2.3.0
+(`packages/core/src/tool/runtime.ts:196-208`), so the model sees
 `{"type":"integer"}`. A raw `Schema.toJsonSchemaDocument` call in this repo prints
 the unstripped document, which is why the one-liner near the bottom of this file
 is not the whole answer.
@@ -111,23 +111,28 @@ Schema.decodeUnknownOption(Schema.URL)("https://x.com")._tag; // "None" — refu
 
 The host redirects exactly two packages to its own runtime copy —
 `runtimePackages = ["effect", "@opencode/plugin"]` in
-`@opencode/plugin/dist/runtime-modules.js` at 2.2.7. `@opencode/schema` is not
-one of them, so this repo's pinned copy builds the `Tool.Error` a tool throws,
-not the host. The host tests `error instanceof Tool.Error`
-(`packages/core/src/tool/runtime.ts:40`) and, when that is false, re-wraps the
-failure as `new Tool.Error({ message })`: the refusal text survives, `metadata`
-and `error` do not. `_tag` survives the same way (`Tool.Error` is a
-`Schema.TaggedStruct`), so `catchTag("Tool.Error")` still matches.
+`@opencode/plugin/dist/runtime-modules.js` at 2.3.0. `@opencode/schema` is not
+one of them, so a schema imported from `@opencode/schema/*` is this repo's
+pinned copy, while the same schema imported from `@opencode/plugin/effect` is
+the host's. The host tests `error instanceof Tool.Error`
+(`packages/core/src/tool/runtime.ts:41` at 2.3.0) and, when that is false,
+re-wraps the failure as `new Tool.Error({ message })`: the refusal text
+survives, `metadata` and `error` do not.
 
-The consequence is a pinning rule, not a code change: the `@opencode/*` pins
-move in lockstep with `engines.opencode`, so the copy that builds the
-error never drifts more than this bump from the copy that reads it. Where the
-barrel re-exports a schema (`Agent`, `Skill`, and not `Tool`), prefer the
-barrel and ride the redirect. `Tool` and `AbsolutePath` have no barrel route in
-either version, so `@opencode/schema` stays the only import that works.
+The rule: **import every schema the barrel re-exports from
+`@opencode/plugin/effect`**, and ride the redirect. At 2.3.0 that is `Agent`,
+`Artifact`, `Command`, `Connection`, `Credential`, `Integration`, `Location`,
+`Mcp`, `Model`, `PersistentPty`, `Provider`, `Reference`, `Rpc`, `Skill`,
+`Tool`, `Vcs`, `WebSearch` and `Worktree` (`dist/effect/index.d.ts`). 2.3.0 is
+the first version that exports `Tool` there, so a `Tool.Error` built from the
+barrel is the host's class and its `metadata` reaches the host. `AbsolutePath`,
+`Session`, `SessionMessage`, `Goal` and `Money` have no barrel route, so
+`@opencode/schema` stays the import for them, and the `@opencode/*` pins move
+in lockstep with `engines.opencode` so that copy never drifts more than one bump
+from the host's.
 
 **The cause of this file's history is in `runtime.ts:174` (`toJsonSchema`) at
-v2.1.1, `:175` at 2.2.7**, and it is
+v2.1.1, `:175` at 2.2.7, `:176` at 2.3.0**, and it is
 why the table changed. The boundary used to walk the Effect schema AST
 itself, and on `effect@4.0.0-rc.112` that AST carries no `_tag` on the nodes a
 schema is built from, so everything past the primitives failed. It now calls
@@ -155,7 +160,7 @@ away with it.
 
 ## How `options` becomes a call path
 
-Read at tag `v2.2.7`, not inferred. A tool added through
+Read at tag `v2.3.0`, not inferred. A tool added through
 `ctx.tool.transform` lands in the **same** registry as the builtins. There is no
 separate plugin path, and the three fields in `Tool.Options` decide where it
 surfaces:
@@ -180,8 +185,8 @@ Two filters, and both are about the **caller**, not the tool:
 Wholly disabled means one shape and no other. `whollyDisabled` at
 `packages/core/src/tool.ts` is three lines: take the last rule matching the
 action, and drop the tool only when that rule is `{resource: "*", effect:
-"deny"}` (`packages/core/src/tool.ts:386-389` at 2.2.7). Re-read at tag
-`v2.2.7`, so this paragraph and the filter definition above are current. The
+"deny"}` (`packages/core/src/tool.ts:385-388` at 2.3.0). Re-read at tag
+`v2.3.0`, so this paragraph and the filter definition above are current. The
 schema table further up is still measured at 2.1.1 and has not been fully re-run
 at 2.2.7 (the `Int`/`Finite`/`NonEmptyString`/`URL`/`Trim` rows were spot
 re-verified at v2.1.1 and again at 2.2.7).
@@ -256,8 +261,8 @@ console.log(JSON.stringify(Schema.toJsonSchemaDocument(Schema.Int).schema));
 ```
 
 That is Effect's emission, not what the model sees: the host strips those two
-bounds before it sends the schema (`packages/core/src/tool/runtime.ts:195-207` at
-2.2.7), so the model sees `{"type":"integer"}`. For what the host does with a
+bounds before it sends the schema (`packages/core/src/tool/runtime.ts:196-208` at
+2.3.0), so the model sees `{"type":"integer"}`. For what the host does with a
 value, run the same decoder the host runs, because it is the same `effect@4.1.0`:
 
 ```js

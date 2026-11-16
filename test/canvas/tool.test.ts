@@ -1,8 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { Plugin } from "@opencode/plugin/effect";
-import type { Tool } from "@opencode/schema/tool";
+import type { Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect } from "effect";
 import { canvases } from "../../tools/definitions/canvas";
 import type { Input as CanvasInput, Output, Review } from "../../tools/definitions/canvas/content";

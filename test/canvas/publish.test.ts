@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Plugin } from "@opencode/plugin/effect";
-import { Tool } from "@opencode/schema/tool";
+import { type Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect } from "effect";
 import { create, update } from "../../tools/definitions/canvas/publish";
 

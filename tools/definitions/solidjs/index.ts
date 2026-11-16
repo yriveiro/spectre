@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
+import type { Tool } from "@opencode/plugin/effect";
 import type { AbsolutePath } from "@opencode/schema/schema";
-import type { Tool } from "@opencode/schema/tool";
 import { Effect, Schema } from "effect";
 import { audit } from "./audit";
 import { detect } from "./detect";

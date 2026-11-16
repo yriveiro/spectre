@@ -1,4 +1,4 @@
-import { Model } from "@opencode/schema/model";
+import { Model } from "@opencode/plugin/effect";
 import { effortOf, fit, ladderOf } from "./effort";
 import { crosscheckOf, priorityOf } from "./order";
 import { formatRef, modelNames, type Tables } from "./types";

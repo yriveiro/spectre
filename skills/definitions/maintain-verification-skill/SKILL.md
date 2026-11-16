@@ -45,8 +45,8 @@ file.
 
 ## Phase C: Source wave
 
-One read-only reader per feature file, spawned together with `subagent` and
-`background: true`. Call `tools.spectre.routing({})` first and take one model per
+One read-only reader per feature file, spawned together with `subagent`, which
+runs each one in the background. Call `tools.spectre.routing({})` first and take one model per
 reader from the profiles. Never write a model id by hand.
 
 Each reader answers one question from source: how does this user-facing feature

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
-import { Tool } from "@opencode/schema/tool";
 import { Effect, Exit } from "effect";
 import { report } from "../tools/definitions/search";
 import { contextRule } from "../tools/definitions/search/policy";

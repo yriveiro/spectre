@@ -47,7 +47,7 @@ what order. The worker records both in its result.
 
 ## Phase B: Fan out
 
-Spawn all N workers in one message with `background: true`, each with its agent,
+Spawn all N workers in one message, each with its agent,
 its model, and the path to its own `brief.md`. Every brief stands alone, because
 a worker cannot ask you a question. Each one carries the goal, its scope, its
 exact slice or race arm, its own output path, how to verify, and what to report

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Model } from "@opencode/schema/model";
+import type { Model } from "@opencode/plugin/effect";
 import { check } from "../../tools/definitions/routing/check";
 import type { Tables } from "../../tools/definitions/routing/types";
 import { CATALOGUE } from "./fixture";
