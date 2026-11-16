@@ -16,12 +16,11 @@ import { Effect, Schema } from "effect";
 import {
   candidates,
   DEFAULT_AGENT,
-  DEFAULT_TIMEOUT_MS,
+  type Decide,
   jevJudge,
+  judgeRef,
   load,
   resolveProfile,
-  SYSTEMONE_ENDPOINT,
-  SYSTEMONE_KEY_ENV,
 } from "../../tools/definitions/routing";
 import { boot } from "../boot";
 import { head, systemic } from "../guard";
@@ -241,30 +240,17 @@ try {
     { name: "lex:match", report: score(corpus, lexical(described, prompts), priceList) },
   ];
 
-  // The System One arm, when the config asks for a judge and the key is
-  // there. It is the third arm the feature file names, and it is the one that
-  // carries a probability.
   if (judgeSettings !== undefined) {
-    const key = judgeSettings.key ?? SYSTEMONE_KEY_ENV;
-    if (Bun.env[key] === undefined) say(`\n  jev arm: skipped, ${key} is not in the environment\n`);
-    else {
-      say(`\n  jev arm: ${judgeSettings.model ?? "the configured model"}`);
-      // The arm reads the key from the environment itself, so the settings
-      // carry the variable's name and not its value. The second argument is
-      // the surface: the profile names and their match lines.
-      const judge = jevJudge(
-        {
-          model: judgeSettings.model ?? "jev-1.13-free",
-          endpoint: judgeSettings.endpoint ?? SYSTEMONE_ENDPOINT,
-          keyEnv: key,
-          timeout: judgeSettings.timeout ?? DEFAULT_TIMEOUT_MS,
-        },
-        Object.fromEntries(
-          Object.entries(tables.profiles).map(([name, entry]) => [name, entry.match]),
-        ),
-      );
-      arms.push({ name: "jev", report: score(corpus, await jev(judge, prompts), priceList) });
-    }
+    say(`\n  jev arm: ${judgeRef(judgeSettings.model)}`);
+    const decide: Decide = (await client.effect()).experimental.generate.decisions;
+    const judge = jevJudge(
+      { model: judgeSettings.model, timeout: judgeSettings.timeout },
+      Object.fromEntries(
+        Object.entries(tables.profiles).map(([name, entry]) => [name, entry.match]),
+      ),
+      decide,
+    );
+    arms.push({ name: "jev", report: score(corpus, await jev(judge, prompts), priceList) });
   }
 
   if (!NO_MODEL) {

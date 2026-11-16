@@ -6,6 +6,7 @@
  * the profile, which is what a session does today when the tool hands back the
  * table and the model picks.
  */
+import { Effect } from "effect";
 import { type Description, rank } from "../../tools/definitions/routing";
 
 export type { Description };
@@ -88,9 +89,7 @@ export const ask = async (
  */
 export const jev = async (
   judge: {
-    readonly judge: (
-      task: string,
-    ) => Promise<
+    readonly judge: (task: string) => Effect.Effect<
       | {
           readonly kind: "profile";
           readonly profile: string;
@@ -103,7 +102,7 @@ export const jev = async (
 ): Promise<ReadonlyArray<Prediction>> => {
   const out: Array<Prediction> = [];
   for (const prompt of prompts) {
-    const verdict = await judge.judge(prompt);
+    const verdict = await Effect.runPromise(judge.judge(prompt));
     out.push({
       prompt,
       got: verdict.kind === "profile" ? verdict.profile : "none",

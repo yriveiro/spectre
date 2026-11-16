@@ -455,8 +455,7 @@ The judge lives in the config, beside the rest of it:
 ```jsonc
 {
   "judge": {
-    "model": "jev-1.13-free",
-    "endpoint": "https://opencode.ai/inference/systemone/v1/systemone",
+    "model": "opencode/jev-1.13-free",
   }
 }
 ```
@@ -481,10 +480,13 @@ says so rather than inventing one. A lexical score is not a probability, and a
 chat model's confidence is not a calibrated one. The policy that raises the
 effort needs the third arm, so the policy waits for it.
 
-The Jev arm asks the question in the shape the model expects: a `state`,
-which is the task statement, and a `choice` question whose criteria are the
-profiles' `match` lines. The answer carries the choice and the probability
-for every criterion, so one call returns the profile and the confidence.
+The Jev arm asks the host through `ctx.experimental.generate.decisions`: the
+task statement is the input, and one `choice` question offers the profiles'
+`match` lines as its choices. The host resolves the decision model from its
+catalogue and finds the endpoint and the credential through the model's
+provider (`packages/core/src/generate.ts` at `v2.3.0`), so the plugin sends no
+request of its own. The answer carries the choice and the probability for every
+choice, so one call returns the profile and the confidence.
 
 The measurement decides the rest. A judge that does not beat the lexical arm
 on the corpus, priced by regret, is not worth a network call in the hot path,
@@ -497,7 +499,7 @@ and the tool routes from the table as it does today.
 | --- | --- | --- |
 | No `judge` key | the report says the judge was skipped and why | the agent reads the `match` lines and picks |
 | The key is there and the user turned it off | the same | the same |
-| The endpoint is unreachable | the same, and the reason names the failure | the same |
+| The host cannot ask the model | the same, and the reason carries the host's message | the same |
 | The call takes too long | the same, and the reason names the timeout | the same |
 | The answer names a profile the config does not have | the same, and the reason names the profile | the same |
 | The answer is a profile | the report carries the profile and the confidence | the agent spawns on the resolved model |
@@ -554,16 +556,19 @@ probability, because it is the only one that has one.
 {
   "judge": {
     "kind": "jev",
-    "model": "jev-1.13-free",
-    "endpoint": "https://opencode.ai/inference/systemone/v1/systemone",
-    "key": "OPENCODE_API_KEY",
+    "model": "opencode/jev-1.13-free",
     "timeout": 2000
   }
 }
 ```
 
-`kind` is `lexical` or `jev`. The `key` is the **name of an environment
-variable**, never the key itself, so the file holds no secret. A file with no
+`kind` is `lexical` or `jev`. `model` is a decision model ref, and a bare id
+such as `jev-1.13-free` names the `opencode` provider's model. The file names
+no endpoint and no key, because the host owns both. A file written before
+2.3.0 still carries `endpoint` and `key`. When the endpoint is the Console's,
+the reader ignores both and the writer drops them on the next save. Any other
+endpoint keeps the judge quiet with a reason that names it, and the writer
+keeps it so the user can see what the file asked for. A file with no
 `judge` key has no judge, and `"judge": null` in a repository's file turns a
 judge off that a global file asked for, through the same merge rule the other
 keys use.

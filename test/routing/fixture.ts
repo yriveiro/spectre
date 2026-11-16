@@ -55,10 +55,13 @@ export const context = (
   list: () => Effect.Effect<unknown, unknown> = () =>
     Effect.succeed({ location: {}, data: CATALOGUE }),
   sessions: Sessions = {},
+  decide: () => Effect.Effect<unknown, unknown> = () =>
+    Effect.fail({ message: "Model not found: opencode/jev-1.13-free" }),
 ) =>
   ({
     location: { directory },
     model: { list },
+    experimental: { generate: { decisions: decide } },
     session: {
       get: ({ sessionID }: { readonly sessionID: string }) => {
         const at = sessions[sessionID];
