@@ -1,4 +1,4 @@
-import { Opencode } from "./opencode";
+import { connect, type Opencode } from "./opencode";
 
 const PASSWORD = /server password (\S+)/;
 
@@ -129,7 +129,7 @@ export const boot = async (options: {
   };
 
   return {
-    client: new Opencode(options.directory, `http://127.0.0.1:${options.port}`, password),
+    client: connect(options.directory, `http://127.0.0.1:${options.port}`, password),
     registered,
     stop: () => {
       void pump;

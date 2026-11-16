@@ -1,4 +1,4 @@
-import { Opencode } from "../opencode";
+import { connect, type Opencode } from "../opencode";
 
 /** The repo root, from `eval/resume/`. */
 export const REPO = Bun.fileURLToPath(new URL("../../", import.meta.url));
@@ -106,7 +106,7 @@ export const start = async (input: {
     throw new Error(`${name}: no host port was published for 14096`);
   }
 
-  const client = new Opencode("/workspace", `http://127.0.0.1:${hostPort}`, password);
+  const client = connect("/workspace", `http://127.0.0.1:${hostPort}`, password);
 
   // The port is published before the server binds, and the first request can be
   // reset by the proxy. Retry the whole read, not only the empty answer.

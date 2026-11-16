@@ -34,12 +34,13 @@
  *   SPECTRE_WRITER_ONLY="principle-evidence,riprwire" SPECTRE_WRITER_NEGATIVES=0 \
  *     bun eval/writer.ts > eval/reask.json 2> reask.log
  */
+import type { ModelRef } from "@opencode/client";
 import { offences, permitted } from "./bar";
 import { boot } from "./boot";
 import { blind, heldOut, tuned } from "./fixture";
 import { systemic } from "./guard";
 import { ref, select } from "./models";
-import type { Model, Opencode } from "./opencode";
+import type { Opencode } from "./opencode";
 
 const PORT = Number(Bun.env.SPECTRE_WRITER_PORT ?? 4494);
 const CONCURRENCY = Number(Bun.env.SPECTRE_WRITER_CONCURRENCY ?? 6);
@@ -143,6 +144,9 @@ const clean = (raw: string): string | undefined => {
   return text;
 };
 
+const reasonOf = (cause: unknown): string =>
+  (cause instanceof Error ? cause.message : String(cause)).slice(0, 120);
+
 /**
  * Writes one leaf by throwing fresh sessions at it. Returns the row, or a reason
  * for the caller to count, because three leaves failing for one quota is not a
@@ -150,7 +154,7 @@ const clean = (raw: string): string | undefined => {
  */
 const writeOne = async (
   client: Opencode,
-  model: Model,
+  model: ModelRef,
   id: string,
   personaIndex: number,
   descriptions: ReadonlyMap<string, string>,
@@ -161,11 +165,14 @@ const writeOne = async (
     const persona = PERSONAS[(personaIndex + attempt) % PERSONAS.length]!;
     const isNegative = id.startsWith("neg-");
     const text = isNegative ? negativesAsk(persona, attempt) : ask(id, persona, attempt);
-    const session = await client.session(model);
+    const session = await client.session.create({
+      title: "skill-eval",
+      model,
+      location: { directory: client.directory },
+    });
     try {
-      const result = await client.generate(session.id, text);
-      const answer = result.text ?? result.content ?? result.data ?? "";
-      const prompt = clean(String(answer));
+      const result = await client.session.generate({ sessionID: session.id, prompt: text });
+      const prompt = clean(result.text);
       if (prompt === undefined) {
         why = "unreadable sentence";
         continue;
@@ -183,9 +190,9 @@ const writeOne = async (
       }
       return { prompt };
     } catch (cause) {
-      why = (cause as Error).message.slice(0, 120);
+      why = reasonOf(cause);
     } finally {
-      await client.remove(session.id).catch(() => {});
+      await client.session.remove({ sessionID: session.id }).catch(() => {});
     }
   }
   return { why: why ?? "no attempts left" };

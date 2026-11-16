@@ -1,13 +1,6 @@
-import type { Message, Part } from "../opencode";
+import type { SessionMessageAssistant, SessionMessageAssistantTool } from "@opencode/client";
 import type { Scenario, WorkspacePath } from "./scenario";
 import { readIn } from "./workspace";
-
-type ToolState = {
-  readonly status?: string;
-  readonly input?: Readonly<Record<string, unknown>>;
-  readonly metadata?: Readonly<Record<string, unknown>>;
-  readonly content?: ReadonlyArray<{ readonly type?: string; readonly text?: string }>;
-};
 
 export type SubagentCall = {
   readonly agent?: string;
@@ -41,49 +34,45 @@ const text = (value: unknown): string | undefined =>
   typeof value === "string" && value !== "" ? value : undefined;
 
 /** The host writes the child id in `metadata.sessionID` and in the result text. */
-const outputID = (state: ToolState | undefined): string | undefined => {
-  const metadata = text(state?.metadata?.sessionID);
+const outputID = (state: SessionMessageAssistantTool["state"]): string | undefined => {
+  if (state.status === "streaming") return undefined;
+  const metadata = text(state.metadata?.sessionID);
   if (metadata !== undefined) return metadata;
-  for (const part of state?.content ?? []) {
-    const match = part.text?.match(/sessionID="([^"]+)"/);
+  if (state.status === "running") return undefined;
+  for (const part of state.content ?? []) {
+    if (part.type !== "text") continue;
+    const match = part.text.match(/sessionID="([^"]+)"/);
     if (match?.[1] !== undefined) return match[1];
   }
   return undefined;
 };
 
-/**
- * Every `subagent` tool part in the parent transcript, in message order. The
- * part shape is the host's: `name`, `state.input`, `state.metadata` and
- * `state.content`. It is read as a whole part, not through `Part.state.input`,
- * because the output lives beside the input.
- */
-export const subagentCalls = (messages: ReadonlyArray<Message>): ReadonlyArray<SubagentCall> => {
-  const calls: Array<{ readonly at: number; readonly order: number; readonly call: SubagentCall }> = [];
+export const subagentCalls = (
+  messages: ReadonlyArray<SessionMessageAssistant>,
+): ReadonlyArray<SubagentCall> => {
+  const calls: Array<{ readonly at: number; readonly order: number; readonly call: SubagentCall }> =
+    [];
   let order = 0;
   for (const message of messages) {
-    const messageAt = (message as { readonly time?: { readonly created?: number } }).time?.created ?? 0;
-    for (const part of message.content ?? []) {
+    for (const part of message.content) {
       if (part.type !== "tool" || part.name !== "subagent") continue;
-      const state = (part as Part & { state?: ToolState }).state;
-      const input = state?.input ?? {};
-      const at = (part as { readonly time?: { readonly created?: number } }).time?.created ?? messageAt;
+      const input = part.state.status === "streaming" ? undefined : part.state.input;
+      const at = part.time.created;
       calls.push({
         at,
         order: order++,
         call: {
-          agent: text(input.agent),
-          description: text(input.description),
-          prompt: text(input.prompt),
-          sessionID: text(input.sessionID),
-          outputSessionID: outputID(state),
-          status: text(state?.status),
+          agent: text(input?.agent),
+          description: text(input?.description),
+          prompt: text(input?.prompt),
+          sessionID: text(input?.sessionID),
+          outputSessionID: outputID(part.state),
+          status: part.state.status,
           at,
         },
       });
     }
   }
-  // The message list arrives newest-first. The part time puts the calls back in
-  // the order the session made them, and the index breaks a same-millisecond tie.
   return calls.toSorted((a, b) => a.at - b.at || a.order - b.order).map((one) => one.call);
 };
 

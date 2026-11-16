@@ -11,8 +11,8 @@
  * profiles in its own text, and this process reads the config through the
  * tool's own loader, so nothing the run measures depends on the plugin.
  */
-import type { Model } from "@opencode/plugin/effect";
-import { Effect } from "effect";
+import { Model } from "@opencode/plugin/effect";
+import { Effect, Schema } from "effect";
 import {
   candidates,
   DEFAULT_AGENT,
@@ -153,11 +153,7 @@ booting.advance();
 booting.finish("listening");
 
 try {
-  // The route answers `Location.response(Schema.Array(Model.Info))`
-  // (`packages/protocol/src/groups/model.ts:10-12` at `v2.1.1`), so the wire
-  // carries cost, family, status and tools. The local `ModelInfo` type names
-  // only the fields the skill eval reads, hence the cast.
-  const listed = (await client.models()) as ReadonlyArray<Model.Info>;
+  const listed = Schema.decodeUnknownSync(Schema.Array(Model.Info))(await client.models());
   const kept = candidates(allowed, listed);
   if (kept.missing.length > 0)
     refuse(
@@ -296,17 +292,11 @@ try {
       else inFlight -= 1;
     };
 
-    // The route is the one-shot generation the server holds
-    // (`packages/protocol/src/groups/generate.ts:8-14` at `v2.1.1`): one call,
-    // one reply, no session, and the model named in the payload. One attempt,
-    // thrown on anything that is not a reply, so the retry loop has exactly
-    // one caller and the failure reason is raised in one place.
     const once = async (prompt: string): Promise<string> => {
-      const out = await client.raw<{ text: string }>("/api/experimental/generate", {
-        method: "POST",
-        body: JSON.stringify({ prompt, model: armRef }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
+      const out = await client.experimental.generate.text(
+        { prompt, model: armRef },
+        { signal: AbortSignal.timeout(TIMEOUT_MS) },
+      );
       if (out.text.trim() === "") throw new Error("an empty reply");
       return out.text;
     };
