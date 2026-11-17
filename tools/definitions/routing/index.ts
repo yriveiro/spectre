@@ -196,29 +196,8 @@ const Output = Schema.Union([Resolved, Setup, Declined, Problems]);
 /** Exported so a test can name it: `Tool.Info.output` is optional on the type. */
 export type Page = typeof Output.Type;
 
-const DESCRIPTION = `Route a task to a model: resolve each profile's requirement against the models this project allows, and return the ref to spend.
-
-Call it with no \`profile\` to get every profile. Each row carries the profile's \`match\` line, which says when that profile fits, and one \`model\`: the ref the resolver chose, the rung it asked for, and the cost. Take the profile whose \`match\` fits the task, and pass \`model.ref\` to the subagent tool unchanged, variant included.
-
-That \`model.ref\` belongs to the first call. A follow-up continues the child
-with \`sessionID\` and omits \`model\`, so the child keeps the model the profile
-chose. A follow-up does not route again.
-
-  const t = await tools.spectre.routing({})
-  subagent({ agent: t.profiles[0].agent, prompt: "<the task>", model: t.profiles[0].model.ref })
-
-Pass \`task\` when you want the judge to choose the profile: \`routing({ task: "<the task>" })\`. The judge names a profile and never a model, so take \`model.ref\` from that profile's row unchanged. When \`judge.status\` is \`used\`, spend the row named \`judge.profile\`. When it is \`skipped\`, choose the profile yourself against the \`match\` lines. A skipped judge is a complete answer, and the routing is no less correct for it.
-
-What comes back, by \`status\`:
-
-- \`resolved\`: \`profiles\` has one row per profile. \`model\` is the model to spend: \`ref\` is the full string to pass, rung included, and \`rung\` is the level it names. \`pinned\` says the profile named this model with a \`model\` pin, \`steppedUp\` says the ladder had no rung at the requirement and stepped up, \`below\` is the rung under it, and \`family\`, \`rungs\` and \`cost\` describe the model. \`crosscheck\` is the second opinion when the profile asks for one, and \`crosscheckProblem\` says why a declared second opinion found none. \`excluded\` lists the candidates that did not qualify, each with the highest rung it reaches. \`models\` is the allowlist in priority order, each row carrying its \`priority\`, \`family\`, \`rungs\` and \`cost\`; the answer's \`crosscheck\` array is the crosscheck fallback order. \`sources\` names the config files that were read, and \`asked\` the profile names you asked for. \`judge\` says which path chose the profile: \`used\` carries the \`profile\` it chose and the \`confidence\` when its arm reports one, and \`skipped\` carries the \`reason\` it gave none.
-- \`setup\`: the repository has no config. \`provider\`, \`models\` and \`profiles\` are the starter set on the table. Ask the user once, then call this tool again with \`setup: "accepted"\` or \`setup: "declined"\`. Do not write a config by hand.
-- \`declined\`: the user already said no. Do not ask again. Spawn without \`model\`, and the agent's own model runs the work.
-- \`problems\`: the config is wrong. Every mistake is on its own line and names the key. Quote it, say routing is misconfigured, and ask whether to continue on the current model. When the models and the priority order are themselves valid, the answer also carries \`models\` in the same shape as \`resolved\`. It carries \`crosscheck\` too when the crosscheck list is valid. Read the order while you fix the profile. Do not substitute a model you remember.
-
-The allowlist is the whole vocabulary. \`priority\` states the order the resolver reads, and the page can reorder it. The \`crosscheck\` list states which models may serve a second opinion, in fallback order; a profile's crosscheck takes the first model in that list from another family, unless the profile pins one with \`crosscheck.model\`. A ref that is not in \`models\` is not returned by this tool, and nothing checks the allowlist at the subagent boundary: a ref you write yourself is one nobody checked. Never write a model id from memory. If nothing here fits, say so and ask.
-
-A profile states what a task needs in \`effort\` and when to reach for it in \`match\`. The resolver reads the \`priority\` order and the live catalogue. It never reads \`why\`, which is the rationale for the human.`;
+const DESCRIPTION = `Resolve subagent model selection from spectre.json profiles, effort rungs, allowlist priority, and task judging.
+Returns each profile's resolved provider/model#rung ref, agent, cost, and crosscheck model, or runs the configured task judge when task is given. Also handles initial routing setup ("accepted" or "declined") and reports config validation problems before spawning subagents.`;
 
 /** The allowlist as rows, in the explicit priority order. */
 const rows = (
@@ -393,7 +372,6 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
   options: {
     namespace: "spectre",
     codemode: true,
-    pinned: true,
     permission: "read",
   },
   execute: (input, context) =>

@@ -172,9 +172,12 @@ surfaces:
 | `codemode` unset or `true`, plus a `namespace` | `tools.<namespace>.<name>` in Code Mode |
 
 `namespace` is what makes the dotted path: the host joins it to the name as
-`<namespace>.<name>`. `pinned: true` keeps a tool's full listing in the catalog
-from the first round instead of paging it in, and it is only legal alongside
-`codemode: true`.
+`<namespace>.<name>`. `pinned: true` forces a tool's full listing into turn one
+and is only legal alongside `codemode: true`. Every `tools.spectre.*` tool omits
+`pinned` so `CodeModeCatalog` stays within `INLINE_BUDGET = 2_000`
+(`packages/core/src/codemode/catalog.ts:50`). Keep line one of `description` at
+120 characters or fewer (`DESCRIPTION_LIMIT = 120`). Keep `description` at 40 to
+85 words for BM25 ranking, and put field contracts in `.annotate({ description })`.
 
 Two filters, and both are about the **caller**, not the tool:
 

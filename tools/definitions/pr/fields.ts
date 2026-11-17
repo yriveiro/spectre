@@ -84,66 +84,8 @@ export const Input = Schema.Struct(Fields.fields);
 
 export type Input = typeof Input.Type;
 
-export const DESCRIPTION = `Open a pull request whose title and body are composed here from structured fields, checked against the rules in \`playbook-opening-a-pr\`, and refused when a rule fails.
-
-  const pr = await tools.spectre.pr({
-    type: "feat", scope: "spectre", subject: "compose the pull request title and body",
-    summary: "Agents wrote pull requests by hand, so the shape of one was whatever the run produced.",
-    review: "Is the lint fail-closed, or does it only warn?",
-    scopeItems: ["tools/definitions/pr/render.ts"],
-    validation: [
-      { check: "bun test test/pr", result: "38 pass, 0 fail" },
-      { check: "ripwire . --quality-delta", result: "regressions=0 gating=0" },
-      { check: "ripwire . --affected=tools/definitions/pr", result: "tests=30 reached=168" },
-    ],
-    risk: "Adds a tool. Reverting the folder removes it.",
-  })
-  pr.status === "created"                                                // the URL is in pr.url
-
-The title and body reach GitHub exactly as this tool wrote them. No text the caller
-sends is passed through as prose: the fields are assembled into the playbook's shape,
-and the lint refuses rather than repairs.
-
-The \`## Validation\` rows carry one entry per command that ran, with the output it
-printed. A branch that changed a code file carries the two ripwire measurements as
-their own entries. A branch that changed no code file states that fact in the entry
-holding its test result.
-
-## The order, and why it is that order
-
-1. Compose. One pure function, the same fields to the same bytes every time.
-2. Lint. Every rule is a refusal, not a warning. A failure returns the composed
-   title and body, so the rule can be read against what it produced.
-3. Read. The branch, its upstream, and the base. A detached HEAD is a refusal: no
-   branch names the pull request.
-4. Push. Only what the remote lacks, and never with a flag that rewrites history.
-5. Reconcile. One open pull request on this branch means edit, not create.
-6. Write, then read back. An exit code is not a URL.
-
-Nothing is pushed and no pull request exists until step 2 clears, so a failed lint
-leaves the remote exactly as it was.
-
-## Running it twice
-
-The operation converges. A second call finds the open pull request for the branch and
-rewrites it to the same composed bytes, returning \`status: "updated"\` and
-\`changed: false\`. That is the answer a re-run gives, and it is what makes this safe
-to call again after a crash: a run that died after the push finds the branch current
-and pushes nothing, and a run that died after the create finds the pull request and
-converges on it. Nothing reads what the previous attempt was doing.
-
-## What it will not do
-
-It never opens a draft, so there is no input that can express one. \`## Merge Gate\`
-is always rendered unticked, because this tool cannot observe a human and will not
-report an approval it did not read. It never force-pushes. It never commits. It never
-edits a pull request on any other branch, and it never targets a base it was not given
-or could read as the default.
-
-A \`gh\` that failed is reported as it failed. \`status: "failed"\` means nothing is
-confirmed, not that the pull request was rolled back — a create that succeeded and a
-read-back that then failed lands as one, and the URL is in \`problems\` when there is
-one. Read it before retrying, because a retry converges rather than duplicating.`;
+export const DESCRIPTION = `Compose, lint, push, and open or update a GitHub pull request from structured conventional-commit fields.
+Validates title and body against playbook-opening-a-pr before pushing, never force-pushes or opens drafts, and converges idempotently on re-runs. Code changes require validation entries for \`ripwire . --quality-delta\` and \`ripwire . --affected=<paths>\`. A branch that changed no code file states that fact in its test validation entry.`;
 
 /** The lint verdict, as the tool reports it. `detail` names the fix, not the rule. */
 export const Finding = Schema.Struct({

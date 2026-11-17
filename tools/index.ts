@@ -14,6 +14,9 @@ import { solidjs } from "./definitions/solidjs";
 import { stack } from "./definitions/stack";
 import { sessionReturn, worktrees } from "./definitions/worktrees";
 
+export const NAMESPACE_DESCRIPTION =
+  "Direct code search: spectre_search. Tools: worktrees (branch isolation, cleanup), pr (compose, open pull requests), stack (stacked PR merge order, blockers), routing (subagent model selection), brain (project memory: decisions, gotchas, lessons, constraints), history (file git blame, pickaxe rationale), goal (/goal loop contract, ledger), canvas (HTML, diagram, report, PR review artifacts), prose (ASD-STE100 grammar, dictionary check), comments (comment, lint/type suppression inventory), solidjs (Solid 1/2 detection, reactivity audit), ripwire_report (ripwire session audit).";
+
 export const update = (ctx: Plugin.Context) =>
   Effect.gen(function* () {
     // The dictionary path is config, and a config mistake must be reported to
@@ -52,7 +55,7 @@ export const update = (ctx: Plugin.Context) =>
       editor.add(reported);
       editor.namespace({
         name: "spectre",
-        description: "Code search is spectre_search; the rest are Spectre's own tools.",
+        description: NAMESPACE_DESCRIPTION,
       });
     });
 

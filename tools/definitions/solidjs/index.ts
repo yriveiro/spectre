@@ -129,45 +129,15 @@ const Refused = Schema.Struct({
 
 export const Output = Schema.Union([DetectResult, AuditResult, Refused]);
 
-const DESCRIPTION = `Detect the Solid line a project runs, then audit the API it uses.
-
-  await tools.spectre.solidjs({})                              // detect, the default
-  await tools.spectre.solidjs({ action: "detect", target: "." })
-  await tools.spectre.solidjs({ action: "audit", target: "." })
-  await tools.spectre.solidjs({ action: "audit", rule: "v2-effect-arity" })
-
-## Detect answers the version gate
-
-\`mode\` is \`solid-1\`, \`solid-2\`, \`mixed\`, or \`unknown\`. Solid 2 is a release
-candidate, so \`solid-2\` also sets \`solid.prerelease\`. \`framework\` separates
-SolidStart 1 from SolidStart 2, and both run on Solid 1. A stable
-\`@solidjs/start\` 2.x plus a Solid 2 core is \`compatible: false\`, because
-SolidStart does not support Solid 2. \`unknown\` means the inputs did not decide;
-ask which version is installed rather than guessing from a filename.
-
-Read \`evidence\` when a row surprises you. Every mode is derived from a manifest,
-a lockfile, a config, or an import, and the evidence names which one.
-
-## Audit names the mistake and the fix
-
-\`audit\` reads source text, masks comments, and reports a rule, a file, a line, a
-message, and the fix. It is not a typechecker. A finding is a place to look, not
-a proof that the code is wrong; the rule ids match the \`Audit rule\` lines in
-\`references/anti-patterns.md\`.
-
-\`errors\` and \`warnings\` count the whole filtered set, while \`findings\` is only
-the page named by \`offset\` and \`limit\`. \`truncated\` is true when the page is
-not the whole set.
-
-A \`target\` that is not a directory comes back as \`status: "refused"\` with the
-reason, never as an empty clean audit.`;
+const DESCRIPTION = `Detect whether a project runs Solid 1 or Solid 2 and SolidStart, and audit JSX reactivity and API anti-patterns.
+Use action "detect" to inspect package manifests, lockfiles, Vite plugins, and JSX config for version compatibility, or action "audit" to scan SolidJS source files for version-mixing bugs, broken reactivity, and rule-specific fixes.`;
 
 export const solidjs = (directory: AbsolutePath): Tool.Info<typeof Input, typeof Output> => ({
   name: "solidjs",
   description: DESCRIPTION,
   input: Input,
   output: Output,
-  options: { namespace: "spectre", codemode: true, pinned: true, permission: "read" },
+  options: { namespace: "spectre", codemode: true, permission: "read" },
   execute: (input) =>
     Effect.promise(async () => {
       const asked = input.target ?? ".";

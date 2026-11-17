@@ -17,26 +17,8 @@ import { create, update } from "./publish";
 import type { Read, Input as ReadInput } from "./read";
 import { read as readDiff, totalsOf } from "./read";
 
-const DESCRIPTION = `Publish a canvas as an OpenCode artifact, or read a pull request into evidence for a review canvas.
-
-A canvas is an artifact, not a chat reply: the reader gets an id and a durable URL, asks again in three turns, and the same artifact is updated in place. Publishing needs experimental.artifacts in opencode.json; when the flag is off the publish actions refuse and name it.
-
-## What each action owns
-
-- \`diff\` reads a pull request, or an explicit local base and head, and writes the parsed rows to a scratch cache. It returns a token, the subject, the totals and the count cross-check. The token is the input to a \`pr\` content and is content-addressed, so reading the same diff twice gives the same token.
-- \`publish\` creates a new artifact. A second publish is a second artifact.
-- \`update\` replaces the whole file map at the same artifact id and URL. It needs the id \`publish\` returned; there is no list.
-
-## Content kinds
-
-- \`report\` takes Markdown. Mermaid fences are rendered to static SVG at publish time with Pele. Code owns the page, the escaping, the headings and the table of contents.
-- \`diagram\` takes one Mermaid source and a one-sentence takeaway. It is the one-figure page; several figures belong in a report.
-- \`page\` takes one complete HTML document. This is the designed-page arm: keep CSS and JavaScript inline, and reference \`vendor/d3.min.js\` when the page needs d3. The tool attaches the installed d3 bundle.
-- \`pr\` takes the token from \`diff\` and a typed review. The code validates every cited path and line against the parsed rows, renders the diff, and leaves the story to the review.
-
-## What it will not do
-
-It does not present a page with the OS launcher, and it cannot build an absolute URL: the result is the artifact id and the relative URL the host reported. Say that, and never claim the page opened. It does not enumerate artifacts; the id from \`publish\` is the handle.`;
+const DESCRIPTION = `Publish or update interactive HTML pages, Mermaid diagrams, Markdown reports, and visual PR reviews as artifacts.
+Use action "diff" to parse a pull request or local base and head diff into cached evidence with a token, "publish" to create an OpenCode artifact URL (with bundled d3.min.js for custom UI pages and static SVG Mermaid rendering), and "update" to replace an existing art_ artifact in place.`;
 
 const subjectOf = (
   input: DiffInput,
@@ -115,7 +97,7 @@ export const canvases = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Ou
   description: DESCRIPTION,
   input: Input,
   output: Output,
-  options: { namespace: "spectre", codemode: true, pinned: true, permission: "canvas" },
+  options: { namespace: "spectre", codemode: true, permission: "canvas" },
   execute: Effect.fn("Canvas.execute")(function* (input: InputType, context: Tool.Context) {
     const project = ctx.location.project.directory;
     const cwd = ctx.location.directory;

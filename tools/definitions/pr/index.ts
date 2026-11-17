@@ -57,7 +57,7 @@ export const pr = (ctx: Plugin.Context): Info => ({
   description: DESCRIPTION,
   input: InputSchema,
   output: OutputSchema,
-  options: { namespace: "spectre", codemode: true, pinned: true, permission: "pr" },
+  options: { namespace: "spectre", codemode: true, permission: "pr" },
   execute: (input) =>
     Effect.promise(async () => ({ output: await run(ctx.location.directory, input) })),
 });

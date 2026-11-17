@@ -195,8 +195,8 @@ describe("the tool", () => {
     expect(tool.options?.namespace).toBe("spectre");
   });
 
-  test("is pinned, so the catalog carries it from the first round", () => {
-    expect(tool.options?.pinned).toBe(true);
+  test("omits pinned, so the inline catalog stays within budget", () => {
+    expect(tool.options?.pinned).toBeUndefined();
   });
 
   test("asks for read permission and never a write", () => {

@@ -95,57 +95,8 @@ const Failed = Schema.Struct({
 
 const Output = Schema.Union([Armed, Read, Rejected, Failed]);
 
-const DESCRIPTION = `Arm or read the built-in /goal loop for this session. This tool never continues the session; the host's goal plugin does.
-
-  const armed = await tools.spectre.goal({
-    action: "arm",
-    objective: "Take PRs 412-414 to merge-ready",
-    predicate: "tools.spectre.stack returns clear and no unresolved threads remain",
-    check: "tools.spectre.stack({ prs: [412, 413, 414] })",
-  })
-
-Call \`arm\` once, at the start of a run. Call \`status\` when a run resumes or ends.
-
-## The boundary
-
-\`arm\` measures the session's place and refuses to run anywhere a goal would edit the
-directory the session stands in:
-
-- the main worktree of an ordinary repository
-- a linked worktree checked out on the trunk
-- a detached HEAD
-- a directory that is not a git working tree
-- a child session
-
-It also refuses an active or paused goal, an empty or multi-line field, a field containing
-\`&\`, \`<\` or \`>\`, and a composition over the host's 4,000-character cap. The host
-HTML-escapes those three characters before every kickoff, continuation and reviewer prompt,
-so a command containing one would reach the model as a different command.
-
-After the command returns, \`arm\` reads \`opencode.goal\` back and reports \`armed\` only when
-the state is active with the exact composed objective. If another plugin has shadowed the
-\`goal\` command, the read-back is how that is caught.
-
-## The objective
-
-The composed text carries the objective, the measured worktree and branch, the exit
-predicate, the exact check, the ledger path, the procedure name, the blocked rule and the
-delegation rule. It is the durable statement: after a compaction the host's reminder shows
-the objective, and the ledger is the only other survivor.
-
-The ledger is \`.spectre/run.md\`. This tool writes its header once per goal id; the model
-appends one row per round. A failed header returns \`armed\` with \`problems\`, because the
-loop is running and hiding that is worse than the missing file.
-
-## What it will not do
-
-It does not pause, resume, clear, continue, judge or merge. Those are the host's command
-and the reviewer's job. It does not mirror \`Goal.State\`: \`status\` reads the live state
-through \`opencode.goal.get\`, and the caller reads the ledger for the run's history.
-
-An \`arm\` with the same objective as an already-active goal is idempotent: it returns
-\`armed\` and writes no second ledger section. A different objective while a goal is active
-is \`rejected\`; the user must \`/goal clear\` first.`;
+const DESCRIPTION = `Arm or inspect the session /goal autonomous loop contract, exit predicate, verification check, and run ledger.
+Use action "arm" from a feature worktree in a root session to validate the objective, predicate, and single-line check command, activate the built-in /goal loop, verify read-back state, and initialize .spectre/run.md. Use action "status" on resume or completion to read live rounds and ledger state.`;
 
 const viewOf = (state: Goal.State): GoalView => ({
   id: state.id,
@@ -317,7 +268,7 @@ export const goal = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Output
   description: DESCRIPTION,
   input: Input,
   output: Output,
-  options: { namespace: "spectre", codemode: true, pinned: true, permission: "goal" },
+  options: { namespace: "spectre", codemode: true, permission: "goal" },
   execute: (input, context) =>
     Effect.gen(function* () {
       const sessionID = context?.sessionID;

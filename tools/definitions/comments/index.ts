@@ -46,39 +46,8 @@ const Output = Schema.Struct({
 type Page = typeof Output.Type;
 type Kind = Page["hits"][number]["kind"];
 
-const DESCRIPTION = `Inventory every comment and every lint or type suppression under the given targets — never a judgment.
-
-It cannot apply a keep list, so every hit it returns still goes through one.
-
-Targets are files or directories, relative to the project directory or absolute. It
-returns a flat page of hits plus the totals for the whole scope, so a caller can
-narrow before it reads anything:
-
-  { hits: [{ file, line, kind, text }], errors, empty, total, suppressions, scanned, truncated }
-
-- \`file\` is relative to the project directory. \`text\` is the whole line, trimmed, so a
-  comment that trails code arrives with the code it annotates.
-- \`kind\` is \`comment\`, \`doc\`, or \`suppression\`. A suppression is a comment with a
-  rule attached: eslint-disable, prettier-ignore, biome-ignore, @ts-ignore,
-  @ts-expect-error, @ts-nocheck, noqa, ruff:, pylint:, rubocop:, shellcheck disable,
-  nolint.
-- \`total\` and \`suppressions\` count the whole scope. \`hits\` is only the page named by
-  \`offset\` and \`limit\`, and \`truncated\` is true when the page is not the whole scope.
-- \`errors\` lists the targets that could not be scanned, and \`empty\` the targets that
-  produced no hits. An empty result and a failed scan look identical otherwise. A
-  bad target never fails the call: every hit that did scan is still returned.
-
-The scan is lexical, not a parse, so a file mid-edit still reads. It reads whole
-strings before it looks for a marker, so a comment marker inside a string is not a
-comment, and a comment trailing code on its line is reported at that line.
-
-Four limits remain, all lexical. A \`#\` must start its line or follow whitespace, so
-\`x = 1#note\` is missed where Python and Ruby would read one. A YAML block scalar
-whose lines start with \`#\` is reported. A Ruby \`=begin\` block is not read. A template
-holding a nested template inside \`\${ }\` ends at the first backtick, so a comment
-after it can be missed. None are worth a parse dependency: the caller judges every
-hit anyway, so a false positive costs one dismissal and a false negative costs a
-grep.`;
+const DESCRIPTION = `Scan source files and directories to inventory code comments, docblocks, and lint or type suppressions.
+Lexically extracts //, /* */, and # comments without failing on mid-edit syntax, classifying eslint-disable, biome-ignore, prettier-ignore, @ts-ignore, @ts-expect-error, @ts-nocheck, noqa, ruff, pylint, rubocop, shellcheck, and nolint directives as suppressions with paged file and line hits.`;
 
 type RawHit = { readonly line: number; readonly kind: Kind; readonly text: string };
 
@@ -214,6 +183,6 @@ export const comments = (directory: AbsolutePath): Tool.Info<typeof Input, typeo
   description: DESCRIPTION,
   input: Input,
   output: Output,
-  options: { namespace: "spectre", codemode: true, pinned: true, permission: "read" },
+  options: { namespace: "spectre", codemode: true, permission: "read" },
   execute: (input) => Effect.promise(async () => ({ output: await inventory(directory, input) })),
 });
