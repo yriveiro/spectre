@@ -75,67 +75,8 @@ type Page = typeof Output.Type;
 
 const DEFAULT_LIMIT = 400;
 
-const DESCRIPTION = `Inventory the ASD-STE100 structural violations in prose files — never a judgment.
-
-It returns a page of findings plus the totals for the whole scope, so a caller can
-narrow before it reads anything:
-
-  { findings: [{ file, line, rule, level, text, why }], errors, empty, hard, advisory, total, scanned, truncated }
-
-- \`file\` is relative to the project directory.
-- \`level\` is \`hard\` or \`advisory\`. A hard finding is a rule the standard states as
-  mechanical: a semicolon (8.1), a phrasal verb (9.3), a nominalization (3.7), a
-  marketing adjective, a sentence over 25 words (6.3). An advisory finding is
-  reported and never fails anything: passive voice (3.6) and the present perfect
-  (3.2), because both can carry a claim the rule would otherwise strip.
-- \`hard\`, \`advisory\` and \`total\` count the whole scope. \`findings\` is only the page
-  named by \`offset\` and \`limit\`.
-- \`errors\` lists the targets that could not be read, and \`empty\` the ones with no
-  findings. An empty result and a failed scan look identical otherwise.
-- \`disable\` silences named rules, which is how a body that quotes the banned words
-  stops reporting them.
-
-What it will never report, on purpose:
-
-- **Hedges and modality.** \`may\`, \`might\` and \`could\` are the author's stated
-  confidence, so a checker that pressured them out would rewrite claims into facts.
-- **Em dashes.** STE 8.1 bans the semicolon and permits every other standard mark.
-- **Noun clusters.** Capping a stack at three words needs part-of-speech tagging, and
-  a regex false-positives on every hyphenated compound.
-- **Dropped articles.** Noticing a missing article needs semantics.
-
-**With no \`dictionary\` in \`spectre.json\`, only the structural half runs.** The six
-rules above need no word list, so they work unchanged. A call that passes \`words\` with no
-dictionary configured returns an empty \`rulings\` and no \`dictionary\` block rather than a
-verdict, because the question was not answerable and saying so is the honest answer. Both
-\`targets\` and \`words\` are optional, so a caller can ask about words alone and read
-nothing.
-
-The lexical half is off unless \`spectre.json\` names a \`dictionary\`.
-Pass \`words\` to rule on them: \`words: ["check", "secure", "grommet"]\` returns approved /
-not-approved / unknown, the part of speech each ruling holds for, the alternatives the
-dictionary offers, and the page label so you can check it in your own PDF. A word with no
-entry comes back \`unknown\`, never \`not-approved\`: a missing word may be a technical noun
-you declared, and the standard hands those to the project.
-
-The dictionary is a path, not a word list. Issue 9 restricts reproduction of it to eight
-categories of organisation, so no file in this repository carries one. Point \`dictionary\`
-at a JSON export of your own copy and nothing is reproduced here.
-
-Two things a lookup will not do. It does not read the export's \`senses[].non_ste\` examples
-into a rule, so a word can be approved and still be wrong in context. And a
-\`not-approved\` verdict on a software-engineering word is usually correct and usually not
-actionable: this set is built on a technical glossary, and STE rule 1.5 hands that to the
-project rather than forbidding it.
-
-Four limits are lexical. A file mid-edit still reads. A semicolon inside a fenced block,
-a table row, a heading or a blockquote is not prose, so it is skipped, which means a
-prose sample placed in one of those containers is invisible. Sentence splitting reads a
-dot inside an abbreviation or a filename as a full stop only when the next word starts
-with a capital, so a sentence that continues in lower case after \`e.g.\` merges with its
-neighbour. Inline code spans wrap across lines and are tracked as one span, so a span
-opened and closed several lines apart is dropped whole. None needs a parser: the caller
-judges every finding anyway, so a false positive costs one dismissal.`;
+const DESCRIPTION = `Check Markdown prose against ASD-STE100 Simplified Technical English grammar rules and approved-word dictionaries.
+Reports hard violations (semicolons, phrasal verbs, nominalizations, marketing adjectives, sentences over 25 words) and advisory findings (passive voice, present perfect) across .md and .mdx files, plus optional lexical word rulings against a configured STE dictionary JSON export.`;
 
 const PROSE = new Set([".md", ".mdx", ".markdown"]);
 
@@ -312,7 +253,7 @@ export const prose = (
   description: DESCRIPTION,
   input: Input,
   output: Output,
-  options: { namespace: "spectre", codemode: true, pinned: true, permission: "read" },
+  options: { namespace: "spectre", codemode: true, permission: "read" },
   execute: (input) =>
     Effect.promise(async () => ({ output: await inventory(directory, input, dictionary) })),
 });

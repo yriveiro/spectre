@@ -135,12 +135,12 @@ curl -s https://registry.npmjs.org/@opencode/cli | grep -o '"latest":"[^"]*"'
 At the time of writing that is `2.3.0`, published 2026-11-13. The version appears
 in several places that mean different things. `engines.opencode` is the **floor**
 (`>=2.3.0`). `@opencode/ai`, `@opencode/plugin` and `@opencode/schema` are
-**exact** runtime pins, and `@opencode/client` and `@opencode/theme` are exact
-dev pins. `@opencode/theme` is also a `>=2.3.0` optional peer. The `opencode`
-field in `verified.ts` is the stamp a reader has to remember. The runtime pins and
-the dev pins are what source-reading must match, because they are what resolves
-into `node_modules`. Only the runtime pins are what the host is handed. Re-run the
-registry check before any bump.
+**exact** runtime pins, and `@opencode/client`, `@opencode/codemode` and
+`@opencode/theme` are exact dev pins. `@opencode/theme` is also a `>=2.3.0`
+optional peer. The `opencode` field in `verified.ts` is the stamp a reader has
+to remember. The runtime pins and the dev pins are what source-reading must
+match, because they are what resolves into `node_modules`. Only the runtime pins
+are what the host is handed. Re-run the registry check before any bump.
 
 `engines.opencode` documents the floor; nothing enforces it. npm writes no
 `EBADENGINE` for an unknown engine key, and the host reads no `engines` field.

@@ -66,88 +66,15 @@ const Output = Schema.Struct({
   problems: Schema.optional(Schema.String),
 });
 
-const DESCRIPTION = `Read the git history of one file and hand back the commits that explain it.
-
-\`ripwire\` answers who last touched a file and what changes alongside it. Neither
-answers the question this is for, which is why a line looks the way it does. The
-rationale lives in commit messages, so this reads them.
-
-  const h = await tools.spectre.history({ path: "src/auth.ts", line: 42 })
-  h.bodies         // 0 means git holds no rationale for this file
-  h.commits        // the reason that line is shaped like that
-  h.blame          // who last touched this exact line, and when
-  h.ownership      // who owns this file, and how many minor hands shape it
-
-  // The commit that introduced a line, found in the diff rather than a message,
-  // which is the only place the answer lives when nobody wrote one.
-  const origin = await tools.spectre.history({ path: "src/auth.ts", matches: "refreshToken" })
-
-## What comes back
-
-- \`commits\`, newest first. \`body\` is the rationale, and it is the field worth
-  reading: a subject says what changed, a body says why, and the why is what you
-  cannot recover from the code.
-- \`introducedBy\`, the commit that created the file. Read this before changing a
-  shape you do not recognise; the original commit usually says what the shape was
-  for, and a later commit is usually the one that broke it.
-- \`blame\`, when you passed \`line\`. It is one commit, not a distribution: who
-  last touched that exact line, and what they said they were doing.
-- \`reverts\`, how many of the commits returned are reverts. A file with reverts in
-  its recent history has been argued about, and the losing argument is often still
-  in the tree.
-- \`bodies\`, how many of the commits returned carry a body. **A history of
-  subjects and no bodies cannot answer why**, and this is the number that says so
-  before you read a row. Zero means the rationale is not in git for this file, and
-  the honest answer is that the reason is unrecoverable here.
-- \`authors\`, the distinct names among the commits returned. That is the window,
-  not the history: \`ownership\` below counts the file's whole life.
-- \`ownership\`, the whole-history authorship the window cannot see: the file's
-  total commits and distinct authors, who holds the largest share and the share,
-  and how many authors carry under 5% each. That minor-contributor count is the
-  strongest single predictor in the defect literature, so a file with many minor
-  hands is a file whose meaning sits in nobody's head.
-- \`first\` / \`last\`, for "how old is this".
-
-## Two ways to narrow, and they ask different questions
-
-\`contains\` asks the commit **message**. \`matches\` asks the **diff**: the pickaxe,
-which returns the commits that added or removed that exact text. They are not
-redundant, and the second is usually the one that works.
-
-A line nobody wrote a message about has no \`contains\` answer, because the
-rationale was never typed. Its origin is still in the diff, so \`matches\` on a
-literal from the line finds the commit that introduced it. Use \`contains\` for
-"fix", "revert", "keep", "for now", "temporary", which finds the commits that
-argued. Use \`matches\` for the shape nobody explained.
-
-## Reading it
-
-\`problems\` carries the signals that change how much the answer is worth. A file
-whose commits are mostly under 90 days old is still moving, and a reason recorded
-last month may already be wrong. Read the warnings before quoting the history as
-the reason something is the way it is.
-
-## What it will not do
-
-It does not read pull request bodies, issues, or review threads. Those live
-outside git, and a local clone does not have them. A commit message that says
-"see #412" is a commit message that will not answer anything here, and the tool
-cannot tell you that. \`ripwire.stray_content\` and \`ripwire.owners\` cover the
-cross-branch and bus-factor halves.
-
-## Determinism
-
-Everything here is a function of the repository as committed. No network, no clock
-except the ninety-day window in \`problems\`, and the same clone gives the same
-answer. A file with uncommitted edits reports the history of what was committed,
-which is the point, and the working tree is not consulted beyond existence.`;
+const DESCRIPTION = `Read a file's git commit history, line blame, diff pickaxe origin, and authorship to explain why code exists.
+Returns commits with full message bodies, file creation commit (introducedBy), single-line blame, revert counts, and contributor ownership share. Filter commit messages with contains, or search diffs with matches (git pickaxe) to find which commit introduced or removed an unexplained line.`;
 
 export const historyTool = (directory: string): Tool.Info<typeof Input, typeof Output> => ({
   name: "history",
   description: DESCRIPTION,
   input: Input,
   output: Output,
-  options: { namespace: "spectre", codemode: true, pinned: true, permission: "read" },
+  options: { namespace: "spectre", codemode: true, permission: "read" },
   execute: (input) =>
     Effect.promise(async () => {
       const { problems, introducedBy, blame, first, last, ownership, ...rest } = await history(

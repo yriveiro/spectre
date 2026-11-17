@@ -45,65 +45,8 @@ const Output = Schema.Struct({
   problems: Schema.optional(Schema.String),
 });
 
-const DESCRIPTION = `Decide what to do next with a stack of pull requests. One call, one answer.
-
-  const s = await tools.spectre.stack({})
-  if (s.stack === "clear") merge s.ready bottom-up, one at a time
-  else fix s.blocker on PR s.blocker.pr first
-
-\`stack\` is the verdict for the whole set, and \`rows\` is the per-PR evidence
-behind it, so the answer is checkable rather than asserted.
-
-## The one rule that matters
-
-**Tier-major.** Every merge conflict in the stack outranks every review thread,
-which outranks every failing check, which outranks every merge gate. A conflict
-on PR 40 beats an open thread on PR 12, because a stack is a sequence: a blocker
-anywhere stops everything above it, and fixing the cheapest thing first is how a
-stack gets unwedged. \`blocker.pr\` names the one to fix first. Fixing the oldest
-PR in the list is usually wrong.
-
-The four blocker kinds, in the order they are checked:
-
-- \`merge-conflicts\`. \`mergeable\` is CONFLICTING, or \`mergeStateStatus\` is DIRTY
-  or CONFLICTING.
-- \`review-threads\`. Unresolved review threads exist. \`detail\` carries the count.
-- \`failing-checks\`. A check concluded FAILURE, TIMED_OUT, CANCELLED,
-  ACTION_REQUIRED, or STARTUP_FAILURE. \`detail\` says \`ci failing and GitHub
-  refuses the merge\` when the merge is also BLOCKED, which is a different thing
-  from red CI: GitHub will not merge it until the red goes away.
-- \`merge-gate\`. Closed without merging, a draft, or CHANGES_REQUESTED.
-
-A draft whose CI is still running is deliberately **not** a gate. It becomes
-\`waiting\` instead, so a draft does not block a stack that is merely waiting for
-its own checks. Pass \`allowDraft: true\` to treat drafts as landable.
-
-## waiting, clear, and what to do
-
-- \`stack: "waiting"\`. Nothing is wrong; a check is still running. \`blocker\` is
-  absent and \`ready\` lists what has already passed. Wait, do not intervene.
-- \`stack: "clear"\`. Every PR is mergeable. \`ready\` is in the order to land
-  them: lowest first. Squash-merge one at a time, then re-run, because the next
-  PR's base moves.
-- \`stack: "blocker"\`. \`blocker.pr\` is the one to fix. Fixing a different PR
-  first wastes the run.
-
-## What it will not do
-
-It does not merge, rebase, comment, or push. It reads \`gh\` and decides. The
-merge is a separate, irreversible step and stays yours.
-
-## Determinism, and the honest limit
-
-The decision is a pure function of the rows, and the rows are whatever \`gh\`
-reports at the moment of the call. Same PR state, same answer. CI is the input
-that moves without you, so re-run before acting on a \`clear\`; a PR that went red
-since your last read still reads green here.
-
-A row \`gh\` could not read is returned as \`unknown\`, not as good news:
-\`threads: -1\` means unreadable, not zero, and such a row is never \`ready\`.
-Every such row adds a line to \`problems\`. Read \`problems\` before trusting a
-\`clear\`, because a stack you cannot see is not a stack that is fine.`;
+const DESCRIPTION = `Evaluate stacked pull requests to determine merge order, ready PRs, CI status, and the highest-priority blocker.
+Inspects open PRs via gh and returns stack status "clear" (with bottom-up merge order in ready), "waiting" (checks pending), or "blocker", ranking merge-conflicts ahead of review-threads, failing-checks, and merge-gate across the PR stack.`;
 
 const decisionOf = (row: Snapshot, allowDraft: boolean) => {
   const one = decide(row, allowDraft);
@@ -117,7 +60,7 @@ export const stack = (directory: string): Tool.Info<typeof Input, typeof Output>
   description: DESCRIPTION,
   input: Input,
   output: Output,
-  options: { namespace: "spectre", codemode: true, pinned: true, permission: "read" },
+  options: { namespace: "spectre", codemode: true, permission: "read" },
   execute: (input) =>
     Effect.gen(function* () {
       const allowDraft = input.allowDraft ?? false;

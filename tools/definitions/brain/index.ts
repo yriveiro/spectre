@@ -326,87 +326,15 @@ const runRecall = (ctx: Plugin.Context) =>
     };
   });
 
-export const DESCRIPTION = `What this project knows that the code cannot say: which surfaces are one feature, why a decision was made, what bit someone last month.
-
-  const hit = await tools.spectre.brain({ action: "recall", query: "why does routing read spectre.jsonc" })
-  hit.claims[0].path      // the note. One Read away — the body never enters context
-  hit.edges[0].why        // and the reason two claims belong together
-
-  await tools.spectre.brain({
-    action: "assert",
-    kind: "gotcha",
-    subject: ["tools/definitions/canvas/content.ts"],
-    claim: "A canvas is an artifact: publish creates, update replaces the file map at the same id, and the plugin cannot list artifacts.",
-  })
-
-  await tools.spectre.brain({ action: "relate", from: a, to: b, kind: "relates", why: "one feature, two surfaces" })
-
-## A claim and an edge
-
-A **claim** is one immutable markdown note at \`.spectre/brain/neurons/<ulid>.md\`:
-a \`kind\`, one sentence, and the paths it is about. It is minted once and never
-rewritten, so \`git log\` on the folder is the whole history of what was believed
-and when.
-
-An **edge** is one line of \`.spectre/brain/synapses.ndjson\`: \`relates\`,
-\`supersedes\`, \`contradicts\`, \`derived-from\` or \`demoted\`, between two claim
-ids, with a \`why\` that is mandatory. Nothing is ever edited or deleted, and the
-frontmatter *is* the index, so there is no second copy to go stale.
-
-**A feature is not a folder.** It is a \`feature\` claim whose \`subject\` lists two
-or more surfaces, plus the edges that join them. \`ls\` shows ULIDs; \`recall\` is
-the reader.
-
-## The five actions
-
-- \`recall\` — the only read. Returns headlines and edges, never a body, and
-  \`problems\` says what clipped or went unread. It never starts work.
-- \`assert\` — record a \`kind\` claim about \`subject\` paths. Every path must
-  exist. See the next section.
-- \`relate\` — join two claims, or say they contradict, or that one came out of
-  the other.
-- \`supersede\` — one claim replaced another. The old one drops out of answers.
-- \`demote\` — stop trusting a claim, optionally \`until\` a date. Forgetting is
-  an edge with an end, never a deletion.
-
-## The evidence comes back with the assert
-
-\`assert\` returns what git says about the paths you named: per path, how many
-commits touched it, when it was last touched, and how many paths it co-changes
-with. A model cannot write down its own evidence, so a \`feature\` claim whose
-members never co-change arrives visibly wrong **in the return value of the call
-that created it**. Supersede it or re-assert it.
-
-A repository with no git history, or twenty genuinely uncoupled files, returns
-empty evidence and says so. That is a real answer, not a zero.
-
-## Refusals, and they are the interesting part
-
-- \`assert\` refuses a \`subject\` path that does not exist, and names it. A claim
-  about a file that is not there is a hallucinated feature.
-- \`relate\`, \`supersede\` and \`demote\` refuse an empty \`why\`. A required
-  field is a prompt to the model, not a guarantee, so it is checked here.
-- \`recall\` on a brain nobody has seeded returns empty arrays and
-  \`problems: ["cold: 0 claims"]\`. It is not an error and it starts nothing. Ask
-  \`mnemonic\` to seed.
-
-\`wrote\` on every edge action reports whether the ledger actually changed. A
-second identical call returns \`wrote: false\`, which is what an empty \`git diff\`
-looks like from the inside.
-
-## What it will not do
-
-It will not rewrite or delete a claim, so there is no "correct the typo" action —
-\`supersede\` it. It will not assert something \`ripwire\` answers: if callers,
-blast radius, history or co-change are the question, that tool already has the
-measurement. It will not carry a note's body into a turn; it hands back a path.`;
+export const DESCRIPTION = `Query and record persistent project memory for architecture decisions, gotchas, lessons, constraints, and features.
+Stores immutable markdown notes under .spectre/brain/neurons and typed edges in synapses.ndjson. Use action=recall to search headlines and paths, action=assert to record a verified claim with git co-change evidence, action=relate to link or contradict claims, action=supersede to replace outdated notes, and action=demote to mute untrusted claims.`;
 
 export const brain = (ctx: Plugin.Context): Tool.Info<typeof Action, typeof Answered> => ({
   name: "brain",
   description: DESCRIPTION,
   input: Action,
   output: Answered,
-  options: { namespace: "spectre", codemode: true, pinned: true, permission: "brain" },
+  options: { namespace: "spectre", codemode: true, permission: "brain" },
   execute: (input) =>
     Effect.gen(function* () {
       const answer =
