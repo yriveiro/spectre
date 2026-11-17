@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { type Plugin, Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Effect, Exit } from "effect";
@@ -6,9 +6,11 @@ import { attachSearch } from "../../tools/definitions/search/index";
 import { contextRule, judge, rerouteInput, type Health } from "../../tools/definitions/search/policy";
 import { probe } from "../../tools/definitions/search/probe";
 import { memories, rerouted } from "../../tools/definitions/search/state";
-import { captureContext, captureGuard, guardEvent } from "./host";
+import { captureContext, captureGuard, cleanupDirs, guardEvent, makeBin, READY_BIN, withBinary } from "./host";
 
 const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
+
+afterEach(cleanupDirs);
 
 const routed = (pattern: string) => {
   const verdict = judge({ ask: { pattern }, seen: new Set<string>(), health: ready });
@@ -48,42 +50,52 @@ describe("rerouteInput carries the verdict's route into the renamed call", () =>
   });
 });
 
-const RIPWIRE = Bun.which("ripwire");
-
 describe("the guard's permission path", () => {
-  test.skipIf(!RIPWIRE)("a plain permission decline is not swallowed", async () => {
-    const { callback } = await captureGuard(() => Effect.die(new Error("declined")));
-    const exit = await Effect.runPromiseExit(callback(guardEvent("resolveTool")));
-    expect(Exit.isFailure(exit)).toBe(true);
+  test("a plain permission decline is not swallowed", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const { callback } = await captureGuard(() => Effect.die(new Error("declined")));
+      const exit = await Effect.runPromiseExit(callback(guardEvent("resolveTool")));
+      expect(Exit.isFailure(exit)).toBe(true);
+    });
   });
 
-  test.skipIf(!RIPWIRE)("a successful assert renames the tool and carries the route", async () => {
-    const { callback } = await captureGuard();
-    const asked = guardEvent("resolveTool") as { tool: string; input: Record<string, unknown> };
-    await Effect.runPromise(callback(asked));
-    expect(asked.tool).toBe("spectre_search");
-    expect(asked.input["pattern"]).toBe("resolveTool");
-    rerouted.delete(Tool.CallID.make("call_guard_test"));
-    memories.delete(Session.ID.make("ses_guard_test_c"));
+  test("a successful assert renames the tool and carries the route", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const { callback } = await captureGuard();
+      const asked = guardEvent("resolveTool") as { tool: string; input: Record<string, unknown> };
+      await Effect.runPromise(callback(asked));
+      expect(asked.tool).toBe("spectre_search");
+      expect(asked.input["pattern"]).toBe("resolveTool");
+      rerouted.delete(Tool.CallID.make("call_guard_test"));
+      memories.delete(Session.ID.make("ses_guard_test_c"));
+    });
   });
 
-  test.skipIf(!RIPWIRE)("a pattern the session already asked stays native", async () => {
-    const { callback } = await captureGuard();
-    const first = guardEvent("resolveTool", "call_guard_test_first");
-    await Effect.runPromise(callback(first));
-    const second = guardEvent("resolveTool", "call_guard_test_second");
-    await Effect.runPromise(callback(second));
-    expect((second as { tool: string }).tool).toBe("ripgrep");
-    rerouted.delete(Tool.CallID.make("call_guard_test_first"));
-    memories.delete(Session.ID.make("ses_guard_test_c"));
+  test("a pattern the session already asked stays native", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const { callback } = await captureGuard();
+      const first = guardEvent("resolveTool", "call_guard_test_first");
+      await Effect.runPromise(callback(first));
+      const second = guardEvent("resolveTool", "call_guard_test_second");
+      await Effect.runPromise(callback(second));
+      expect((second as { tool: string }).tool).toBe("ripgrep");
+      rerouted.delete(Tool.CallID.make("call_guard_test_first"));
+      memories.delete(Session.ID.make("ses_guard_test_c"));
+    });
   });
 
-  test.skipIf(!RIPWIRE)("a too-broad pattern stays native", async () => {
-    const { callback } = await captureGuard();
-    const asked = guardEvent("ab", "call_guard_test_broad") as { tool: string };
-    await Effect.runPromise(callback(asked));
-    expect(asked.tool).toBe("ripgrep");
-    memories.delete(Session.ID.make("ses_guard_test_c"));
+  test("a too-broad pattern stays native", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const { callback } = await captureGuard();
+      const asked = guardEvent("ab", "call_guard_test_broad") as { tool: string };
+      await Effect.runPromise(callback(asked));
+      expect(asked.tool).toBe("ripgrep");
+      memories.delete(Session.ID.make("ses_guard_test_c"));
+    });
   });
 });
 
@@ -138,7 +150,7 @@ describe("the catalogue's verdict", () => {
 });
 
 describe("attachSearch composes the surfaces", () => {
-  test("it registers the prompt, the context and both tool hooks", async () => {
+  test("it registers the context and both tool hooks", async () => {
     const names: Array<string> = [];
     const hook =
       (surface: string) =>
@@ -147,18 +159,12 @@ describe("attachSearch composes the surfaces", () => {
         return Effect.succeed({ dispose: Effect.void });
       };
     const ctx = {
-      session: { hook: hook("session"), get: () => Effect.succeed({}) },
+      session: { hook: hook("session") },
       tool: { hook: hook("tool") },
-      skill: { list: () => Effect.succeed({ location: {}, data: [] }) },
       storage: { get: () => Effect.succeed(undefined) },
     } as unknown as Plugin.Context;
 
     await Effect.runPromise(Effect.scoped(attachSearch(ctx)));
-    expect(names).toEqual([
-      "session:prompt",
-      "session:context",
-      "tool:execute.before",
-      "tool:execute.after",
-    ]);
+    expect(names).toEqual(["session:context", "tool:execute.before", "tool:execute.after"]);
   });
 });

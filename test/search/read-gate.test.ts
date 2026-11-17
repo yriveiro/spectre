@@ -20,8 +20,6 @@ const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10"
 const absent: Health = { kind: "absent", why: "ripwire is not on PATH" };
 
 const held = (overrides?: Partial<Memory>): Memory => ({
-  attached: false,
-  subagent: false,
   search: true,
   touched: 0,
   asked: new Map(),
@@ -41,7 +39,7 @@ const read = (overrides?: Partial<Memory>, health: Health = ready) =>
   decide(
     { surface: "read", path: "src/retry.ts", code: true, insideRoot: true },
     held(overrides),
-    { health, skill: true, parentID: false },
+    { health },
   );
 
 describe("readAsk separates a code read from a prompt asset", () => {
@@ -78,21 +76,21 @@ describe("decide, the read passes", () => {
       decide(
         { surface: "read", path: "README.md", code: false, insideRoot: true },
         held(),
-        { health: ready, skill: true, parentID: false },
+        { health: ready },
       ).verdict,
     ).toEqual({ kind: "pass", why: "not-code" });
     expect(
       decide(
         { surface: "read", path: "skill://x/fake.ts", code: false, insideRoot: true },
         held(),
-        { health: ready, skill: true, parentID: false },
+        { health: ready },
       ).verdict,
     ).toEqual({ kind: "pass", why: "not-code" });
     expect(
       decide(
         { surface: "read", path: "../x.ts", code: true, insideRoot: false },
         held(),
-        { health: ready, skill: true, parentID: false },
+        { health: ready },
       ).verdict,
     ).toEqual({ kind: "pass", why: "outside-root" });
   });

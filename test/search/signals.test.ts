@@ -4,7 +4,6 @@ import {
   contextAsk,
   grepAsk,
   mutateAsk,
-  promptAsk,
   readAsk,
   shellAsk,
   subagentAsk,
@@ -170,13 +169,7 @@ describe("subagentAsk reads the child a spawn created", () => {
   });
 });
 
-describe("promptAsk and contextAsk read the request", () => {
-  test("a prompt event reads as the prompt", () => {
-    expect(promptAsk({ messageID: "msg_1" })).toEqual({ surface: "prompt" });
-    expect(promptAsk(null)).toBeUndefined();
-    expect(promptAsk("prompt")).toBeUndefined();
-  });
-
+describe("contextAsk reads the request", () => {
   test("a context event reads the tool names the request carries", () => {
     expect(contextAsk({ tools: { spectre_search: {}, ripgrep: {} } })).toEqual({
       surface: "context",

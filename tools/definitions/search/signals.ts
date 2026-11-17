@@ -152,12 +152,6 @@ export const subagentAsk = (input: unknown, output: unknown): SurfaceAsk<"subage
   };
 };
 
-/** The `prompt` event. Discovery reads no field of the prompt itself. */
-export const promptAsk = (input: unknown): SurfaceAsk<"prompt"> | undefined => {
-  if (typeof input !== "object" || input === null) return undefined;
-  return { surface: "prompt" };
-};
-
 /** The `context` event: the tool names the request carries, which decides whether a reroute can run. */
 export const contextAsk = (input: unknown): SurfaceAsk<"context"> | undefined => {
   if (typeof input !== "object" || input === null || !("tools" in input)) return undefined;

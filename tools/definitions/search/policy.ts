@@ -1,4 +1,3 @@
-import { Skill } from "@opencode/plugin/effect";
 import { CONTRACT, END_OF_WORK, landRefusal, readRefusal } from "./contract";
 
 export type TextAsk = {
@@ -16,7 +15,8 @@ export type Health =
 export type Route =
   | { readonly kind: "task"; readonly task: string }
   | { readonly kind: "literal"; readonly text: string }
-  | { readonly kind: "regex"; readonly pattern: string };
+  | { readonly kind: "regex"; readonly pattern: string }
+  | { readonly kind: "expand"; readonly symbol: string };
 
 export type AllowWhy = "plain-text" | "too-broad" | "already-asked" | "no-instrument";
 export type JudgeVerdict =
@@ -156,7 +156,6 @@ export type ShellAsk =
   | { readonly kind: "other" };
 
 export type Ask =
-  | { readonly surface: "prompt" }
   | { readonly surface: "context"; readonly tools: ReadonlyArray<string> }
   | { readonly surface: "text"; readonly id: "grep" | "ripgrep"; readonly ask: TextAsk }
   | { readonly surface: "shell"; readonly command: string; readonly parsed: ShellAsk }
@@ -178,11 +177,9 @@ export type Answer = { readonly kind: "pending" } | { readonly kind: "answered";
 
 export type Why =
   | "no-instrument"
-  | "no-skill"
   | "plain-text"
   | "too-broad"
   | "already-asked"
-  | "already-attached"
   | "search-unavailable"
   | "unmappable"
   | "not-a-search"
@@ -198,7 +195,6 @@ export type Why =
 
 export type Verdict =
   | { readonly kind: "pass"; readonly why: Why }
-  | { readonly kind: "attach"; readonly skill: Skill.ID }
   | {
       readonly kind: "reroute";
       readonly origin: "grep" | "shell";
@@ -208,8 +204,6 @@ export type Verdict =
   | { readonly kind: "prose"; readonly key: "rule" | "end-of-work"; readonly text: string };
 
 export interface Memory {
-  readonly attached: boolean;
-  readonly subagent: boolean;
   readonly search: boolean;
   readonly touched: number;
   readonly asked: Map<string, Answer>;
@@ -224,14 +218,9 @@ export interface Memory {
 
 export interface Env {
   readonly health: Health;
-  readonly skill: boolean;
-  readonly parentID: boolean;
 }
 
 export type Decision = { readonly verdict: Verdict; readonly next: Memory };
-
-/** The compact map: the body the first prompt attaches, and the id that attachment names. */
-export const MAP: Skill.ID = Skill.ID.make("ripwire-first");
 
 const LANDING: ReadonlyArray<ReadonlyArray<string>> = [
   ["git", "commit"],
@@ -524,9 +513,17 @@ const passed = (why: Why, memory: Memory): Decision => ({
 const NATIVE =
   "ripwire is not on PATH, so this session is native: `spectre_search` answers `absent` with the install line, and the native tools complete the task.";
 
-/** The rule the context part carries. A session with no instrument is told so on every request. */
+const MOMENTS = [
+  "- New symbol: `ripwire . --exemplar=<task>` or `--lego=<iface>` (`--legend=compact`).",
+  "- Contract edit: `ripwire . --impact=<sym> --uses=<sym>`, then `--edit-check=<file:sym>`.",
+  "- Subagent fan-out: `ripwire . --pack-task=<task> --partition=<n>`.",
+  "- Branch cleanup: `ripwire . --stray-content` before `--plan`.",
+  "- Before commit/PR: call `tools.spectre.ripwire({ action: \"check\" })` in `execute` (or run `ripwire . --quality-delta` and `ripwire . --affected=<paths>`).",
+].join("\n");
+
+/** The rule the context part carries. Ready sessions carry the moment cues; native sessions carry the fallback note. */
 export const contextRule = (health: Health): string =>
-  health.kind === "ready" ? CONTRACT.rule : `${CONTRACT.rule}\n\n${NATIVE}`;
+  health.kind === "ready" ? `${CONTRACT.rule}\n\n${MOMENTS}` : `${CONTRACT.rule}\n\n${NATIVE}`;
 
 /**
  * Carry the verdict's route into the renamed call. The search tool re-derives
@@ -542,16 +539,9 @@ export const rerouteInput = (input: TextAsk, route: Route): Record<string, unkno
       return { ...input, kind: "regex" };
     case "literal":
       return { ...input };
+    case "expand":
+      return { ...input, expand: route.symbol };
   }
-};
-
-const onPrompt = (memory: Memory, env: Env): Decision => {
-  const next: Memory = { ...memory, subagent: env.parentID };
-  if (!memory.attached && env.skill) {
-    return { verdict: { kind: "attach", skill: MAP }, next: { ...next, attached: true } };
-  }
-  if (memory.attached) return passed("already-attached", next);
-  return passed("no-skill", next);
 };
 
 const measuredFresh = (memory: Memory): boolean => {
@@ -689,13 +679,12 @@ const onComplete = (ask: SurfaceAsk<"complete">, memory: Memory): Decision => {
 
 /**
  * The rule, first match wins. Absent or stale ripwire passes every gate as
- * `no-instrument`; discovery and the prose rule do not depend on the instrument,
- * so they run first. The read refusal and the landing refusal each spend once,
- * and the second call is native. The completion row records a search that ran,
- * which is what makes the first code read after it `already-used`.
+ * `no-instrument`; the prose rule reports native or ready health, so it runs
+ * first. The read refusal and the landing refusal each spend once, and the
+ * second call is native. The completion row records a search that ran, which
+ * is what makes the first code read after it `already-used`.
  */
 export const decide = (ask: Ask, memory: Memory, env: Env): Decision => {
-  if (ask.surface === "prompt") return onPrompt(memory, env);
   if (ask.surface === "context") return onContext(ask.tools, memory, env.health);
   if (env.health.kind !== "ready") return passed("no-instrument", memory);
   switch (ask.surface) {
@@ -723,7 +712,9 @@ export type ArgvInput = {
 export const argv = ({ route, root, budget }: ArgvInput): string[] => {
   switch (route.kind) {
     case "task":
-      return [root, `--for=${route.task}`, "--signatures-only", `--token-budget=${budget}`];
+      return [root, `--for=${route.task}`, "--signatures-only", `--token-budget=${budget}`, "--legend=compact"];
+    case "expand":
+      return [root, `--expand=${route.symbol}`, "--legend=compact"];
     case "literal":
       return [root, `--grep=${route.text}`];
     case "regex":

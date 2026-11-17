@@ -1,7 +1,7 @@
 import { type Plugin, Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Effect, type Schema } from "effect";
-import { attachCatalogue, attachDiscovery, attachGuard } from "../../tools/definitions/search/apply";
+import { attachCatalogue, attachGuard } from "../../tools/definitions/search/apply";
 import { attachMeasure } from "../../tools/definitions/search/measure";
 import type { Ask } from "../../tools/definitions/search/policy";
 import { memories } from "../../tools/definitions/search/state";
@@ -117,68 +117,6 @@ export const toolEvent = (
 export const guardEvent = (pattern: string, id: string = "call_guard_test"): unknown =>
   toolEvent("ripgrep", { pattern }, "ses_guard_test_c", id);
 
-export interface PromptEvent {
-  readonly sessionID: Session.ID;
-  prompt: { text: string; skills?: Array<{ readonly id: string }> };
-}
-
-export const promptEvent = (session: string): PromptEvent => ({
-  sessionID: Session.ID.make(session),
-  prompt: { text: "carry on" },
-});
-
-export interface PromptListing {
-  readonly skills?: ReadonlyArray<string>;
-  readonly parentID?: string;
-  /** The agent the session holds. `null` is a session holding none, which runs as `defaultAgent`. */
-  readonly agent?: string | null;
-  readonly defaultAgent?: string;
-  readonly broken?: boolean;
-  readonly brokenSession?: boolean;
-  readonly brokenAgents?: boolean;
-}
-
-export const capturePrompt = async (
-  listing: PromptListing = {},
-): Promise<(event: unknown) => Effect.Effect<void, never>> => {
-  let callback: ((event: unknown) => Effect.Effect<void, never>) | undefined;
-  const data = (listing.skills ?? []).map((id) => ({ id }));
-  const agent = listing.agent === undefined ? "spectre" : listing.agent;
-  const ctx = {
-    skill: {
-      list: () =>
-        listing.broken === true
-          ? Effect.die(new Error("the skill registry did not answer"))
-          : Effect.succeed({ location: {}, data }),
-    },
-    agent: {
-      list: () =>
-        listing.brokenAgents === true
-          ? Effect.die(new Error("the agent list did not answer"))
-          : Effect.succeed({
-              location: {},
-              data: listing.defaultAgent === undefined ? [] : [{ id: listing.defaultAgent }],
-            }),
-    },
-    session: {
-      hook: (_name: string, cb: (event: unknown) => Effect.Effect<void, never>) => {
-        callback = cb;
-        return Effect.succeed({ dispose: Effect.void });
-      },
-      get: () =>
-        listing.brokenSession === true
-          ? Effect.die(new Error("the session read did not answer"))
-          : Effect.succeed({
-              ...(listing.parentID === undefined ? {} : { parentID: listing.parentID }),
-              ...(agent === null ? {} : { agent }),
-            }),
-    },
-  } as unknown as Plugin.Context;
-  await Effect.runPromise(Effect.scoped(attachDiscovery(ctx)));
-  if (callback === undefined) throw new Error("discovery did not register");
-  return callback;
-};
-
 /** Drop the in-process memories a test seeded, so a later case starts clean. */
 export const forget = (...names: Array<string>): void => {
   for (const name of names) memories.delete(Session.ID.make(name));
@@ -203,9 +141,9 @@ export const captureContext = async (): Promise<((event: unknown) => Effect.Effe
 /** One project, and the storage domain the usage record reads and writes. */
 export const PROJECT = "prj_measure_test";
 
-export const locationOf = (project: string) => ({
-  directory: "/tmp",
-  project: { id: project, directory: "/tmp", canonical: "/tmp" },
+export const locationOf = (project: string, directory: string = "/tmp") => ({
+  directory,
+  project: { id: project, directory, canonical: directory },
 });
 
 /** A `ctx.storage` over a map, ordered the way the host's KV scan orders keys. */
@@ -260,12 +198,35 @@ export const captureAfter = async (
   return { callback, values, project };
 };
 
-/** A `Plugin.Context` for a tool that only reads storage, such as the report. */
+export interface MovedSession {
+  readonly directory: string;
+  readonly resources?: Array<ReadonlyArray<string>>;
+}
+
+/** A `Plugin.Context` for a tool that reads storage or checks paths, with optional moved-session location. */
 export const readingContext = (
   project: string,
   values: Map<string, Schema.Json> = new Map(),
+  directory: string = "/tmp",
+  moved?: MovedSession,
 ): Plugin.Context =>
-  ({ location: locationOf(project), storage: makeStorage(values) }) as unknown as Plugin.Context;
+  ({
+    location: locationOf(project, directory),
+    storage: makeStorage(values),
+    ...(moved === undefined
+      ? {}
+      : {
+          session: {
+            get: () => Effect.succeed({ location: { directory: moved.directory } }),
+          },
+        }),
+    permission: {
+      assert: (input: { readonly resources: ReadonlyArray<string> }) => {
+        moved?.resources?.push(input.resources);
+        return Effect.void;
+      },
+    },
+  }) as unknown as Plugin.Context;
 
 /** A completed `execute.after` event, with the output the tool returned. */
 export const afterEvent = (
@@ -298,10 +259,10 @@ export const failedEvent = (tool: string, input: unknown, session: string, id: s
   error: new Tool.Error({ message: "the tool failed" }),
 });
 
-export const toolContext = (session: string): Tool.Context => ({
+export const toolContext = (session: string, id: string = "call_report_rows"): Tool.Context => ({
   sessionID: Session.ID.make(session),
   agent: "build" as Tool.Context["agent"],
   messageID: "msg_report_rows" as Tool.Context["messageID"],
-  id: Tool.CallID.make("call_report_rows"),
+  id: Tool.CallID.make(id),
   progress: () => Effect.void,
 });

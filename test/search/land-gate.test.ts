@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Session } from "@opencode/schema/session";
 import { Effect, Exit } from "effect";
 import { CONTRACT, END_OF_WORK, landRefusal } from "../../tools/definitions/search/contract";
-import { decide, type Health, type Memory, shellParse } from "../../tools/definitions/search/policy";
+import { contextRule, decide, type Health, type Memory, shellParse } from "../../tools/definitions/search/policy";
 import { memories } from "../../tools/definitions/search/state";
 import { captureGuard, cleanupDirs, makeBin, READY_BIN, toolEvent, withBinary } from "./host";
 
@@ -16,8 +16,6 @@ const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10"
 const absent: Health = { kind: "absent", why: "ripwire is not on PATH" };
 
 const held = (overrides?: Partial<Memory>): Memory => ({
-  attached: false,
-  subagent: false,
   search: true,
   touched: 0,
   asked: new Map(),
@@ -35,7 +33,7 @@ const shell = (command: string, overrides?: Partial<Memory>, health: Health = re
   decide(
     { surface: "shell", command, parsed: shellParse(command) },
     held(overrides),
-    { health, skill: true, parentID: false },
+    { health },
   );
 
 describe("the landing command set", () => {
@@ -66,7 +64,7 @@ describe("decide, the context row above the landing", () => {
     decide(
       { surface: "context", tools: ["spectre_search"] },
       held(overrides),
-      { health: ready, skill: true, parentID: false },
+      { health: ready },
     );
 
   test("an unmeasured code edit carries the end-of-work nudge and the rule", () => {
@@ -75,6 +73,7 @@ describe("decide, the context row above the landing", () => {
     if (decision.verdict.kind !== "prose") throw new Error("expected prose");
     expect(decision.verdict.key).toBe("end-of-work");
     expect(decision.verdict.text).toContain(END_OF_WORK);
+    expect(decision.verdict.text).toContain('tools.spectre.ripwire({ action: "check" })');
     expect(decision.verdict.text).toContain(CONTRACT.rule);
     expect(decision.next.search).toBe(true);
   });
@@ -87,7 +86,7 @@ describe("decide, the context row above the landing", () => {
       const decision = context(memory);
       if (decision.verdict.kind !== "prose") throw new Error("expected prose");
       expect(decision.verdict.key).toBe("rule");
-      expect(decision.verdict.text).toBe(CONTRACT.rule);
+      expect(decision.verdict.text).toBe(contextRule(ready));
     }
   });
 
@@ -193,6 +192,7 @@ describe("decide, the landing refusal", () => {
       editedCode: new Set(["src/retry.ts", "src/attach.ts"]),
     });
     if (decision.verdict.kind !== "refuse") throw new Error("expected a refusal");
+    expect(decision.verdict.message).toContain('tools.spectre.ripwire({ action: "check" })');
     expect(decision.verdict.message).toContain("ripwire . --quality-delta");
     expect(decision.verdict.message).toContain("ripwire . --affected=src/attach.ts,src/retry.ts");
     expect(decision.verdict.message).not.toContain("README.md");

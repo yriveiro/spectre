@@ -1,27 +1,21 @@
-import { type Agent, type Plugin, type Skill, Tool } from "@opencode/plugin/effect";
+import { type Agent, type Plugin, Tool } from "@opencode/plugin/effect";
 import type { Session } from "@opencode/schema/session";
 import type { SessionMessage } from "@opencode/schema/session-message";
 import { Effect, type Scope } from "effect";
-import { factsOf, isSpectre } from "./agents";
+import { isSpectre } from "./agents";
 import { shape } from "./catalogue";
 import { CONTRACT } from "./contract";
-import { decide, type Ask, type Env, type Health, MAP, type ShellAsk, type TextAsk, type Verdict } from "./policy";
+import { decide, type Ask, type Env, type Health, type ShellAsk, type TextAsk, type Verdict } from "./policy";
 import { probe } from "./probe";
+import { rootOf } from "./root";
 import { contextAsk, grepAsk, mutateAsk, readAsk, shellAsk } from "./signals";
-import { markRerouted, memories, memoryOf, remember } from "./state";
+import { markRerouted, memoryOf, remember } from "./state";
 
 /**
  * The appliers. A verdict is a decision; this file is what it costs on the host:
- * the two permission asserts and the tool rename for a reroute, the prose rule
- * and the catalogue for a request, the skill attachment for the first prompt.
- * `decide` never touches the host.
+ * the two permission asserts and the tool rename for a reroute, and the prose rule
+ * and catalogue for a request. `decide` never touches the host.
  */
-
-/** The `session.prompt` event, as far as the applier reads it. */
-interface PromptBefore {
-  readonly sessionID: Session.ID;
-  prompt: { skills?: Array<{ readonly id: Skill.ID }> };
-}
 
 /** The `execute.before` event, as far as the applier reads it. */
 export interface ToolBefore {
@@ -33,18 +27,7 @@ export interface ToolBefore {
   input: unknown;
 }
 
-/** The text surface reads `health` alone; `skill` and `parentID` are the prompt's facts. */
-export const envOf = (health: Health): Env => ({ health, skill: true, parentID: false });
-
-/**
- * The prompt row runs above the health gate, so no instrument is probed for it:
- * `skill` and `parentID` are its only facts, and `decide` never reads the third.
- */
-const promptEnv = (skill: boolean, parentID: boolean): Env => ({
-  health: { kind: "absent", why: "the prompt row reads no instrument" },
-  skill,
-  parentID,
-});
+export const envOf = (health: Health): Env => ({ health });
 
 /* The text payload's two asserts, and the shell payload's: the action the model
  * asked for, then the read the renamed tool will run. */
@@ -123,14 +106,14 @@ const applyReroute = (
 export type AskReader = (event: ToolBefore) => Ask | undefined;
 
 /** The surface this call names, or `undefined` when the call is not one the rule reads. */
-const askOf = (ctx: Plugin.Context, event: ToolBefore): Ask | undefined => {
+const askOf = (root: string, event: ToolBefore): Ask | undefined => {
   const text = grepAsk(event.input, event.tool);
   if (text !== undefined) return text;
   switch (event.tool) {
     case "shell":
       return shellAsk(event.input);
     case "read":
-      return readAsk(event.input, ctx.location.directory);
+      return readAsk(event.input, root);
     case "edit":
     case "write":
       return mutateAsk(event.input, event.tool);
@@ -157,13 +140,14 @@ const healthOf = (): Effect.Effect<Health | undefined> =>
  * `v2.3.0:packages/core/src/permission.ts:273-278`, so it must reach the host
  * and end the step. Catching it here would turn a "no" into a search.
  */
-export const attachGuard = (ctx: Plugin.Context, read: AskReader = (event) => askOf(ctx, event)): Effect.Effect<void, never, Scope.Scope> =>
+export const attachGuard = (ctx: Plugin.Context, read?: AskReader): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
     yield* ctx.tool.hook("execute.before", (event) =>
       Effect.gen(function* () {
         if (!isSpectre(event.agent)) return;
 
-        const ask = read(event);
+        const root = yield* rootOf(ctx, event.sessionID);
+        const ask = read === undefined ? askOf(root, event) : read(event);
         if (ask === undefined) return;
 
         const health = yield* healthOf();
@@ -181,9 +165,9 @@ export const attachGuard = (ctx: Plugin.Context, read: AskReader = (event) => as
         if (verdict.kind === "reroute") {
           const asks =
             ask.surface === "text"
-              ? textAsks(ask.ask, ctx.location.directory)
+              ? textAsks(ask.ask, root)
               : ask.surface === "shell"
-                ? shellAsks(ask.parsed, ask.command, ctx.location.directory)
+                ? shellAsks(ask.parsed, ask.command, root)
                 : undefined;
           if (asks !== undefined) yield* applyReroute(ctx, event, asks, verdict);
         }
@@ -227,60 +211,4 @@ export const attachCatalogue = (ctx: Plugin.Context): Effect.Effect<void, never,
     );
 
     yield* Effect.logInfo("Registered search context", { trigger: "session.context" });
-  });
-
-/**
- * Whether the host holds the map. The attachment is resolved by id at prompt
- * admission, and an id the host does not know fails the prompt, so a list that
- * cannot answer leaves the prompt alone.
- */
-const holdsSkill = (ctx: Plugin.Context, skill: Skill.ID): Effect.Effect<boolean> =>
-  ctx.skill.list().pipe(
-    Effect.map((listing) => listing.data.some((one) => one.id === skill)),
-    Effect.catchCause((cause) =>
-      Effect.logWarning("search discovery could not list the skills", { cause }).pipe(Effect.as(false)),
-    ),
-  );
-
-/**
- * The first user prompt of every session running as a Spectre agent, child
- * included, carries the compact `ripwire-first` map: the host resolves the body
- * once and persists it in that message. `decide` owns the once-per-session rule,
- * so a second prompt attaches nothing. A session already holding the skill was
- * attached by the user, and the body is not attached twice.
- */
-const discover = (ctx: Plugin.Context, event: PromptBefore): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    // An attached session already paid, and a stock session is not ours to read.
-    if (memories.get(event.sessionID)?.attached === true) return;
-
-    const facts = yield* factsOf(ctx, event.sessionID);
-    if (facts.agent === undefined || !isSpectre(facts.agent)) return;
-
-    const memory = memoryOf(event.sessionID);
-    const skill = yield* holdsSkill(ctx, MAP);
-    const decision = decide({ surface: "prompt" }, memory, promptEnv(skill, facts.isChild));
-    const { verdict } = decision;
-
-    if (verdict.kind === "attach") {
-      const held = event.prompt.skills ?? [];
-      const already = held.some((one) => one.id === verdict.skill);
-      if (!already) event.prompt.skills = [...held, { id: verdict.skill }];
-    }
-
-    remember(event.sessionID, decision.next);
-  });
-
-/** The prompt surface. A defect is logged, never thrown: discovery must not lose the prompt. */
-export const attachDiscovery = (ctx: Plugin.Context): Effect.Effect<void, never, Scope.Scope> =>
-  Effect.gen(function* () {
-    yield* ctx.session.hook("prompt", (event) =>
-      discover(ctx, event).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning("search discovery failed", { cause }).pipe(Effect.asVoid),
-        ),
-      ),
-    );
-
-    yield* Effect.logInfo("Registered search discovery", { trigger: "session.prompt" });
   });

@@ -3,7 +3,7 @@ export interface Contract {
   readonly search: string;
   readonly ripgrep: string;
   readonly sentinel: string;
-  readonly report: string;
+  readonly ripwire: string;
 }
 
 export const CONTRACT: Contract = {
@@ -21,15 +21,12 @@ any file the code index does not hold. It takes ripgrep's regular expression
 syntax or literal text matching. For a symbol, a definition, a call site, or
 "where is this implemented", call \`spectre_search\` first.`,
   sentinel: `[spectre_search] this ripgrep was a code search, so spectre_search answered it.`,
-  report: `List the sessions that skipped ripwire in this project: edits with no
-\`--quality-delta\` after the last one, code reads with no lookup, and \`subagent\`
-spawns with no \`--pack-task --partition\` fan-out. Each finding names the session
-id, the count and the missing verb. It reads the durable usage record, not the
-transcript, so it is one read.`,
+  ripwire: `Run pre-landing ripwire quality-delta and affected-test checks, or audit session ripwire usage.
+Default action=check runs ripwire --quality-delta and --affected over edited code files, returning gating regressions, new-symbol debt rows, the measured at SHA, and affected test paths to run before commit or PR. Pass action=report to list project sessions that skipped ripwire verbs.`,
 };
 
 /** The nudge the context part carries once the tree holds an unmeasured code edit. */
-export const END_OF_WORK = `This session holds code edits and no measurement since the last one. Before the change lands, run \`ripwire . --quality-delta\` and \`ripwire . --affected=\` with the paths you edited. The landing gate refuses the first commit, push or PR until both ran after the last mutation.`;
+export const END_OF_WORK = `This session holds code edits and no measurement since the last one. Before the change lands, call \`tools.spectre.ripwire({ action: "check" })\` in \`execute\`, or run \`ripwire . --quality-delta\` and \`ripwire . --affected=\` with the paths you edited. The landing gate refuses the first commit, push or PR until both ran after the last mutation.`;
 
 /** The install line the absent answer carries, quoted from the ripwire README. */
 export const INSTALL = `RIPWIRE_REPO=redhat-et/ripwire bash -c "$(curl -fsSL https://raw.githubusercontent.com/redhat-et/ripwire/main/scripts/install.sh)"`;
@@ -40,5 +37,5 @@ export const readRefusal = (path: string): string => `\`${path}\` is a code file
 /** The landing gate's one refusal: the two commands it watched for, and the paths it watched. */
 export const landRefusal = (paths: ReadonlyArray<string>): string => {
   const affected = paths.length === 0 ? "." : [...paths].sort().join(",");
-  return `This change cannot land yet: the tree holds code edits and neither measurement ran against them. Run \`ripwire . --quality-delta\` and \`ripwire . --affected=${affected}\`, then re-issue the command. The gate checks that both commands ran after the last mutation. It refuses once, then it is advisory by design, because a blocked model must be able to land.`;
+  return `This change cannot land yet: the tree holds code edits and neither measurement ran against them. Call \`tools.spectre.ripwire({ action: "check" })\` in \`execute\`, or run \`ripwire . --quality-delta\` and \`ripwire . --affected=${affected}\`, then re-issue the command. The gate checks that both commands ran after the last mutation. It refuses once, then it is advisory by design, because a blocked model must be able to land.`;
 };

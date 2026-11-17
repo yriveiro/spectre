@@ -19,6 +19,7 @@ const TOOLS = [
   "history",
   "pr",
   "prose",
+  "ripwire",
   "routing",
   "solidjs",
   "stack",
@@ -49,17 +50,19 @@ describe("every registered tool is reachable from some skill", () => {
       (await import("../../tools/definitions/history")).historyTool(ctx),
       (await import("../../tools/definitions/pr")).pr(ctx),
       (await import("../../tools/definitions/prose")).prose(ctx),
+      (await import("../../tools/definitions/search")).ripwire(ctx),
       (await import("../../tools/definitions/routing")).routing(ctx),
       (await import("../../tools/definitions/solidjs")).solidjs(ctx),
       (await import("../../tools/definitions/stack")).stack(ctx),
       (await import("../../tools/definitions/worktrees")).worktrees(ctx),
     ];
 
-    // The list covers the eleven `tools.spectre.*` Code Mode tools. The direct
+    // The list covers the twelve `tools.spectre.*` Code Mode tools. The direct
     // `spectre_search` tool is outside that namespace and is covered by
     // `test/search/tool.test.ts`, which asserts `codemode: false`.
     expect(registered.map((tool) => tool.options?.namespace)).toEqual(TOOLS.map(() => "spectre"));
     expect(registered).toHaveLength(TOOLS.length);
     expect(registered.every((tool) => tool.options?.codemode === true)).toBe(true);
+    expect((await import("../../tools/definitions/search")).ripwire(ctx).options?.pinned).toBeUndefined();
   });
 });

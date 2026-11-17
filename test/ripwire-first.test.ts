@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Effect, Exit } from "effect";
-import { report } from "../tools/definitions/search";
+import { ripwire } from "../tools/definitions/search";
 import { contextRule } from "../tools/definitions/search/policy";
 import { memories, rerouted } from "../tools/definitions/search/state";
 import {
@@ -10,11 +10,9 @@ import {
   captureAfter,
   captureContext,
   captureGuard,
-  capturePrompt,
   cleanupDirs,
   forget,
   makeBin,
-  promptEvent,
   READY_BIN,
   readingContext,
   tempDir,
@@ -41,25 +39,25 @@ const contextEvent = (name: string): ContextEvent => ({
 
 afterEach(cleanupDirs);
 
-describe("the first prompt carries the map once", () => {
-  test("a fresh session attaches it, the next prompt does not, and a child attaches once", async () => {
-    const primary = await capturePrompt({ skills: ["ripwire-first"] });
+describe("ready context carries moment cues while native context carries none", () => {
+  test("a ready Spectre session appends the compact moment cues to CONTRACT.rule", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const context = await captureContext();
+      const draft = contextEvent("ses_context_ready");
+      await Effect.runPromise(context(draft));
 
-    const first = promptEvent("ses_fresh_primary");
-    await Effect.runPromise(primary(first));
-    expect(first.prompt.skills).toEqual([{ id: "ripwire-first" }]);
+      const text = draft.system.at(-1)?.text ?? "";
+      expect(text).toBe(contextRule({ kind: "ready", binary: bin, version: "0.6.10" }));
+      expect(text).toContain("--exemplar=");
+      expect(text).toContain("--impact=");
+      expect(text).toContain("--pack-task=");
+      expect(text).toContain("--stray-content");
+      expect(text).toContain('tools.spectre.ripwire({ action: "check" })');
+      expect(text).not.toContain("this session is native");
 
-    const second = promptEvent("ses_fresh_primary");
-    await Effect.runPromise(primary(second));
-    expect(second.prompt.skills).toBeUndefined();
-
-    const child = await capturePrompt({ skills: ["ripwire-first"], parentID: "ses_fresh_primary" });
-    const born = promptEvent("ses_fresh_child");
-    await Effect.runPromise(child(born));
-    expect(born.prompt.skills).toEqual([{ id: "ripwire-first" }]);
-    expect(memories.get(session("ses_fresh_child"))?.subagent).toBe(true);
-
-    forget("ses_fresh_primary", "ses_fresh_child");
+      forget("ses_context_ready");
+    });
   });
 });
 
@@ -263,7 +261,7 @@ describe("a landing waits for the two measurements", () => {
 });
 
 describe("a host with no ripwire is native", () => {
-  test("every surface passes with no-instrument, the context says so, and nothing throws", async () => {
+  test("every surface passes with no-instrument, the context says so with zero CLI cues, and nothing throws", async () => {
     const bin = `${tempDir()}/ripwire-not-installed`;
     await withBinary(bin, async () => {
       const { callback } = await captureGuard();
@@ -297,10 +295,11 @@ describe("a host with no ripwire is native", () => {
       const draft = contextEvent(name);
       const contextExit = await Effect.runPromiseExit(context(draft));
       expect(Exit.isSuccess(contextExit)).toBe(true);
-      expect(draft.system.at(-1)?.text).toBe(
-        contextRule({ kind: "absent", why: "the fixture path holds no binary" }),
-      );
-      expect(draft.system.at(-1)?.text).toContain("this session is native");
+      const text = draft.system.at(-1)?.text ?? "";
+      expect(text).toBe(contextRule({ kind: "absent", why: "the fixture path holds no binary" }));
+      expect(text).toContain("this session is native");
+      expect(text).not.toContain("--exemplar=");
+      expect(text).not.toContain("tools.spectre.ripwire");
       expect(draft.tools["spectre_search"]?.description).toBe("search");
 
       forget(name);
@@ -308,27 +307,64 @@ describe("a host with no ripwire is native", () => {
   });
 });
 
-describe("the report names the session that skipped the delta", () => {
-  test("two edits and no measurement name the session", async () => {
-    const bin = await makeBin(READY_BIN);
+describe("tools.spectre.ripwire reports skipped verbs and check clears both gates", () => {
+  test("two edits and no measurement name the session, and check clears landing and report", async () => {
+    const dir = tempDir();
+    const bin = await makeBin(`#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.6.10 (Release, built_from=test)"
+  exit 0
+fi
+case "$*" in
+  *"--quality-delta"*)
+    printf '%s' '<quality-delta baseline="git-HEAD" regressions="0" gating="0" new-symbol="0" at="f00dbabe"></quality-delta>'
+    exit 0
+    ;;
+  *"--affected="*)
+    printf '%s' '<affected><test p="test/one.test.ts" hops="1"/></affected>'
+    exit 0
+    ;;
+esac
+exit 1
+`);
     await withBinary(bin, async () => {
+      const guard = await captureGuard();
       const after = await captureAfter();
       const name = "ses_report_delta_missing";
 
-      await Effect.runPromise(
-        after.callback(afterEvent("edit", { path: "src/one.ts" }, name, "call_report_one")),
-      );
-      await Effect.runPromise(
-        after.callback(afterEvent("edit", { path: "src/two.ts" }, name, "call_report_two")),
-      );
+      for (const [idx, path] of ["src/one.ts", "src/two.ts"].entries()) {
+        await Effect.runPromise(guard.callback(toolEvent("edit", { path }, name, `call_g_${idx}`)));
+        await Effect.runPromise(after.callback(afterEvent("edit", { path }, name, `call_a_${idx}`)));
+      }
 
-      const result = await Effect.runPromise(
-        report(readingContext(after.project, after.values)).execute({}, toolContext(name)),
+      const initial = await Effect.runPromise(
+        ripwire(readingContext(after.project, after.values, dir)).execute({ action: "report" }, toolContext(name)),
       );
-      expect(result.output?.sessions).toBe(1);
-      expect(result.output?.findings).toEqual([
+      if (initial.output?.action !== "report") throw new Error("expected report output");
+      expect(initial.output.sessions).toBe(1);
+      expect(initial.output.findings).toEqual([
         { session: name, count: 2, missing: "ripwire . --quality-delta" },
       ]);
+
+      const checked = await Effect.runPromise(
+        ripwire(readingContext(after.project, after.values, dir)).execute({ action: "check" }, toolContext(name)),
+      );
+      expect(checked.output).toMatchObject({
+        action: "check",
+        status: "ok",
+        sha: "f00dbabe",
+        testsToRun: ["test/one.test.ts"],
+      });
+
+      const commit = toolEvent("shell", { command: "git commit -m land" }, name, "call_land_after_check");
+      const commitExit = await Effect.runPromiseExit(guard.callback(commit));
+      expect(Exit.isSuccess(commitExit)).toBe(true);
+
+      const cleared = await Effect.runPromise(
+        ripwire(readingContext(after.project, after.values, dir)).execute({ action: "report" }, toolContext(name)),
+      );
+      if (cleared.output?.action !== "report") throw new Error("expected report output");
+      expect(cleared.output.findings).toEqual([]);
 
       forget(name);
     });

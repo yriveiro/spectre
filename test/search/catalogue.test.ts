@@ -14,8 +14,6 @@ const draft = (overrides?: Partial<Draft>): Draft => ({
 });
 
 const held = (overrides?: Partial<Memory>): Memory => ({
-  attached: false,
-  subagent: false,
   search: true,
   touched: 0,
   asked: new Map(),

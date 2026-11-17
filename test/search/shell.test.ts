@@ -17,8 +17,6 @@ const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10"
 const absent: Health = { kind: "absent", why: "ripwire is not on PATH" };
 
 const held = (overrides?: Partial<Memory>): Memory => ({
-  attached: false,
-  subagent: false,
   search: true,
   touched: 0,
   asked: new Map(),
@@ -36,7 +34,7 @@ const shell = (command: string, overrides?: Partial<Memory>, health: Health = re
   decide(
     { surface: "shell", command, parsed: shellParse(command) },
     held(overrides),
-    { health, skill: true, parentID: false },
+    { health },
   );
 
 describe("shellParse reads one bare search", () => {
