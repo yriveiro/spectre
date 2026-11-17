@@ -75,7 +75,6 @@ import { principleTestForTruth } from "./principle-test-for-truth";
 import { principleTypeSystemDiscipline } from "./principle-type-system-discipline";
 import { principleVerification } from "./principle-verification";
 import { ripwire } from "./ripwire";
-import { ripwireFirst } from "./ripwire-first";
 import { showMeYourWork } from "./show-me-your-work";
 import { solidjsBestPractices } from "./solidjs-best-practices";
 import { spectreMode } from "./spectre-mode";
@@ -172,7 +171,6 @@ const definitions: ReadonlyArray<Definition> = [
   spectreMode,
   principleGuardTheContextWindow,
   ripwire,
-  ripwireFirst,
   swarm,
 ];
 
@@ -180,7 +178,7 @@ const definitions: ReadonlyArray<Definition> = [
  * Registered and reader-called rather than indexed, so they carry no row in the
  * ripwire map and do not move its `none` count: `skills/FOR_AGENTS.md`,
  * "Porting a principle from elsewhere", item 3. `spectre-mode` is the hub;
- * `ripwire` and `ripwire-first` are the map and its compact form.
+ * `ripwire` is the map.
  */
 export const notALeaf: ReadonlySet<string> = new Set([
   "architect",
@@ -226,7 +224,6 @@ export const notALeaf: ReadonlySet<string> = new Set([
   "playbook-worktree-init",
   "pr-canvas",
   "ripwire",
-  "ripwire-first",
   "show-me-your-work",
   "solidjs-best-practices",
   "spectre-mode",

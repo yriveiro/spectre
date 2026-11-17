@@ -12,7 +12,7 @@ import { historyTool } from "../../tools/definitions/history";
 import { pr } from "../../tools/definitions/pr";
 import { prose } from "../../tools/definitions/prose";
 import { routing } from "../../tools/definitions/routing";
-import { report } from "../../tools/definitions/search";
+import { ripwire } from "../../tools/definitions/search";
 import { solidjs } from "../../tools/definitions/solidjs";
 import { stack } from "../../tools/definitions/stack";
 import { worktrees } from "../../tools/definitions/worktrees";
@@ -52,7 +52,7 @@ const SPECTRE_TOOLS: ReadonlyArray<RegisteredTool> = [
   historyTool(directory),
   pr(ctx),
   prose(directory),
-  report(ctx),
+  ripwire(ctx),
   routing(ctx),
   solidjs(directory),
   stack(directory),
@@ -273,8 +273,8 @@ const TASK_QUERIES: ReadonlyArray<readonly [query: string, expectedPath: string]
   ["open github pr conventional commit", "tools.spectre.pr"],
   ["asd-ste100 markdown prose grammar", "tools.spectre.prose"],
   ["prose passive voice semicolons dictionary", "tools.spectre.prose"],
-  ["sessions that skipped ripwire verbs", "tools.spectre.ripwire_report"],
-  ["ripwire usage report quality-delta", "tools.spectre.ripwire_report"],
+  ["pre-commit quality-delta and affected tests check", "tools.spectre.ripwire"],
+  ["sessions that skipped ripwire verbs", "tools.spectre.ripwire"],
   ["subagent model routing effort profile", "tools.spectre.routing"],
   ["task judge model allowlist crosscheck", "tools.spectre.routing"],
   ["detect solid 1 or solid 2", "tools.spectre.solidjs"],

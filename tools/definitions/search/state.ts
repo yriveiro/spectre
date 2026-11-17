@@ -25,8 +25,6 @@ const evictOldest = <Key, Value>(map: Map<Key, Value>, cap: number): void => {
 };
 
 const fresh = (): Memory => ({
-  attached: false,
-  subagent: false,
   // A session that has run no request snapshot has not been shown to lack the
   // tool, and a reroute that cannot resolve fails at the host in the same step.
   search: true,

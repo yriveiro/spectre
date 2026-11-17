@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { Skill } from "@opencode/plugin/effect";
 import { CONTRACT } from "../../tools/definitions/search/contract";
 import {
   argv,
@@ -18,8 +17,6 @@ const stale: Health = { kind: "stale", binary: "/bin/ripwire", version: "0.5.0" 
 const empty = new Set<string>();
 
 const held = (overrides?: Partial<Memory>): Memory => ({
-  attached: false,
-  subagent: false,
   search: true,
   touched: 0,
   asked: new Map(),
@@ -33,7 +30,7 @@ const held = (overrides?: Partial<Memory>): Memory => ({
   ...overrides,
 });
 
-const env = (overrides?: Partial<Env>): Env => ({ health: ready, skill: true, parentID: false, ...overrides });
+const env = (overrides?: Partial<Env>): Env => ({ health: ready, ...overrides });
 
 describe("judge", () => {
   test("literal: true stays on the text tool", () => {
@@ -143,10 +140,16 @@ describe("judge", () => {
 });
 
 describe("argv", () => {
-  test("a task carries the signatures flag and the budget", () => {
+  test("a task carries the signatures flag, the budget, and compact legend", () => {
     expect(
       argv({ route: { kind: "task", task: "function rescue" }, root: "/root", budget: 4000 }),
-    ).toEqual(["/root", "--for=function rescue", "--signatures-only", "--token-budget=4000"]);
+    ).toEqual(["/root", "--for=function rescue", "--signatures-only", "--token-budget=4000", "--legend=compact"]);
+  });
+
+  test("an expand carries the expand flag and compact legend", () => {
+    expect(
+      argv({ route: { kind: "expand", symbol: "src/a.ts:rescue" }, root: "/root", budget: 4000 }),
+    ).toEqual(["/root", "--expand=src/a.ts:rescue", "--legend=compact"]);
   });
 
   test("a literal carries the grep flag", () => {
@@ -227,52 +230,39 @@ describe("decide, the text surface", () => {
   });
 });
 
-describe("decide, the prompt surface", () => {
-  test("the first prompt attaches the map once", () => {
-    const decision = decide({ surface: "prompt" }, held(), env());
-    expect(decision.verdict).toEqual({ kind: "attach", skill: Skill.ID.make("ripwire-first") });
-    expect(decision.next.attached).toBe(true);
-  });
-
-  test("a second prompt does not attach again", () => {
-    expect(decide({ surface: "prompt" }, held({ attached: true }), env()).verdict).toEqual({
-      kind: "pass",
-      why: "already-attached",
-    });
-  });
-
-  test("a session with no registered map passes as no-skill", () => {
-    expect(decide({ surface: "prompt" }, held(), env({ skill: false })).verdict).toEqual({
-      kind: "pass",
-      why: "no-skill",
-    });
-  });
-
-  test("a child session is recorded, and discovery does not wait for the instrument", () => {
-    const decision = decide({ surface: "prompt" }, held(), env({ parentID: true, health: absent }));
-    expect(decision.next.subagent).toBe(true);
-    expect(decision.verdict.kind).toBe("attach");
-  });
-});
-
 describe("decide, the context surface", () => {
   test("it records whether the request holds the search tool", () => {
     expect(decide({ surface: "context", tools: ["spectre_search"] }, held(), env()).next.search).toBe(true);
     expect(decide({ surface: "context", tools: ["grep"] }, held(), env()).next.search).toBe(false);
   });
 
-  test("it writes the rule", () => {
+  test("a ready session carries CONTRACT.rule and the compact moment cues", () => {
+    const rule = contextRule(ready);
+    expect(rule).toContain(CONTRACT.rule);
+    expect(rule).toContain("--exemplar=");
+    expect(rule).toContain("--impact=");
+    expect(rule).toContain("--pack-task=");
+    expect(rule).toContain("--stray-content");
+    expect(rule).toContain('tools.spectre.ripwire({ action: "check" })');
+    expect(rule).not.toContain("this session is native");
     expect(decide({ surface: "context", tools: [] }, held(), env()).verdict).toEqual({
       kind: "prose",
       key: "rule",
-      text: CONTRACT.rule,
+      text: rule,
     });
   });
 
-  test("a session with no instrument is told that it is native", () => {
-    expect(contextRule(ready)).toBe(CONTRACT.rule);
-    expect(contextRule(absent)).toContain("this session is native");
-    expect(contextRule(stale)).toContain("this session is native");
+  test("a session with no instrument is told that it is native and carries zero CLI cues", () => {
+    for (const health of [absent, stale]) {
+      const rule = contextRule(health);
+      expect(rule).toContain(CONTRACT.rule);
+      expect(rule).toContain("this session is native");
+      expect(rule).not.toContain("--exemplar=");
+      expect(rule).not.toContain("--impact=");
+      expect(rule).not.toContain("--pack-task=");
+      expect(rule).not.toContain("--stray-content");
+      expect(rule).not.toContain("tools.spectre.ripwire");
+    }
     expect(decide({ surface: "context", tools: [] }, held(), env({ health: absent })).verdict).toEqual({
       kind: "prose",
       key: "rule",

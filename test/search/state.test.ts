@@ -7,8 +7,6 @@ import { markRerouted, memories, memoryOf, remember, rerouted } from "../../tool
 const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
 
 const held = (overrides?: Partial<Memory>): Memory => ({
-  attached: false,
-  subagent: false,
   search: true,
   touched: 0,
   asked: new Map(),
@@ -42,8 +40,6 @@ describe("one Memory per session", () => {
     expect(
       decide({ surface: "text", id: "ripgrep", ask: { pattern: "resolveTool" } }, asked, {
         health: ready,
-        skill: true,
-        parentID: false,
       }).verdict,
     ).toEqual({ kind: "pass", why: "already-asked" });
   });

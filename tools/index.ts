@@ -9,13 +9,13 @@ import { pr } from "./definitions/pr";
 import { prose } from "./definitions/prose";
 import { routing } from "./definitions/routing";
 import { load } from "./definitions/routing/load";
-import { attachSearch, report, search } from "./definitions/search";
+import { attachSearch, ripwire, search } from "./definitions/search";
 import { solidjs } from "./definitions/solidjs";
 import { stack } from "./definitions/stack";
 import { sessionReturn, worktrees } from "./definitions/worktrees";
 
 export const NAMESPACE_DESCRIPTION =
-  "Direct code search: spectre_search. Tools: worktrees (branch isolation, cleanup), pr (compose, open pull requests), stack (stacked PR merge order, blockers), routing (subagent model selection), brain (project memory: decisions, gotchas, lessons, constraints), history (file git blame, pickaxe rationale), goal (/goal loop contract, ledger), canvas (HTML, diagram, report, PR review artifacts), prose (ASD-STE100 grammar, dictionary check), comments (comment, lint/type suppression inventory), solidjs (Solid 1/2 detection, reactivity audit), ripwire_report (ripwire session audit).";
+  "Direct code search: spectre_search. Tools: worktrees (branch isolation, cleanup), pr (compose, open pull requests), stack (stacked PR merge order, blockers), routing (subagent model selection), brain (project memory: decisions, gotchas, lessons, constraints), history (file git blame, pickaxe rationale), goal (/goal loop contract, ledger), canvas (HTML, diagram, report, PR review artifacts), prose (ASD-STE100 grammar, dictionary check), comments (comment, lint/type suppression inventory), solidjs (Solid 1/2 detection, reactivity audit), ripwire (pre-landing quality-delta and affected-test check, session usage audit).";
 
 export const update = (ctx: Plugin.Context) =>
   Effect.gen(function* () {
@@ -35,7 +35,7 @@ export const update = (ctx: Plugin.Context) =>
     const loop = goal(ctx);
     const solid = solidjs(ctx.location.directory);
     const found = search(ctx);
-    const reported = report(ctx);
+    const checked = ripwire(ctx);
 
     // Not looped: `add` is generic, so a union of the two schemas instantiates to
     // neither and the call will not typecheck.
@@ -52,7 +52,7 @@ export const update = (ctx: Plugin.Context) =>
       editor.add(loop);
       editor.add(solid);
       editor.add(found);
-      editor.add(reported);
+      editor.add(checked);
       editor.namespace({
         name: "spectre",
         description: NAMESPACE_DESCRIPTION,
@@ -61,7 +61,7 @@ export const update = (ctx: Plugin.Context) =>
 
     yield* Effect.logInfo("Registered tools", {
       tools: [
-        listed, said, route, trees, prs, opening, why, pages, memory, loop, solid, found, reported,
+        listed, said, route, trees, prs, opening, why, pages, memory, loop, solid, found, checked,
       ].map((tool) => `${tool.options?.namespace}_${tool.name}`),
     });
 

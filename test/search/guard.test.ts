@@ -16,8 +16,6 @@ import { captureGuard, cleanupDirs, forget, makeBin, READY_BIN, tempDir, toolEve
 const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
 
 const held = (overrides?: Partial<Memory>): Memory => ({
-  attached: false,
-  subagent: false,
   search: true,
   touched: 0,
   asked: new Map(),
@@ -184,7 +182,7 @@ echo "ripwire 0.1.0 (Release, built_from=test)"
     const decision = decide(
       { surface: "text", id: "grep", ask: { pattern: "resolveTool" } },
       held({ search: false }),
-      { health: ready, skill: true, parentID: false },
+      { health: ready },
     );
     expect(decision.verdict).toEqual({ kind: "pass", why: "search-unavailable" });
   });

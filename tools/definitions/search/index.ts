@@ -1,14 +1,15 @@
 import { type Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect, Schema, type Scope } from "effect";
-import { attachCatalogue, attachDiscovery, attachGuard } from "./apply";
+import { attachCatalogue, attachGuard } from "./apply";
 import { CONTRACT, INSTALL } from "./contract";
 import { attachMeasure } from "./measure";
-import { argv, type Route } from "./policy";
+import { argv, type Health, type Route } from "./policy";
 import { probe } from "./probe";
-import { run, scope } from "./run";
+import { rootOf } from "./root";
+import { type RunResult, run, scope } from "./run";
 import { rerouted } from "./state";
 
-export { report } from "./report";
+export { ripwire } from "./ripwire";
 
 export const SearchInput = Schema.Struct({
   query: Schema.optional(Schema.String).annotate({
@@ -16,6 +17,9 @@ export const SearchInput = Schema.Struct({
   }),
   pattern: Schema.optional(Schema.String).annotate({
     description: "A symbol, literal, or regex already in hand. `ripgrep`'s own field name, kept so a rerouted call decodes.",
+  }),
+  expand: Schema.optional(Schema.String).annotate({
+    description: "Symbol selector (such as path:name or path::scope::name) to fetch its full body via ripwire --expand.",
   }),
   kind: Schema.optional(Schema.Literals(["task", "literal", "regex"])).annotate({
     description: "How to read `pattern`. `query` is always a task. Omit for a literal.",
@@ -45,8 +49,8 @@ export const SearchInput = Schema.Struct({
 
 export const SearchOutput = Schema.Struct({
   tool: Schema.Literals(["spectre_search"]),
-  verb: Schema.Literals(["for", "grep", "regex"]).annotate({
-    description: "Which ripwire verb answered: `for` a task, `grep` a literal, `regex` a pattern.",
+  verb: Schema.Literals(["for", "grep", "regex", "expand"]).annotate({
+    description: "Which ripwire verb answered: `for` a task, `grep` a literal, `regex` a pattern, `expand` a symbol body.",
   }),
   status: Schema.Literals(["answered", "empty", "partial", "absent", "refused"]),
   command: Schema.String.annotate({
@@ -62,18 +66,32 @@ export const SearchOutput = Schema.Struct({
   note: Schema.optional(Schema.String),
 });
 
-const verbOf = (route: Route): "for" | "grep" | "regex" => {
-  switch (route.kind) {
-    case "task":
-      return "for";
-    case "literal":
-      return "grep";
-    case "regex":
-      return "regex";
+type SearchInputValue = typeof SearchInput.Type;
+
+interface SelectedRoute {
+  readonly route: Route;
+  readonly verb: "for" | "grep" | "regex" | "expand";
+  readonly reason: string;
+}
+
+const HEADER_AT = 8_192;
+
+const routeOf = (input: SearchInputValue): SelectedRoute | undefined => {
+  if (input.expand !== undefined && input.expand !== "") {
+    return { route: { kind: "expand", symbol: input.expand }, verb: "expand", reason: "expand" };
   }
+  const text = input.query ?? input.pattern ?? "";
+  if (text === "") return undefined;
+  if (input.query !== undefined && input.query !== "") {
+    return { route: { kind: "task", task: input.query }, verb: "for", reason: "query" };
+  }
+  if (input.kind === "regex") {
+    return { route: { kind: "regex", pattern: text }, verb: "regex", reason: "kind" };
+  }
+  return { route: { kind: "literal", text }, verb: "grep", reason: "pattern" };
 };
 
-const ignoredOf = (input: typeof SearchInput.Type): string => {
+const ignoredOf = (input: SearchInputValue): string => {
   const ignored: Array<string> = [];
   if (input.include !== undefined) ignored.push("include");
   if (input.caseSensitive !== undefined) ignored.push("caseSensitive");
@@ -88,13 +106,110 @@ const withIgnored = (note: string | undefined, ignored: string): { note?: string
   return { note: note === undefined ? ignored : `${note} ${ignored}` };
 };
 
+const refusedOutput = (reason: string, note: string) => {
+  const output = {
+    tool: "spectre_search" as const,
+    verb: "grep" as const,
+    status: "refused" as const,
+    command: "",
+    answer: "",
+    reason,
+    note,
+  };
+  return { output, content: output.answer };
+};
+
+const absentOutput = (health: Exclude<Health, { readonly kind: "ready" }>) => {
+  const note =
+    health.kind === "stale"
+      ? `${health.binary} is version ${health.version}, older than 0.6.10. Run ripwire --doctor.`
+      : `${health.why}. Install it:\n${INSTALL}`;
+  const output = {
+    tool: "spectre_search" as const,
+    verb: "grep" as const,
+    status: "absent" as const,
+    command: "",
+    answer: "",
+    reason: "no-instrument",
+    note,
+  };
+  return { output, content: output.answer };
+};
+
+const thinCoverage = (result: RunResult): number | undefined => {
+  if (result.status !== "answered" && result.status !== "partial") return undefined;
+  const match = /<(?:ctx|for)\b[^>]*\bcoverage="(\d+)"/.exec(result.answer.slice(0, HEADER_AT));
+  if (match?.[1] === undefined) return undefined;
+  const coverage = Number(match[1]);
+  return coverage < 50 ? coverage : undefined;
+};
+
+const mergeWidened = (initial: RunResult, widened: RunResult, coverage: number): RunResult => {
+  if (widened.status !== "answered" && widened.status !== "partial") return initial;
+  const status = initial.status === "partial" || widened.status === "partial" ? "partial" : "answered";
+  const widenNote = `Widened with --limit=40 because initial coverage was ${coverage}% (<50%).`;
+  const note = [initial.note, widened.note, widenNote]
+    .filter((part): part is string => part !== undefined && part !== "")
+    .join(" ");
+  return {
+    status,
+    command: `${initial.command} && ${widened.command}`,
+    answer: `${initial.answer}\n${widened.answer}`,
+    ...(note === "" ? {} : { note }),
+  };
+};
+
+const runSearchRoute = async (params: {
+  readonly root: string;
+  readonly scoped: string;
+  readonly route: Route;
+  readonly budget: number;
+  readonly fresh?: boolean;
+}): Promise<RunResult> => {
+  const options = params.fresh === undefined ? {} : { fresh: params.fresh };
+  const initial = await run(
+    params.root,
+    argv({ route: params.route, root: params.scoped, budget: params.budget }),
+    options,
+  );
+  if (params.route.kind !== "task") return initial;
+  const coverage = thinCoverage(initial);
+  if (coverage === undefined) return initial;
+  const widened = await run(
+    params.root,
+    [params.scoped, `--for=${params.route.task}`, "--limit=40", "--legend=compact"],
+    options,
+  );
+  return mergeWidened(initial, widened, coverage);
+};
+
+const formatSearchResult = (
+  selected: SelectedRoute,
+  result: RunResult,
+  ignored: string,
+  callID: Tool.CallID,
+) => {
+  const wasRerouted = rerouted.delete(callID);
+  const answer = wasRerouted ? `${CONTRACT.sentinel}\n${result.answer}` : result.answer;
+  const output = {
+    tool: "spectre_search" as const,
+    verb: selected.verb,
+    status: result.status,
+    command: result.command,
+    answer,
+    ...(wasRerouted ? { rerouted: true as const } : {}),
+    reason: selected.reason,
+    ...withIgnored(result.note, ignored),
+  };
+  return { output, content: output.answer };
+};
+
 /**
- * The direct code-search tool. A code question (`query`) runs as a task; a
- * `pattern` with `kind: "regex"` runs as a regex; anything else runs as a
- * literal. `scope` refuses a path outside the root before the spawn, and a
- * non-ready probe is `absent` without spawning. When the guard renamed a
- * `ripgrep` call, its id sits in `rerouted`: the sentinel prefixes the
- * answer so the model sees which instrument answered.
+ * The direct code-search tool. `expand` fetches a symbol's full body; `query`
+ * runs as a task and widens thin `<50%` coverage answers automatically; `pattern`
+ * with `kind: "regex"` runs as a regex; anything else runs as a literal. `scope`
+ * refuses a path outside the root before the spawn, and a non-ready probe is
+ * `absent` without spawning.
  */
 export const search = (ctx: Plugin.Context): Tool.Info<typeof SearchInput, typeof SearchOutput> => ({
   name: "search",
@@ -104,21 +219,12 @@ export const search = (ctx: Plugin.Context): Tool.Info<typeof SearchInput, typeo
   options: { namespace: "spectre", codemode: false, permission: "read" },
   execute: (input, context) =>
     Effect.gen(function* () {
-      const root = ctx.location.directory;
+      const root = yield* rootOf(ctx, context.sessionID);
       // A missing path is the whole tree, not an escape: scope returns
       // `undefined` for both, so branch before calling it.
       const scoped = input.path === undefined ? root : scope(root, input.path);
       if (scoped === undefined) {
-        const output = {
-          tool: "spectre_search" as const,
-          verb: "grep" as const,
-          status: "refused" as const,
-          command: "",
-          answer: "",
-          reason: "outside-root",
-          note: `${input.path} is outside ${root}, so no code index was read.`,
-        };
-        return { output, content: output.answer };
+        return refusedOutput("outside-root", `${input.path} is outside ${root}, so no code index was read.`);
       }
 
       yield* ctx.permission.assert({
@@ -130,70 +236,28 @@ export const search = (ctx: Plugin.Context): Tool.Info<typeof SearchInput, typeo
       });
 
       const health = yield* Effect.promise(() => probe());
-      if (health.kind !== "ready") {
-        const output = {
-          tool: "spectre_search" as const,
-          verb: "grep" as const,
-          status: "absent" as const,
-          command: "",
-          answer: "",
-          reason: "no-instrument",
-          note:
-            health.kind === "stale"
-              ? `${health.binary} is version ${health.version}, older than 0.6.10. Run ripwire --doctor.`
-              : `${health.why}. Install it:\n${INSTALL}`,
-        };
-        return { output, content: output.answer };
+      if (health.kind !== "ready") return absentOutput(health);
+
+      const selected = routeOf(input);
+      if (selected === undefined) {
+        return refusedOutput("empty-query", "Neither query, pattern, nor expand was given, so nothing was asked.");
       }
 
-      const text = input.query ?? input.pattern ?? "";
-      if (text === "") {
-        const output = {
-          tool: "spectre_search" as const,
-          verb: "grep" as const,
-          status: "refused" as const,
-          command: "",
-          answer: "",
-          reason: "empty-query",
-          note: "Neither query nor pattern was given, so nothing was asked.",
-        };
-        return { output, content: output.answer };
-      }
-
-      const route: Route =
-        input.query !== undefined && input.query !== ""
-          ? { kind: "task", task: input.query }
-          : input.kind === "regex"
-            ? { kind: "regex", pattern: text }
-            : { kind: "literal", text };
-      const verb = verbOf(route);
-      const reason = input.query !== undefined && input.query !== "" ? "query" : input.kind === "regex" ? "kind" : "pattern";
-      const ignored = ignoredOf(input);
       const result = yield* Effect.promise(() =>
-        run(root, argv({ route, root: scoped, budget: input.budget ?? 2000 }), {
+        runSearchRoute({
+          root,
+          scoped,
+          route: selected.route,
+          budget: input.budget ?? 2000,
           ...(input.fresh === undefined ? {} : { fresh: input.fresh }),
         }),
       );
-
-      const wasRerouted = rerouted.delete(context.id);
-      const answer = wasRerouted ? `${CONTRACT.sentinel}\n${result.answer}` : result.answer;
-      const output = {
-        tool: "spectre_search" as const,
-        verb,
-        status: result.status,
-        command: result.command,
-        answer,
-        ...(wasRerouted ? { rerouted: true as const } : {}),
-        reason,
-        ...withIgnored(result.note, ignored),
-      };
-      return { output, content: output.answer };
+      return formatSearchResult(selected, result, ignoredOf(input), context.id);
     }),
 });
 
 export const attachSearch = (ctx: Plugin.Context): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
-    yield* attachDiscovery(ctx);
     yield* attachCatalogue(ctx);
     yield* attachGuard(ctx);
     yield* attachMeasure(ctx);

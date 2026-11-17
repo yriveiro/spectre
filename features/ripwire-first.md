@@ -4,8 +4,9 @@ Status: tasks E1 to E15 built. E16 is open.
 
 Ripwire is the first instrument of a session. A code search reaches it before a
 file read, the first code read of a session waits for it once, and a landing
-carries its two measurements. The plugin teaches the map, reroutes the search,
-and records what each session did. It never blocks a second time.
+carries its two measurements. The plugin teaches the moment cues when ripwire is
+ready, reroutes the search, and records what each session did. It never blocks a
+second time.
 
 ## The decision
 
@@ -16,41 +17,37 @@ policy has one home and no hook holds a rule of its own.
 
 Three parts of the design follow from that shape:
 
-- **Discovery is a prompt attachment.** `session.prompt` attaches the compact
-  `ripwire-first` map to the first user prompt of every session running as a
-  Spectre agent, once. The full `ripwire` skill stays visible through
-  `autoinvoke: true`, and the short rule rides in `session.context` for every
-  request after a compaction.
-- **The search surface moves the call.** The plugin renames a code-shaped `grep`
-  or a bare shell `rg` to `spectre_search` and rewrites its input, so the model
-  gets the answer in the same turn. The plugin teaches the 531 shell calls of the
-  finding and never gates them, because most of them are git archaeology.
+- **Discovery rides in `session.context` only when ripwire is ready.** Ready
+  sessions append compact moment cues to `contextRule(ready)`, while native
+  sessions append only the fallback note and carry zero CLI flags. The full
+  `ripwire` skill stays visible through `autoinvoke: true`.
+- **The search surface moves the call and widens thin task reads.** The plugin
+  renames a code-shaped `grep` or a bare shell `rg` to `spectre_search` and
+  rewrites its input, so the model gets the answer in the same turn.
+  `spectre_search` also serves symbol bodies via `expand` (`--expand=`) and
+  widens `--for` answers whose `coverage=` falls below `50` with `--limit=40`.
 - **The end of work carries two measurements.** The landing gate refuses the
   first commit, push or PR of a session that holds an unmeasured code edit. It
-  asks for `ripwire . --quality-delta` and `ripwire . --affected=`, both after
-  the last code edit, and then it steps aside.
+  accepts `tools.spectre.ripwire({ action: "check" })` or shell calls to
+  `ripwire . --quality-delta` and `ripwire . --affected=`, both after the last
+  code edit, and then it steps aside.
 
-Two candidates lost. A rename of `spectre_search` to `spectre_ripgrep` claims
-ownership of a host built-in and changes its permission action. A shell deny
-costs a turn and answers nothing, because the reroute answers in the same call.
+Two candidates lost. Prompt attachment of a `ripwire-first` skill paid ~856
+persisted tokens on every primary and child session, including native machines
+without ripwire. A shell deny costs a turn and answers nothing, because the
+reroute answers in the same call.
 
 ## The agent gate
 
 The feature belongs to the agents this plugin registers. `agents.ts` answers
-whether a session runs as one of them, and every surface asks first. A session
-on any other agent — `build`, `plan`, `general`, `explore`, or one the user
-wrote — keeps what the host gave it: `grep` keeps its name and its description,
-no rule joins the request, the first code read goes through, the commit lands,
-and nothing writes a usage row. A child spawned as a Spectre agent carries the
-feature, and a `general` child does not. A spawn of a stock child seeds no
-usage row either, so the report's session count holds only sessions the feature
-can report on.
-
-A session holds the agent the user switched in, and that field stays empty until
-they do. An empty selection runs as the host default, and `agent.list` answers
-the default first (`packages/core/src/agent.ts` at v2.3.0, `list`), so discovery
-reads the default from the head of that list. A read that fails gives no agent,
-and the session goes untouched rather than guessed at.
+whether a session runs as one of them, and every hook surface asks first. A
+session on any other agent — `build`, `plan`, `general`, `explore`, or one the
+user wrote — keeps what the host gave it: `grep` keeps its name and its
+description, no rule joins the request, the first code read goes through, the
+commit lands, and nothing writes a usage row. A child spawned as a Spectre agent
+carries the feature, and a `general` child does not. A spawn of a stock child
+seeds no usage row either, so the report's session count holds only sessions the
+feature can report on.
 
 The gate is not a verdict. `decide` never sees a stock agent, because the
 question is whose session this is rather than what the search surface should do,
@@ -60,39 +57,36 @@ and a rule inside `decide` would claim a policy that no `Ask` describes.
 
 | Surface | What it reads | What it does |
 | ------- | ------------- | ------------ |
-| `session.prompt` | whether this session attached the map | attaches `ripwire-first` once |
-| `session.context` | the request tools, the code edits, the measurements | writes the rule, and the end-of-work nudge |
-| `session.context` | the tool list | narrows `read` and `glob`, and renders `spectre_search` for the probe's health |
-| `tool.execute.before` | `grep`, `ripgrep`, shell, `read`, `edit`, `write`, `subagent` | reroutes a search, and refuses a gate once |
+| `session.context` | the request tools, the code edits, the measurements, probe health | writes `contextRule(health)` with ready moment cues or the native fallback, plus the end-of-work nudge |
+| `session.context` | the tool list | replaces `grep` with `ripgrep` |
+| `tool.execute.before` | `grep`, `ripgrep`, shell, `read`, `edit`, `write` | reroutes a search, and refuses a gate once |
 | `tool.execute.after` | a completed call | writes the durable usage record |
-| `spectre_ripwire_report` | the usage record | names the session and the missing verb |
+| `tools.spectre.ripwire` | edited code (`check`) or the usage record (`report`) | runs `--quality-delta` and `--affected`, or names the session and the missing verb |
 
-Every row above runs only when the session's agent is one `agents/index.ts`
-registers. The tool itself is the exception, because a call to it is the model's
-own.
+Every hook row above runs only when the session's agent is one `agents/index.ts`
+registers. The tools themselves are the exception, because a call to them is the
+model's own.
 
-`spectre_search` stays `codemode: false`. A Code Mode tool is reachable only
-through `execute`, and that catalog is the surface that hid the verb names. The
-host renders a direct tool in full, beside `ripgrep`, where the choice happens.
+`spectre_search` stays `codemode: false`. A Code Mode tool runs through
+`execute`, while the host renders a direct tool in full, beside `ripgrep`, where
+the search choice happens. `tools.spectre.ripwire` stays unpinned in Code Mode.
 
 ## The six flows
 
 ### 1. A fresh primary session
 
 ```text
-session.prompt    attach "ripwire-first" once
-session.context   the rule, with search set from the request tools
+session.context   the rule and moment cues, with search set from the request tools
 grep "retry"      reroute -> spectre_search({ pattern: "retry" })
 read pkg/retry.ts pass, already-used
 edit pkg/retry.ts pass, editedCode 1
 git commit        refuse land once
-ripwire . --quality-delta         delta 1
-ripwire . --affected=pkg/retry.ts affected 1
+tools.spectre.ripwire({ action: "check" })  delta 1, affected 1
 git commit        pass, measured
 ```
 
-Prompt delivery gave discovery, the context rule gave the policy, and the tool
-gave the answer. The two measurements cleared the landing gate in one round.
+The context rule gave the policy and moment cues, and the search tool gave the
+answer. One `check` call (or the two CLI flags) cleared the landing gate.
 
 ### 2. A first read before any search
 
@@ -119,8 +113,7 @@ command alone. A bare search with one pattern and at most one path moves.
 
 ```text
 probe                absent, with the install line and --doctor
-session.prompt       attach (the map teaches the native fallback)
-session.context      the rule, plus the native note
+session.context      the rule, plus the native note (no CLI moment cues)
 grep, read, commit   pass, no-instrument
 ```
 
@@ -130,13 +123,13 @@ ripwire fires when the binary is missing or stale.
 ### 5. A child session
 
 ```text
-subagent spawn        pass, subagents 1
-child's first prompt  attach once
+subagent spawn       pass, subagents 1
+child's context      carries contextRule(health) when the child runs as Spectre
 ```
 
-A child is a new context, so it pays for the map once. Two prompts in that child
-attach one body. The child carries it only when it runs as a Spectre agent: a
-`general` or `explore` child is a stock session and none of this reaches it.
+A child running as a Spectre agent receives the same `session.context` rule and
+moment cues. A `general` or `explore` child is a stock session and none of this
+reaches it.
 
 ### 6. A session that changed no code file
 
@@ -150,13 +143,12 @@ blocks a landing.
 
 ## The rule table
 
-First match wins, in `decide`. Rows 0 to 3 sit above every other row.
+First match wins, in `decide`. Rows 1 to 3 sit above every other row.
 
 | # | Surface and condition | Verdict |
 | - | --------------------- | ------- |
-| 0 | prompt · not attached, and the skill is present / attached / skill absent | attach / pass `already-attached` / pass `no-skill` |
-| 1 | context · a code edit with no fresh measurement | prose `end-of-work`, then the rule |
-| 2 | context · otherwise | the rule alone, and `search` from the request tools |
+| 1 | context · a code edit with no fresh measurement | prose `end-of-work`, then `contextRule(health)` |
+| 2 | context · otherwise | `contextRule(health)` alone, and `search` from the request tools |
 | 3 | any other surface · ripwire absent or stale | pass, `no-instrument` |
 | 4 | text · `literal: true` | pass, `plain-text` |
 | 5 | text · pattern under 3 characters | pass, `too-broad` |
@@ -180,10 +172,10 @@ First match wins, in `decide`. Rows 0 to 3 sit above every other row.
 | 23 | read · the first code read of a session, with no lookup | refuse `read` once |
 | 24 | edit, write, subagent, a completed search | pass, observe only |
 
-`Memory` holds the session state: the attach bit, the search bit, the lookups,
-the asked patterns with their outcome, the reads, the edited paths, the code
-edit count, the two measurements, the gates already spent, and the subagent
-count. `remember` is the only writer.
+`Memory` holds the session state: the search bit, the lookups, the asked
+patterns with their outcome, the reads, the edited paths, the code edit count,
+the two measurements, the gates already spent, and the subagent count.
+`remember` is the only writer.
 
 A measurement records the code-edit count it ran at, so `fresh` is a comparison
 of two integers and not a timestamp. A delta older than the last code edit does
@@ -193,45 +185,45 @@ not count, and a doc edit does not invalidate it.
 
 | Surface | Verdicts | Fallback | Test row |
 | ------- | -------- | -------- | -------- |
-| `session.prompt` | attach, pass | a missing skill id gives `no-skill`; a second prompt attaches nothing | `test/search/attach.test.ts` "two prompts, one body; a child attaches once" |
-| `session.context` | prose, pass | a defect is logged and the request stays unchanged | `test/search/catalogue.test.ts` "the rule once, and the shape of the tools" |
+| `session.context` | prose, pass | a defect logs a warning and leaves the request unchanged | `test/search/catalogue.test.ts` "the rule once, and the shape of the tools" |
 | `grep`, `ripgrep` | reroute, pass | every pass leaves the native call unchanged | `test/search/guard.test.ts` "both ids, plain text, too broad, already-asked, absent" |
 | shell `rg`, `git grep`, `grep` | reroute, pass | a pipe, a metacharacter or a second path passes | `test/search/shell.test.ts` "bare `rg` reroutes; `rg | head` passes" |
 | shell landing | refuse once, pass | no code edit, gate spent, measurement fresh | `test/search/land-gate.test.ts` "doc only passes; delta only refuses; both fresh passes" |
 | `read` | refuse once, pass | not code, outside root, lookup, pass, edit, gate spent | `test/search/read-gate.test.ts` "a README passes; the first code read refuses; the second passes" |
 | shell `ripwire` | pass, observe | `--help` and `--version` count nothing | `test/search/land-gate.test.ts` "the two flags record the code-edit count" |
+| `tools.spectre.ripwire` | check, report | `absent` without ripwire, `nothing-edited` on empty code set, exit `2` reported as `gating` | `test/search/report.test.ts` "check runs delta and affected; report audits sessions" |
 | `edit`, `write` | pass, observe | no gate; the record is the only output | `test/search/measure.test.ts` "mutation counts and the record holds the path" |
-| `subagent` | pass, observe | no gate; the count feeds the report | `test/search/measure.test.ts` "a child is counted; a follow-up is not a new child" |
+| `subagent` | pass, observe | no gate; the count feeds the report | `test/search/measure.test.ts` "a child counts once; a follow-up does not" |
 | `spectre_pr` | no row | `execute.before` sees `execute`, not `spectre_pr` | `test/pr/compose.test.ts` "each measurement gets its own validation row" |
 
 The shell row is a tool rename on `tool.execute.before`, not a rewrite in
 `shell.create.before`, because that hook cannot fail. The rename asserts the
-`shell` action and the `read` action, since the renamed tool will run a read.
+`shell` action and the `read` action, since the renamed tool runs a read.
 
 ## The capability table
 
 | Verb | Enforced or taught | Entry point |
 | ---- | ------------------ | ----------- |
-| `--for` | enforced, on the search surface | `spectre_search({ query })`, and the phrase reroute from `grep` or a shell |
+| `--for` | enforced, on the search surface | `spectre_search({ query })`, auto-widening thin `coverage` under `50` with `--limit=40` |
+| `--expand` | tool arm, on the search surface | `spectre_search({ expand })` |
 | `--grep` | enforced, on the search surface | `spectre_search({ pattern })`, and the literal reroute |
 | `--regex` | enforced, on the search surface | `spectre_search({ pattern, kind: "regex" })` |
-| `--quality-delta` | enforced, the act | the landing gate asks for it after the last code edit |
-| `--affected` | enforced, the act | the landing gate asks for it after the last code edit, and prints the paths it watched |
-| `--impact` | taught | the `ripwire-first` map row; no hook can name the symbol a change is about |
-| `--callers` | taught | the edit-contract row, which says one hop and a different question; the leaf carries the verb |
-| `--edit-check` | taught | the map row and the landing message, because the hook cannot name the symbol |
-| `--exemplar` | taught | the map row before a new symbol; the report records whether it ran |
-| `--stray-content` | taught | the branch-cleanup row |
-| `--whereis` | taught | the branch-cleanup row, beside `--stray-content` |
-| `--doctor` | taught, and surfaced by the probe | the `absent` and `stale` notes, and the map row |
-| `--pack-task --partition` | taught | the fan-out row; the report measures it against the subagent count |
-| `--recall` | taught | the session-memory row; the plugin cannot form the task query |
+| `--quality-delta` | enforced, via `check` or shell | `tools.spectre.ripwire({ action: "check" })`, or the shell flag after the last code edit |
+| `--affected` | enforced, via `check` or shell | `tools.spectre.ripwire({ action: "check" })`, or the shell flag after the last code edit |
+| `--impact` | taught | the `contextRule(ready)` contract-edit cue; no hook can name the symbol a change touches |
+| `--uses` | taught | the `contextRule(ready)` contract-edit cue |
+| `--edit-check` | taught | the `contextRule(ready)` contract-edit cue, because the hook cannot name the symbol |
+| `--exemplar` | taught | the `contextRule(ready)` new-symbol cue |
+| `--lego` | taught | the `contextRule(ready)` new-symbol cue |
+| `--stray-content` | taught | the `contextRule(ready)` branch-cleanup cue |
+| `--doctor` | taught, and surfaced by the probe | the `absent` and `stale` notes, and `ripwire/SKILL.md` |
+| `--pack-task --partition` | taught | the `contextRule(ready)` fan-out cue; the report measures it against the subagent count |
 
 No row claims that a hook enforces a verb it cannot see. The landing gate
-enforces that the two commands ran after the last change. It does not claim the
-report was correct. `--edit-check` is the one verb a reviewer will ask about, and
-the answer is prose: the hook sees an edit to a path, not the symbol whose
-contract changed.
+enforces that both measurements ran after the last change. It does not claim the
+report was clean. `--edit-check` is the one verb a reviewer asks about, and the
+answer is prose: the hook sees an edit to a path, not the symbol whose contract
+changed.
 
 ## What the gates do not do
 
@@ -241,13 +233,10 @@ finding from the slice 3 crosscheck, and it stays a decision rather than a
 defect: the plugin has no measurement of a report's quality, so a second refusal
 would block on something it cannot check.
 
-The gate checks the act, not the answer. A model can run
-`ripwire . --quality-delta` and ignore the output, and the gate passes. The
-usage record and the report name that case for a human instead.
-
-`--affected` carries a value the model chooses. The gate does not compare that
-value to the code-edit set. A later version can, because the record already holds
-both.
+The landing gate checks the act, not the answer. A model can run
+`ripwire . --quality-delta` or `tools.spectre.ripwire({ action: "check" })` with
+gating rows and still pass the landing gate. Both `status: "gating"` and the
+usage report surface those details explicitly.
 
 ## The task list
 
@@ -255,16 +244,16 @@ both.
 | - | -------------------- | -------------- |
 | E1 | one pure `decide` over `Ask`, `Memory` and `Env` | `policy.ts`, `test/search/policy.test.ts` |
 | E2 | one `Memory`, one `remember`, one reroute map, caps kept | `state.ts`, `test/search/state.test.ts` |
-| E3 | pure readers for prompt, context, text, shell, read, mutate, subagent, completion | `signals.ts`, `test/search/signals.test.ts` |
-| E4 | one applier per verdict; `context.ts` and `guard.ts` gone | `apply.ts`, `catalogue.ts`, `test/search/apply.test.ts` |
-| E5 | the map attached once per session running as a Spectre agent, child included | `apply.ts`, `agents.ts`, `test/search/attach.test.ts` |
-| E6 | the compact map skill, registered and not a leaf | `skills/definitions/ripwire-first/`, `test/skills/ripwire-first.test.ts` |
+| E3 | pure readers for context, text, shell, read, mutate, subagent, completion | `signals.ts`, `test/search/signals.test.ts` |
+| E4 | one applier per verdict; `context.ts`, `guard.ts`, and `attachDiscovery` gone | `apply.ts`, `catalogue.ts`, `test/search/apply.test.ts` |
+| E5 | moment cues in `contextRule(ready)` only; native sessions carry zero CLI flags | `policy.ts`, `agents.ts`, `test/search/policy.test.ts` |
+| E6 | `spectre_search({ expand })` and `<50` `coverage` auto-widening | `index.ts`, `policy.ts`, `test/search/tool.test.ts` |
 | E7 | the full `ripwire` skill visible in every request | `skills/definitions/ripwire/index.ts`, `test/skills/ripwire-map.test.ts` |
 | E8 | both text ids reroute, a bare shell search reroutes, the rest passes | `apply.ts`, `policy.ts`, `signals.ts`, `test/search/guard.test.ts`, `test/search/shell.test.ts` |
 | E9 | the first code read without a lookup refuses once | `apply.ts`, `policy.ts`, `test/search/read-gate.test.ts` |
-| E10 | the landing gate: one refusal, then the two measurements | `apply.ts`, `policy.ts`, `signals.ts`, `test/search/land-gate.test.ts` |
+| E10 | the landing gate: one refusal, then `check` or the two shell measurements | `apply.ts`, `policy.ts`, `signals.ts`, `test/search/land-gate.test.ts` |
 | E11 | the `execute.after` usage record, durable and bounded | `measure.ts`, `test/search/measure.test.ts` |
-| E12 | `spectre_ripwire_report` names the session and the missing verb | `report.ts`, `test/search/report.test.ts` |
+| E12 | `tools.spectre.ripwire` runs `check` (`--quality-delta` + `--affected`) and `report` | `ripwire.ts`, `test/search/report.test.ts` |
 | E13 | the goal contract, the two playbooks and the PR template name both measurements | `goal/contract.ts`, `playbook-autonomous-run`, `playbook-opening-a-pr`, `pr/fields.ts`, `test/goal/contract.test.ts`, `test/pr/compose.test.ts` |
 | E14 | one decision in the docs, and the old feature note points here | this file, `ripwire-search.md`, `features/README.md` |
 | E15 | one integration test over every decision row, with the absent-binary fallback | `test/ripwire-first.test.ts` |
@@ -272,8 +261,8 @@ both.
 
 ## Open questions
 
-- Does the map alone move the first-touch rate, or is the read gate the only
-  lever? The four eval arms answer it.
+- Do the ready moment cues move the first-touch rate on their own, or is the read
+  gate the primary lever?
 - Does the shell parser survive aliases and shell functions? It cannot see them.
   The question is whether it misses a search that matters.
 - Does the `grep` request rename land in every provider and Code Mode setting?

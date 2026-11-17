@@ -5,6 +5,7 @@ import { isSpectre } from "./agents";
 import { envOf } from "./apply";
 import { decide, type Outcome, type SurfaceAsk } from "./policy";
 import { probe } from "./probe";
+import { rootOf } from "./root";
 import { readAsk, shellAsk, subagentAsk } from "./signals";
 import { memoryOf, remember } from "./state";
 
@@ -156,9 +157,22 @@ const write = (storage: Plugin.Context["storage"], project: string, event: Obser
     }),
   );
 
+export const recordCheck = (
+  storage: Plugin.Context["storage"] | undefined,
+  project: string,
+  session: Session.ID,
+): Effect.Effect<void> =>
+  storage === undefined
+    ? Effect.void
+    : write(storage, project, {
+        session,
+        change: { kind: "ripwire", lookup: true, delta: true, affected: true, fanout: false },
+      });
+
 const SearchInput = Schema.Struct({
   query: Schema.optional(Schema.String),
   pattern: Schema.optional(Schema.String),
+  expand: Schema.optional(Schema.String),
 });
 
 const SearchAnswer = Schema.Struct({
@@ -182,7 +196,7 @@ const readSearch = (event: ToolAfter): Observation | undefined => {
   const answer = Option.getOrUndefined(decodeSearchAnswer(outputOf(event)));
   if (answer === undefined) return undefined;
   const input = Option.getOrUndefined(decodeSearchInput(event.input));
-  const text = input?.pattern ?? input?.query ?? "";
+  const text = input?.expand ?? input?.pattern ?? input?.query ?? "";
   return {
     ask: { surface: "complete", text, outcome: answer.status },
     change: { kind: "search", outcome: answer.status },
@@ -229,7 +243,8 @@ const observe = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (!isSpectre(event.agent)) return;
 
-    const observation = readEvent(event, ctx.location.directory);
+    const root = yield* rootOf(ctx, event.sessionID);
+    const observation = readEvent(event, root);
     if (observation === undefined) return;
 
     const health = yield* Effect.promise(() => probe());

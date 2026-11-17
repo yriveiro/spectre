@@ -31,11 +31,12 @@ principle quoted at something it was never about.
 
 ## The search moment
 
-For a code search, call `spectre_search`. It runs ripwire's `--for`, `--grep` or
-`--regex` and returns the enclosing symbol. For plain text, logs, docs prose,
-fixtures and lock files, call `ripgrep`. `spectre_search` answers a code-shaped
-`ripgrep` call once, and the result says so. Rule 4 allows a second `ripgrep`
-for the same pattern, and `literal: true` always stays on `ripgrep`.
+For a code search, call `spectre_search`. It runs ripwire's `--for`, `--grep`,
+`--regex` or `--expand` and returns the enclosing symbol or body. For plain
+text, logs, docs prose, fixtures and lock files, call `ripgrep`.
+`spectre_search` answers a code-shaped `ripgrep` call once, and the result says
+so. Rule 4 allows a second `ripgrep` for the same pattern, and `literal: true`
+always stays on `ripgrep`.
 
 ## The map
 
@@ -94,7 +95,7 @@ set and neither is obvious from its name:
 
 ## Two ways in
 
-The direct `spectre_search` tool is the front door because the Code Mode catalog renders the 33 MCP tools as none shown. The MCP server is the second hop for the graph verbs, and the `ripgrep` tool is the renamed built-in `grep` tool which already runs ripgrep.
+The direct `spectre_search` tool is the front door because the Code Mode catalog renders the 33 MCP tools as none shown. Before landing code edits, call `tools.spectre.ripwire` in `execute` to run `--quality-delta` and `--affected`. Pass `action: "report"` to audit session usage. The MCP server is the second hop for the graph verbs, and the `ripgrep` tool is the renamed built-in `grep` tool which already runs ripgrep.
 
 **The MCP server**, as `tools.ripwire.*`. Thirty-three tools: thirty-one verbs,
 ranked, with lazy handles, plus `batch` (sixteen read sub-queries in one turn)
