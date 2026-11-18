@@ -3,12 +3,14 @@ import { join } from "node:path";
 import { AbsolutePath } from "@opencode/schema";
 import {
   catalogue,
+  clampModelEffort,
   type Draft,
   directoryOf,
   effortDots,
   read,
   resolve,
   save,
+  sessionDefaultDraft,
 } from "../../tui/data";
 
 const scratch = () => join(Bun.env.TMPDIR ?? "/tmp", `spectre-tui-data-${crypto.randomUUID()}`);
@@ -460,5 +462,221 @@ describe("the page writes through the writer", () => {
     expect(draft.problems[0]).toContain(`${at}/spectre.json`);
     await expect(save(draft)).rejects.toThrow();
     expect(await Bun.file(`${at}/spectre.json`).text()).toBe("{ broken");
+  });
+});
+
+describe("sessionDefaultDraft seeds unconfigured directories from the session model", () => {
+  const catalog = catalogue([
+    {
+      ...row({
+        id: "gemini-4-carbon",
+        family: "gemini-carbon",
+        name: "Gemini 4 Carbon",
+        rungs: ["low", "medium", "high"],
+        cost: [0.5, 2],
+      }),
+      providerID: "github-copilot",
+    },
+    row({
+      id: "sparse-model",
+      family: "sparse",
+      name: "Sparse",
+      rungs: ["low", "high", "max"],
+      cost: [0.2, 0.8],
+    }),
+    row({
+      id: "muse-spark",
+      family: "muse",
+      name: "Muse",
+      rungs: [],
+      cost: [0.1, 0.2],
+    }),
+    row({
+      id: "disabled-one",
+      family: "disabled",
+      name: "Disabled",
+      rungs: ["high"],
+      cost: [1, 1],
+      enabled: false,
+    }),
+    row({
+      id: "deprecated-one",
+      family: "deprecated",
+      name: "Deprecated",
+      rungs: ["high"],
+      cost: [1, 1],
+      status: "deprecated",
+    }),
+    row({
+      id: "toolless-one",
+      family: "toolless",
+      name: "Toolless",
+      rungs: ["high"],
+      cost: [1, 1],
+      tools: false,
+    }),
+  ] as unknown as Parameters<typeof catalogue>[0]);
+
+  const cappedModel = catalog.find((one) => one.id === "gemini-4-carbon");
+  const sparseModel = catalog.find((one) => one.id === "sparse-model");
+  const floorModel = catalog.find((one) => one.id === "muse-spark");
+  const disabledModel = catalog.find((one) => one.id === "disabled-one");
+  const deprecatedModel = catalog.find((one) => one.id === "deprecated-one");
+  const toollessModel = catalog.find((one) => one.id === "toolless-one");
+
+  test("clampModelEffort clamps higher efforts down, steps gaps up, and maps floor models to none", () => {
+    if (!cappedModel || !sparseModel || !floorModel) throw new Error("missing fixture models");
+    expect(clampModelEffort(cappedModel, "minimal")).toBe("low");
+    expect(clampModelEffort(cappedModel, "low")).toBe("low");
+    expect(clampModelEffort(cappedModel, "medium")).toBe("medium");
+    expect(clampModelEffort(cappedModel, "high")).toBe("high");
+    expect(clampModelEffort(cappedModel, "xhigh")).toBe("high");
+    expect(clampModelEffort(cappedModel, "max")).toBe("high");
+    expect(clampModelEffort(cappedModel, undefined)).toBe("low");
+
+    expect(clampModelEffort(sparseModel, "medium")).toBe("high");
+    expect(clampModelEffort(sparseModel, "xhigh")).toBe("max");
+
+    expect(clampModelEffort(floorModel, "low")).toBe("none");
+    expect(clampModelEffort(floorModel, "high")).toBe("none");
+    expect(clampModelEffort(floorModel, "max")).toBe("none");
+    expect(clampModelEffort(floorModel, undefined)).toBe("none");
+  });
+
+  test("binds all 7 default profiles to the session model, turns crosscheck off, and clamps unsupported efforts", async () => {
+    if (!cappedModel) throw new Error("missing cappedModel");
+    const at = scratch();
+    await Bun.write(`${at}/.keep`, "");
+    const blank = await read(at);
+
+    const seeded = sessionDefaultDraft(blank, cappedModel);
+    expect(seeded.source).toBeUndefined();
+    expect(seeded.provider).toBe("github-copilot");
+    expect(seeded.models).toEqual([
+      { alias: "gemini-carbon", ref: "github-copilot/gemini-4-carbon", priority: 1 },
+    ]);
+    expect(seeded.crosscheck).toEqual([]);
+    expect(seeded.profiles).toHaveLength(7);
+    expect(seeded.profiles.every((one) => one.crosscheck === undefined)).toBe(true);
+    expect(seeded.profiles.find((one) => one.name === "mechanical")?.effort).toBe("low");
+    expect(seeded.profiles.find((one) => one.name === "deep")?.effort).toBe("high");
+
+    const resolved = resolve(seeded, catalog);
+    expect(resolved).toHaveLength(7);
+    expect(resolved.every((one) => one.problem === undefined)).toBe(true);
+    expect(resolved.every((one) => one.crosscheck === undefined)).toBe(true);
+    expect(resolved.every((one) => one.crosscheckProblem === undefined)).toBe(true);
+    expect(resolved.find((one) => one.profile === "mechanical")?.ref).toBe(
+      "github-copilot/gemini-4-carbon#low",
+    );
+    expect(resolved.find((one) => one.profile === "deep")?.ref).toBe(
+      "github-copilot/gemini-4-carbon#high",
+    );
+  });
+
+  test("handles floor models with zero rungs cleanly with no resolution errors", async () => {
+    if (!floorModel) throw new Error("missing floorModel");
+    const at = scratch();
+    await Bun.write(`${at}/.keep`, "");
+    const blank = await read(at);
+
+    const seeded = sessionDefaultDraft(blank, floorModel);
+    expect(seeded.source).toBeUndefined();
+    expect(seeded.provider).toBe("opencode-go");
+    expect(seeded.models).toEqual([{ alias: "muse", ref: "opencode-go/muse-spark", priority: 1 }]);
+    expect(seeded.profiles.every((one) => one.effort === "none")).toBe(true);
+    expect(seeded.profiles.every((one) => one.crosscheck === undefined)).toBe(true);
+
+    const resolved = resolve(seeded, catalog);
+    expect(resolved).toHaveLength(7);
+    expect(resolved.every((one) => one.problem === undefined)).toBe(true);
+    expect(resolved.every((one) => one.ref === "opencode-go/muse-spark")).toBe(true);
+    expect(resolved.every((one) => one.rung === undefined)).toBe(true);
+  });
+
+  test("leaves configured, broken, populated, or unusable-model drafts untouched", async () => {
+    if (!cappedModel) throw new Error("missing cappedModel");
+    const at = scratch();
+    await Bun.write(`${at}/.keep`, "");
+    const blank = await read(at);
+
+    const configured = await read(await project());
+    expect(sessionDefaultDraft(configured, cappedModel)).toBe(configured);
+
+    const broken: Draft = { ...blank, problems: ["bad json"] };
+    expect(sessionDefaultDraft(broken, cappedModel)).toBe(broken);
+
+    const populated: Draft = {
+      ...blank,
+      models: [{ alias: "muse", ref: "opencode-go/muse-spark", priority: 1 }],
+    };
+    expect(sessionDefaultDraft(populated, cappedModel)).toBe(populated);
+
+    expect(sessionDefaultDraft(blank, undefined)).toBe(blank);
+    expect(sessionDefaultDraft(blank, disabledModel)).toBe(blank);
+    expect(sessionDefaultDraft(blank, deprecatedModel)).toBe(blank);
+    expect(sessionDefaultDraft(blank, toollessModel)).toBe(blank);
+  });
+});
+
+describe("linked worktree read and save keep the linked worktree clean", () => {
+  const git = async (cwd: string, args: ReadonlyArray<string>) => {
+    const proc = Bun.spawn(
+      [
+        "git",
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ],
+      { cwd, stdout: "pipe", stderr: "pipe" },
+    );
+    const [out, err, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    if (code !== 0) throw new Error(`git ${args.join(" ")} failed (${code}): ${err}`);
+    return out.trim();
+  };
+
+  test("saving from a clean linked worktree writes main/spectre.json so git worktree remove succeeds without --force", async () => {
+    const mainDir = scratch();
+    const linkedDir = scratch();
+    await Bun.write(`${mainDir}/README.md`, "root\n");
+    await git(mainDir, ["init", "-b", "main"]);
+    await git(mainDir, ["add", "README.md"]);
+    await git(mainDir, ["commit", "-m", "init"]);
+    await git(mainDir, ["worktree", "add", "-b", "swarm-worker-1", linkedDir]);
+
+    const blank = await read(linkedDir);
+    expect(blank.source).toBeUndefined();
+
+    const writtenPath = await save({
+      ...blank,
+      provider: "opencode-go",
+      models: [{ alias: "minimax", ref: "opencode-go/minimax-m3.1-flash-free", priority: 1 }],
+      crosscheck: [],
+    });
+
+    const canonicalMain = await git(mainDir, [
+      "rev-parse",
+      "--path-format=absolute",
+      "--show-toplevel",
+    ]);
+    expect(writtenPath).toBe(`${canonicalMain}/spectre.json`);
+    expect(await Bun.file(`${linkedDir}/spectre.json`).exists()).toBe(false);
+    expect(await git(linkedDir, ["status", "--porcelain"])).toBe("");
+
+    const reloaded = await read(linkedDir);
+    expect(reloaded.source).toBe(`${canonicalMain}/spectre.json`);
+    expect(reloaded.provider).toBe("opencode-go");
+    expect(reloaded.models.map((one) => one.alias)).toEqual(["minimax"]);
+
+    await git(mainDir, ["worktree", "remove", linkedDir]);
+    expect(await Bun.file(`${canonicalMain}/spectre.json`).exists()).toBe(true);
   });
 });

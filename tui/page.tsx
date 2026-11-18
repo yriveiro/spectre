@@ -62,6 +62,7 @@ export type PageInput = {
   readonly models: ReadonlyArray<EntryRow>;
   readonly catalogue: ReadonlyArray<Model>;
   readonly source?: string | undefined;
+  readonly sessionModel?: string | undefined;
   readonly draft: Draft;
   readonly tab?: TabId | undefined;
   readonly onTabChange?: ((tab: TabId) => void) | undefined;
@@ -445,10 +446,14 @@ const moveBadges = (input: {
 const providerBar = (input: {
   readonly colors: Palette;
   readonly provider: string | undefined;
+  readonly usingDefaults: boolean;
   readonly available: boolean;
   readonly onOpen: () => void;
 }): JSX.Element => {
-  const label = input.provider ?? `${DEFAULT_PROVIDER} (default)`;
+  const label =
+    input.usingDefaults && input.provider !== undefined
+      ? `${input.provider} (session)`
+      : (input.provider ?? `${DEFAULT_PROVIDER} (default)`);
   const selectValue = input.available ? label : `${label} (unavailable)`;
   const selectWidth = Math.max(16, Math.min(36, selectValue.length + 4));
 
@@ -470,43 +475,133 @@ const providerBar = (input: {
   );
 };
 
-const jevToggleBar = (input: {
+const trimPrefix = (value: string, prefix: string): string =>
+  value.startsWith(prefix) ? value.slice(prefix.length) : value;
+
+const shortModelId = (value: string | undefined): string | undefined => {
+  if (value === undefined) return undefined;
+  const slash = value.indexOf("/");
+  return slash === -1 ? value : value.slice(slash + 1);
+};
+
+const radioSpan = (fg: RGBA, bold: boolean, text: string): JSX.Element =>
+  h("span", { style: { fg, attributes: bold ? TextAttributes.BOLD : TextAttributes.NONE } }, text);
+
+const selectionSpans = (input: {
   readonly colors: Palette;
-  readonly modelName: string;
+  readonly judgeKind: "lexical" | "jev" | undefined;
+  readonly sessionModel: string | undefined;
+  readonly jevModel: string;
+  readonly enabled: boolean;
+  readonly available: boolean;
+}): ReadonlyArray<JSX.Element | string> => {
+  const { colors, available, enabled, judgeKind } = input;
+  const shortSession = shortModelId(input.sessionModel);
+  const sessionLabel = shortSession ? `Session LLM (${shortSession})` : "Session LLM";
+  const shortJev = trimPrefix(input.jevModel, "opencode/");
+  const isLexical = judgeKind === "lexical";
+  const sessionActive = !isLexical && (!available || !enabled);
+  const jevActive = !isLexical && available && enabled;
+  const sessionSpan = radioSpan(
+    sessionActive ? colors.cyan : colors.muted,
+    sessionActive,
+    `${sessionActive ? "(●)" : "( )"} ${sessionLabel}`,
+  );
+  const jevSpan = radioSpan(
+    !available ? colors.disabled : jevActive ? colors.green : colors.muted,
+    jevActive,
+    !available
+      ? `(○) JEV unavailable (${shortJev})`
+      : `${jevActive ? "(●)" : "( )"} JEV (${shortJev})`,
+  );
+  if (!isLexical) return [sessionSpan, "   ", jevSpan];
+  return [sessionSpan, "   ", radioSpan(colors.green, true, "(●) Lexical (BM25)"), "   ", jevSpan];
+};
+
+const selectionBar = (input: {
+  readonly colors: Palette;
+  readonly judgeKind: "lexical" | "jev" | undefined;
+  readonly sessionModel: string | undefined;
+  readonly jevModel: string;
   readonly enabled: boolean;
   readonly available: boolean;
   readonly onToggle: () => void;
-}): JSX.Element => {
-  const { colors, available, enabled } = input;
-  const radioText = !available
-    ? "(○) Disabled (model not available)"
-    : enabled
-      ? "(●) On  ( ) Off"
-      : "( ) On  (●) Off";
-  const radioColor = !available ? colors.disabled : enabled ? colors.green : colors.muted;
-
-  return h(
+}): JSX.Element =>
+  h(
     "box",
     {
       flexDirection: "row",
       justifyContent: "space-between",
+      width: "100%",
+      gap: 1,
       onMouseUp: input.onToggle,
     },
+    h("text", { fg: input.colors.blue, flexShrink: 0, wrapMode: "none" }, "Profile selection:"),
     h(
       "text",
-      { fg: colors.blue, truncate: true, wrapMode: "none" },
-      "Judge: ",
-      h("span", { style: { fg: available ? colors.text : colors.disabled } }, input.modelName),
+      { fg: input.colors.muted, flexShrink: 1, minWidth: 0, wrapMode: "word" },
+      ...selectionSpans(input),
     ),
+  );
+
+type WarningItem = {
+  readonly tone: "warning" | "error";
+  readonly text: string;
+};
+
+const warningsOf = (input: {
+  readonly loading: boolean | undefined;
+  readonly source: string | undefined;
+  readonly directory: string;
+  readonly problems: ReadonlyArray<string>;
+}): ReadonlyArray<WarningItem> => {
+  const items: Array<WarningItem> = [];
+  if (input.loading !== true && input.source === undefined) {
+    items.push({
+      tone: "warning",
+      text: `No ${FILE_NAME} found in ${input.directory} — using defaults from current session model.`,
+    });
+  }
+  for (const problem of input.problems) {
+    items.push({ tone: "error", text: problem });
+  }
+  return items;
+};
+
+const warningsSection = (
+  colors: Palette,
+  warnings: ReadonlyArray<WarningItem>,
+): JSX.Element | null => {
+  if (warnings.length === 0) return null;
+  return h(
+    "box",
+    { flexDirection: "column", width: "100%" },
     h(
       "text",
-      {
-        fg: radioColor,
-        attributes: available && enabled ? TextAttributes.BOLD : TextAttributes.NONE,
-        flexShrink: 0,
-        wrapMode: "none",
-      },
-      radioText,
+      { fg: colors.warning, attributes: TextAttributes.BOLD, wrapMode: "none" },
+      "Warnings:",
+    ),
+    ...warnings.map((item) =>
+      h(
+        "box",
+        { flexDirection: "row", paddingLeft: INDENT, paddingRight: 1, gap: 1, width: "100%" },
+        h(
+          "text",
+          { flexShrink: 0, fg: item.tone === "error" ? colors.red : colors.warning },
+          "• ⚠",
+        ),
+        h(
+          "text",
+          {
+            fg: item.tone === "error" ? colors.red : colors.warning,
+            flexGrow: 1,
+            flexShrink: 1,
+            minWidth: 0,
+            wrapMode: "word",
+          },
+          item.text,
+        ),
+      ),
     ),
   );
 };
@@ -1282,6 +1377,12 @@ export const page = (input: PageInput): JSX.Element => {
   const providerAvailable = isProviderAvailable(input.draft.provider, input.catalogue);
   const usableModels = usableEntryRows(input.models, input.draft.provider);
   const crosscheckList = crosscheckRows(usableModels, input.draft.crosscheck);
+  const warnings = warningsOf({
+    loading: input.loading,
+    source: input.source,
+    directory: input.draft.directory,
+    problems: input.draft.problems,
+  });
 
   const metrics = layoutMetrics({
     terminalWidth: input.terminalWidth ?? context.renderer?.width ?? liveRenderer?.width,
@@ -1610,35 +1711,23 @@ export const page = (input: PageInput): JSX.Element => {
         h("text", { fg: colors.text, attributes: TextAttributes.BOLD }, "Routing"),
         h("text", { fg: colors.teal, onMouseUp: close }, "Esc"),
       ),
-      field(theme, "Config", () => input.source ?? "None yet"),
+      field(theme, "Config", () => input.source ?? "None"),
       show(
         () => input.loading === true,
         () => indentedLine(colors.muted, `Reading ${input.draft.directory}…`),
       ),
-      show(
-        () => input.loading !== true && input.source === undefined,
-        () =>
-          indentedLine(
-            colors.warning,
-            `No ${FILE_NAME} in ${input.draft.directory}. The page writes one when you save.`,
-          ),
-      ),
-      show(
-        () => input.draft.problems.length > 0,
-        () =>
-          h("box", { flexDirection: "column" }, () =>
-            input.draft.problems.map((one) => indentedLine(colors.red, one)),
-          ),
-      ),
       providerBar({
         colors,
         provider: input.draft.provider,
+        usingDefaults: input.source === undefined,
         available: providerAvailable,
         onOpen: openProviderPicker,
       }),
-      jevToggleBar({
+      selectionBar({
         colors,
-        modelName: jevModel,
+        judgeKind: input.draft.judge?.kind,
+        sessionModel: input.sessionModel,
+        jevModel,
         enabled: jevEnabled,
         available: jevAvailable,
         onToggle: () => {
@@ -1653,6 +1742,7 @@ export const page = (input: PageInput): JSX.Element => {
           input.onChange(applied(input.draft, { kind: "judge", enabled: !jevEnabled }));
         },
       }),
+      warningsSection(colors, warnings),
     ),
     tabBar({
       colors,
