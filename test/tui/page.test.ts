@@ -1824,5 +1824,199 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
     expect(
       createdTexts.some((text) => text.includes(`No spectre.json found in ${unconfiguredDir}`)),
     ).toBe(true);
+
+    const emptyModelsDir = join(
+      Bun.env.TMPDIR ?? "/tmp",
+      `spectre-tui-empty-models-${crypto.randomUUID()}`,
+    );
+    await Bun.write(
+      `${emptyModelsDir}/spectre.json`,
+      JSON.stringify({
+        provider: "acme",
+        models: {},
+        priority: [],
+        crosscheck: [],
+        profiles: {
+          worker: { effort: "high", crosscheck: { effort: "high" } },
+        },
+      }),
+    );
+
+    let sidebarRender: ((input: { sessionID: string }) => unknown) | undefined;
+    let emptyModalShown: (() => unknown) | undefined;
+    let emptyCommandRun: (() => void) | undefined;
+    let modelReady = false;
+    let syncCalls = 0;
+
+    const emptyContext = {
+      ...fullContext,
+      location: { directory: emptyModelsDir },
+      data: {
+        ...fullContext.data,
+        location: {
+          ...fullContext.data.location,
+          default: () => ({ directory: emptyModelsDir }),
+          model: {
+            list: () =>
+              modelReady
+                ? [
+                    {
+                      providerID: "acme",
+                      id: "muse-spark-1.3",
+                      modelID: "muse-spark-1.3",
+                      name: "Muse Spark",
+                      family: "muse",
+                      variants: [{ id: "high" }],
+                      cost: [{ input: 0.1, output: 0.2, cache: { read: 0, write: 0 } }],
+                      enabled: true,
+                      status: "active",
+                      capabilities: { tools: true, input: [], output: [] },
+                      time: { released: 0 },
+                      limit: { context: 200_000, output: 32_000 },
+                    },
+                    {
+                      providerID: "acme",
+                      id: "child-only",
+                      modelID: "child-only",
+                      name: "Child Only",
+                      family: "child",
+                      variants: [{ id: "high" }],
+                      cost: [{ input: 0.2, output: 0.4, cache: { read: 0, write: 0 } }],
+                      enabled: true,
+                      status: "active",
+                      capabilities: { tools: true, input: [], output: [] },
+                      time: { released: 0 },
+                      limit: { context: 200_000, output: 32_000 },
+                    },
+                  ]
+                : undefined,
+            sync: async () => {
+              syncCalls += 1;
+            },
+          },
+        },
+        session: {
+          get: (id: string) => {
+            if (id === "ses_main") {
+              return {
+                id: "ses_main",
+                location: { directory: emptyModelsDir },
+                model: { providerID: "acme", id: "muse-spark-1.3" },
+              };
+            }
+            if (id === "ses_child") {
+              return {
+                id: "ses_child",
+                parentID: "ses_main",
+                location: { directory: emptyModelsDir },
+                model: { providerID: "acme", id: "child-only" },
+              };
+            }
+            return undefined;
+          },
+        },
+      },
+      keymap: {
+        layer: (factory: () => { mode?: string; commands: ReadonlyArray<{ run: () => void }> }) => {
+          const built = factory();
+          if (built.mode === "global" && built.commands[0]) {
+            emptyCommandRun = built.commands[0].run;
+          }
+        },
+      },
+      ui: {
+        ...fullContext.ui,
+        dialog: {
+          ...fullContext.ui.dialog,
+          show: (render: () => unknown) => {
+            emptyModalShown = render;
+          },
+        },
+        router: {
+          register: () => () => {},
+          navigate: () => {},
+          current: () => ({ type: "session" as const, sessionID: "ses_child" }),
+        },
+        slot: (claim: { append?: string; render: (input: { sessionID: string }) => unknown }) => {
+          if (claim.append === "sidebar.content") sidebarRender = claim.render;
+          return () => {};
+        },
+      },
+    };
+
+    await mod.default.setup(emptyContext);
+    if (sidebarRender === undefined || emptyCommandRun === undefined) {
+      throw new Error("the entrypoint did not register the sidebar slot and opener");
+    }
+    const renderSidebar = sidebarRender;
+
+    createdTexts.length = 0;
+    createComponent(HostRenderer.Provider, {
+      value: true,
+      get children() {
+        return createComponent(PluginContextProvider, {
+          value: emptyContext as never,
+          get children() {
+            return renderSidebar({ sessionID: "ses_child" }) as never;
+          },
+        });
+      },
+    });
+    await Bun.sleep(20);
+    createdTexts.length = 0;
+    createComponent(HostRenderer.Provider, {
+      value: true,
+      get children() {
+        return createComponent(PluginContextProvider, {
+          value: emptyContext as never,
+          get children() {
+            return renderSidebar({ sessionID: "ses_child" }) as never;
+          },
+        });
+      },
+    });
+    expect(syncCalls).toBeGreaterThan(0);
+    expect(createdTexts).not.toContain("Error");
+
+    modelReady = true;
+    createdTexts.length = 0;
+    createComponent(HostRenderer.Provider, {
+      value: true,
+      get children() {
+        return createComponent(PluginContextProvider, {
+          value: emptyContext as never,
+          get children() {
+            return renderSidebar({ sessionID: "ses_child" }) as never;
+          },
+        });
+      },
+    });
+    expect(createdTexts).not.toContain("Error");
+    expect(createdTexts).toContain("muse");
+    expect(createdTexts).toContain("No models — using defaults");
+
+    createdTexts.length = 0;
+    emptyCommandRun();
+    await Bun.sleep(20);
+    if (emptyModalShown === undefined) throw new Error("the opener did not show the modal");
+    const renderEmptyModal = emptyModalShown;
+    createComponent(HostRenderer.Provider, {
+      value: true,
+      get children() {
+        return createComponent(PluginContextProvider, {
+          value: emptyContext as never,
+          get children() {
+            return renderEmptyModal() as never;
+          },
+        });
+      },
+    });
+    expect(createdTexts).not.toContain("Select default provider");
+    expect(createdTexts).toContain("acme (session)");
+    expect(
+      createdTexts.some((text) =>
+        text.includes(`No models configured in ${emptyModelsDir}/spectre.json`),
+      ),
+    ).toBe(true);
   });
 });

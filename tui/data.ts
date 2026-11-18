@@ -91,30 +91,110 @@ export const defaultProfiles = (enabled = true): ReadonlyArray<Profile> =>
 export const clampModelEffort = (model: Model, effort: string | undefined): string =>
   clampEffort(ladder(model), effort) ?? "none";
 
-export const sessionDefaultDraft = (draft: Draft, sessionModel: Model | undefined): Draft => {
+export const isModelUsable = (
+  model: Model | undefined,
+  provider?: string | undefined,
+): model is Model => {
+  if (model === undefined) return false;
+  if (!model.enabled || model.status === "deprecated" || !model.tools) return false;
+  if (provider !== undefined && model.providerID !== provider) return false;
+  return true;
+};
+
+export const findCatalogModel = (models: ReadonlyArray<Model>, ref: string): Model | undefined =>
+  models.find((one) => {
+    const head = `${one.providerID}/${one.id}`;
+    return ref === head || ref.startsWith(`${head}#`);
+  });
+
+export const usableDraft = (draft: Draft, catalogue: ReadonlyArray<Model>): Draft => {
+  const models = draft.models.filter((entry) => {
+    if (draft.provider !== undefined && !entry.ref.startsWith(`${draft.provider}/`)) {
+      return false;
+    }
+    if (catalogue.length === 0) return true;
+    const found = findCatalogModel(catalogue, entry.ref);
+    if (!isModelUsable(found, draft.provider)) return false;
+    const hash = entry.ref.indexOf("#");
+    const variant = hash === -1 ? undefined : entry.ref.slice(hash + 1);
+    if (variant !== undefined && !found.rungs.includes(variant)) return false;
+    return true;
+  });
+  const held = new Set(models.map((one) => one.alias));
+  const crosscheck = draft.crosscheck.filter((alias) => held.has(alias));
+  const hasInvalidPin =
+    catalogue.length > 0 &&
+    draft.profiles.some((one) => one.pinned !== undefined && !held.has(one.pinned));
   if (
-    draft.source !== undefined ||
-    draft.problems.length > 0 ||
-    draft.models.length > 0 ||
-    sessionModel === undefined ||
-    !sessionModel.enabled ||
-    sessionModel.status === "deprecated" ||
-    !sessionModel.tools
-  ) {
+    models.length === draft.models.length &&
+    crosscheck.length === draft.crosscheck.length &&
+    !hasInvalidPin
+  )
+    return draft;
+  return {
+    ...draft,
+    models,
+    crosscheck,
+    profiles: draft.profiles.map((one) =>
+      one.pinned !== undefined && !held.has(one.pinned) ? { ...one, pinned: undefined } : one,
+    ),
+  };
+};
+
+export type FallbackReason = "missing-file" | "empty-models" | "unavailable-models";
+
+export type EffectiveDraft = {
+  readonly clean: Draft;
+  readonly fallback: FallbackReason | undefined;
+};
+
+const fallbackReasonOf = (draft: Draft, usable: Draft): FallbackReason | undefined => {
+  if (draft.problems.length > 0 || usable.models.length > 0) return undefined;
+  if (draft.source === undefined) return "missing-file";
+  return draft.models.length === 0 ? "empty-models" : "unavailable-models";
+};
+
+export const sessionDefaultDraft = (
+  draft: Draft,
+  sessionModel: Model | undefined,
+  catalogue: ReadonlyArray<Model> = [],
+): Draft => {
+  const usable = usableDraft(draft, catalogue);
+  if (fallbackReasonOf(draft, usable) === undefined || !isModelUsable(sessionModel)) {
     return draft;
   }
   const alias = proposeAlias(sessionModel, []);
   const ref = `${sessionModel.providerID}/${sessionModel.id}`;
   return {
     ...draft,
-    provider: draft.provider ?? sessionModel.providerID,
+    provider: sessionModel.providerID,
     models: [{ alias, ref, priority: 1 }],
     crosscheck: [],
     profiles: draft.profiles.map((profile) => ({
       ...profile,
-      effort: clampModelEffort(sessionModel, profile.effort),
+      effort:
+        profile.effort === undefined && profile.pinned === undefined
+          ? undefined
+          : clampModelEffort(sessionModel, profile.effort),
+      pinned: undefined,
       crosscheck: undefined,
     })),
+  };
+};
+
+export const resolveEffectiveDraft = (
+  draft: Draft,
+  catalogue: ReadonlyArray<Model>,
+  sessionModel: Model | undefined,
+): EffectiveDraft => {
+  const usable = usableDraft(draft, catalogue);
+  const reason = fallbackReasonOf(draft, usable);
+  if (reason === undefined || !isModelUsable(sessionModel)) {
+    return { clean: usable, fallback: undefined };
+  }
+  return {
+    clean: usableDraft(sessionDefaultDraft(draft, sessionModel, catalogue), catalogue),
+    fallback: reason,
   };
 };
 

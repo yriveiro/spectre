@@ -2,6 +2,30 @@ import type { Model, Plugin } from "@opencode/plugin/effect";
 import type { Session } from "@opencode/schema/session";
 import { Effect } from "effect";
 
+const rootModelRef = (
+  ctx: Plugin.Context,
+  initial: {
+    readonly id: Session.ID;
+    readonly parentID?: Session.ID | undefined;
+    readonly model?: { readonly providerID: string; readonly id: string } | undefined;
+  },
+): Effect.Effect<string | undefined> =>
+  Effect.gen(function* () {
+    let current = initial;
+    const seen = new Set<string>([initial.id]);
+    while (current.parentID !== undefined && !seen.has(current.parentID)) {
+      const parentID = current.parentID;
+      seen.add(parentID);
+      const parent = yield* ctx.session
+        .get({ sessionID: parentID })
+        .pipe(Effect.catch(() => Effect.succeed(undefined)));
+      if (parent === undefined) break;
+      current = parent;
+    }
+    const chosen = current.model ?? initial.model;
+    return chosen === undefined ? undefined : `${chosen.providerID}/${chosen.id}`;
+  });
+
 export const sessionState = (
   ctx: Plugin.Context,
   sessionID: Session.ID,
@@ -15,8 +39,8 @@ export const sessionState = (
       .pipe(Effect.catch(() => Effect.succeed(undefined)));
     if (session === undefined) return { directory: undefined, modelRef: undefined };
     const directory = session.location.directory;
-    if (session.model !== undefined)
-      return { directory, modelRef: `${session.model.providerID}/${session.model.id}` };
+    const fromMain = yield* rootModelRef(ctx, session);
+    if (fromMain !== undefined) return { directory, modelRef: fromMain };
     if (typeof ctx.model?.default === "function") {
       const out = yield* ctx.model
         .default({ location: { directory } })

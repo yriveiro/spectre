@@ -54,6 +54,7 @@ export type SessionRow =
   | string
   | {
       readonly directory: string;
+      readonly parentID?: string;
       readonly model?: SessionModel;
     };
 
@@ -88,6 +89,7 @@ export const context = (
         return Effect.succeed({
           id: sessionID,
           location: { directory: at.directory },
+          ...(at.parentID === undefined ? {} : { parentID: at.parentID }),
           ...(at.model === undefined ? {} : { model: at.model }),
         });
       },

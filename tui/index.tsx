@@ -22,15 +22,16 @@ import {
   defaultProfiles,
   directoryOf,
   effortDots,
+  type FallbackReason,
   type Model,
   normalizeCost,
   type Resolution,
   read,
   resolve,
+  resolveEffectiveDraft,
   type SelectionMethod,
   save,
   selectionMethodOf,
-  sessionDefaultDraft,
 } from "./data.ts";
 import { page, type TabId } from "./page.tsx";
 import { h, show } from "./render.ts";
@@ -246,8 +247,15 @@ const sidebarHeader = (input: {
     ),
   );
 
+export const sidebarFallbackLabel = (reason: FallbackReason | undefined): string => {
+  if (reason === "empty-models") return "No models — using defaults";
+  if (reason === "unavailable-models") return "Models unavailable — defaults";
+  return `No ${FILE_NAME} — using defaults`;
+};
+
 const sidebarDefaultsWarning = (
   theme: Plugin.Context["theme"],
+  label: string,
   onOpen: () => void,
 ): ReadonlyArray<JSX.Element> => [
   h("box", { height: 1 }),
@@ -265,7 +273,7 @@ const sidebarDefaultsWarning = (
         flexShrink: 1,
         minWidth: 0,
       },
-      `No ${FILE_NAME} — using defaults`,
+      label,
     ),
   ),
 ];
@@ -277,9 +285,11 @@ export const sidebarSection = (input: {
   readonly onOpenModal: () => void;
   readonly rows: () => ReadonlyArray<Resolution>;
   readonly usingDefaults?: () => boolean;
+  readonly warningText?: () => string;
   readonly method?: () => SelectionMethod["badge"];
 }): JSX.Element => {
   const usingDefaults = () => input.usingDefaults?.() ?? false;
+  const warningText = () => input.warningText?.() ?? `No ${FILE_NAME} — using defaults`;
   const method = () => input.method?.() ?? "Session";
   return show(
     () => input.rows().length > 0,
@@ -307,7 +317,10 @@ export const sidebarSection = (input: {
                   .rows()
                   .map((row) => sidebarRow(input.theme, row, defaults, input.onOpenModal));
                 return defaults
-                  ? [...items, ...sidebarDefaultsWarning(input.theme, input.onOpenModal)]
+                  ? [
+                      ...items,
+                      ...sidebarDefaultsWarning(input.theme, warningText(), input.onOpenModal),
+                    ]
                   : items;
               }),
           ),
@@ -541,19 +554,50 @@ export default Plugin.define({
 
     let activeTab: TabId = "configured";
     let selectedRow = 0;
+    let editingProvider: string | undefined;
 
-    const listed = (sessionID?: string) => {
+    const modelListFor = (sessionID?: string): ReadonlyArray<unknown> | undefined => {
       const location =
         (sessionID === undefined ? undefined : context.data.session.get(sessionID)?.location) ??
         context.location;
-      return context.data.location.model.list(location) ?? [];
+      const atSession = context.data.location.model.list(location);
+      if (atSession !== undefined) return atSession;
+      void context.data.location.model.sync?.(location)?.catch(() => undefined);
+      if (location !== context.location) {
+        const atDefault = context.data.location.model.list(context.location);
+        if (atDefault !== undefined) return atDefault;
+      }
+      return undefined;
+    };
+
+    const listed = (sessionID?: string): ReadonlyArray<unknown> => modelListFor(sessionID) ?? [];
+
+    const mainSessionID = (sessionID?: string): string | undefined => {
+      const target = sessionID ?? routeSession();
+      if (target === undefined) return undefined;
+      if (typeof context.data.session.root === "function") {
+        const root = context.data.session.root(target);
+        if (context.data.session.get(root) !== undefined) return root;
+      }
+      let cursor = target;
+      const seen = new Set<string>();
+      while (!seen.has(cursor)) {
+        seen.add(cursor);
+        const parentID: string | undefined = context.data.session.get(cursor)?.parentID;
+        if (parentID === undefined) return cursor;
+        if (context.data.session.get(parentID) === undefined) return cursor;
+        cursor = parentID;
+      }
+      return target;
     };
 
     const activeModelRef = (sessionID?: string): string | undefined => {
       const target = sessionID ?? routeSession();
-      const fromSession =
-        target === undefined ? undefined : context.data.session.get(target)?.model;
-      if (fromSession !== undefined) return `${fromSession.providerID}/${fromSession.id}`;
+      const rootID = mainSessionID(sessionID);
+      const fromMain = rootID === undefined ? undefined : context.data.session.get(rootID)?.model;
+      if (fromMain !== undefined) return `${fromMain.providerID}/${fromMain.id}`;
+      const fromTarget = target === undefined ? undefined : context.data.session.get(target)?.model;
+      if (fromTarget !== undefined) return `${fromTarget.providerID}/${fromTarget.id}`;
       const fromPrompt = context.ui.model?.current?.();
       if (fromPrompt !== undefined) return `${fromPrompt.providerID}/${fromPrompt.modelID}`;
       return undefined;
@@ -570,10 +614,24 @@ export default Plugin.define({
 
     const effectiveDraft = (
       sessionID?: string,
-    ): { readonly models: ReadonlyArray<Model>; readonly clean: Draft } => {
+      respectProviderEdit = false,
+    ): {
+      readonly models: ReadonlyArray<Model>;
+      readonly clean: Draft;
+      readonly fallback: FallbackReason | undefined;
+    } => {
       const models = catalogue(listed(sessionID));
-      const seeded = sessionDefaultDraft(hold(sessionID), activeCatalogModel(models, sessionID));
-      return { models, clean: usableDraft(seeded, models) };
+      const held = hold(sessionID);
+      const activeModel = activeCatalogModel(models, sessionID);
+      if (
+        respectProviderEdit &&
+        editingProvider !== undefined &&
+        editingProvider !== activeModel?.providerID
+      ) {
+        return { models, clean: usableDraft(held, models), fallback: undefined };
+      }
+      const resolved = resolveEffectiveDraft(held, models, activeModel);
+      return { models, clean: resolved.clean, fallback: resolved.fallback };
     };
 
     const isDirectoryReady = (target: string): boolean => current === target || cache.has(target);
@@ -581,8 +639,12 @@ export default Plugin.define({
     const persist = async (): Promise<void> => {
       const sessionID = routeSession();
       const models = catalogue(listed(sessionID));
-      const seeded = sessionDefaultDraft(draft, activeCatalogModel(models, sessionID));
-      const sanitized = usableDraft(seeded, models);
+      const activeModel = activeCatalogModel(models, sessionID);
+      const sanitized =
+        editingProvider !== undefined && editingProvider !== activeModel?.providerID
+          ? usableDraft(draft, models)
+          : resolveEffectiveDraft(draft, models, activeModel).clean;
+      editingProvider = undefined;
       try {
         const writtenPath = await save(sanitized);
         const committed = copy({ ...sanitized, source: writtenPath, problems: [] });
@@ -618,7 +680,7 @@ export default Plugin.define({
     const renderModal = () => {
       const sessionID = routeSession();
       const target = directoryFor(sessionID);
-      const { models, clean } = effectiveDraft(sessionID);
+      const { models, clean, fallback } = effectiveDraft(sessionID, true);
       const active = configuredProfiles(clean);
       const found = resolve(clean, models);
 
@@ -640,6 +702,7 @@ export default Plugin.define({
         models: allow,
         catalogue: models,
         draft: clean,
+        fallback,
         sessionModel: activeModelRef(sessionID),
         jevAvailable: isJevAvailable(clean, decisionsFor(target)),
         tab: activeTab,
@@ -657,15 +720,23 @@ export default Plugin.define({
           showModal();
         },
         onProviderChange: (next) => {
+          editingProvider = next.provider;
           onChange(next);
-          onSave();
           showModal();
         },
         onSave: () => {
           onSave();
           context.ui.dialog.clear();
         },
-        onClose: () => context.ui.dialog.clear(),
+        onClose: () => {
+          if (editingProvider !== undefined) {
+            editingProvider = undefined;
+            cache.delete(target);
+            if (current === target) current = undefined;
+            setRevision((value) => value + 1);
+          }
+          context.ui.dialog.clear();
+        },
         source: clean.source,
       });
     };
@@ -687,20 +758,21 @@ export default Plugin.define({
     };
 
     const openModal = async (): Promise<void> => {
+      editingProvider = undefined;
       const sessionID = routeSession();
       await ensure(directoryFor(sessionID));
       decisions.clear();
-      const models = catalogue(listed(sessionID));
-      const seeded = sessionDefaultDraft(draft, activeCatalogModel(models, sessionID));
-      if (!isProviderAvailable(seeded.provider, models)) {
+      const { models, clean } = effectiveDraft(sessionID);
+      if (!isProviderAvailable(clean.provider, models)) {
         void providerPicker({
           dialog: context.ui.dialog,
-          draft: seeded,
+          draft: clean,
           models,
         }).then((edit) => {
           if (edit !== undefined) {
-            onChange(applied(seeded, edit));
-            onSave();
+            const next = applied(clean, edit);
+            editingProvider = next.provider;
+            onChange(next);
           }
           showModal();
         });
@@ -749,6 +821,9 @@ export default Plugin.define({
         void ensure(target);
         return [];
       }
+      if (modelListFor(sessionID) === undefined) {
+        return [];
+      }
       const { models, clean } = effectiveDraft(sessionID);
       const active = configuredProfiles(clean);
       if (active.length === 0) return [];
@@ -774,13 +849,25 @@ export default Plugin.define({
           usingDefaults: () => {
             revision();
             const target = directoryFor(input.sessionID);
-            if (!isDirectoryReady(target)) return false;
-            return hold(input.sessionID).source === undefined;
+            if (!isDirectoryReady(target) || modelListFor(input.sessionID) === undefined) {
+              return false;
+            }
+            return effectiveDraft(input.sessionID).fallback !== undefined;
+          },
+          warningText: () => {
+            revision();
+            const target = directoryFor(input.sessionID);
+            if (!isDirectoryReady(target) || modelListFor(input.sessionID) === undefined) {
+              return sidebarFallbackLabel(undefined);
+            }
+            return sidebarFallbackLabel(effectiveDraft(input.sessionID).fallback);
           },
           method: () => {
             revision();
             const target = directoryFor(input.sessionID);
-            if (!isDirectoryReady(target)) return "Session";
+            if (!isDirectoryReady(target) || modelListFor(input.sessionID) === undefined) {
+              return "Session";
+            }
             const { clean } = effectiveDraft(input.sessionID);
             return selectionMethodOf({
               draft: clean,

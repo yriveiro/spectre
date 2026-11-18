@@ -24,6 +24,7 @@ import {
 } from "./controls.tsx";
 import {
   type Draft,
+  type FallbackReason,
   formatCost,
   isCustomProfile,
   isProfileEnabled,
@@ -62,6 +63,7 @@ export type PageInput = {
   readonly models: ReadonlyArray<EntryRow>;
   readonly catalogue: ReadonlyArray<Model>;
   readonly source?: string | undefined;
+  readonly fallback?: FallbackReason | undefined;
   readonly sessionModel?: string | undefined;
   readonly draft: Draft;
   readonly tab?: TabId | undefined;
@@ -552,15 +554,28 @@ type WarningItem = {
 const warningsOf = (input: {
   readonly loading: boolean | undefined;
   readonly source: string | undefined;
+  readonly fallback: FallbackReason | undefined;
   readonly directory: string;
   readonly problems: ReadonlyArray<string>;
 }): ReadonlyArray<WarningItem> => {
   const items: Array<WarningItem> = [];
-  if (input.loading !== true && input.source === undefined) {
-    items.push({
-      tone: "warning",
-      text: `No ${FILE_NAME} found in ${input.directory} — using defaults from current session model.`,
-    });
+  if (input.loading !== true) {
+    if (input.fallback === "empty-models") {
+      items.push({
+        tone: "warning",
+        text: `No models configured in ${input.source ?? FILE_NAME} — using defaults from current session model.`,
+      });
+    } else if (input.fallback === "unavailable-models") {
+      items.push({
+        tone: "warning",
+        text: `No configured models in ${input.source ?? FILE_NAME} are available in this session — using defaults from current session model.`,
+      });
+    } else if (input.fallback === "missing-file" || input.source === undefined) {
+      items.push({
+        tone: "warning",
+        text: `No ${FILE_NAME} found in ${input.directory} — using defaults from current session model.`,
+      });
+    }
   }
   for (const problem of input.problems) {
     items.push({ tone: "error", text: problem });
@@ -1380,6 +1395,7 @@ export const page = (input: PageInput): JSX.Element => {
   const warnings = warningsOf({
     loading: input.loading,
     source: input.source,
+    fallback: input.fallback,
     directory: input.draft.directory,
     problems: input.draft.problems,
   });
@@ -1403,10 +1419,7 @@ export const page = (input: PageInput): JSX.Element => {
         if (edit?.kind === "provider") {
           const next = applied(input.draft, edit);
           if (input.onProviderChange) input.onProviderChange(next);
-          else {
-            input.onChange(next);
-            input.onSave();
-          }
+          else input.onChange(next);
           return;
         }
         input.onChange(edit !== undefined ? applied(input.draft, edit) : input.draft);
@@ -1719,7 +1732,7 @@ export const page = (input: PageInput): JSX.Element => {
       providerBar({
         colors,
         provider: input.draft.provider,
-        usingDefaults: input.source === undefined,
+        usingDefaults: input.fallback !== undefined || input.source === undefined,
         available: providerAvailable,
         onOpen: openProviderPicker,
       }),

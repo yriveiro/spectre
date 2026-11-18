@@ -22,8 +22,10 @@ import {
 } from "../tools/definitions/routing/index.ts";
 import {
   type Draft,
+  findCatalogModel,
   formatConfig,
   formatCost,
+  isModelUsable,
   isProfileEnabled,
   type Model,
   normalizeCost,
@@ -31,6 +33,7 @@ import {
   type Resolution,
   resolve as resolveDraft,
   spendRef,
+  usableDraft,
 } from "./data.ts";
 import { bindKeyboard, field, h, type Palette, palette, show } from "./render.ts";
 
@@ -267,15 +270,7 @@ export const isProviderAvailable = (
   return providers.includes(provider);
 };
 
-export const isModelUsable = (
-  model: Model | undefined,
-  provider?: string | undefined,
-): model is Model => {
-  if (model === undefined) return false;
-  if (!model.enabled || model.status === "deprecated" || !model.tools) return false;
-  if (provider !== undefined && model.providerID !== provider) return false;
-  return true;
-};
+export { isModelUsable, usableDraft };
 
 export const compatibleModelsFor = (
   models: ReadonlyArray<Model>,
@@ -285,46 +280,6 @@ export const compatibleModelsFor = (
   const available = availableProviders(models);
   const filterByProvider = provider !== undefined || available.includes(targetProvider);
   return models.filter((one) => isModelUsable(one, filterByProvider ? targetProvider : undefined));
-};
-
-const findCatalogModel = (models: ReadonlyArray<Model>, ref: string): Model | undefined =>
-  models.find((one) => {
-    const head = refOf(one);
-    return ref === head || ref.startsWith(`${head}#`);
-  });
-
-export const usableDraft = (draft: Draft, catalogue: ReadonlyArray<Model>): Draft => {
-  const models = draft.models.filter((entry) => {
-    if (draft.provider !== undefined && !entry.ref.startsWith(`${draft.provider}/`)) {
-      return false;
-    }
-    if (catalogue.length === 0) return true;
-    const found = findCatalogModel(catalogue, entry.ref);
-    if (!isModelUsable(found, draft.provider)) return false;
-    const hash = entry.ref.indexOf("#");
-    const variant = hash === -1 ? undefined : entry.ref.slice(hash + 1);
-    if (variant !== undefined && !found.rungs.includes(variant)) return false;
-    return true;
-  });
-  const held = new Set(models.map((one) => one.alias));
-  const crosscheck = draft.crosscheck.filter((alias) => held.has(alias));
-  const hasInvalidPin =
-    catalogue.length > 0 &&
-    draft.profiles.some((one) => one.pinned !== undefined && !held.has(one.pinned));
-  if (
-    models.length === draft.models.length &&
-    crosscheck.length === draft.crosscheck.length &&
-    !hasInvalidPin
-  )
-    return draft;
-  return {
-    ...draft,
-    models,
-    crosscheck,
-    profiles: draft.profiles.map((one) =>
-      one.pinned !== undefined && !held.has(one.pinned) ? { ...one, pinned: undefined } : one,
-    ),
-  };
 };
 
 export type SelectedModel = {

@@ -9,6 +9,7 @@ import {
   effortDots,
   read,
   resolve,
+  resolveEffectiveDraft,
   save,
   sessionDefaultDraft,
 } from "../../tui/data";
@@ -616,6 +617,63 @@ describe("sessionDefaultDraft seeds unconfigured directories from the session mo
     expect(sessionDefaultDraft(blank, disabledModel)).toBe(blank);
     expect(sessionDefaultDraft(blank, deprecatedModel)).toBe(blank);
     expect(sessionDefaultDraft(blank, toollessModel)).toBe(blank);
+  });
+
+  test("resolveEffectiveDraft falls back to the session model when spectre.json has empty models or unavailable models", async () => {
+    if (!cappedModel) throw new Error("missing cappedModel");
+
+    const emptyModelsDir = scratch();
+    await Bun.write(
+      `${emptyModelsDir}/spectre.json`,
+      JSON.stringify({
+        provider: "github-copilot",
+        models: {},
+        priority: [],
+        crosscheck: [],
+        profiles: {
+          worker: { effort: "high", crosscheck: { effort: "high" } },
+          deep: { effort: "max", crosscheck: { effort: "max" } },
+        },
+      }),
+    );
+    const emptyDraft = await read(emptyModelsDir);
+    const emptyEffective = resolveEffectiveDraft(emptyDraft, catalog, cappedModel);
+    expect(emptyEffective.fallback).toBe("empty-models");
+    expect(emptyEffective.clean.provider).toBe("github-copilot");
+    expect(
+      resolve(emptyEffective.clean, catalog).map((one) => [one.profile, one.ref, one.problem]),
+    ).toEqual([
+      ["worker", "github-copilot/gemini-4-carbon#high", undefined],
+      ["deep", "github-copilot/gemini-4-carbon#high", undefined],
+    ]);
+
+    const unavailableDir = scratch();
+    await Bun.write(
+      `${unavailableDir}/spectre.json`,
+      JSON.stringify({
+        provider: "opencode-go",
+        models: { beam: "opencode-go/beam-free" },
+        priority: ["beam"],
+        profiles: {
+          mechanical: { effort: "low", model: "beam" },
+          deep: { effort: "max", crosscheck: { effort: "max" } },
+        },
+      }),
+    );
+    const unavailableDraft = await read(unavailableDir);
+    const unavailableEffective = resolveEffectiveDraft(unavailableDraft, catalog, cappedModel);
+    expect(unavailableEffective.fallback).toBe("unavailable-models");
+    expect(unavailableEffective.clean.provider).toBe("github-copilot");
+    expect(
+      resolve(unavailableEffective.clean, catalog).map((one) => [
+        one.profile,
+        one.ref,
+        one.problem,
+      ]),
+    ).toEqual([
+      ["mechanical", "github-copilot/gemini-4-carbon#low", undefined],
+      ["deep", "github-copilot/gemini-4-carbon#high", undefined],
+    ]);
   });
 });
 
