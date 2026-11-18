@@ -433,7 +433,7 @@ export const opener = (
 });
 
 export default Plugin.define({
-  id: "spectre.routing",
+  id: "spectre.ui",
   setup: async (context) => {
     const defaultDirectory = context.data.location.default().directory;
     const initial = context.location?.directory ?? defaultDirectory;
