@@ -4,22 +4,26 @@ import type { Route } from "@opencode/plugin/tui/context";
 import { Effect, Option, Schema } from "effect";
 import {
   candidates,
+  clampEffort,
   crosscheckOf,
   DEFAULT_AGENT,
   DEFAULT_PROFILES,
-  FILE_NAME,
+  inheritedConfigPath,
   isDefaultProfile,
+  JEV_MODEL,
   type JudgeConfig,
   type Known,
   known,
+  ladder,
   loadProject,
   modelNames,
   priorityOf,
-  projectPath,
+  proposeAlias,
   resolveProfile,
   type Pick as Spent,
   serialise,
   writeConfig,
+  writePath,
 } from "../tools/definitions/routing/index.ts";
 
 export { DEFAULT_PROFILES, isDefaultProfile };
@@ -83,6 +87,55 @@ export const defaultProfiles = (enabled = true): ReadonlyArray<Profile> =>
     pinned: undefined,
     enabled,
   }));
+
+export const clampModelEffort = (model: Model, effort: string | undefined): string =>
+  clampEffort(ladder(model), effort) ?? "none";
+
+export const sessionDefaultDraft = (draft: Draft, sessionModel: Model | undefined): Draft => {
+  if (
+    draft.source !== undefined ||
+    draft.problems.length > 0 ||
+    draft.models.length > 0 ||
+    sessionModel === undefined ||
+    !sessionModel.enabled ||
+    sessionModel.status === "deprecated" ||
+    !sessionModel.tools
+  ) {
+    return draft;
+  }
+  const alias = proposeAlias(sessionModel, []);
+  const ref = `${sessionModel.providerID}/${sessionModel.id}`;
+  return {
+    ...draft,
+    provider: draft.provider ?? sessionModel.providerID,
+    models: [{ alias, ref, priority: 1 }],
+    crosscheck: [],
+    profiles: draft.profiles.map((profile) => ({
+      ...profile,
+      effort: clampModelEffort(sessionModel, profile.effort),
+      crosscheck: undefined,
+    })),
+  };
+};
+
+export type SelectionMethod =
+  | { readonly kind: "jev"; readonly badge: "JEV"; readonly model: string }
+  | { readonly kind: "lexical"; readonly badge: "Lexical" }
+  | { readonly kind: "session"; readonly badge: "Session"; readonly model: string | undefined };
+
+export const selectionMethodOf = (input: {
+  readonly draft: Draft;
+  readonly jevAvailable: boolean;
+  readonly sessionModel?: string | undefined;
+}): SelectionMethod => {
+  if (input.draft.judge?.kind === "lexical") {
+    return { kind: "lexical", badge: "Lexical" };
+  }
+  if (input.jevAvailable && input.draft.judge !== undefined) {
+    return { kind: "jev", badge: "JEV", model: input.draft.judge.model ?? JEV_MODEL };
+  }
+  return { kind: "session", badge: "Session", model: input.sessionModel };
+};
 
 export type Resolution = {
   readonly profile: string;
@@ -159,7 +212,7 @@ export const directoryOf = (input: {
 export const read = async (directory: string): Promise<Draft> => {
   // The path is read separately because a file that does not decode contributes
   // no source, and the page still has to name the file it could not read.
-  const source = await Effect.runPromise(projectPath(directory)).catch(() => undefined);
+  const source = await Effect.runPromise(inheritedConfigPath(directory)).catch(() => undefined);
   const found = await Effect.runPromise(loadProject(directory));
   const ordered = priorityOf(found.tables.models, found.tables.priority);
   const models = ordered.ranked.map((one) => ({
@@ -335,13 +388,13 @@ const written = (draft: Draft): Parameters<typeof writeConfig>[1] => ({
 
 export const formatConfig = (draft: Draft): string => serialise(written(draft)).trimEnd();
 
-export const save = (draft: Draft): Promise<void> => {
-  const path = `${draft.directory}/${FILE_NAME}`;
-  return preserved(path).then((kept) => {
-    const rest = { ...kept };
-    delete rest.setup;
-    delete rest.judge;
-    const file = { ...rest, ...written(draft) } as Parameters<typeof writeConfig>[1];
-    return Effect.runPromise(writeConfig(path, file));
-  });
+export const save = async (draft: Draft): Promise<string> => {
+  const path = await Effect.runPromise(writePath(draft.directory));
+  const kept = await preserved(draft.source ?? path);
+  const rest = { ...kept };
+  delete rest.setup;
+  delete rest.judge;
+  const file = { ...rest, ...written(draft) } as Parameters<typeof writeConfig>[1];
+  await Effect.runPromise(writeConfig(path, file));
+  return path;
 };

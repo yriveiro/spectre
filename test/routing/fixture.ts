@@ -44,11 +44,20 @@ export const useScratch = () => {
   };
 };
 
-/**
- * The directories the fake sessions are in. A test mutates the record between
- * two calls to move a session, which is what `session.move` does to the row.
- */
-export type Sessions = Record<string, string>;
+export type SessionModel = {
+  readonly providerID: string;
+  readonly id: string;
+  readonly variant?: string;
+};
+
+export type SessionRow =
+  | string
+  | {
+      readonly directory: string;
+      readonly model?: SessionModel;
+    };
+
+export type Sessions = Record<string, SessionRow>;
 
 export const context = (
   directory: string,
@@ -57,17 +66,30 @@ export const context = (
   sessions: Sessions = {},
   decide: () => Effect.Effect<unknown, unknown> = () =>
     Effect.fail({ message: "Model not found: opencode/jev-1.13-free" }),
+  defaultModel?: SessionModel,
 ) =>
   ({
     location: { directory },
-    model: { list },
+    model: {
+      list,
+      ...(defaultModel === undefined
+        ? {}
+        : {
+            default: () => Effect.succeed({ location: {}, data: defaultModel }),
+          }),
+    },
     experimental: { generate: { decisions: decide } },
     session: {
       get: ({ sessionID }: { readonly sessionID: string }) => {
         const at = sessions[sessionID];
-        return at === undefined
-          ? Effect.fail(new Error(`no session ${sessionID}`))
-          : Effect.succeed({ id: sessionID, location: { directory: at } });
+        if (at === undefined) return Effect.fail(new Error(`no session ${sessionID}`));
+        if (typeof at === "string")
+          return Effect.succeed({ id: sessionID, location: { directory: at } });
+        return Effect.succeed({
+          id: sessionID,
+          location: { directory: at.directory },
+          ...(at.model === undefined ? {} : { model: at.model }),
+        });
       },
     },
   }) as unknown as Plugin.Context;

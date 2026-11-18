@@ -44,12 +44,27 @@ export type Palette = {
   readonly yellow: RGBA;
   readonly warning: RGBA;
   readonly red: RGBA;
+  readonly jsonKey: RGBA;
+  readonly jsonString: RGBA;
+  readonly jsonNumber: RGBA;
+  readonly jsonKeyword: RGBA;
+  readonly jsonPunctuation: RGBA;
 };
 
-/**
- * Resolves the modal palette from the configured host theme tokens, with safe
- * fallbacks only when a test mock omits optional syntax or border groups.
- */
+const jsonPalette = (dialogTheme: ResolvedTheme) => ({
+  jsonKey: dialogTheme.syntax?.variable ?? RGBA.fromHex("#8fbcbb"),
+  jsonString:
+    dialogTheme.syntax?.string ??
+    dialogTheme.text.feedback?.success?.base ??
+    RGBA.fromHex("#a3be8c"),
+  jsonNumber:
+    dialogTheme.syntax?.number ??
+    dialogTheme.text.feedback?.warning?.base ??
+    RGBA.fromHex("#d08770"),
+  jsonKeyword: dialogTheme.syntax?.keyword ?? RGBA.fromHex("#81a1c1"),
+  jsonPunctuation: dialogTheme.syntax?.punctuation ?? dialogTheme.text.muted,
+});
+
 export const palette = (
   baseTheme: ResolvedTheme,
   dialogTheme: ResolvedTheme = baseTheme,
@@ -108,10 +123,10 @@ export const palette = (
       dialogTheme.text.feedback?.error?.base ??
       dialogTheme.text.action?.destructive?.base ??
       RGBA.fromHex("#bf616a"),
+    ...jsonPalette(dialogTheme),
   };
 };
 
-/** An element, with its props and its children. */
 export const h = (
   tag: string,
   props?: Record<string, unknown> | null,

@@ -38,7 +38,6 @@ const globalConfigDir: Effect.Effect<string | undefined> = Effect.sync((): strin
   return home === undefined ? undefined : join(home, ".config", "opencode");
 });
 
-/** The one file this directory contributes: the canonical name when it is there. */
 const oneFile = (directory: string): Effect.Effect<string | undefined> =>
   Effect.gen(function* () {
     const canonical = join(directory, FILE_NAME);
@@ -47,28 +46,94 @@ const oneFile = (directory: string): Effect.Effect<string | undefined> =>
     return (yield* Effect.promise(() => Bun.file(legacy).exists())) ? legacy : undefined;
   });
 
-/**
- * The project's own file, or undefined when the project has none.
- *
- * The tool merges the global file with the project's. The page edits, and it
- * edits the project's file, so it needs to know which file that is without the
- * global one folded in.
- */
-export const projectPath = (directory: string): Effect.Effect<string | undefined> =>
-  oneFile(directory);
+const gitOut = async (cwd: string, args: ReadonlyArray<string>): Promise<string | undefined> => {
+  let proc: Bun.Subprocess<"pipe", "pipe", "pipe">;
+  try {
+    proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  } catch {
+    return undefined;
+  }
+  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  return code === 0 ? out.trim() : undefined;
+};
 
-/**
- * Lowest precedence first: the global file, then the project's. One file per
- * directory, so a directory holding both is read as the canonical one says and
- * the other is ignored — which one is a fact the tool reports through its
- * sources, not one a reader has to guess.
- */
+const parseWorktreeBlock = (block: string) => {
+  let directory: string | undefined;
+  let branch: string | undefined;
+  let bare = false;
+  for (const line of block.split("\n")) {
+    if (line.startsWith("worktree ")) directory = line.slice("worktree ".length).trim();
+    else if (line === "bare") bare = true;
+    else if (line.startsWith("branch refs/heads/"))
+      branch = line.slice("branch refs/heads/".length).trim();
+  }
+  return directory === undefined ? undefined : { directory, branch, bare };
+};
+
+const parseMainWorktree = (porcelain: string): string | undefined => {
+  const rows = porcelain
+    .trim()
+    .split("\n\n")
+    .flatMap((block) => {
+      const parsed = parseWorktreeBlock(block);
+      return parsed === undefined ? [] : [parsed];
+    });
+  return (
+    rows.find((one) => one.branch === "main")?.directory ?? rows.find((one) => !one.bare)?.directory
+  );
+};
+
+const linkedWorktreeMain = async (directory: string): Promise<string | undefined> => {
+  if (!(await Bun.file(join(directory, ".git")).exists())) return undefined;
+  const [top, porcelain] = await Promise.all([
+    gitOut(directory, ["rev-parse", "--path-format=absolute", "--show-toplevel"]),
+    gitOut(directory, ["worktree", "list", "--porcelain"]),
+  ]);
+  if (top === undefined || porcelain === undefined) return undefined;
+  const mainDir = parseMainWorktree(porcelain);
+  return mainDir === undefined || mainDir === top ? undefined : mainDir;
+};
+
+const hasLocalConfigChanges = async (directory: string): Promise<boolean> => {
+  const status = await gitOut(directory, ["status", "--porcelain", "--", FILE_NAME, LEGACY_NAME]);
+  return status !== undefined && status !== "";
+};
+
+const resolveProjectFile = (directory: string): Effect.Effect<string | undefined> =>
+  Effect.gen(function* () {
+    const mainDir = yield* Effect.promise(() => linkedWorktreeMain(directory));
+    if (mainDir === undefined) return yield* oneFile(directory);
+    const [localFile, mainFile, localDirty] = yield* Effect.all(
+      [
+        oneFile(directory),
+        oneFile(mainDir),
+        Effect.promise(() => hasLocalConfigChanges(directory)),
+      ],
+      { concurrency: "unbounded" },
+    );
+    if (localFile !== undefined && localDirty) return localFile;
+    return mainFile ?? localFile;
+  });
+
+export const writePath = (directory: string): Effect.Effect<string> =>
+  Effect.gen(function* () {
+    const mainDir = yield* Effect.promise(() => linkedWorktreeMain(directory));
+    if (mainDir === undefined) return join(directory, FILE_NAME);
+    if (yield* Effect.promise(() => hasLocalConfigChanges(directory))) {
+      return join(directory, FILE_NAME);
+    }
+    return join(mainDir, FILE_NAME);
+  });
+
+export const inheritedConfigPath = (directory: string): Effect.Effect<string | undefined> =>
+  resolveProjectFile(directory);
+
 export const configPaths = (directory: string): Effect.Effect<ReadonlyArray<string>> =>
   Effect.gen(function* () {
     const global = yield* globalConfigDir;
     const paths: Array<string | undefined> = [
       global === undefined ? undefined : yield* oneFile(global),
-      yield* oneFile(directory),
+      yield* resolveProjectFile(directory),
     ];
     return paths.filter((one): one is string => one !== undefined);
   });

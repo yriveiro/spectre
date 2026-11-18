@@ -1,46 +1,29 @@
-import type { Plugin, Tool } from "@opencode/plugin/effect";
+import type { Model, Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect, Schema } from "effect";
 import { agentIds } from "../../../agents";
-import { candidates, known } from "./catalogue";
+import { candidates, known, ladder } from "./catalogue";
 import { check } from "./check";
-import { hostCatalogue, sessionDirectory } from "./host";
+import { clampEffort } from "./effort";
+import { hostCatalogue, sessionState } from "./host";
 import { jevJudge } from "./jev";
 import { type Judge, lexicalJudge, surface, type Verdict } from "./judge";
 import { decode, load } from "./load";
-import { FILE_NAME, projectPath } from "./locate";
+import { FILE_NAME, inheritedConfigPath, writePath } from "./locate";
 import { crosscheckOf, priorityOf } from "./order";
 import { decide } from "./policy";
 import { resolve } from "./resolve";
 import {
   type Candidate,
   DEFAULT_AGENT,
+  DEFAULT_PROFILES,
   type Excluded as ExcludedRow,
   type File,
   type Pick,
+  type Profile as ProfileSpec,
+  type Resolution,
   type Tables,
 } from "./types";
-import { writeConfig } from "./write";
-
-/**
- * The routing tool, and the only surface a session reads.
- *
- * The output is a union of four structs, so an outcome carries the fields it
- * has and no others. `resolved` is a model to spend, `setup` is a repository
- * with no config, `declined` is the stored answer "no", and `problems` is a
- * config that cannot be routed on.
- *
- * The config is read from the invoking session's directory on every call, so an
- * edit made mid-session routes on the edit, and a session that moved into a
- * worktree routes on that worktree's file. The policy is `resolve.ts`, and the
- * validation is `check.ts`.
- *
- * The judge is optional, and a `resolved` answer says which path chose the
- * profile. The judge names a profile and never a model, so it cannot change
- * what the resolver spent. A judge that is absent, quiet or broken is a
- * `skipped` answer and not a failed call.
- *
- * @see features/routing.md
- */
+import { proposeAlias, writeConfig } from "./write";
 
 const Input = Schema.Struct({
   profile: Schema.optional(Schema.String).annotate({
@@ -144,18 +127,21 @@ const Judged = Schema.Union([
 const Resolved = Schema.Struct({
   status: Schema.Literals(["resolved"]),
   profiles: Schema.Array(Profile),
-  /** The spendable allowlist, in `priority` order. */
-  models: Schema.Array(Row),
-  /**
-   * The models that may serve a crosscheck, in fallback order. Each row's
-   * `priority` is its place in the allowlist, not its place here.
-   */
-  crosscheck: Schema.Array(Row),
+  models: Schema.Array(Row).annotate({
+    description: "The spendable allowlist, in `priority` order.",
+  }),
+  crosscheck: Schema.Array(Row).annotate({
+    description:
+      "The models that may serve a crosscheck, in fallback order. Each row's `priority` is its place in the allowlist, not its place here.",
+  }),
   sources: Schema.Array(Schema.String),
-  /** The names the caller asked for. Empty on a whole-table call. */
-  asked: Schema.Array(Schema.String),
-  /** The judge's answer, or why it was not asked. Present on every answer. */
-  judge: Judged,
+  asked: Schema.Array(Schema.String).annotate({
+    description: "The names the caller asked for. Empty on a whole-table call.",
+  }),
+  judge: Judged.annotate({
+    description: "The judge's answer, or why it was not asked. Present on every answer.",
+  }),
+  warnings: Schema.optional(Schema.Array(Schema.String)),
 });
 
 const StarterProfile = Schema.Struct({
@@ -364,6 +350,160 @@ const answer = (mode: "accepted" | "declined", path: string): Effect.Effect<stri
     });
   });
 
+const asRow = (one: Candidate, priority: number): typeof Row.Type => ({
+  name: one.alias,
+  model: one.ref,
+  priority,
+  family: one.model.family,
+  rungs: [...one.model.rungs],
+  cost: { input: one.model.costInput, output: one.model.costOutput },
+});
+
+const toProfileRow = (
+  name: string,
+  match: string | undefined,
+  effort: string | undefined,
+  resolution: Resolution,
+): typeof Profile.Type => ({
+  name,
+  match,
+  effort,
+  agent: resolution.agent,
+  model: spent(resolution.primary),
+  crosscheck: resolution.crosscheck === undefined ? undefined : spent(resolution.crosscheck),
+  crosscheckProblem: resolution.crosscheckProblem,
+  excluded: resolution.excluded.map(notThis),
+});
+
+type JudgePassInput = {
+  readonly ctx: Plugin.Context;
+  readonly tables: Tables;
+  readonly shown: ReadonlyArray<typeof Profile.Type>;
+  readonly kept: ReadonlyArray<Candidate>;
+  readonly input: { readonly task?: string | undefined; readonly profile?: string | undefined };
+  readonly clamp?: ((effort: string | undefined) => string | undefined) | undefined;
+};
+
+const escalateChoice = (
+  args: JudgePassInput,
+  judgement: Extract<typeof Judged.Type, { readonly status: "used" }>,
+) => {
+  const { profile } = judgement;
+  const choice = decide(
+    { profile, confidence: judgement.confidence, alternatives: judgement.alternatives },
+    args.tables.profiles,
+    args.tables.judge?.threshold,
+  );
+  const entry = args.tables.profiles[profile];
+  if (choice?.escalated !== true || entry === undefined) return undefined;
+  const nextEffort = args.clamp === undefined ? choice.effort : args.clamp(choice.effort);
+  const resolved = resolve(
+    profile,
+    { ...entry, effort: args.clamp === undefined ? nextEffort : (nextEffort ?? "none") },
+    args.kept,
+    DEFAULT_AGENT,
+    args.tables.crosscheck,
+  );
+  if (resolved.problem !== undefined || resolved.resolution === undefined) return undefined;
+  const row = toProfileRow(profile, entry.match, nextEffort, resolved.resolution);
+  return {
+    table: args.shown.map((item) => (item.name === profile ? row : item)),
+    judgement: {
+      ...judgement,
+      ...(nextEffort !== entry.effort ? { escalated: true, effort: nextEffort } : {}),
+      alternatives: choice.alternatives,
+    },
+  };
+};
+
+const judgeAndEscalate = (args: JudgePassInput) =>
+  Effect.gen(function* () {
+    const raw = yield* ask(judgeFor(args.ctx, args.tables), args.input.task, args.input.profile);
+    if (raw.status !== "used") return { table: [...args.shown], judgement: raw };
+    const escalated = escalateChoice(args, raw);
+    const base = escalated?.judgement ?? raw;
+    const table = escalated?.table ?? [...args.shown];
+    const alternatives = (base.alternatives ?? []).filter((one) => one.profile !== base.profile);
+    return { table, judgement: { ...base, alternatives } };
+  });
+
+const sessionCandidate = (
+  models: ReadonlyArray<Model.Info>,
+  modelRef: string,
+): Candidate | undefined => {
+  const foundModel = models
+    .map(known)
+    .find(
+      (one) =>
+        `${one.providerID}/${one.id}` === modelRef &&
+        one.enabled &&
+        one.status !== "deprecated" &&
+        one.tools,
+    );
+  if (foundModel === undefined) return undefined;
+  const alias = proposeAlias(foundModel, []);
+  return candidates([{ alias, ref: modelRef, pinned: undefined }], [foundModel]).kept[0];
+};
+
+const resolveSessionDefaults = (args: {
+  readonly ctx: Plugin.Context;
+  readonly directory: string;
+  readonly modelRef: string | undefined;
+  readonly tables: Tables;
+  readonly input: { readonly task?: string | undefined; readonly profile?: string | undefined };
+}) =>
+  Effect.gen(function* () {
+    if (args.modelRef === undefined) return undefined;
+    const listed = yield* hostCatalogue(args.ctx);
+    const candidate = sessionCandidate(listed.models, args.modelRef);
+    if (candidate === undefined) return undefined;
+    const modelLadder = ladder(candidate.model);
+    const clamp = (effort: string | undefined) => clampEffort(modelLadder, effort);
+    const profiles: Readonly<Record<string, ProfileSpec>> = Object.fromEntries(
+      Object.entries(DEFAULT_PROFILES).map(([name, entry]) => [
+        name,
+        { ...entry, crosscheck: undefined, effort: clamp(entry.effort) },
+      ]),
+    );
+    const defaultShown = Object.entries(profiles).flatMap(([name, entry]) => {
+      const one = resolve(
+        name,
+        { ...entry, effort: entry.effort ?? "none" },
+        [candidate],
+        DEFAULT_AGENT,
+        [],
+      );
+      return one.resolution === undefined
+        ? []
+        : [toProfileRow(name, entry.match, entry.effort, one.resolution)];
+    });
+    const { table, judgement } = yield* judgeAndEscalate({
+      ctx: args.ctx,
+      tables: { ...args.tables, crosscheck: [], profiles },
+      shown: defaultShown,
+      kept: [candidate],
+      input: args.input,
+      clamp,
+    });
+    return {
+      output: {
+        status: "resolved" as const,
+        profiles:
+          args.input.profile === undefined
+            ? table
+            : table.filter((one) => one.name === args.input.profile),
+        models: [asRow(candidate, 1)],
+        crosscheck: [],
+        sources: [],
+        asked: args.input.profile === undefined ? [] : [args.input.profile],
+        judge: judgement,
+        warnings: [
+          `No ${FILE_NAME} found in ${args.directory} — using defaults from current session model.`,
+        ],
+      },
+    };
+  });
+
 export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Output> => ({
   name: "routing",
   description: DESCRIPTION,
@@ -372,24 +512,19 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
   options: {
     namespace: "spectre",
     codemode: true,
+    pinned: true,
     permission: "read",
   },
   execute: (input, context) =>
     Effect.gen(function* () {
-      // The session owns the directory. A project session that moved into a
-      // worktree reads that worktree's config on the next call, which is the
-      // call that routes the next task. A session that cannot be read is a
-      // problem, not a reason to read the plugin's directory.
-      const directory = yield* sessionDirectory(ctx, context.sessionID);
+      const state = yield* sessionState(ctx, context.sessionID);
+      const { directory } = state;
       if (directory === undefined)
         return failed([
           `the session ${context.sessionID} could not be read, so the directory that holds its ${FILE_NAME} is unknown`,
         ]);
-      const path = `${directory}/${FILE_NAME}`;
+      const path = yield* writePath(directory);
 
-      // The setup action writes one file and then answers from what it wrote.
-      // It refuses when routing is already configured, because a second answer
-      // would replace a working config with a marker or a starter set.
       if (input.setup !== undefined) {
         const before = yield* load(directory);
         if (before.sources.length > 0)
@@ -402,16 +537,20 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
 
       const found = yield* load(directory);
 
-      // No routing config: the project has no file, and the files that do
-      // exist, such as a global dictionary, set no allowlist and no profiles.
-      // A project file is an answer even when it is an empty one, so only its
-      // absence asks the setup question.
       const unconfigured =
-        (yield* projectPath(directory)) === undefined &&
+        (yield* inheritedConfigPath(directory)) === undefined &&
         found.tables.setup === undefined &&
         Object.keys(found.tables.models).length === 0 &&
         !found.configuredProfiles;
-      if (unconfigured) {
+      if (unconfigured && input.setup === undefined) {
+        const fallback = yield* resolveSessionDefaults({
+          ctx,
+          directory,
+          modelRef: state.modelRef,
+          tables: found.tables,
+          input,
+        });
+        if (fallback !== undefined) return fallback;
         const set = yield* starter;
         if (set.problem !== undefined) return failed([set.problem]);
         if (set.file === undefined) return failed([`${path}: the starter set could not be read`]);
@@ -426,8 +565,6 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
         };
       }
 
-      // The user said no before. The marker is the answer, so the question does
-      // not come again and this repository routes on no model.
       if (found.tables.setup !== undefined)
         return {
           output: {
@@ -452,14 +589,6 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
       const rankOf = new Map(ordered.ranked.map((one) => [one.alias, one.priority]));
       const kept = candidates(allowed, listed.models.map(known));
 
-      const asRow = (one: Candidate, priority: number): typeof Row.Type => ({
-        name: one.alias,
-        model: one.ref,
-        priority,
-        family: one.model.family,
-        rungs: [...one.model.rungs],
-        cost: { input: one.model.costInput, output: one.model.costOutput },
-      });
       const modelRows = kept.kept.map((one) => asRow(one, rankOf.get(one.alias) ?? 0));
       const crosscheckOrder = crosscheckOf(
         found.tables.models,
@@ -467,18 +596,11 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
         ordered.ranked.map((one) => one.alias),
       );
       const byAlias = new Map(kept.kept.map((one) => [one.alias, one]));
-      // The array carries the fallback order. The row's `priority` stays the
-      // model's place in the allowlist, so `priority` means one thing in both
-      // arrays and a reader never has to ask which order it names.
       const crosscheckRows = crosscheckOrder.listed.flatMap((alias) => {
         const one = byAlias.get(alias);
         return one === undefined ? [] : [asRow(one, rankOf.get(alias) ?? 0)];
       });
 
-      // A profile or agent problem does not make the model order wrong. When
-      // every model and the priority order are valid, a problems answer still
-      // carries the order, so a reader can see what the resolver will read
-      // while fixing the profile.
       const modelsValid =
         found.problems.length === 0 &&
         listed.problem === undefined &&
@@ -494,10 +616,6 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
           crosscheckValid ? crosscheckRows : undefined,
         );
 
-      // Every problem is collected before the answer is built, because one bad
-      // row withholds the whole profile table. The problems from `candidates`
-      // are only added when `check` found none: the two report the same bad
-      // ref, and one line per mistake is the rule.
       const lines = [...found.problems];
       if (listed.problem !== undefined) lines.push(listed.problem);
       lines.push(...checked.problems);
@@ -516,92 +634,18 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
           continue;
         }
         if (one.resolution === undefined) continue;
-        shown.push({
-          name,
-          match: entry.match,
-          effort: entry.effort,
-          agent: one.resolution.agent,
-          model: spent(one.resolution.primary),
-          crosscheck:
-            one.resolution.crosscheck === undefined ? undefined : spent(one.resolution.crosscheck),
-          crosscheckProblem: one.resolution.crosscheckProblem,
-          excluded: one.resolution.excluded.map(notThis),
-        });
+        shown.push(toProfileRow(name, entry.match, entry.effort, one.resolution));
       }
       if (found.configuredProfiles || shown.length === 0) lines.push(...profileProblems);
       if (lines.length > 0) return failedWithOrder(lines);
 
-      // The judge is asked last, so a config with a problem never spends a
-      // request.
-      let judgement = yield* ask(judgeFor(ctx, found.tables), input.task, input.profile);
-
-      // An unsure judge plays safe.
-      //
-      // A probability below the threshold means the judge does not know which
-      // profile this is, and not knowing is a reason to spend more rather than
-      // less: the profile the judge named is spent one step above its own
-      // effort. The threshold is measured, not guessed. On the routing corpus
-      // no hit sits below 0.7 and the one low-confidence mistake sits at 0.46,
-      // so this rule catches that mistake and costs nothing. It cannot catch a
-      // confident mistake, and nothing can: two of the three mistakes on the
-      // corpus came with a probability of 0.98.
-      let table = shown;
-      if (judgement.status === "used") {
-        const { profile } = judgement;
-        const choice = decide(
-          {
-            profile,
-            confidence: judgement.confidence,
-            alternatives: judgement.alternatives,
-          },
-          found.tables.profiles,
-          found.tables.judge?.threshold,
-        );
-        const entry = found.tables.profiles[profile];
-        if (choice?.escalated === true && entry !== undefined) {
-          const one = resolve(
-            profile,
-            { ...entry, effort: choice.effort },
-            kept.kept,
-            DEFAULT_AGENT,
-            found.tables.crosscheck,
-          );
-          if (one.problem === undefined && one.resolution !== undefined) {
-            const row = {
-              name: profile,
-              match: entry.match,
-              effort: choice.effort,
-              agent: one.resolution.agent,
-              model: spent(one.resolution.primary),
-              crosscheck:
-                one.resolution.crosscheck === undefined
-                  ? undefined
-                  : spent(one.resolution.crosscheck),
-              crosscheckProblem: one.resolution.crosscheckProblem,
-              excluded: one.resolution.excluded.map(notThis),
-            };
-            table = shown.map((one) => (one.name === profile ? row : one));
-            judgement = {
-              ...judgement,
-              escalated: true,
-              effort: choice.effort,
-              alternatives: choice.alternatives,
-            };
-          }
-        }
-      }
-
-      if (judgement.status === "used") {
-        // The alternatives are the judge's second readings, and a session
-        // that disagrees with the judge needs to see them. The judge's own
-        // answer is not one of them.
-        const { profile } = judgement;
-        const alternatives = judgement.alternatives ?? [];
-        judgement = {
-          ...judgement,
-          alternatives: alternatives.filter((one) => one.profile !== profile),
-        };
-      }
+      const { table, judgement } = yield* judgeAndEscalate({
+        ctx,
+        tables: found.tables,
+        shown,
+        kept: kept.kept,
+        input,
+      });
 
       return {
         output: {
@@ -618,25 +662,15 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
     }),
 });
 
-/**
- * The public surface of this folder.
- *
- * The tool is the first consumer. The terminal page is the second, and it
- * needs the same reader, the same resolver and the same writer, so a page
- * cannot show something the router will not do. The judge is exported for the
- * eval harness, so the measurement reads the arm the tool runs and not a copy
- * of it. Nothing above `definitions/` imports a sibling of this folder: a
- * second consumer of the internals is the signal that the boundary is wrong,
- * and the answer is the declaration deciding what is public.
- */
 export { candidates, isFree, known, ladder } from "./catalogue";
-export { effortOf, fit, KNOWN_ORDER, ladderOf, rungs } from "./effort";
+export { clampEffort, effortOf, fit, KNOWN_ORDER, ladderOf, rungs } from "./effort";
+export { hostCatalogue, sessionState } from "./host";
 export type { Decide, JevSettings } from "./jev";
 export { DEFAULT_TIMEOUT_MS, JEV_MODEL, jevJudge, judgeRef } from "./jev";
 export type { Description, Judge, Verdict } from "./judge";
 export { lexicalJudge, rank, surface } from "./judge";
 export { load, loadProject } from "./load";
-export { FILE_NAME, LEGACY_NAME, projectPath } from "./locate";
+export { FILE_NAME, inheritedConfigPath, LEGACY_NAME, writePath } from "./locate";
 export type { CrosscheckOrder, Ordered, Ranked } from "./order";
 export { crosscheckOf, priorityOf } from "./order";
 export type { Choice } from "./policy";

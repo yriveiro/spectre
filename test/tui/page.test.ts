@@ -181,6 +181,7 @@ const frame = async (input: {
   readonly models?: ReadonlyArray<EntryRow>;
   readonly catalogue?: ReadonlyArray<Model>;
   readonly jevAvailable?: boolean;
+  readonly sessionModel?: string;
   readonly width?: number;
   readonly height?: number;
   readonly onTabChange?: (tab: TabId) => void;
@@ -205,6 +206,7 @@ const frame = async (input: {
             draft: input.draft ?? draft,
             tab: input.tab,
             loading: input.loading,
+            sessionModel: input.sessionModel,
             jevAvailable: input.jevAvailable ?? false,
             onTabChange: input.onTabChange,
             onChange: input.onChange ?? (() => {}),
@@ -223,16 +225,18 @@ const frame = async (input: {
 };
 
 describe("the modal draws what the session would spend", () => {
-  test("the modal frame carries the header with Esc, the provider select, the Jev toggle, the tabs, the Info column and the footer bar", async () => {
+  test("the modal frame carries the header with Esc, the provider select, the profile selection bar, the tabs, the Info column and the footer bar", async () => {
     const { setup } = await frame({ jevAvailable: false });
     const drawn = setup.captureCharFrame();
     expect(drawn).toContain("Routing");
     expect(drawn).toContain("Esc");
+    expect(drawn).toContain("Config: /tmp/project/spectre.json");
     expect(drawn).toContain("Provider:");
     expect(drawn).toContain("acme");
-    expect(drawn).toContain("Judge:");
-    expect(drawn).toContain("jev-1.13-free");
-    expect(drawn).toContain("(○) Disabled (model not available)");
+    expect(drawn).toContain("Profile selection:");
+    expect(drawn).toContain("(●) Session LLM");
+    expect(drawn).toContain("(○) JEV unavailable (jev-1.13-free)");
+    expect(drawn).not.toContain("Warnings:");
     expect(drawn).toContain("Configured (2)");
     expect(drawn).toContain("Profiles (2)");
     expect(drawn).toContain("Allowlist (2)");
@@ -252,21 +256,42 @@ describe("the modal draws what the session would spend", () => {
     await setup.dispose();
   });
 
-  test("the frame shows a reader problem and says when the directory has no file", async () => {
+  test("the frame renders Warnings below Profile selection when unconfigured or broken, and hides Warnings when clean", async () => {
     const broken = await frame({
       draft: {
         ...draft,
         problems: ["/tmp/project/spectre.json: Expected a value at models"],
       },
     });
-    expect(broken.setup.captureCharFrame()).toContain("Expected a value at models");
+    const brokenFrame = broken.setup.captureCharFrame();
+    const brokenLines = brokenFrame.split("\n");
+    const brokenSelectionLine = brokenLines.findIndex((one) => one.includes("Profile selection:"));
+    const brokenWarningsLine = brokenLines.findIndex((one) => one.includes("Warnings:"));
+    expect(brokenSelectionLine).toBeGreaterThan(-1);
+    expect(brokenWarningsLine).toBeGreaterThan(brokenSelectionLine);
+    expect(brokenFrame).toContain("• ⚠");
+    expect(brokenFrame).toContain("Expected a value at models");
     await broken.setup.dispose();
 
     const missing = await frame({
       draft: { ...draft, source: undefined, problems: [] },
       source: null,
     });
-    expect(missing.setup.captureCharFrame()).toContain("No spectre.json in /tmp/project");
+    const missingFrame = missing.setup.captureCharFrame();
+    const missingLines = missingFrame.split("\n");
+    const configLine = missingLines.findIndex((one) => one.includes("Config: None"));
+    const providerLine = missingLines.findIndex((one) => one.includes("Provider:"));
+    const selectionLine = missingLines.findIndex((one) => one.includes("Profile selection:"));
+    const warningsLine = missingLines.findIndex((one) => one.includes("Warnings:"));
+    expect(configLine).toBeGreaterThan(-1);
+    expect(providerLine).toBeGreaterThan(configLine);
+    expect(selectionLine).toBeGreaterThan(providerLine);
+    expect(warningsLine).toBeGreaterThan(selectionLine);
+    expect(missingFrame).toContain("acme (session)");
+    expect(missingFrame).toContain("• ⚠");
+    expect(missingFrame).toContain(
+      "No spectre.json found in /tmp/project — using defaults from current session model.",
+    );
     await missing.setup.dispose();
 
     const reading = await frame({
@@ -276,7 +301,8 @@ describe("the modal draws what the session would spend", () => {
     });
     const readingFrame = reading.setup.captureCharFrame();
     expect(readingFrame).toContain("Reading /tmp/project");
-    expect(readingFrame).not.toContain("No spectre.json in /tmp/project");
+    expect(readingFrame).not.toContain("Warnings:");
+    expect(readingFrame).not.toContain("No spectre.json found in /tmp/project");
     await reading.setup.dispose();
   });
 
@@ -376,16 +402,21 @@ describe("the modal draws what the session would spend", () => {
     await setup.dispose();
   });
 
-  test("the Jev toggle appears disabled while the host lists no judge model, and toggles the judge when it does", async () => {
+  test("Profile selection shows the session model, disables JEV when unavailable, toggles JEV on and off when available, and displays Lexical", async () => {
     let changed: Draft | undefined;
     const { setup: disabledSetup } = await frame({
       jevAvailable: false,
+      sessionModel: "github-copilot/gemini-4-carbon",
       onChange: (next) => {
         changed = next;
       },
     });
-    const disabledLines = disabledSetup.captureCharFrame().split("\n");
-    const disabledRow = disabledLines.findIndex((one) => one.includes("Judge:"));
+    const disabledFrame = disabledSetup.captureCharFrame();
+    expect(disabledFrame).toContain("Profile selection:");
+    expect(disabledFrame).toContain("(●) Session LLM (gemini-4-carbon)");
+    expect(disabledFrame).toContain("(○) JEV unavailable (jev-1.13-free)");
+    const disabledLines = disabledFrame.split("\n");
+    const disabledRow = disabledLines.findIndex((one) => one.includes("Profile selection:"));
     expect(disabledRow).toBeGreaterThan(-1);
     await disabledSetup.mockMouse.click(10, disabledRow);
     await disabledSetup.flush();
@@ -394,13 +425,16 @@ describe("the modal draws what the session would spend", () => {
 
     const { setup: availableSetup } = await frame({
       jevAvailable: true,
+      sessionModel: "github-copilot/gemini-4-carbon",
       onChange: (next) => {
         changed = next;
       },
     });
     const availableFrame = availableSetup.captureCharFrame();
-    expect(availableFrame).toContain("( ) On  (●) Off");
-    const availableRow = availableFrame.split("\n").findIndex((one) => one.includes("Judge:"));
+    expect(availableFrame).toContain("(●) Session LLM (gemini-4-carbon)   ( ) JEV (jev-1.13-free)");
+    const availableRow = availableFrame
+      .split("\n")
+      .findIndex((one) => one.includes("Profile selection:"));
     expect(availableRow).toBeGreaterThan(-1);
     await availableSetup.mockMouse.click(10, availableRow);
     await availableSetup.flush();
@@ -410,10 +444,33 @@ describe("the modal draws what the session would spend", () => {
 
     const { setup: enabledSetup } = await frame({
       jevAvailable: true,
+      sessionModel: "github-copilot/gemini-4-carbon",
       draft: changed,
+      onChange: (next) => {
+        changed = next;
+      },
     });
-    expect(enabledSetup.captureCharFrame()).toContain("(●) On  ( ) Off");
+    const enabledFrame = enabledSetup.captureCharFrame();
+    expect(enabledFrame).toContain("( ) Session LLM (gemini-4-carbon)   (●) JEV (jev-1.13-free)");
+    const enabledRow = enabledFrame
+      .split("\n")
+      .findIndex((one) => one.includes("Profile selection:"));
+    expect(enabledRow).toBeGreaterThan(-1);
+    await enabledSetup.mockMouse.click(10, enabledRow);
+    await enabledSetup.flush();
+    expect(changed?.judge).toBeUndefined();
     await enabledSetup.dispose();
+
+    const { setup: lexicalSetup } = await frame({
+      width: 120,
+      jevAvailable: false,
+      sessionModel: "github-copilot/gemini-4-carbon",
+      draft: { ...draft, judge: { kind: "lexical" } },
+    });
+    expect(lexicalSetup.captureCharFrame()).toContain(
+      "( ) Session LLM (gemini-4-carbon)   (●) Lexical (BM25)   (○) JEV unavailable (jev-1.13-free)",
+    );
+    await lexicalSetup.dispose();
   });
 
   test("clicking Esc in the modal closes it", async () => {
@@ -1293,12 +1350,14 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
     const expanded = openSetup.captureCharFrame();
     expect(expanded).toContain("▼");
     expect(expanded).toContain("Routing");
+    expect(expanded).toContain("Session");
     expect(expanded).toContain("worker");
     expect(expanded).toContain("muse");
     expect(expanded).toContain("●●●○");
     expect(expanded).not.toContain("muse-spark-1.3#high");
     expect(expanded).toContain("pinned");
     expect(expanded).toContain("Error");
+    expect(expanded).not.toContain("No spectre.json — using defaults");
 
     const workerLine = expanded.split("\n").findIndex((one) => one.includes("worker"));
     expect(workerLine).toBeGreaterThan(-1);
@@ -1329,10 +1388,132 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
     await closedSetup.renderOnce();
 
     const collapsed = closedSetup.captureCharFrame();
-    expect(collapsed).toContain("▶ Routing (1 active, 1 error)");
+    expect(collapsed).toContain("▶ Routing (1 active, 1 error · Session)");
     expect(collapsed).not.toContain("muse");
     expect(collapsed).not.toContain("●●●○");
     await closedSetup.dispose();
+  });
+
+  test("the sidebar in default mode shows method badge, warning-colored dots, a blank spacer row before the bottom warning, and collapsed defaults summary", async () => {
+    const SUCCESS = RGBA.fromInts(80, 220, 120, 255);
+    const ERROR = RGBA.fromInts(240, 80, 80, 255);
+    const richTokens = {
+      ...surfaceTokens,
+      text: {
+        ...surfaceTokens.text,
+        feedback: {
+          warning: { base: WARNING, muted: GREY },
+          success: { base: SUCCESS },
+          error: { base: ERROR },
+        },
+      },
+    };
+    const richTheme = { ...richTokens, surface: () => richTokens };
+
+    const defaultRows: ReadonlyArray<Resolution> = [
+      spent,
+      {
+        profile: "refactor",
+        alias: "muse",
+        ref: "acme/muse-spark-1.3#high",
+        rung: "high",
+        cost: "$0.1/$0.2",
+        crosscheck: undefined,
+        crosscheckCost: undefined,
+        crosscheckProblem: undefined,
+        problem: undefined,
+      },
+    ];
+
+    let modalOpened = 0;
+    const defaultSetup = await testRender(
+      () =>
+        sidebarSection({
+          theme: richTheme as never,
+          open: () => true,
+          onToggle: () => {},
+          onOpenModal: () => {
+            modalOpened += 1;
+          },
+          rows: () => defaultRows,
+          usingDefaults: () => true,
+          method: () => "JEV",
+        }),
+      { width: 37, height: 10 },
+    );
+    await defaultSetup.renderOnce();
+
+    const frameText = defaultSetup.captureCharFrame();
+    const lines = frameText.split("\n");
+    expect(lines[0]).toContain("▼ Routing");
+    expect(lines[0]).toContain("JEV");
+
+    const refactorIdx = lines.findIndex((one) => one.includes("refactor"));
+    expect(refactorIdx).toBeGreaterThan(0);
+    expect(lines[refactorIdx + 1]?.trim()).toBe("");
+    expect(lines[refactorIdx + 2]).toContain("⚠ No spectre.json — using defaults");
+
+    const nonEmptyIndices = lines.flatMap((line, idx) => (line.trim().length > 0 ? [idx] : []));
+    expect(nonEmptyIndices.at(-1)).toBe(refactorIdx + 2);
+
+    const captured = defaultSetup.captureSpans();
+    const dotSpans = captured.lines
+      .flatMap((line) => line.spans)
+      .filter((span) => span.text.includes("•"));
+    expect(dotSpans.length).toBe(2);
+    for (const span of dotSpans) {
+      expect(span.fg).toEqual(WARNING);
+    }
+    const warnSpan = captured.lines
+      .flatMap((line) => line.spans)
+      .find((span) => span.text.includes("⚠"));
+    expect(warnSpan?.fg).toEqual(WARNING);
+
+    await defaultSetup.mockMouse.click(4, refactorIdx + 2);
+    await defaultSetup.flush();
+    expect(modalOpened).toBe(1);
+    await defaultSetup.dispose();
+
+    const configuredSetup = await testRender(
+      () =>
+        sidebarSection({
+          theme: richTheme as never,
+          open: () => true,
+          onToggle: () => {},
+          onOpenModal: () => {},
+          rows: () => defaultRows,
+          usingDefaults: () => false,
+          method: () => "Session",
+        }),
+      { width: 37, height: 10 },
+    );
+    await configuredSetup.renderOnce();
+    const configuredDots = configuredSetup
+      .captureSpans()
+      .lines.flatMap((line) => line.spans)
+      .filter((span) => span.text.includes("•"));
+    expect(configuredDots.length).toBe(2);
+    for (const span of configuredDots) {
+      expect(span.fg).toEqual(SUCCESS);
+    }
+    await configuredSetup.dispose();
+
+    const collapsedSetup = await testRender(
+      () =>
+        sidebarSection({
+          theme: richTheme as never,
+          open: () => false,
+          onToggle: () => {},
+          onOpenModal: () => {},
+          rows: () => defaultRows,
+          usingDefaults: () => true,
+          method: () => "Session",
+        }),
+      { width: 37, height: 4 },
+    );
+    await collapsedSetup.renderOnce();
+    expect(collapsedSetup.captureCharFrame()).toContain("▶ Routing (⚠ defaults · Session)");
+    await collapsedSetup.dispose();
   });
 
   test("the docked composer footer renders nothing in the main session and shows the profile and normalized cost on a subagent", async () => {
@@ -1556,5 +1737,92 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
       },
     });
     expect(created).toContain("scrollbox");
+
+    const unconfiguredDir = join(
+      Bun.env.TMPDIR ?? "/tmp",
+      `spectre-tui-defaults-${crypto.randomUUID()}`,
+    );
+    await Bun.write(`${unconfiguredDir}/.keep`, "");
+
+    let defaultsShown: (() => unknown) | undefined;
+    let defaultsDialogOptions: { size?: string; centered?: boolean } | undefined;
+    let defaultsCommandRun: (() => void) | undefined;
+    createdTexts.length = 0;
+
+    const defaultsContext = {
+      ...fullContext,
+      location: { directory: unconfiguredDir },
+      data: {
+        ...fullContext.data,
+        location: {
+          ...fullContext.data.location,
+          default: () => ({ directory: unconfiguredDir }),
+        },
+        session: {
+          get: (id: string) =>
+            id === "ses_defaults"
+              ? {
+                  id: "ses_defaults",
+                  location: { directory: unconfiguredDir },
+                  model: { providerID: "acme", id: "muse-spark-1.3" },
+                }
+              : undefined,
+        },
+      },
+      keymap: {
+        layer: (factory: () => { mode?: string; commands: ReadonlyArray<{ run: () => void }> }) => {
+          const built = factory();
+          if (built.mode === "global" && built.commands[0]) {
+            defaultsCommandRun = built.commands[0].run;
+          }
+        },
+      },
+      ui: {
+        ...fullContext.ui,
+        dialog: {
+          ...fullContext.ui.dialog,
+          show: (render: () => unknown) => {
+            defaultsShown = render;
+          },
+          set: (options: { size?: string; centered?: boolean }) => {
+            defaultsDialogOptions = options;
+          },
+        },
+        router: {
+          register: () => () => {},
+          navigate: () => {},
+          current: () => ({ type: "session" as const, sessionID: "ses_defaults" }),
+        },
+      },
+    };
+
+    await mod.default.setup(defaultsContext);
+    if (defaultsCommandRun === undefined)
+      throw new Error("the entrypoint registered no opener command for unconfigured session");
+    defaultsCommandRun();
+    await Bun.sleep(20);
+
+    if (defaultsShown === undefined) throw new Error("the opener did not call dialog.show");
+    expect(defaultsDialogOptions).toEqual({ size: "xlarge", centered: true });
+    const renderDefaultsModal = defaultsShown;
+
+    createComponent(HostRenderer.Provider, {
+      value: true,
+      get children() {
+        return createComponent(PluginContextProvider, {
+          value: defaultsContext as never,
+          get children() {
+            return renderDefaultsModal() as never;
+          },
+        });
+      },
+    });
+    expect(createdTexts).not.toContain("Select default provider");
+    expect(createdTexts).toContain("acme (session)");
+    expect(createdTexts).toContain("None");
+    expect(createdTexts).toContain("Warnings:");
+    expect(
+      createdTexts.some((text) => text.includes(`No spectre.json found in ${unconfiguredDir}`)),
+    ).toBe(true);
   });
 });

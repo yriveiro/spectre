@@ -1,7 +1,7 @@
 import { usePlugin } from "@opencode/plugin/tui";
 import type { Dialog, DialogSelectOption } from "@opencode/plugin/tui/context";
 import type { ResolvedTheme } from "@opencode/theme/tui";
-import { type KeyEvent, TextAttributes } from "@opentui/core";
+import { type KeyEvent, type RGBA, TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import {
@@ -32,7 +32,7 @@ import {
   resolve as resolveDraft,
   spendRef,
 } from "./data.ts";
-import { bindKeyboard, field, h, palette, show } from "./render.ts";
+import { bindKeyboard, field, h, type Palette, palette, show } from "./render.ts";
 
 export const DEFAULT_PROVIDER = "opencode-go";
 
@@ -1932,19 +1932,103 @@ export const removeProfilePicker = async (input: {
   return { kind: "remove-profile", profile: chosen };
 };
 
+export type JsonTokenKind = "key" | "string" | "number" | "keyword" | "punctuation" | "whitespace";
+
+export type JsonToken = {
+  readonly kind: JsonTokenKind;
+  readonly text: string;
+};
+
+const JSON_WHITESPACE = /[ \t]+/y;
+const JSON_STRING = /"(?:\\.|[^"\\])*"/sy;
+const JSON_NUMBER = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
+const JSON_KEYWORD = /\b(?:true|false|null)\b/y;
+
+const matchAt = (pattern: RegExp, line: string, at: number): string | undefined => {
+  pattern.lastIndex = at;
+  return pattern.exec(line)?.[0];
+};
+
+const isJsonKeyAfter = (line: string, afterQuote: number): boolean => {
+  let at = afterQuote;
+  while (at < line.length && (line[at] === " " || line[at] === "\t")) {
+    at += 1;
+  }
+  return line[at] === ":";
+};
+
+const nextJsonToken = (line: string, at: number): JsonToken => {
+  const ws = matchAt(JSON_WHITESPACE, line, at);
+  if (ws !== undefined) return { kind: "whitespace", text: ws };
+  const str = line[at] === '"' ? matchAt(JSON_STRING, line, at) : undefined;
+  if (str !== undefined) {
+    return { kind: isJsonKeyAfter(line, at + str.length) ? "key" : "string", text: str };
+  }
+  const num = matchAt(JSON_NUMBER, line, at);
+  if (num !== undefined) return { kind: "number", text: num };
+  const kw = matchAt(JSON_KEYWORD, line, at);
+  if (kw !== undefined) return { kind: "keyword", text: kw };
+  return { kind: "punctuation", text: line.slice(at, at + 1) };
+};
+
+export const tokenizeJsonLine = (line: string): ReadonlyArray<JsonToken> => {
+  const tokens: Array<JsonToken> = [];
+  for (let at = 0; at < line.length; ) {
+    const token = nextJsonToken(line, at);
+    tokens.push(token);
+    at += token.text.length;
+  }
+  return tokens;
+};
+
+const colorFor = (kind: JsonTokenKind, colors: Palette): RGBA => {
+  switch (kind) {
+    case "key":
+      return colors.jsonKey;
+    case "string":
+      return colors.jsonString;
+    case "number":
+      return colors.jsonNumber;
+    case "keyword":
+      return colors.jsonKeyword;
+    case "punctuation":
+      return colors.jsonPunctuation;
+    case "whitespace":
+      return colors.text;
+  }
+};
+
 export const preview = (input: {
   readonly theme: ResolvedTheme;
   readonly draft: Draft;
   readonly models: ReadonlyArray<Model>;
 }): JSX.Element => {
   const colors = palette(input.theme);
-  const cleanDraft = usableDraft(input.draft, input.models);
-  const jsonText = formatConfig(cleanDraft);
-  const lines = jsonText
-    .split("\n")
-    .map((line) => h("text", { fg: colors.teal, wrapMode: "word" }, line));
+  const lines = formatConfig(usableDraft(input.draft, input.models)).split("\n");
+  const gutterWidth = Math.max(2, String(lines.length).length);
 
-  return h("box", { flexDirection: "column" }, ...lines);
+  return h(
+    "box",
+    { flexDirection: "column", width: "100%" },
+    ...lines.map((line, at) =>
+      h(
+        "box",
+        { flexDirection: "row", width: "100%", columnGap: 1 },
+        h(
+          "text",
+          { fg: colors.faint, flexShrink: 0, wrapMode: "none" },
+          `${String(at + 1).padStart(gutterWidth)} │`,
+        ),
+        h(
+          "text",
+          { fg: colors.text, flexGrow: 1, flexShrink: 1, minWidth: 0, wrapMode: "word" },
+          ...tokenizeJsonLine(line).map((token) =>
+            h("span", { style: { fg: colorFor(token.kind, colors) } }, token.text),
+          ),
+        ),
+      ),
+    ),
+  );
 };
 
 export const controls = (input: {

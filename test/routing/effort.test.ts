@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  clampEffort,
   effortOf,
   type Fit,
   fit,
@@ -295,5 +296,30 @@ describe("the six ladders of the feature file", () => {
       return got.kind === "rung" ? got.at.name : "short";
     });
     expect(atMax).toEqual(["short", "max", "max", "max", "max", "max"]);
+  });
+});
+
+describe("clampEffort", () => {
+  test("meets an exact rung on the ladder", () => {
+    expect(clampEffort(ladder("low", "medium", "high"), "medium")).toBe("medium");
+  });
+
+  test("steps up when the ladder skips the requested rung", () => {
+    expect(clampEffort(ladder("low", "high", "max"), "medium")).toBe("high");
+  });
+
+  test("clamps down to the highest ranked rung when the ladder stops below the requirement", () => {
+    const capped = ladder("low", "medium", "high");
+    expect(clampEffort(capped, "xhigh")).toBe("high");
+    expect(clampEffort(capped, "max")).toBe("high");
+  });
+
+  test("returns undefined for a floor model with no rungs", () => {
+    expect(clampEffort(ladderOf([]), "high")).toBeUndefined();
+    expect(clampEffort(ladderOf([]), undefined)).toBeUndefined();
+  });
+
+  test("falls back to the lowest rung when effort is omitted", () => {
+    expect(clampEffort(ladder("low", "high"), undefined)).toBe("low");
   });
 });
