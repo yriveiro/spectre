@@ -512,7 +512,6 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
   options: {
     namespace: "spectre",
     codemode: true,
-    pinned: true,
     permission: "read",
   },
   execute: (input, context) =>
