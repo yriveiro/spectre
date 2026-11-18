@@ -1,9 +1,9 @@
-import type { Model, Plugin, Tool } from "@opencode/plugin/effect";
+import { Model, type Plugin, type Tool } from "@opencode/plugin/effect";
 import { Effect, Schema } from "effect";
 import { agentIds } from "../../../agents";
 import { candidates, known, ladder } from "./catalogue";
 import { check } from "./check";
-import { clampEffort } from "./effort";
+import { clampEffort, effortOf } from "./effort";
 import { hostCatalogue, sessionState } from "./host";
 import { jevJudge } from "./jev";
 import { type Judge, lexicalJudge, surface, type Verdict } from "./judge";
@@ -18,6 +18,8 @@ import {
   DEFAULT_PROFILES,
   type Excluded as ExcludedRow,
   type File,
+  type Known,
+  modelNames,
   type Pick,
   type Profile as ProfileSpec,
   type Resolution,
@@ -427,6 +429,8 @@ const judgeAndEscalate = (args: JudgePassInput) =>
     return { table, judgement: { ...base, alternatives } };
   });
 
+const ALIAS = /^[a-z0-9][a-z0-9-]*$/;
+
 const sessionCandidate = (
   models: ReadonlyArray<Model.Info>,
   modelRef: string,
@@ -445,24 +449,67 @@ const sessionCandidate = (
   return candidates([{ alias, ref: modelRef, pinned: undefined }], [foundModel]).kept[0];
 };
 
+const isAllowlistEntryFallbackEligible = (
+  entry: { readonly alias: string; readonly ref: string },
+  catalogue: ReadonlyArray<Known>,
+): boolean => {
+  if (!ALIAS.test(entry.alias)) return false;
+  let parsed: Model.Ref;
+  try {
+    parsed = Model.Ref.parse(entry.ref);
+  } catch {
+    return false;
+  }
+  const foundModel = catalogue.find(
+    (one) => one.providerID === parsed.providerID && one.id === parsed.id,
+  );
+  return !(foundModel?.enabled && foundModel.status !== "deprecated" && foundModel.tools);
+};
+
+const isProfileStructurallyValid = (
+  entry: ProfileSpec,
+  models: Tables["models"],
+  catalogue: ReadonlyArray<Model.Info>,
+  spectreAgents: ReadonlyArray<string>,
+): boolean => {
+  if (!spectreAgents.includes(entry.agent ?? DEFAULT_AGENT)) return false;
+  const pinned = entry.model ?? [];
+  if (entry.effort === undefined && pinned.length === 0) return false;
+  if (
+    entry.effort !== undefined &&
+    effortOf(entry.effort).kind !== "known" &&
+    !catalogue.some((one) => one.variants.some((variant) => variant.id === entry.effort))
+  ) {
+    return false;
+  }
+  return (
+    pinned.every((alias) => alias in models) &&
+    modelNames(entry.crosscheck?.model).every((alias) => alias in models)
+  );
+};
+
 const resolveSessionDefaults = (args: {
   readonly ctx: Plugin.Context;
-  readonly directory: string;
+  readonly listedModels?: ReadonlyArray<Model.Info> | undefined;
   readonly modelRef: string | undefined;
   readonly tables: Tables;
+  readonly baseProfiles?: Readonly<Record<string, ProfileSpec>> | undefined;
+  readonly sources: ReadonlyArray<string>;
+  readonly warning: string;
   readonly input: { readonly task?: string | undefined; readonly profile?: string | undefined };
 }) =>
   Effect.gen(function* () {
     if (args.modelRef === undefined) return undefined;
-    const listed = yield* hostCatalogue(args.ctx);
-    const candidate = sessionCandidate(listed.models, args.modelRef);
+    const models = args.listedModels ?? (yield* hostCatalogue(args.ctx)).models;
+    const candidate = sessionCandidate(models, args.modelRef);
     if (candidate === undefined) return undefined;
     const modelLadder = ladder(candidate.model);
     const clamp = (effort: string | undefined) => clampEffort(modelLadder, effort);
+    const sourceProfiles = args.baseProfiles ?? DEFAULT_PROFILES;
     const profiles: Readonly<Record<string, ProfileSpec>> = Object.fromEntries(
-      Object.entries(DEFAULT_PROFILES).map(([name, entry]) => [
+      Object.entries(sourceProfiles).map(([name, entry]) => [
         name,
-        { ...entry, crosscheck: undefined, effort: clamp(entry.effort) },
+        { ...entry, model: undefined, crosscheck: undefined, effort: clamp(entry.effort) },
       ]),
     );
     const defaultShown = Object.entries(profiles).flatMap(([name, entry]) => {
@@ -494,15 +541,73 @@ const resolveSessionDefaults = (args: {
             : table.filter((one) => one.name === args.input.profile),
         models: [asRow(candidate, 1)],
         crosscheck: [],
-        sources: [],
+        sources: [...args.sources],
         asked: args.input.profile === undefined ? [] : [args.input.profile],
         judge: judgement,
-        warnings: [
-          `No ${FILE_NAME} found in ${args.directory} — using defaults from current session model.`,
-        ],
+        warnings: [args.warning],
       },
     };
   });
+
+const resolveConfiguredFallback = (args: {
+  readonly ctx: Plugin.Context;
+  readonly modelRef: string | undefined;
+  readonly input: {
+    readonly setup?: "accepted" | "declined" | undefined;
+    readonly task?: string | undefined;
+    readonly profile?: string | undefined;
+  };
+  readonly found: {
+    readonly tables: Tables;
+    readonly sources: ReadonlyArray<string>;
+    readonly problems: ReadonlyArray<string>;
+    readonly configuredProfiles: boolean;
+  };
+  readonly listed: {
+    readonly models: ReadonlyArray<Model.Info>;
+    readonly problem: string | undefined;
+  };
+  readonly ordered: {
+    readonly ranked: ReadonlyArray<{ readonly alias: string; readonly ref: string }>;
+    readonly problems: ReadonlyArray<string>;
+  };
+  readonly crosscheckProblems: ReadonlyArray<string>;
+  readonly normalizedCatalogue: ReadonlyArray<Known>;
+  readonly keptCount: number;
+}) => {
+  const { found, listed, ordered } = args;
+  const profileEntries = found.configuredProfiles ? Object.values(found.tables.profiles) : [];
+  const eligible =
+    args.input.setup === undefined &&
+    args.keptCount === 0 &&
+    found.problems.length === 0 &&
+    listed.problem === undefined &&
+    ordered.problems.length === 0 &&
+    args.crosscheckProblems.length === 0 &&
+    ordered.ranked.every((entry) =>
+      isAllowlistEntryFallbackEligible(entry, args.normalizedCatalogue),
+    ) &&
+    profileEntries.every((entry) =>
+      isProfileStructurallyValid(entry, found.tables.models, listed.models, agentIds),
+    );
+  if (!eligible) return Effect.succeed(undefined);
+  const sourceLabel = found.sources.at(-1) ?? FILE_NAME;
+  const warning =
+    ordered.ranked.length === 0
+      ? `No models configured in ${sourceLabel} — using defaults from current session model.`
+      : `No configured models in ${sourceLabel} are available in this session — using defaults from current session model.`;
+  return resolveSessionDefaults({
+    ctx: args.ctx,
+    listedModels: listed.models,
+    modelRef: args.modelRef,
+    tables: found.tables,
+    baseProfiles:
+      Object.keys(found.tables.profiles).length > 0 ? found.tables.profiles : DEFAULT_PROFILES,
+    sources: found.sources,
+    warning,
+    input: args.input,
+  });
+};
 
 export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Output> => ({
   name: "routing",
@@ -544,9 +649,10 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
       if (unconfigured && input.setup === undefined) {
         const fallback = yield* resolveSessionDefaults({
           ctx,
-          directory,
           modelRef: state.modelRef,
           tables: found.tables,
+          sources: [],
+          warning: `No ${FILE_NAME} found in ${directory} — using defaults from current session model.`,
           input,
         });
         if (fallback !== undefined) return fallback;
@@ -573,27 +679,42 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
         };
 
       const listed = yield* hostCatalogue(ctx);
-      const checked = check(
-        found.configuredProfiles ? found.tables : { ...found.tables, profiles: {} },
-        listed.models,
-        DEFAULT_AGENT,
-        agentIds,
-      );
       const ordered = priorityOf(found.tables.models, found.tables.priority);
       const allowed = ordered.ranked.map((one) => ({
         alias: one.alias,
         ref: one.ref,
         pinned: undefined,
       }));
-      const rankOf = new Map(ordered.ranked.map((one) => [one.alias, one.priority]));
-      const kept = candidates(allowed, listed.models.map(known));
-
-      const modelRows = kept.kept.map((one) => asRow(one, rankOf.get(one.alias) ?? 0));
       const crosscheckOrder = crosscheckOf(
         found.tables.models,
         found.tables.crosscheck,
         ordered.ranked.map((one) => one.alias),
       );
+      const normalizedCatalogue = listed.models.map(known);
+      const kept = candidates(allowed, normalizedCatalogue);
+
+      const configuredFallback = yield* resolveConfiguredFallback({
+        ctx,
+        modelRef: state.modelRef,
+        input,
+        found,
+        listed,
+        ordered,
+        crosscheckProblems: crosscheckOrder.problems,
+        normalizedCatalogue,
+        keptCount: kept.kept.length,
+      });
+      if (configuredFallback !== undefined) return configuredFallback;
+
+      const checked = check(
+        found.configuredProfiles ? found.tables : { ...found.tables, profiles: {} },
+        listed.models,
+        DEFAULT_AGENT,
+        agentIds,
+      );
+      const rankOf = new Map(ordered.ranked.map((one) => [one.alias, one.priority]));
+
+      const modelRows = kept.kept.map((one) => asRow(one, rankOf.get(one.alias) ?? 0));
       const byAlias = new Map(kept.kept.map((one) => [one.alias, one]));
       const crosscheckRows = crosscheckOrder.listed.flatMap((alias) => {
         const one = byAlias.get(alias);

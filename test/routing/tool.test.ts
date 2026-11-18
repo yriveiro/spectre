@@ -754,4 +754,104 @@ describe("tools.spectre.routing", () => {
     expect(out.profiles[0]?.model.ref).toBe("acme/falcon-mini#high");
     expect(out.warnings?.[0]).toContain("No spectre.json found");
   });
+
+  test("a config with empty models resolves configured profiles on the main session model when one is available", async () => {
+    const dir = scratch.projectDir();
+    await scratch.writeProject(
+      JSON.stringify({
+        provider: "acme",
+        models: {},
+        priority: [],
+        crosscheck: [],
+        profiles: {
+          worker: { effort: "high", crosscheck: { effort: "high" }, match: "carry out edits" },
+          deep: { effort: "max", crosscheck: { effort: "max" }, match: "architecture" },
+        },
+      }),
+    );
+
+    const out = at(
+      await call(dir, {}, undefined, {
+        id: "ses_project",
+        sessions: {
+          ses_project: {
+            directory: dir,
+            model: { providerID: "acme", id: "falcon-mini" },
+          },
+        },
+      }),
+      "resolved",
+    );
+
+    expect(out.sources).toEqual([`${dir}/spectre.json`]);
+    expect(out.profiles.map((one) => [one.name, one.model.ref, one.crosscheck])).toEqual([
+      ["worker", "acme/falcon-mini#high", undefined],
+      ["deep", "acme/falcon-mini#high", undefined],
+    ]);
+    expect(out.warnings?.[0]).toContain("No models configured in");
+  });
+
+  test("a config whose models belong to an unavailable provider falls back to the main session model", async () => {
+    const dir = scratch.projectDir();
+    await scratch.writeProject(
+      JSON.stringify({
+        provider: "opencode-go",
+        models: { beam: "opencode-go/beam-free" },
+        priority: ["beam"],
+        profiles: {
+          mechanical: { effort: "low", model: "beam", match: "one command" },
+          deep: { effort: "max", crosscheck: { effort: "max" }, match: "architecture" },
+        },
+      }),
+    );
+
+    const out = at(
+      await call(dir, {}, listOf(LADDERS), {
+        id: "ses_child",
+        sessions: {
+          ses_main: {
+            directory: dir,
+            model: { providerID: "acme", id: "falcon-mini" },
+          },
+          ses_child: {
+            directory: dir,
+            parentID: "ses_main",
+            model: { providerID: "acme", id: "falcon-low" },
+          },
+        },
+      }),
+      "resolved",
+    );
+
+    expect(out.profiles.map((one) => [one.name, one.model.ref])).toEqual([
+      ["mechanical", "acme/falcon-mini#high"],
+      ["deep", "acme/falcon-mini#high"],
+    ]);
+    expect(out.warnings?.[0]).toContain("are available in this session");
+  });
+
+  test("an invalid variant on an available model stays a problem even when the session has a model", async () => {
+    const dir = scratch.projectDir();
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini#bogus" }),
+        profiles: { worker: { effort: "high", match: "w" } },
+      }),
+    );
+
+    const out = at(
+      await call(dir, {}, listOf(LADDERS), {
+        id: "ses_project",
+        sessions: {
+          ses_project: {
+            directory: dir,
+            model: { providerID: "acme", id: "falcon-mini" },
+          },
+        },
+      }),
+      "problems",
+    );
+
+    expect(out.problems).toContain("models.light");
+  });
 });

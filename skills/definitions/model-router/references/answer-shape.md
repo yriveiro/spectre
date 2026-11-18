@@ -31,7 +31,7 @@ The `models` array is in allowlist `priority` order. The `crosscheck` array is i
 
 A named call puts the name in `asked`. A call that names a profile the config does not have returns an empty `profiles` array, and `asked` still carries the name.
 
-When no `spectre.json` exists and the session holds a usable model, the tool resolves default profiles on that session model. It clamps each profile effort to the model's ladder, leaves `crosscheck` off, sets `sources` to `[]`, and reports a warning in `warnings`.
+When no `spectre.json` exists, or when no configured model is usable here, the tool resolves profiles on the main session model. It clamps each effort to that model's ladder, turns `crosscheck` off, keeps `sources` (`[]` with no file), and adds a warning in `warnings`.
 
 ## A profile row
 
