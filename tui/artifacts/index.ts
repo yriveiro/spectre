@@ -162,12 +162,12 @@ export const artifactCommands = (
   onOpenGallery: () => void,
 ): ReadonlyArray<KeymapCommand> => [
   {
-    id: "spectre.artifacts.open",
-    title: "Artifacts",
+    id: "spectre.artifacts.search",
+    title: "Artifact Search",
     description: "Search published artifacts and open them in Browse or the web gallery",
     group: "Spectre",
     palette: true,
-    slash: { name: "artifacts", aliases: ["artifact"] },
+    slash: { name: "artifact-search" },
     run: () => {
       onOpenModal();
     },
@@ -178,6 +178,7 @@ export const artifactCommands = (
     description: "Open the interactive artifact gallery in Browse",
     group: "Spectre",
     palette: true,
+    slash: { name: "artifact-gallery" },
     run: () => {
       onOpenGallery();
     },

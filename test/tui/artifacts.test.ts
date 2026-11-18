@@ -42,7 +42,7 @@ const ALPHA_SUMMARY: ArtifactSummary = {
 };
 
 describe("opener artifact commands", () => {
-  test("keeps routing first and exposes /artifacts plus gallery in the global layer", () => {
+  test("keeps routing first and exposes /artifact-search and /artifact-gallery in the global layer", () => {
     let routingRuns = 0;
     let modalRuns = 0;
     let galleryRuns = 0;
@@ -62,24 +62,28 @@ describe("opener artifact commands", () => {
     expect(
       layer.commands.map((cmd) => ({
         id: cmd.id,
+        title: cmd.title,
         palette: cmd.palette,
         slash: cmd.slash,
       })),
     ).toEqual([
       {
         id: "spectre.routing.open",
+        title: "Routing",
         palette: true,
         slash: { name: "routing" },
       },
       {
-        id: "spectre.artifacts.open",
+        id: "spectre.artifacts.search",
+        title: "Artifact Search",
         palette: true,
-        slash: { name: "artifacts", aliases: ["artifact"] },
+        slash: { name: "artifact-search" },
       },
       {
         id: "spectre.artifacts.gallery",
+        title: "Artifact Gallery",
         palette: true,
-        slash: undefined,
+        slash: { name: "artifact-gallery" },
       },
     ]);
 
