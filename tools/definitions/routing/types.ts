@@ -264,7 +264,7 @@ export const DEFAULT_PROFILES: Readonly<Record<string, Profile>> = {
     effort: "xhigh",
     crosscheck: { effort: "xhigh" },
     match:
-      "Use when one hard problem has one right answer and there is no diff to read the answer out of: prove the invariant, find the one bad input, derive the result. Not for work that spans a subsystem.",
+      "Use when one hard problem has one right answer and there is no diff to read the answer out of: prove the invariant, find the one bad input, derive the result. Not for work that spans a subsystem or for reviewing a diff.",
     why: "One hard problem where the answer has to be right and there is no diff to read the answer out of. The escalation goes to another family at the same effort, because a second family beats the same family asked twice.",
   },
   deep: {

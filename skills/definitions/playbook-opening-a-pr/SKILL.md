@@ -126,14 +126,14 @@ Keep one owner for the final split, the PR fields, and the `tools.spectre.pr` ca
 If no useful task can run in parallel, mark this phase `n/a` and state why.
 
 For each useful subagent lane, load `model-router` and call
-`tools.spectre.routing({ task: "<one lane>" })`. A grep, read, run, or report task
-usually fits the `mechanical` profile or its equivalent. Use a profile with more
-effort for semantic review, scope analysis, or risk analysis. Follow the judge's
-choice when it answers. When it skips, match the task to the profile's `match` line.
-If you are unsure between profiles, follow `model-router` and choose more effort.
-Follow `model-router` for `setup`, `declined`, or `problems`. Never choose a profile
-by array position or guess a model. Pass the selected profile's `agent` and exact
-`model.ref`.
+`tools.spectre.routing({ task: "<one lane>" })`. A command check fits `mechanical`
+or its equivalent. A call-site or blast-radius scan fits `search`. Semantic diff
+review or risk judgment fits `judgment`, not `thinking` or `deep`, unless the change
+spans a subsystem. Follow the judge's choice when it answers. When it skips, match
+the task to the profile's `match` line. If you are unsure between profiles, follow
+`model-router` and choose more effort. Follow `model-router` for `setup`,
+`declined`, or `problems`. Never choose a profile by array position or guess a
+model. Pass the selected profile's `agent` and exact `model.ref`.
 
 Launch all independent subagents together. Each one runs in the background. Give each a
 bounded, read-only task and ask for evidence. No subagent edits or commits on the
@@ -201,7 +201,8 @@ The fields become this shape, and the tool writes every heading, so you cannot o
 one or leave a section filled with `None.`:
 
 ```markdown
-<One paragraph. Why the change exists, in plain words. No heading above it.>
+## Summary
+<Why the change exists, in plain words. Short paragraphs, with no heading inside `summary`.>
 
 ## Review
 <The one feedback you want, in one line.>
@@ -229,8 +230,8 @@ one or leave a section filled with `None.`:
 - [ ] If checks are not green, the direct user override names the failed checks and reason.
 ```
 
-`## Review`, `## Scope`, `## Validation`, `## Risk and Rollback` and `## Merge Gate`
-are always present. Drop `tradeoffs` and `breaking` when there is nothing to say. A
+`## Summary`, `## Review`, `## Scope`, `## Validation`, `## Risk and Rollback` and
+`## Merge Gate` are always present. Drop `tradeoffs` and `breaking` when there is nothing to say. A
 heading holding `None.` is a line a reviewer spends reading nothing, and it is
 refused. Desired feedback is the type that best predicts acceptance (arXiv
 2602.14611, 80,000 pull requests across 156 projects).
@@ -251,8 +252,10 @@ verbatim.
 Write the summary, the review line and each bullet under `technical-writing`, then
 pass the result through `grammar`. Apply every technical-writing layer except
 Diátaxis. One word for each action, keep the articles, and avoid an `-ing` form
-where a plain verb does the work. Run `interrogate` over the diff before you commit,
-and `code-hygiene` before review.
+where a plain verb does the work. Run `interrogate` over the diff before you commit
+only when the branch changes non-trivial behavior or design. Skip `interrogate` on
+docs-only, config-only, or mechanical changes. Run `code-hygiene` before review when
+the branch touches code.
 
 Cut anything a reviewer would not ask about. A branch-protection `GET` returning
 403, a safety argument citing another commit's SHA, and a list of defects found and
@@ -262,8 +265,8 @@ why you left it.
 
 Attach a screenshot or a video when it proves a claim a sentence cannot. Link full
 SHAs, per-lane recitals and file-by-file checklists as an artifact rather than
-pasting them. There is no `## Summary` heading, because the summary field is it, and
-no `## Test plan`, because `## Validation` is it.
+pasting them. Do not write a heading inside `summary`, because the tool writes
+`## Summary` above it. Do not add `## Test plan`, because `## Validation` is it.
 
 ## Phase F: Stack
 
@@ -307,9 +310,11 @@ Finish the phase or the whole stack first, then run `playbook-babysit` when the
 user asks for it. A babysit per new pull request stalls the build and spends
 checks on commits the next wave will restart anyway.
 
-A subagent that opens a pull request runs `interrogate`, `grammar` and
-`code-hygiene`, calls the tool once, posts the URL, and returns to its parent. It
-does not babysit.
+When a parent delegates opening a pull request to a subagent, route that child on
+`worker` or its equivalent through `model-router`. The child applies the same
+`interrogate` and `code-hygiene` gates and checks its prose under `grammar`. Then it
+calls `tools.spectre.pr` once, posts the URL, and returns to its parent without
+babysitting.
 
 ## Outputs
 
