@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { load } from "../../../tools/definitions/routing/load";
+import { decode, load } from "../../../tools/definitions/routing/load";
+import { DEFAULT_PROFILES } from "../../../tools/definitions/routing/types";
 import { offences } from "../../bar";
 import { blind, NONE, tuned } from "../fixture";
 
@@ -63,5 +64,19 @@ describe("the routing corpus", () => {
       }
 
     expect(duplicates).toEqual([]);
+  });
+
+  test("every default profile has judged rows in the blind slice", () => {
+    const covered = new Set(
+      blind.filter((row) => row.provenance === "judged").map((row) => row.label),
+    );
+    expect([...covered].toSorted()).toEqual(Object.keys(DEFAULT_PROFILES).toSorted());
+  });
+
+  test("spectre.default.json and DEFAULT_PROFILES carry the same profile table", async () => {
+    const starterPath = `${PROJECT}spectre.default.json`;
+    const decoded = decode(starterPath, await Bun.file(starterPath).text());
+    expect(decoded.problem).toBeUndefined();
+    expect(decoded.file?.profiles).toEqual(DEFAULT_PROFILES);
   });
 });
