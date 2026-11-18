@@ -247,11 +247,11 @@ export const DEFAULT_PROFILES: Readonly<Record<string, Profile>> = {
     why: "Find where something lives: grep, read, name the call sites. A missed symbol costs a second pass over the repo, so it leads above the floor and escalates to the other model.",
   },
   worker: {
-    effort: "high",
-    crosscheck: { effort: "high" },
+    effort: "medium",
+    crosscheck: { effort: "medium" },
     match:
       "Use when the change is already decided and the task is to carry it out across several files: add the field, write the test, make the edits. Not for choosing between two defensible designs.",
-    why: "A change that is already decided and has to be executed across several files. The model holds one plan while editing it, so it takes a high effort rather than the floor. A second family at the same effort gives a second opinion on the change.",
+    why: "A change that is already decided and has to be executed across several files. The model holds one plan while editing it, so it takes medium effort rather than the floor. A second family at the same effort gives a second opinion on the change.",
   },
   judgment: {
     effort: "high",
@@ -261,11 +261,11 @@ export const DEFAULT_PROFILES: Readonly<Record<string, Profile>> = {
     why: "Two defensible options and one has to be chosen. High effort on one family, the same level on the other as the cross-check, because a wrong call is expensive to undo and a second opinion is the cheapest way to catch one. The second opinion comes from another family at the same effort.",
   },
   thinking: {
-    effort: "max",
-    crosscheck: { effort: "max" },
+    effort: "xhigh",
+    crosscheck: { effort: "xhigh" },
     match:
       "Use when one hard problem has one right answer and there is no diff to read the answer out of: prove the invariant, find the one bad input, derive the result. Not for work that spans a subsystem.",
-    why: "One hard problem where the answer has to be right and there is no diff to read the answer out of. The escalation goes to another family at its top effort, because a second family beats the same family asked twice.",
+    why: "One hard problem where the answer has to be right and there is no diff to read the answer out of. The escalation goes to another family at the same effort, because a second family beats the same family asked twice.",
   },
   deep: {
     effort: "max",

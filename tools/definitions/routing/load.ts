@@ -1,6 +1,6 @@
 import { dirname, resolve } from "node:path";
 import { Effect, Schema } from "effect";
-import { configPaths, projectPath } from "./locate";
+import { configPaths, inheritedConfigPath } from "./locate";
 import { Config, DEFAULT_PROFILES, type File, type ProfileEntry, type Tables } from "./types";
 
 /**
@@ -89,7 +89,7 @@ export type Loaded = {
  */
 export const loadProject = (directory: string): Effect.Effect<Loaded> =>
   Effect.gen(function* () {
-    const path = yield* projectPath(directory);
+    const path = yield* inheritedConfigPath(directory);
     if (path === undefined)
       return { tables: emptyTables(), sources: [], problems: [], configuredProfiles: false };
     const found = yield* read(path);

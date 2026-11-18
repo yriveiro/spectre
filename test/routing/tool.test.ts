@@ -2,21 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { type Page, routing } from "../../tools/definitions/routing";
-import { context, useScratch } from "./fixture";
+import { context, type SessionModel, type Sessions, useScratch } from "./fixture";
 
-/**
- * The tool, not the pipeline: what a model actually receives.
- *
- * The output is a union, so a test names the status it expects and reads only
- * the fields that status carries. Five things matter here and nowhere else: a
- * bad config is an answer rather than a failed call, the table is withheld when
- * any check fails, the setup question is answered once, the ref that came back
- * is the ref a session spends, and the judge is optional.
- *
- * The sandbox boundary cannot be proven from here. Per `tools/FOR_AGENTS.md` a
- * registration which logs is not a tool that runs; only a real call in a live
- * session proves that.
- */
 const scratch = useScratch();
 
 /** A catalogue row as the tool reads it. Thin, because the normalizer is total. */
@@ -34,11 +21,16 @@ const call = async (
   directory: string,
   input: { profile?: string; task?: string; setup?: "accepted" | "declined" } = {},
   list?: () => Effect.Effect<unknown, unknown>,
-  session?: { readonly id: string; readonly sessions: Record<string, string> },
+  session?: {
+    readonly id: string;
+    readonly sessions: Sessions;
+    readonly defaultModel?: SessionModel;
+  },
   decide?: () => Effect.Effect<unknown, unknown>,
 ) => {
   const sessions = session?.sessions ?? { ses_project: directory };
-  const run = routing(context(directory, list, sessions, decide)).execute as unknown as (
+  const run = routing(context(directory, list, sessions, decide, session?.defaultModel))
+    .execute as unknown as (
     given: typeof input,
     context: { readonly sessionID: string },
   ) => Effect.Effect<{
@@ -514,7 +506,7 @@ describe("tools.spectre.routing", () => {
         providerID: ref.slice(0, cut),
         id: ref.slice(cut + 1),
         family: ref.slice(cut + 1),
-        variants: ["low", "medium", "high", "max"].map((id) => ({ id })),
+        variants: ["low", "medium", "high", "xhigh", "max"].map((id) => ({ id })),
       };
     });
 
@@ -669,5 +661,97 @@ describe("tools.spectre.routing", () => {
     expect(out.judge.status).toBe("skipped");
     if (out.judge.status === "skipped") expect(out.judge.reason).toContain("names a profile");
     expect(out.profiles.map((one) => one.name)).toEqual(["designer"]);
+  });
+
+  test("an unconfigured directory with a session model resolves all 7 default profiles with clamped efforts and no crosscheck", async () => {
+    const dir = scratch.projectDir();
+    const out = at(
+      await call(dir, {}, undefined, {
+        id: "ses_project",
+        sessions: {
+          ses_project: {
+            directory: dir,
+            model: { providerID: "acme", id: "falcon-mini", variant: "none" },
+          },
+        },
+      }),
+      "resolved",
+    );
+
+    expect(out.profiles.map((one) => one.name)).toEqual([
+      "mechanical",
+      "search",
+      "worker",
+      "judgment",
+      "thinking",
+      "deep",
+      "refactor",
+    ]);
+    const thinking = out.profiles.find((one) => one.name === "thinking");
+    const deep = out.profiles.find((one) => one.name === "deep");
+    expect(thinking?.model.ref).toBe("acme/falcon-mini#high");
+    expect(deep?.model.ref).toBe("acme/falcon-mini#high");
+    expect(out.profiles.every((one) => one.crosscheck === undefined)).toBe(true);
+    expect(out.models).toMatchObject([
+      {
+        name: "falcon-mini",
+        model: "acme/falcon-mini",
+        priority: 1,
+        rungs: ["none", "high"],
+      },
+    ]);
+    expect(out.crosscheck).toEqual([]);
+    expect(out.sources).toEqual([]);
+    expect(out.warnings?.[0]).toContain("No spectre.json found");
+  });
+
+  test("an unconfigured directory with a floor session model resolves all 7 default profiles without a rung", async () => {
+    const dir = scratch.projectDir();
+    const out = at(
+      await call(dir, {}, undefined, {
+        id: "ses_project",
+        sessions: {
+          ses_project: {
+            directory: dir,
+            model: { providerID: "opencode", id: "gpt-5" },
+          },
+        },
+      }),
+      "resolved",
+    );
+
+    expect(out.profiles.map((one) => one.name)).toEqual([
+      "mechanical",
+      "search",
+      "worker",
+      "judgment",
+      "thinking",
+      "deep",
+      "refactor",
+    ]);
+    for (const row of out.profiles) {
+      expect(row.model.ref).toBe("opencode/gpt-5");
+      expect(row.model.rung).toBeUndefined();
+      expect(row.crosscheck).toBeUndefined();
+    }
+    expect(out.sources).toEqual([]);
+    expect(out.warnings?.[0]).toContain("No spectre.json found");
+  });
+
+  test("an unconfigured directory with no session model uses ctx.model.default when available", async () => {
+    const dir = scratch.projectDir();
+    const out = at(
+      await call(dir, { profile: "worker" }, undefined, {
+        id: "ses_project",
+        sessions: { ses_project: dir },
+        defaultModel: { providerID: "acme", id: "falcon-mini" },
+      }),
+      "resolved",
+    );
+
+    expect(out.asked).toEqual(["worker"]);
+    expect(out.profiles).toHaveLength(1);
+    expect(out.profiles[0]?.model.ref).toBe("acme/falcon-mini#high");
+    expect(out.warnings?.[0]).toContain("No spectre.json found");
   });
 });

@@ -14,6 +14,7 @@ This page lists every field a routing answer can carry. Read it when the skill b
 | `sources` | The config files the tool read, lowest precedence first. |
 | `asked` | The profile names the call asked for. Empty on a whole-table call. |
 | `judge` | The profile choice, or the reason the tool did not ask. |
+| `warnings` | Optional routing notices, such as the unconfigured session-model fallback. |
 
 The `models` and `crosscheck` arrays share one row shape:
 
@@ -29,6 +30,8 @@ The `models` and `crosscheck` arrays share one row shape:
 The `models` array is in allowlist `priority` order. The `crosscheck` array is in fallback order. The `priority` on a `crosscheck` row is still the model's place in the allowlist, so the two orders never share one number.
 
 A named call puts the name in `asked`. A call that names a profile the config does not have returns an empty `profiles` array, and `asked` still carries the name.
+
+When no `spectre.json` exists and the session holds a usable model, the tool resolves default profiles on that session model. It clamps each profile effort to the model's ladder, leaves `crosscheck` off, sets `sources` to `[]`, and reports a warning in `warnings`.
 
 ## A profile row
 
@@ -113,7 +116,7 @@ The answer carries `models` when the allowlist holds at least one spendable mode
 
 ## `setup`
 
-`status` is `"setup"`. The answer carries `provider` when the starter file states one, the starter `models` in priority order, the starter `profiles` as `name` and `effort`, and `source`, the path the tool would write.
+`status` is `"setup"`. The answer carries `provider` when the starter file states one, the starter `models` in priority order, the starter `profiles` as `name` and `effort`, and `source`, the path the tool would write. The tool returns `setup` only when no config exists and the session holds no usable model in the catalogue.
 
 ## `declined`
 

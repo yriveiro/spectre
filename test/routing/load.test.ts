@@ -353,3 +353,96 @@ describe("the dictionary path", () => {
     expect(found.problems.join("\n")).toContain("dictionary");
   });
 });
+
+describe("linked git worktree inheritance", () => {
+  const git = async (cwd: string, args: ReadonlyArray<string>) => {
+    const proc = Bun.spawn(
+      [
+        "git",
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ],
+      { cwd, stdout: "pipe", stderr: "pipe" },
+    );
+    const [out, err, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    if (code !== 0) throw new Error(`git ${args.join(" ")} failed (${code}): ${err}`);
+    return out.trim();
+  };
+
+  test("a linked worktree with no spectre.json inherits an untracked spectre.json from main", async () => {
+    const mainDir = `${scratch.projectDir()}-repo`;
+    const linkedDir = `${scratch.projectDir()}-wt`;
+    await Bun.write(`${mainDir}/README.md`, "hello\n");
+    await git(mainDir, ["init", "-b", "main"]);
+    await git(mainDir, ["add", "README.md"]);
+    await git(mainDir, ["commit", "-m", "init"]);
+    await git(mainDir, ["worktree", "add", "-b", "feat-a", linkedDir]);
+
+    await Bun.write(
+      `${mainDir}/spectre.json`,
+      JSON.stringify({
+        provider: "github-copilot",
+        models: { carbon: "github-copilot/gemini-4-carbon" },
+        priority: ["carbon"],
+      }),
+    );
+
+    const found = await run(linkedDir);
+    expect(found.problems).toEqual([]);
+    expect(found.tables.provider).toBe("github-copilot");
+    expect(found.tables.models).toEqual({ carbon: "github-copilot/gemini-4-carbon" });
+    expect(await git(linkedDir, ["status", "--porcelain"])).toBe("");
+  });
+
+  test("uncommitted local edits in main override an untouched tracked spectre.json in a linked worktree, while local edits in the linked worktree win", async () => {
+    const mainDir = `${scratch.projectDir()}-tracked-repo`;
+    const linkedDir = `${scratch.projectDir()}-tracked-wt`;
+    await Bun.write(
+      `${mainDir}/spectre.json`,
+      JSON.stringify({
+        provider: "opencode-go",
+        models: { stale: "opencode-go/stale-model" },
+        priority: ["stale"],
+      }),
+    );
+    await git(mainDir, ["init", "-b", "main"]);
+    await git(mainDir, ["add", "spectre.json"]);
+    await git(mainDir, ["commit", "-m", "commit trunk spectre.json"]);
+    await git(mainDir, ["worktree", "add", "-b", "feat-b", linkedDir]);
+
+    await Bun.write(
+      `${mainDir}/spectre.json`,
+      JSON.stringify({
+        provider: "github-copilot",
+        models: { carbon: "github-copilot/gemini-4-carbon" },
+        priority: ["carbon"],
+      }),
+    );
+
+    const inherited = await run(linkedDir);
+    expect(inherited.tables.provider).toBe("github-copilot");
+    expect(inherited.tables.models).toEqual({ carbon: "github-copilot/gemini-4-carbon" });
+
+    await Bun.write(
+      `${linkedDir}/spectre.json`,
+      JSON.stringify({
+        provider: "anthropic",
+        models: { sonnet: "anthropic/claude-sonnet-4" },
+        priority: ["sonnet"],
+      }),
+    );
+
+    const overridden = await run(linkedDir);
+    expect(overridden.tables.provider).toBe("anthropic");
+    expect(overridden.tables.models).toEqual({ sonnet: "anthropic/claude-sonnet-4" });
+  });
+});

@@ -164,5 +164,13 @@ export const fit = (one: Ladder, want: Effort): Fit => {
   };
 };
 
-/** The rungs as a person reads them: the ranked ones, then the unranked ones. */
 export const rungs = (one: Ladder): ReadonlyArray<string> => [...one.ranked, ...one.unranked];
+
+export const clampEffort = (one: Ladder, effort: string | undefined): string | undefined => {
+  if (one.ranked.length === 0 && one.unranked.length === 0) return undefined;
+  if (effort === undefined) return one.ranked[0] ?? one.unranked[0];
+  const got = fit(one, effortOf(effort));
+  if (got.kind === "rung") return got.at.name;
+  if (got.kind === "short" && got.best !== undefined) return got.best.name;
+  return one.ranked[0] ?? one.unranked[0];
+};
