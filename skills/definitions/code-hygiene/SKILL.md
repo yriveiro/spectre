@@ -27,11 +27,18 @@ Mode tool that has no other surface.
    not spawn Sicko first. Its report cannot be audited without this, and a
    report nobody can audit is worse than no report.
 
-2. Spawn Sicko with the `subagent` tool. `agent` is `sicko`, which is the agent
-   id, not the persona name. Pass the scope in `prompt`: the caller's files or
-   diff, or the working-tree diff against the base branch, default `main`. Set
-   `description` to a short phrase naming the scope. Keep the `sessionID` the
-   spawn returns. Do not restate its rules. The keep list is its own.
+2. Route the model before you spawn Sicko. Load `model-router` and call
+   `tools.spectre.routing({ profile: "search" })`. If that returns no row, call
+   `tools.spectre.routing({ task: "<the comment audit scope>" })` instead. Follow
+   `model-router` on `setup`, `declined`, or `problems`.
+
+   Spawn Sicko with the `subagent` tool. Set `agent` to `sicko`, which is the
+   agent id, not the persona name, and do not replace it with `profile.agent`.
+   Pass the selected row's `model.ref` as `model`. Pass the scope in `prompt`:
+   the caller's files or diff, or the working-tree diff against the base branch,
+   default `main`. Set `description` to a short phrase naming the scope. Keep the
+   `sessionID` the spawn returns. Do not restate its rules. The keep list is its
+   own.
 
    The tool is `subagent` and the argument is `agent`. There is no other way to
    spawn an agent, so if the name you reach for is not `subagent`, name the tool
