@@ -4,6 +4,11 @@ import type { JSX } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import { FILE_NAME } from "../tools/definitions/routing/index.ts";
 import {
+  artifactCommands,
+  createArtifactsController,
+  makeClientArtifactStore,
+} from "./artifacts/index.ts";
+import {
   applied,
   isJevAvailable,
   isProviderAvailable,
@@ -394,7 +399,11 @@ export const subagentFooter = (input: {
       ),
   );
 
-export const opener = (open: () => void) => ({
+export const opener = (
+  open: () => void,
+  openArtifacts: () => void = () => {},
+  openGallery: () => void = () => {},
+) => ({
   mode: "global" as const,
   commands: [
     {
@@ -406,6 +415,7 @@ export const opener = (open: () => void) => ({
       slash: { name: "routing" } as const,
       run: open,
     },
+    ...artifactCommands(openArtifacts, openGallery),
   ],
 });
 
@@ -699,12 +709,38 @@ export default Plugin.define({
       showModal();
     };
 
+    const artifacts = createArtifactsController({
+      store: makeClientArtifactStore({
+        client: context.client,
+        sessionTitle: (sessionID) => context.data.session.get(sessionID)?.title,
+      }),
+      dialog: context.ui.dialog,
+      toast: context.ui.toast,
+      resolveContext: () => {
+        const sessionID = routeSession();
+        return {
+          directory: directoryFor(sessionID),
+          sessionID,
+        };
+      },
+    });
+
     context.ui.router.register({
       name: PAGE,
       render: renderModal,
     });
 
-    context.keymap.layer(() => opener(openModal));
+    context.keymap.layer(() =>
+      opener(
+        openModal,
+        () => {
+          void artifacts.openModal();
+        },
+        () => {
+          void artifacts.openGallery();
+        },
+      ),
+    );
 
     const resolvedRows = (sessionID: string): ReadonlyArray<Resolution> => {
       revision();
@@ -770,5 +806,9 @@ export default Plugin.define({
           },
         }),
     });
+
+    return () => {
+      artifacts.dispose();
+    };
   },
 });
