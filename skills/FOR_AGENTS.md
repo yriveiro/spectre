@@ -63,12 +63,12 @@ A claim another leaf owns does not get restated: name the owner in one clause an
 move on. `principle-subtract-before-you-add` opens by handing
 deletion-first-as-reader-load to `principle-laziness-protocol`.
 
-**The template is a target, not a description of the set.** 29 of the 83 bodies
-still carry a what-not section and 23 carry `## The moves`. Four principles still
-carry the five-section shape it replaced — `principle-boundary-discipline`,
-`principle-evidence`, `principle-hygiene`, `principle-make-operations-idempotent`,
-each with `Core values`, `Strategies` and `Tactics` where a new leaf writes one
-moves list. Do not copy them.
+**The template now covers every principle.** Twenty-seven `principle-*` bodies
+carry `## The moves`, and `principle-guard-the-context-window` uses the compact
+no-section shape. The four legacy five-section bodies
+(`principle-boundary-discipline`, `principle-evidence`, `principle-hygiene`, and
+`principle-make-operations-idempotent`) folded `Core values`, `Strategies`, and
+`Tactics` into `## The moves`. Do not reintroduce altitude splits.
 
 ## The three rules the measurements put here
 
@@ -106,7 +106,9 @@ same move:
 The failure is the same every time: a description written about the principle
 competes with every leaf on that vocabulary, and a prompt carries the prompt's.
 Open with the moment, not the doctrine, put the literal nouns in, and check the
-description by asking whether a real prompt's words appear in it.
+description by asking whether a real prompt's words appear in it. Never borrow a
+neighbour's vocabulary in a hand-off clause: dropping borrowed migration words from
+`principle-hygiene`'s description fixed a held-out migration row without naming it.
 
 **Do not cut a claim to save bytes.** Deleting the `Strategies` and `Tactics`
 sections outright cost 7.0 points of `bm25-full` hit@1, 46.5% to 39.5%. Folding
@@ -148,11 +150,10 @@ is written", and the row stopped routing. Put the literal nouns back.
 
 Indexing is what the hub pays, and it is why the hub is the binding constraint: it
 is the file that says "read this index, then load the one leaf you need", and one
-that outgrows the message is one nobody reads. On this checkout the `## Triggers`
-table and the `## Principles index` between them are 71% of the hub, over 15
-bullets, and 17 of the 32 leaves appear nowhere in it (`TODO.md` tracks them). The
-index entry has to become one line and the triggers table has to stop growing
-before the set grows much more.
+that outgrows the message is one nobody reads. `spectre-mode/SKILL.md` keeps one
+line per leaf across all 32 leaves, plus compact trigger rows without duplicates.
+Keep every new index bullet to one line and merge overlapping trigger rows rather
+than growing the table.
 
 ## Porting a principle from elsewhere
 
@@ -174,13 +175,13 @@ one means four things, and skipping any of them is how a port rots.
    and it costs the set nothing: the map and the index are what the leaf count
    and the routing surface are made of.
 
-   Two facts they need, kept here so they are not copied into the definition
-   files. They are registered only because `load()` dies on a body it does not
-   list. `ripwire` is the one auto-invoked definition, and the other 84 carry
-   `autoinvoke: false`, so the hub's trigger table is the router for them, and
-   a skill in neither the table nor the index is reached only by a reader who
-   asks for it by name, which is why its description is written for that reader.
-   Their ids are in `notALeaf`, which a map row is checked against.
+   Two facts they need, kept here so nobody copies them into the definition
+   files. They register only because `load()` dies on a body it does not list.
+   `ripwire` is the one definition declaring `autoinvoke: true` (`skills/index.ts`
+   switches it to `false` when neither `SPECTRE_RIPWIRE` nor `PATH` holds a
+   `ripwire` binary), and the other 84 carry `autoinvoke: false`. The hub's
+   trigger table routes those 84, while a reader asks for unindexed skills by
+   name. Their ids sit in `notALeaf`, which the map test checks.
 
    `arena` carries one more, and it is why the name needs watching:
    `features/arena.md` reserves `arena` for an unbuilt feature, and which of the
@@ -206,11 +207,16 @@ argument for fewer, sharper leaves.
 
 ## Measuring the routing
 
+`ripwire --eval-skills` reads YAML frontmatter from `SKILL.md`, while OpenCode
+reads `description` from `index.ts`. `eval/mirror.ts` writes a temp tree with
+frontmatter built from the live definitions so descriptions never drift.
+`test/skills/routing.test.ts` gates on AUC floors rather than per-skill win
+rates, because any description edit moves per-skill ranks.
+
 BM25 is a lexical proxy. The thing that routes is a model reading the same
 descriptions, so `eval/` asks both and prints them in one table.
 `eval/README.md` holds the commands, the evidence columns, and why the catalogue
-is checked against OpenCode's `Registered skills` log line rather than
-`GET /api/skill`.
+checks OpenCode's `Registered skills` log line rather than `GET /api/skill`.
 
 **The eval is blocked on a person today.** Delete the
 `"plugins": ["github:yriveiro/spectre"]` line from

@@ -11,7 +11,10 @@ export const spectre: Definition = {
 
 You are operating as spectre-mode's full agent style. Read the \`spectre-mode\`
 skill in full before doing any work, including its inline Principles index.
-Navigate to a leaf \`principle-*\` skill whenever you apply that principle.
+Navigate to a leaf \`principle-*\` skill whenever you apply that principle. Load
+\`communication\` only when shaping a multi-step report, blocked question, or
+trade-off choice, not before trivial single-line acknowledgements or internal
+tool turns.
 
 Before you spawn a subagent, load the \`model-router\` skill. It evaluates the
 task, picks a model from the allowlist in \`spectre.json\`, and hands back the

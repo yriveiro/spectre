@@ -109,12 +109,6 @@ altered to fit a word, nothing added that the source did not say, every hedge
 still there, and every object of a transitive verb still attached. A rewrite
 that fails any of those is not compliant, whatever its word list says.
 
-This branch borrowed this section and cut it down. The source is
-`references/meaning-fidelity.md` in `nuelcyoung/asd-ste100`, which is the
-counterweight that repository's `dictionary.md` and `pos-analysis.md` need and
-this one lacked. Its worked example is aerospace, so what came across is the rule
-and not the RPO paragraph.
-
 ## Active voice, and name the actor (STE 3.6)
 
 **Test: who is doing this, and did the sentence say so?**
@@ -182,9 +176,6 @@ does not have. The 20 is a judgement.
 Under STE 8.4 to 8.7 an inline code span, a link and a hyphenated compound each
 count as one word, so a long snippet does not make a short sentence long.
 
-Measured on this set before adoption: 7 sentences over 25 words across 79 files.
-This is not the expensive rule it looks like.
-
 Meet the limit by splitting, never by deleting. When a sentence will not fit,
 ask which proposition needs a sentence of its own. Never ask which words can go.
 
@@ -213,20 +204,8 @@ mark, so the em dash is legal and stays legal here.
 Bad: `The agent deletes the file; then it logs the path.`
 Good: `The agent deletes the file. Then it logs the path.`
 
-The em dash is permitted, because rule 8.1 permits every other standard mark.
-
-Measured on this set before adoption: 168 semicolons in prose across 79 files,
-and 0 inside a code fence or a table row. This is the rule that costs the most,
-and it is one character per finding.
-
-The branch that adopted this paid 191 of them across 63 files, which is 23 more
-than the 168 because the sweep went past the set of skill bodies and into
-`features/`, `eval/` and the two `FOR_AGENTS.md`. `test/tools/prose.test.ts`
-reads the whole repo and expects zero, so a new file cannot bring one back
-quietly. Four of the sentences held five or more items in a list, and those
-became lists rather than a run of full stops, which is what STE 4.3 asks for.
-The rest were a contrast or two instructions where the mark was doing the work
-of a full stop.
+Replace a semicolon between two clauses with a full stop. Turn a semicolon list
+of four or more items into a vertical list under STE 4.3.
 
 ## Keep the subject, the verb, and the article (STE 4.2, 4.5)
 
@@ -256,10 +235,6 @@ or `could`. Its reason is that a technician must not act on an unverified claim.
 That reason does not transfer. Here a hedge is the writer reporting the limit of
 what they checked, and deleting it does not make the claim more true. It makes it
 a fact nobody established.
-
-The STE-purist source agrees on the outcome by a different route. Its Pass 1
-holds that every hedge must survive, and its worked example deletes a modal that
-was itself approved, which it still calls a meaning failure.
 
 So: hedge down to one qualifier, never to zero. "Could potentially possibly be
 argued that it might" becomes `may`. "May have failed" stays.
@@ -330,8 +305,6 @@ Bad: `Circle back to the diff.` Good: `Read the diff again.`
 The standard's reason is that the meaning is not predictable from the parts, and
 both non-native readers and translation systems mishandle it. A model reading
 `hand off` is in the same position as a reader who does not know the idiom.
-
-Measured on this set before adoption: 10 occurrences across 79 files.
 
 ## Cap a noun cluster at three words (STE 2.1, not implemented)
 

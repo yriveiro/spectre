@@ -3,12 +3,19 @@ import { Effect } from "effect";
 import { load } from "./definitions";
 import { attach as watchEffectVersion } from "./definitions/effect-best-practices/watch";
 
+const hasRipwire = () =>
+  Boolean(Bun.env.SPECTRE_RIPWIRE?.trim()) ||
+  Bun.which("ripwire", { PATH: Bun.env.PATH ?? "" }) !== null;
+
 export const update = (ctx: Pick<Plugin.Context, "skill"> & Plugin.Context) =>
   Effect.gen(function* () {
     const skills = yield* load();
 
     yield* ctx.skill.transform((editor) => {
-      for (const skill of skills) editor.add(skill);
+      const available = hasRipwire();
+      for (const skill of skills) {
+        editor.add(skill.id === "ripwire" && !available ? { ...skill, autoinvoke: false } : skill);
+      }
     });
 
     // The watcher is not a skill: it reads `package.json` and reads the event stream, and it
