@@ -18,7 +18,7 @@ export type Ownership = {
  * predictor in the defect literature: many small hands mean the file's meaning
  * sits in no one's head.
  */
-export const ownershipOf = (commits: ReadonlyArray<Commit>): Ownership | null => {
+export const ownershipOf = (commits: ReadonlyArray<{ readonly author: string }>): Ownership | null => {
   if (commits.length === 0) return null;
   const byAuthor = new Map<string, number>();
   for (const commit of commits) byAuthor.set(commit.author, (byAuthor.get(commit.author) ?? 0) + 1);
@@ -73,6 +73,40 @@ const log = async (
 };
 
 export const DEFAULT_LIMIT = 20;
+export const DEFAULT_MAX_BODY_CHARS = 2000;
+
+type Header = {
+  readonly author: string;
+  readonly date: string;
+};
+
+const parseHeaders = (raw: string): ReadonlyArray<Header> =>
+  raw
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line !== "")
+    .flatMap((line) => {
+      const at = line.lastIndexOf("\t");
+      if (at <= 0) return [];
+      const author = line.slice(0, at);
+      const date = line.slice(at + 1);
+      return author === "" || date === "" ? [] : [{ author, date }];
+    });
+
+const headers = async (
+  cwd: string,
+  file: string,
+  args: ReadonlyArray<string>,
+): Promise<ReadonlyArray<Header>> => {
+  const found = await run(cwd, ["log", "--format=%an%x09%aI", ...args, "--", file]);
+  return found.code === 0 ? parseHeaders(found.out) : [];
+};
+
+const truncateBody = (body: string, maxChars: number): string =>
+  body.length <= maxChars ? body : `${body.slice(0, maxChars)}… [truncated]`;
+
+const withBoundedBody = (commit: Commit, maxChars: number): Commit =>
+  commit.body.length <= maxChars ? commit : { ...commit, body: truncateBody(commit.body, maxChars) };
 
 export const history = async (
   directory: string,
@@ -82,9 +116,14 @@ export const history = async (
     readonly line?: number;
     readonly contains?: string;
     readonly matches?: string;
+    readonly maxBodyChars?: number;
   },
 ): Promise<Report> => {
   const limit = input.limit ?? DEFAULT_LIMIT;
+  const maxBodyChars =
+    input.maxBodyChars !== undefined && Number.isFinite(input.maxBodyChars)
+      ? Math.max(0, Math.floor(input.maxBodyChars))
+      : DEFAULT_MAX_BODY_CHARS;
   const problems: Array<string> = [];
 
   const tracked = await run(directory, ["ls-files", "--error-unmatch", input.path]);
@@ -118,10 +157,11 @@ export const history = async (
   const filter: Array<string> = [];
   if (input.contains !== undefined) filter.push(`--grep=${input.contains}`, "--fixed-strings");
   if (input.matches !== undefined) filter.push(`-S${input.matches}`);
-  const commits = await log(directory, input.path, [`--max-count=${limit}`, ...filter]);
+  const rawCommits = await log(directory, input.path, [`--max-count=${limit}`, ...filter]);
+  const commits = rawCommits.map((one) => withBoundedBody(one, maxBodyChars));
 
   const added = await log(directory, input.path, ["--diff-filter=A", "--max-count=1"]);
-  const introducedBy = added[0] ?? null;
+  const introducedBy = added[0] ? withBoundedBody(added[0], maxBodyChars) : null;
 
   let blame: Blame | null = null;
   if (input.line !== undefined) {
@@ -146,7 +186,7 @@ export const history = async (
       );
   }
 
-  const total = await log(directory, input.path, ["--max-count=100000"]);
+  const total = await headers(directory, input.path, ["--max-count=100000"]);
   const cut = new Date(Date.now() - 90 * 86_400_000).toISOString();
   const recent = total.filter((one) => one.date >= cut);
   if (recent.length > 0 && total.length > recent.length)
@@ -168,7 +208,7 @@ export const history = async (
     // How much of what came back actually carries a rationale. A history of
     // subjects and no bodies cannot answer why, and the caller should not have
     // to read every row to discover that.
-    bodies: commits.filter((one) => one.body !== "").length,
+    bodies: rawCommits.filter((one) => one.body !== "").length,
     problems,
   };
 };

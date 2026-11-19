@@ -152,17 +152,19 @@ describe("argv", () => {
     ).toEqual(["/root", "--expand=src/a.ts:rescue", "--legend=compact"]);
   });
 
-  test("a literal carries the grep flag", () => {
+  test("a literal carries the grep flag and a 50-hit limit", () => {
     expect(argv({ route: { kind: "literal", text: "resolveTool" }, root: "/root", budget: 4000 })).toEqual([
       "/root",
       "--grep=resolveTool",
+      "--limit=50",
     ]);
   });
 
-  test("a regex carries the regex flag", () => {
+  test("a regex carries the regex flag and a 50-hit limit", () => {
     expect(argv({ route: { kind: "regex", pattern: "re.*" }, root: "/root", budget: 4000 })).toEqual([
       "/root",
       "--regex=re.*",
+      "--limit=50",
     ]);
   });
 });

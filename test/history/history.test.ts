@@ -51,6 +51,7 @@ const repo = async () => {
   await git(base, ["init", "-q", "-b", "main", root]);
   await git(root, ["config", "user.email", "dev@example.com"]);
   await git(root, ["config", "user.name", "Dev One"]);
+  await git(root, ["config", "commit.gpgsign", "false"]);
 
   await Bun.write(`${root}/a.txt`, "one\n");
   await git(root, ["add", "."]);
@@ -291,6 +292,76 @@ describe("a file with three commits, the last reverting the second", () => {
     // is the ordering the fields claim, not a strict inequality.
     expect(Date.parse(report.last!)).toBeGreaterThanOrEqual(Date.parse(report.first!));
     expect(report.commits[0]?.date).toBe(report.last);
+  });
+
+  test("long commit bodies truncate at 2000 chars by default and honor maxBodyChars", async () => {
+    const root = await repo();
+    const exactBody = "x".repeat(2000);
+    const overBody = "y".repeat(2050);
+
+    await Bun.write(`${root}/long.txt`, "1\n");
+    await git(root, ["add", "long.txt"]);
+    await git(root, ["commit", "-q", "-m", "initial long", "-m", overBody]);
+
+    await Bun.write(`${root}/long.txt`, "2\n");
+    await git(root, ["commit", "-qam", "exact boundary", "-m", exactBody]);
+
+    const defaults = await call(root, { path: "long.txt" });
+    expect(defaults.commits[0]?.body).toBe(exactBody);
+    expect(defaults.commits[1]?.body).toBe(`${"y".repeat(2000)}… [truncated]`);
+    expect(defaults.introducedBy?.body).toBe(`${"y".repeat(2000)}… [truncated]`);
+    expect(defaults.bodies).toBe(2);
+
+    const custom = await call(root, { path: "long.txt", maxBodyChars: 12 });
+    expect(custom.commits[0]?.body).toBe(`${"x".repeat(12)}… [truncated]`);
+    expect(custom.commits[1]?.body).toBe(`${"y".repeat(12)}… [truncated]`);
+
+    const zero = await call(root, { path: "long.txt", maxBodyChars: 0 });
+    expect(zero.commits[0]?.body).toBe("… [truncated]");
+    expect(zero.bodies).toBe(2);
+  });
+
+  test("header-only scan computes ownership, first timestamp, and 90-day churn warning", async () => {
+    const root = await repo();
+    const oldDate = "2025-01-01T00:00:00Z";
+    const recentDate = new Date().toISOString();
+
+    await Bun.write(`${root}/churn.txt`, "v1\n");
+    await git(root, ["add", "churn.txt"]);
+    await git(root, [
+      "-c",
+      `user.name=Ada Lovelace`,
+      "commit",
+      "-q",
+      "--date",
+      oldDate,
+      "-m",
+      "ancient commit",
+      "-m",
+      "body ignored during total scan",
+    ]);
+
+    await Bun.write(`${root}/churn.txt`, "v2\n");
+    await git(root, ["commit", "-qam", "recent commit", "--date", recentDate]);
+
+    const report = (await call(root, { path: "churn.txt", limit: 1 })) as Report & {
+      ownership?: {
+        commits: number;
+        authors: number;
+        major: { author: string; commits: number; share: number };
+        minor: number;
+      };
+    };
+
+    expect(report.authors).toEqual(["Dev One"]);
+    expect(report.ownership).toEqual({
+      commits: 2,
+      authors: 2,
+      major: { author: "Ada Lovelace", commits: 1, share: 0.5 },
+      minor: 0,
+    });
+    expect(report.first).toBe(oldDate);
+    expect(report.problems).toContain("1 of the last 2 commits to this file are under 90 days old");
   });
 });
 

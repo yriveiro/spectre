@@ -1,6 +1,6 @@
 import type { Tool } from "@opencode/plugin/effect";
 import { Effect, Schema } from "effect";
-import { DEFAULT_LIMIT, history } from "./read";
+import { DEFAULT_LIMIT, DEFAULT_MAX_BODY_CHARS, history } from "./read";
 
 const Input = Schema.Struct({
   path: Schema.String.annotate({
@@ -19,6 +19,9 @@ const Input = Schema.Struct({
   }),
   limit: Schema.optional(Schema.Number).annotate({
     description: `Commits to return, newest first. Default ${DEFAULT_LIMIT}.`,
+  }),
+  maxBodyChars: Schema.optional(Schema.Number).annotate({
+    description: `Maximum characters per commit body before truncation. Default ${DEFAULT_MAX_BODY_CHARS}.`,
   }),
 });
 
