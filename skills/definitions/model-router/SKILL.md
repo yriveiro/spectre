@@ -7,7 +7,7 @@ Read the task, ask the resolver for a model, spend the ref it returns, and say w
 1. **Evaluate.** Read the task and state what it asks for. Do this before you look at any profile. State how much reading it needs, how much judgement it needs, and what a wrong answer would cost. One or two sentences are enough.
 2. **Ask.** Call `tools.spectre.routing({ task: "<the task>" })`. The `task` is the statement the judge reads. The tool reads `spectre.json` from the directory of the session, or `spectre.jsonc` when that is the file there. It merges the global file with the project file and resolves every profile against the live catalogue. A session that moved into a worktree reads that worktree's file on the next call.
 3. **Choose.** Read `judge` first. When it is `used`, take the row it names. When it is `skipped`, take the profile whose `match` line fits your evaluation. The profile states the thinking it needs, or pins a model. The resolver turns that into one model. You do not pick a rung.
-4. **Spawn.** Call `subagent` with `model: profile.model.ref`, copied exactly, variant included. Then say the choice in one line.
+4. **Spawn.** Call `subagent` with `agent: profile.agent` and `model: profile.model.ref`, copied exactly, variant included. The `mechanical`, `search`, and `worker` profiles default to `operator`, and higher profiles default to `spectre`. Then say the choice in one line.
 
 If your evaluation already settled on a profile, pass its name: `routing({ profile: "refactor" })` returns only that row and puts the name in `asked`. A named profile is the decision, so the tool does not ask the judge, and `judge.status` is `skipped`.
 

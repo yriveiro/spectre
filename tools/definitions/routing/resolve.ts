@@ -2,6 +2,7 @@ import { ladder } from "./catalogue";
 import { type Effort, effortOf, type Fit, fit, type Ladder, ladderOf } from "./effort";
 import {
   type Candidate,
+  defaultAgentFor,
   type Excluded,
   modelNames,
   type Pick,
@@ -309,7 +310,7 @@ export const resolve = (
   readonly excluded: ReadonlyArray<Excluded>;
   readonly problem: string | undefined;
 } => {
-  const agent = entry.agent ?? defaultAgent;
+  const agent = entry.agent ?? defaultAgentFor(profile, defaultAgent);
   const pins = modelNames(entry.model);
 
   // A pin skips the requirement. The first pinned name the allowlist holds is

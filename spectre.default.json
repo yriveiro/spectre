@@ -10,16 +10,19 @@
   "profiles": {
     "mechanical": {
       "effort": "low",
+      "agent": "operator",
       "match": "Use when the task is one command to run and one output to read, and the deliverable is what it said: run the tests, read the log, report the failure. Not for finding where something lives.",
       "why": "One command, one log, and a report. Nothing to decide, so the cheapest effort runs it; a wrong answer here shows up as a failed command rather than a wrong commit."
     },
     "search": {
       "effort": "medium",
+      "agent": "operator",
       "match": "Use when the task is to find where something lives, with grep for a symbol, a file to read, the call sites to name, or the blast radius to list. Not for a command to run.",
       "why": "Find where something lives: grep, read, name the call sites. A missed symbol costs a second pass over the repo, so it leads above the floor and escalates to the other model."
     },
     "worker": {
       "effort": "medium",
+      "agent": "operator",
       "crosscheck": { "effort": "medium" },
       "match": "Use when the change is already decided and the task is to carry it out across several files: add the field, write the test, make the edits. Not for choosing between two defensible designs.",
       "why": "A change that is already decided and has to be executed across several files. The model holds one plan while editing it, so it takes medium effort rather than the floor. A second family at the same effort gives a second opinion on the change."

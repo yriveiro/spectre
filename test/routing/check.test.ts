@@ -53,7 +53,7 @@ const tables = (
   ),
 });
 
-const AGENTS = ["spectre", "sicko"];
+const AGENTS = ["spectre", "operator", "sicko"];
 
 const run = (given: Tables, models: ReadonlyArray<Model.Info> = catalogue) =>
   check(given, models, "spectre", AGENTS);
@@ -259,7 +259,7 @@ describe("check", () => {
         {
           name: "worker",
           models: [{ name: "light", model: "acme/falcon-mini" }],
-          agent: "spectre",
+          agent: "operator",
           why: "w",
         },
       ]);
@@ -377,7 +377,44 @@ describe("check", () => {
     expect(found.profiles).toEqual([]);
     expect(found.problems).toHaveLength(1);
     expect(found.problems[0]).toContain('"explore" is not a spectre agent');
-    expect(found.problems[0]).toContain("Spectre agents: spectre, sicko");
+    expect(found.problems[0]).toContain("Spectre agents: spectre, operator, sicko");
+  });
+
+  test("omitted agent defaults lean profiles to operator and higher or custom profiles to spectre, while explicit agent wins", () => {
+    const found = run(
+      tables(
+        { light: "acme/falcon-mini" },
+        {
+          mechanical: { model: "light" },
+          search: { model: "light" },
+          worker: { model: "light" },
+          judgment: { model: "light" },
+          thinking: { model: "light" },
+          deep: { model: "light" },
+          refactor: { model: "light" },
+          custom: { model: "light" },
+          "worker-override": { model: "light" },
+        },
+      ),
+    );
+    expect(found.problems).toEqual([]);
+    expect(Object.fromEntries(found.profiles.map((one) => [one.name, one.agent]))).toEqual({
+      mechanical: "operator",
+      search: "operator",
+      worker: "operator",
+      judgment: "spectre",
+      thinking: "spectre",
+      deep: "spectre",
+      refactor: "spectre",
+      custom: "spectre",
+      "worker-override": "spectre",
+    });
+
+    const overridden = run(
+      tables({ light: "acme/falcon-mini" }, { worker: { model: "light", agent: "spectre" } }),
+    );
+    expect(overridden.problems).toEqual([]);
+    expect(overridden.profiles[0]?.agent).toBe("spectre");
   });
 
   test("a misspelled spectre agent is caught here, not at spawn", () => {

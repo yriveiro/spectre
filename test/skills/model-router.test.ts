@@ -9,6 +9,7 @@ describe("model-router ships the body it promises", () => {
     const body = await Bun.file(`${SKILL}/SKILL.md`).text();
     expect(body.match(/^\d+\. \*\*(?:Evaluate|Ask|Choose|Spawn)\.\*\*/gm)?.length).toBe(4);
     expect(body).toContain("tools.spectre.routing");
+    expect(body).toContain("operator");
     expect(body).not.toContain("routing_model_preference");
   });
 
