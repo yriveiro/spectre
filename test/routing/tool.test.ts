@@ -854,4 +854,43 @@ describe("tools.spectre.routing", () => {
 
     expect(out.problems).toContain("models.light");
   });
+
+  test("omitted agent defaults mechanical, search, and worker to operator and others to spectre, while explicit agent overrides", async () => {
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini" }),
+        profiles: {
+          mechanical: { effort: "none", match: "one command" },
+          search: { effort: "high", match: "find symbols" },
+          worker: { effort: "high", match: "carry out edits" },
+          judgment: { effort: "high", match: "choose design" },
+          thinking: { effort: "high", match: "prove invariant" },
+          deep: { effort: "high", match: "architecture" },
+          refactor: { effort: "high", match: "restructure" },
+        },
+      }),
+    );
+
+    const out = at(await call(scratch.projectDir()), "resolved");
+    expect(Object.fromEntries(out.profiles.map((one) => [one.name, one.agent]))).toEqual({
+      mechanical: "operator",
+      search: "operator",
+      worker: "operator",
+      judgment: "spectre",
+      thinking: "spectre",
+      deep: "spectre",
+      refactor: "spectre",
+    });
+
+    await scratch.writeProject(
+      JSON.stringify({
+        ...allow({ light: "acme/falcon-mini" }),
+        profiles: {
+          worker: { effort: "high", agent: "spectre", match: "carry out edits" },
+        },
+      }),
+    );
+    const overridden = at(await call(scratch.projectDir()), "resolved");
+    expect(overridden.profiles[0]?.agent).toBe("spectre");
+  });
 });

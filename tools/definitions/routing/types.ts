@@ -232,22 +232,31 @@ export const formatRef = (ref: Model.Ref): string =>
     : `${ref.providerID}/${ref.id}#${ref.variant}`;
 
 export const DEFAULT_AGENT = "spectre";
+export const OPERATOR_AGENT = "operator";
+
+const OPERATOR_PROFILES = new Set(["mechanical", "search", "worker"]);
+
+export const defaultAgentFor = (profile: string, fallback: string = DEFAULT_AGENT): string =>
+  fallback === DEFAULT_AGENT && OPERATOR_PROFILES.has(profile) ? OPERATOR_AGENT : fallback;
 
 export const DEFAULT_PROFILES: Readonly<Record<string, Profile>> = {
   mechanical: {
     effort: "low",
+    agent: OPERATOR_AGENT,
     match:
       "Use when the task is one command to run and one output to read, and the deliverable is what it said: run the tests, read the log, report the failure. Not for finding where something lives.",
     why: "One command, one log, and a report. Nothing to decide, so the cheapest effort runs it; a wrong answer here shows up as a failed command rather than a wrong commit.",
   },
   search: {
     effort: "medium",
+    agent: OPERATOR_AGENT,
     match:
       "Use when the task is to find where something lives, with grep for a symbol, a file to read, the call sites to name, or the blast radius to list. Not for a command to run.",
     why: "Find where something lives: grep, read, name the call sites. A missed symbol costs a second pass over the repo, so it leads above the floor and escalates to the other model.",
   },
   worker: {
     effort: "medium",
+    agent: OPERATOR_AGENT,
     crosscheck: { effort: "medium" },
     match:
       "Use when the change is already decided and the task is to carry it out across several files: add the field, write the test, make the edits. Not for choosing between two defensible designs.",

@@ -1,7 +1,7 @@
 import { Model } from "@opencode/plugin/effect";
 import { effortOf, fit, ladderOf } from "./effort";
 import { crosscheckOf, priorityOf } from "./order";
-import { formatRef, modelNames, type Tables } from "./types";
+import { defaultAgentFor, formatRef, modelNames, type Tables } from "./types";
 
 export type Row = { name: string; model: string };
 
@@ -123,7 +123,7 @@ export const check = (
     const pinned = entry.model ?? [];
     let ok = true;
 
-    const agent = entry.agent ?? defaultAgent;
+    const agent = entry.agent ?? defaultAgentFor(name, defaultAgent);
     if (!spectreAgents.includes(agent)) {
       problems.push(
         `profiles.${name}.agent: "${agent}" is not a spectre agent, so the run would not be in spectre mode. Spectre agents: ${spectreAgents.join(", ")}`,

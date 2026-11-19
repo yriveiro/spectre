@@ -514,7 +514,7 @@ describe("resolve: the pin", () => {
     expect(found.resolution?.crosscheck?.alias).toBe("free");
   });
 
-  test("the agent is the profile's own, or the default", () => {
+  test("the agent is the profile's own, or the per-profile default", () => {
     const withAgent = resolve(
       "reviewer",
       { effort: "low", agent: "sicko" },
@@ -523,13 +523,33 @@ describe("resolve: the pin", () => {
     );
     expect(withAgent.resolution?.agent).toBe("sicko");
 
-    const without = resolve(
+    const explicitSpectreOnWorker = resolve(
       "worker",
-      { effort: "low" },
+      { effort: "low", agent: "spectre" },
       kept([allow("glm", "opencode-go/glm-5.3-flash")]),
       "spectre",
     );
-    expect(without.resolution?.agent).toBe("spectre");
+    expect(explicitSpectreOnWorker.resolution?.agent).toBe("spectre");
+
+    for (const profile of ["mechanical", "search", "worker"]) {
+      const lean = resolve(
+        profile,
+        { effort: "low" },
+        kept([allow("glm", "opencode-go/glm-5.3-flash")]),
+        "spectre",
+      );
+      expect(lean.resolution?.agent).toBe("operator");
+    }
+
+    for (const profile of ["judgment", "thinking", "deep", "refactor", "explorer"]) {
+      const full = resolve(
+        profile,
+        { effort: "low" },
+        kept([allow("glm", "opencode-go/glm-5.3-flash")]),
+        "spectre",
+      );
+      expect(full.resolution?.agent).toBe("spectre");
+    }
   });
 });
 

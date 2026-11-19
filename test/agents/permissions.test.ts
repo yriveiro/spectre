@@ -82,6 +82,20 @@ describe("data root permissions", () => {
     const agents = await register();
     const subagent = agents.get("sicko");
     expect(subagent?.permissions.some((rule) => rule.resource.startsWith(ROOT))).toBe(true);
+
+    const operator = agents.get("operator");
+    expect(operator?.mode).toBe("subagent");
+    expect(operator?.permissions.slice(0, 3)).toEqual([
+      { action: "external_directory", resource: `${ROOT}/*`, effect: "allow" },
+      { action: "read", resource: `${ROOT}/*`, effect: "allow" },
+      { action: "edit", resource: `${ROOT}/*`, effect: "allow" },
+    ]);
+    expect(operator?.permissions.filter((rule) => rule.resource === BRAIN)).toEqual([
+      { action: "edit", resource: BRAIN, effect: "deny" },
+    ]);
+    expect(
+      operator?.permissions.some((rule) => rule.resource === BRAIN && rule.effect === "allow"),
+    ).toBe(false);
   });
 
   test("no rule names a home-relative path, which the config loader expands and a plugin does not", async () => {
