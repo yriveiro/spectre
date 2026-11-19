@@ -7,5 +7,10 @@ export const modelRouter: Definition = {
   description:
     "Read a task, then pick a model for it from the models spectre.json allows and spawn a subagent on that. Load this before any subagent call, so the model string comes from the checked allowlist rather than from memory. Use whenever work is about to be delegated to a subagent, when a task should be split so the mechanical part and the judgement part run on different models, and when a profile asks for a crosscheck: run the second model as a reviewer and judge its challenges.",
   autoinvoke: false,
+  catalog: {
+    tier: "push",
+    group: "leaf",
+    trigger: "spawning a subagent, picking a profile, or resuming a rejected child",
+  },
   path: anchor(import.meta.dir),
 };

@@ -7,5 +7,10 @@ export const architect: Definition = {
   description:
     "Settle the types, the signatures and the module shape on paper before a line of implementation exists, then fill the code in against that sketch and throw the sketch away when the code keeps fighting it. Reach for it when a change is big enough that the wrong shape becomes load-bearing by the time you notice: a new module, a second caller arriving for something that has one, a data shape other code will start depending on. You call it. Nothing in this set calls it for you.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "design",
+    summary: "Settle types, signatures, and deep module boundaries on paper before writing implementation",
+  },
   path: anchor(import.meta.dir),
 };

@@ -1,61 +1,20 @@
 # Playbook
 
-Twenty-three procedures, one per shape of task. This file is the index and the
-selection rule. Each playbook is a folder beside it.
+Twenty-five procedures, one per shape of task (`24` `playbook-*` skills plus `worktree-cleanup`). This file states the selection rule and the wake contract. Call `tools.spectre.skills({ category: "playbook" })` to list all twenty-five procedures or `tools.spectre.skills({ query, category: "playbook" })` to match one before calling `skill({ id })`.
 
-`principle-*` tells you how to hold yourself while you work. These tell you what
-to do and in what order. A principle has no phases. A playbook does. If a request
-is small enough that the order does not matter, no playbook is the right answer
-and a principle or nothing is.
+`principle-*` tells you how to hold yourself while you work. Playbooks tell you what to do and in what order. A principle has no phases. A playbook does. If a request is small enough that the order does not matter, skip playbooks and apply a principle or nothing.
 
 ## The rule
 
-**Match the shape of the task, not its topic.** "The login page is slow" is a
-perf task whichever feature it is in. "Rewrite the auth module" is a refactor
-even though it touches login. Getting this wrong is the expensive error here: the
-wrong playbook is a complete, confident, well-executed sequence of the wrong
-steps, and it looks exactly like good work until the end.
+**Match the shape of the task, not its topic.** "The login page is slow" is a perf task whichever feature it touches. "Rewrite the auth module" is a refactor even though it touches login. Picking the wrong playbook runs a confident sequence of the wrong steps.
 
-Three things force a choice over a bare request:
+Three questions force a choice over a bare request:
 
-1. **Is anything wrong?** Reproduce before you change anything. `playbook-bug-fix`.
-2. **Is it too slow?** Measure before you change anything. `playbook-perf-issue`.
-3. **Does it have to be true?** Write the test first. `playbook-tdd`'s neighbour,
-   the `tdd` skill, when it is a bug and nothing else.
+1. **Is anything wrong?** Reproduce before you change anything. Load `playbook-bug-fix`.
+2. **Is it too slow?** Measure before you change anything. Load `playbook-perf-issue`.
+3. **Does a defect have a cheap local test target?** Write the failing test first with `tdd`.
 
-If none of those hold and the shape is still unclear, `playbook-prototype` exists
-to settle it cheaply before the real procedure starts.
-
-## The table
-
-| Playbook | The task | Reach for it when |
-| -------- | ------- | ----------------- |
-| `playbook-investigation` | a read-only question | you are asking how something works and nothing needs changing |
-| `playbook-bug-fix` | a defect | it misbehaves. Reproduce, root-cause, fix, verify |
-| `playbook-feature` | new behaviour | the shape is settled and the work is building it |
-| `playbook-refactoring` | a behaviour-preserving change | it works and the shape is wrong |
-| `playbook-prototype` | a decision between designs | you do not know which shape is right and guessing is expensive |
-| `playbook-perf-issue` | a measured slowness | it is slow and you can measure the slowness |
-| `playbook-hillclimb` | one number, against a target | the metric is already measured and the job is to move it |
-| `playbook-runtime-forensics` | a live symptom | it is broken right now, in a running process |
-| `playbook-trace-forensics` | a captured artefact | you have a profile, a heap dump, or a spindump and nobody has read it |
-| `playbook-visual-parity` | pixel equivalence | two implementations should look identical and do not |
-| `playbook-eval` | comparing candidates | you need to know which of two answers is better, blinded |
-| `playbook-authoring-a-skill` | writing a skill | you are editing a `SKILL.md` and the shape is the work |
-| `playbook-multi-phase-plan` | work that spans phases | it will not fit in one commit and the plan is the deliverable |
-| `playbook-babysit` | driving a PR to merge-ready | a pull request is open and something is outstanding |
-| `playbook-shipping` | landing a verified stack | everything is green and the job is getting it in |
-| `playbook-opening-a-pr` | the last step of most playbooks | small ordered commits, ready, never draft |
-| `playbook-worktree-init` | opening a fresh worktree | a change needs its own directory and branch, and the session must move into it |
-| `playbook-session-pickup` | taking over interrupted work | you are resuming something that was not finished |
-| `playbook-pause-safely` | suspending work | you must stop now and the work has to resume cleanly |
-| `playbook-autonomous-run` | one task to a condition | it has a checkable exit and you want it driven to it |
-| `playbook-orchestrate` | a multi-day programme | one thread owns many units and the units are countable |
-| `playbook-autopilot-full` | a queue of PRs to merged | each item has an owner and the queue drains |
-| `playbook-autopilot-stack` | one stack for a human to land | the stack is built and verified and a person merges it |
-
-`worktree-cleanup` is the twenty-fourth and it is not prefixed, and it is a maintenance task rather than a
-shape of work. It is in the same table under its own name.
+If none of those holds and the shape stays unclear, load `playbook-prototype` to settle it cheaply before the real procedure starts.
 
 ## Long programmes and the native wake
 

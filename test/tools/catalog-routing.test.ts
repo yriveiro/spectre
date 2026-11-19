@@ -13,6 +13,7 @@ import { pr } from "../../tools/definitions/pr";
 import { prose } from "../../tools/definitions/prose";
 import { routing } from "../../tools/definitions/routing";
 import { ripwire } from "../../tools/definitions/search";
+import { skillsTool } from "../../tools/definitions/skills";
 import { solidjs } from "../../tools/definitions/solidjs";
 import { stack } from "../../tools/definitions/stack";
 import { worktrees } from "../../tools/definitions/worktrees";
@@ -54,6 +55,7 @@ const SPECTRE_TOOLS: ReadonlyArray<RegisteredTool> = [
   prose(directory),
   ripwire(ctx),
   routing(ctx),
+  skillsTool(),
   solidjs(directory),
   stack(directory),
   worktrees(ctx),
@@ -283,12 +285,14 @@ const TASK_QUERIES: ReadonlyArray<readonly [query: string, expectedPath: string]
   ["pr stack blocker merge conflicts", "tools.spectre.stack"],
   ["open branch worktree move session", "tools.spectre.worktrees"],
   ["cleanup git worktrees hold-wip safe", "tools.spectre.worktrees"],
+  ["search list inspect spectre skill catalog", "tools.spectre.skills"],
+  ["preview skill headings pull workflows", "tools.spectre.skills"],
 ];
 
 describe("Code Mode catalog routing surface", () => {
-  test("mounts a 40-tool catalog (12 spectre tools + 28 MCP distractors)", () => {
-    expect(SPECTRE_TOOLS).toHaveLength(12);
-    expect(runtime.catalog).toHaveLength(40);
+  test("mounts a 41-tool catalog (13 spectre tools + 28 MCP distractors)", () => {
+    expect(SPECTRE_TOOLS).toHaveLength(13);
+    expect(runtime.catalog).toHaveLength(41);
   });
 
   test("zero tools.spectre.* tools set pinned: true", () => {

@@ -146,14 +146,21 @@ is written", and the row stopped routing. Put the literal nouns back.
 - **A description.** `test/skills/routing.test.ts` fails on a blank one, and on
   `bm25-desc` or `bm25-full` stopping beating chance. The routing arm is skipped
   when `ripwire` is missing. The blank check always runs.
+- **A `catalog` entry on `Definition`.** `skills/definitions/definition.ts`
+  requires `catalog: SkillCatalog` (`push` with `group: "leaf" | "communication"`
+  and a single-line `trigger`, `hub` with `summary`, or `pull` with `category` and `summary`).
+  `skills/definitions/index.ts` derives `notALeaf` directly from `!(tier === "push" && group === "leaf")`,
+  `skills/catalog.ts` renders the static catalog embedded into `agents/definitions/spectre.ts`
+  within `1,500` tokens and updates the `skill` tool contract for `agent === "spectre"` in
+  `session.context`, and `tools.spectre.skills` indexes all 85 skills for BM25 lookup.
+  `test/skills/catalog.test.ts` checks the partition, line lengths, token cap, and blind-slice four-word bar.
 - **Registration**, as above.
 
-Indexing is what the hub pays, and it is why the hub is the binding constraint: it
-is the file that says "read this index, then load the one leaf you need", and one
-that outgrows the message is one nobody reads. `spectre-mode/SKILL.md` keeps one
-line per leaf across all 32 leaves, plus compact trigger rows without duplicates.
-Keep every new index bullet to one line and merge overlapping trigger rows rather
-than growing the table.
+The Spectre skill catalog carries the 33 push triggers (`32` leaves and
+`communication`) plus the pull-tier guide (`25` playbooks, `24` domain/workflow
+skills, and `3` hubs), while `spectre-mode/SKILL.md` holds only the disposition
+rules and core non-negotiable rows. Never maintain duplicate skill index lists
+in Markdown.
 
 ## Porting a principle from elsewhere
 

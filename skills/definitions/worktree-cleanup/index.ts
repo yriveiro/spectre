@@ -7,5 +7,10 @@ export const worktreeCleanup: Definition = {
   description:
     "Reclaim disk from abandoned worktrees without losing work. Reach for it when `git worktree list` is longer than the work in it: a merged branch still holding a directory, a stack that landed last week, a scratch tree from an experiment. Call `tools.spectre.worktrees({})` first and let its bucket decide, because that judgement is a pure function of the git state and re-deriving it by eye is how a branch gets deleted early. It never deletes; you call it. Nothing in this set calls it for you.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "playbook",
+    summary: "auditing git worktrees and reclaiming merged or stale directories",
+  },
   path: anchor(import.meta.dir),
 };

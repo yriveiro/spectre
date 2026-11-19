@@ -35,11 +35,28 @@ export const parseRegistered = (line: string): ReadonlyArray<string> => {
  * eval measures through.
  *
  * Two things are load-bearing and both were measured the hard way. The project
- * has to exist and hold its config before the spawn, because the directory
- * becomes the child's cwd and the plugin is loaded from there. And
- * `OPENCODE_CONFIG_DIR` is deliberately not set: it replaces the whole config
- * directory, which is also where the provider credentials live.
+ * has to exist before the spawn because it becomes the child's cwd, and
+ * `OPENCODE_CONFIG_DIR` isolates plugin registration from the user's global
+ * `~/.config/opencode/opencode.jsonc` while keeping host provider auth intact
+ * in the data directory.
  */
+const writeBootConfigs = async (directory: string, plugin: string | undefined): Promise<string> => {
+  const configDir = `${directory}/.opencode-config`;
+  await Bun.$`mkdir -p ${directory} ${configDir}`.quiet();
+  const body =
+    JSON.stringify(
+      {
+        $schema: "https://opencode.ai/config.json",
+        update: "disable",
+        experimental: {},
+        ...(plugin === undefined ? {} : { plugins: [plugin] }),
+      },
+      null,
+      2,
+    ) + "\n";
+  await Bun.write(`${configDir}/opencode.json`, body);
+  return configDir;
+};
 export const boot = async (options: {
   /** An entry point directory, resolved relative to the server's cwd. Omit for none. */
   plugin?: string;
@@ -56,18 +73,7 @@ export const boot = async (options: {
         `The caller resolved the repository root wrongly.`,
     );
 
-  await Bun.$`mkdir -p ${options.directory}`.quiet();
-  await Bun.write(
-    `${options.directory}/opencode.json`,
-    JSON.stringify(
-      {
-        $schema: "https://opencode.ai/config.json",
-        ...(options.plugin === undefined ? {} : { plugins: [options.plugin] }),
-      },
-      null,
-      2,
-    ) + "\n",
-  );
+  const configDir = await writeBootConfigs(options.directory, options.plugin);
 
   // `--log-level info` is load-bearing, not noise. `Registered skills` is an
   // info line, so at the default level the verification below has nothing to
@@ -76,6 +82,10 @@ export const boot = async (options: {
     ["opencode", "serve", "--port", String(options.port), "--log-level", "info", "--print-logs"],
     {
       cwd: options.directory,
+      env: {
+        ...Bun.env,
+        OPENCODE_CONFIG_DIR: configDir,
+      },
       stdout: "pipe",
       stderr: "pipe",
     },

@@ -16,7 +16,8 @@ import { hitRateOf, NONE, type Prediction, type Report, score, table } from "./s
 // plugin at the directory above the repository, so it failed to load and the
 // verification correctly refused. `boot` asserts the entrypoint is here so that
 // class of mistake cannot be silent again.
-const PLUGIN = new URL("../", import.meta.url).pathname;
+const rawPlugin = Bun.env.SPECTRE_EVAL_PLUGIN ?? new URL("../", import.meta.url).pathname;
+const PLUGIN = rawPlugin.endsWith("/") ? rawPlugin : `${rawPlugin}/`;
 const PORT = Number(Bun.env.SPECTRE_EVAL_PORT ?? 4489);
 const FAST = Bun.argv.includes("--fast");
 const ROWS = Number(
@@ -31,6 +32,7 @@ const BASELINE = Bun.env.SPECTRE_EVAL_BASELINE;
 const HELD_OUT = Bun.argv.includes("--held-out");
 const BLIND = Bun.argv.includes("--blind");
 const ONLY = Bun.argv.find((a) => a.startsWith("--model="))?.slice("--model=".length);
+const AGENT = Bun.argv.find((a) => a.startsWith("--agent="))?.slice("--agent=".length);
 const SKIP_LEXICAL = Bun.argv.includes("--no-ripwire");
 
 /**
@@ -45,6 +47,11 @@ const ASK =
   "else. Do not do the work and do not use any other tool.";
 
 const log = reporter();
+
+const sessionPayload = (directory: string, model: ModelRef) =>
+  AGENT === undefined
+    ? { title: "skill-eval", model, location: { directory } }
+    : { title: "skill-eval", agent: AGENT, model, location: { directory } };
 
 const evaluate = async (
   client: Opencode,
@@ -64,11 +71,7 @@ const evaluate = async (
       const index = next++;
       if (index >= corpus.length) return;
       const row = corpus[index]!;
-      const session = await client.session.create({
-        title: "skill-eval",
-        model,
-        location: { directory: client.directory },
-      });
+      const session = await client.session.create(sessionPayload(client.directory, model));
       try {
         await client.session.prompt({
           sessionID: session.id,
@@ -129,14 +132,19 @@ try {
   const { Effect } = await import("effect");
   const ours: ReadonlyArray<string> = (await Effect.runPromise(load())).map((s) => s.id).toSorted();
 
-  // A session has to exist before the registration line is emitted, so this waits
-  // on a session rather than on a timer. The route is only accepted as evidence
-  // once it actually carries one of our ids: on a fresh project it answers with
-  // the global catalogue first, and taking that at face value reports thirteen
-  // missing leaves when the plugin has simply not loaded yet.
+  const picked = select(await client.models(), {
+    models: ONLY ?? Bun.env.SPECTRE_EVAL_MODELS,
+    variant: Bun.env.SPECTRE_EVAL_VARIANT,
+    skip: Bun.env.SPECTRE_EVAL_SKIP,
+  });
+  const models = picked.models;
+  for (const skip of picked.skipped) log.say(`  skipped  ${skip.ref.padEnd(44)} ${skip.why}`);
+  if (models.length === 0) throw new Error("every free model was excluded, nothing to compare");
+
+  const probeModel = models[0]!;
   const probe = await client.session.create({
     title: "skill-eval",
-    model: { providerID: "opencode", id: "mimo-v2.6-flash-free" },
+    model: { providerID: probeModel.providerID, id: probeModel.id },
     location: { directory: client.directory },
   });
   await client.session.prompt({ sessionID: probe.id, text: "reply with the single word: ok" });
@@ -171,15 +179,6 @@ try {
     throw new Error("catalogue not verified, see above");
   }
   log.say(`  verified  ${ours.length} skills, source: the ${source}\n`);
-
-  const picked = select(await client.models(), {
-    models: ONLY ?? Bun.env.SPECTRE_EVAL_MODELS,
-    variant: Bun.env.SPECTRE_EVAL_VARIANT,
-    skip: Bun.env.SPECTRE_EVAL_SKIP,
-  });
-  const models = picked.models;
-  for (const skip of picked.skipped) log.say(`  skipped  ${skip.ref.padEnd(44)} ${skip.why}`);
-  if (models.length === 0) throw new Error("every free model was excluded, nothing to compare");
 
   log.say(
     `  ${corpus.length} rows (${HELD_OUT ? "held out" : "all"}), ${ours.length} skills, ${models.length} free model${models.length === 1 ? "" : "s"}`,

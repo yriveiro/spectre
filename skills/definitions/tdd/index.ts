@@ -7,5 +7,10 @@ export const tdd: Definition = {
   description:
     "Make the bug executable as a failing test before you touch the code, then fix it and watch it go green. Reach for it when a defect has a cheap local test target and you would otherwise be the only thing standing between it and the next person: a wrong return value, a bad edge in a pure function, a regression somebody reported on a real input. The order is the whole point, since a test that has only ever passed has not been shown to catch anything. You call it. Nothing in this set calls it for you.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "verification",
+    summary: "Turn a bug or requirement into a failing executable test first, then fix to green",
+  },
   path: anchor(import.meta.dir),
 };
