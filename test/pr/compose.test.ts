@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
+import { pr } from "../../tools/definitions/pr";
 import { DESCRIPTION, type Fields } from "../../tools/definitions/pr/fields";
 import { lint } from "../../tools/definitions/pr/lint";
-import { compose } from "../../tools/definitions/pr/render";
+import { compose, composeCommit } from "../../tools/definitions/pr/render";
 
 const fields = (over: Partial<Fields> = {}): Fields => ({
   type: "feat",
@@ -172,5 +174,102 @@ describe("the lint is fail-closed and each rule is reachable", () => {
       expect(one.rule).not.toBe("");
       expect(one.detail).not.toBe("");
     }
+  });
+
+  test("hard STE prose violations in author fields fail lint in memory without scratch files", () => {
+    expect(rules({ summary: "The agent deletes the file; then it logs the path." })).toContain(
+      "prose-semicolon",
+    );
+    expect(rules({ review: "Does this spin up a second worker?" })).toContain("prose-phrasal-verb");
+    expect(rules({ risk: "This seamless migration touches one file." })).toContain(
+      "prose-marketing-adjective",
+    );
+    const tooLong = `${Array.from({ length: 26 }, (_, i) => `word${i}`).join(" ")}.`;
+    expect(rules({ summary: tooLong })).toContain("prose-long-sentence");
+  });
+
+  test("literal CLI output in validation results is not scanned as author prose", () => {
+    expect(
+      rules({
+        validation: [
+          {
+            check: "bun test",
+            result: "pass; spin up 26 words a b c d e f g h i j k l m n o p q r s t u v w x y z",
+          },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
+  test("commit fields are validated before any git command runs", () => {
+    expect(
+      rules({
+        commit: {
+          files: ["tools/definitions/pr/index.ts"],
+          description: "Render pull request titles and commit messages from structured fields.",
+          changes: ["add composeCommit for Phase B commit formatting"],
+        },
+      }),
+    ).toEqual([]);
+
+    expect(
+      rules({
+        commit: {
+          files: [],
+          description: "Too short.",
+          changes: [],
+        },
+      }),
+    ).toEqual(["commit-files", "commit-description-length", "commit-changes-count"]);
+  });
+});
+
+describe("commit message composition and compose-only action", () => {
+  test("composeCommit renders Phase B headers, bullets, and optional breaking changes", () => {
+    const text = composeCommit(
+      fields({ breaking: "Drop raw body strings in favor of structured fields." }),
+      {
+        files: ["tools/definitions/pr/render.ts"],
+        description: "Compose deterministic pull request and commit text from structured fields.",
+        changes: [
+          "add composeCommit to render Phase B commit messages",
+          "- strip duplicate leading bullet markers on changes",
+        ],
+      },
+    );
+
+    expect(text).toBe(
+      [
+        "feat(spectre)!: compose the pull request title from fields",
+        "",
+        "# Description",
+        "Compose deterministic pull request and commit text from structured fields.",
+        "",
+        "# Changes",
+        "- add composeCommit to render Phase B commit messages",
+        "- strip duplicate leading bullet markers on changes",
+        "",
+        "# Breaking Changes",
+        "- Drop raw body strings in favor of structured fields.",
+      ].join("\n"),
+    );
+  });
+
+  test("action compose returns the validated title and body without calling git or gh", async () => {
+    const tool = pr({ location: { directory: "/nonexistent-dir-never-read" } } as never);
+    const done = await Effect.runPromise(
+      tool.execute({ ...fields(), action: "compose" }, {
+        sessionID: "ses_test",
+        agent: "spectre",
+        messageID: "msg_test",
+        id: "call_test",
+        progress: () => Effect.void,
+      } as never),
+    );
+    expect(done.output).toEqual({
+      status: "composed",
+      title: "feat(spectre): compose the pull request title from fields",
+      body: compose(fields()).body,
+    });
   });
 });

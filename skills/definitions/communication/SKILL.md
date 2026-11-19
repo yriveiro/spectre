@@ -208,7 +208,7 @@ Deleting is the easy half. The rest of this check protects the message:
 Then run the mechanical half, which is a script rather than a judgement:
 
 ```js
-await tools.spectre.prose({ targets: ["<the file or message you are about to send>"] })
+await tools.spectre.prose({ text: "<the message you are about to send>" })
 ```
 
 A finding is a sentence to read, not a defect to clear before you send. What the

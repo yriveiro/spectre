@@ -8,7 +8,10 @@ import { lint, RULE_NAMES } from "./rules";
 const Input = Schema.Struct({
   targets: Schema.optional(Schema.Array(Schema.String)).annotate({
     description:
-      "Files or directories holding prose, relative to the project directory or absolute. A directory is walked for .md and .mdx. Omit to ask about words only, which is what a caller does when it has no dictionary and wants the structural rules on nothing.",
+      "Files or directories holding prose, relative to the project directory or absolute. A directory is walked for .md and .mdx. Omit to check `text` in memory or ask about words only.",
+  }),
+  text: Schema.optional(Schema.String).annotate({
+    description: "Inline Markdown text to check in memory without writing a scratch file on disk.",
   }),
   disable: Schema.optional(Schema.Array(Schema.String)).annotate({
     description: `Rule names to skip. Known: ${RULE_NAMES.join(", ")}.`,
@@ -190,6 +193,7 @@ const inventory = async (
   directory: string,
   input: {
     readonly targets?: ReadonlyArray<string>;
+    readonly text?: string;
     readonly disable?: ReadonlyArray<string>;
     readonly words?: ReadonlyArray<string>;
     readonly dictionary?: string;
@@ -209,6 +213,16 @@ const inventory = async (
   const errors: Array<{ target: string; reason: string }> = [];
   const empty: Array<string> = [];
   let scanned = 0;
+
+  if (input.text !== undefined) {
+    const inlineFound = lint(input.text, disabled);
+    if (inlineFound.length === 0) {
+      empty.push("<text>");
+    } else {
+      scanned += 1;
+      for (const one of inlineFound) found.push({ ...one, file: "<text>" });
+    }
+  }
 
   const scans = await Promise.all(
     (input.targets ?? []).map((asked) => scanTarget(asked, directory, disabled)),
@@ -245,6 +259,8 @@ const inventory = async (
  * file reads no config. A missing key means the lexical half is off, which is not
  * an error: the structural rules do not need it.
  */
+export { countWords, lint as lintProse } from "./rules";
+
 export const prose = (
   directory: AbsolutePath,
   dictionary?: string,

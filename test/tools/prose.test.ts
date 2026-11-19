@@ -446,4 +446,14 @@ describe("with no dictionary configured", () => {
     expect(out.findings).toEqual([]);
     expect(out.scanned).toBe(0);
   }, 30_000);
+
+  test("inline text is linted in memory without writing a scratch file", async () => {
+    const dirty = await call({ text: "It is seamless; spin up." });
+    expect(dirty.hard).toBe(3);
+    expect(dirty.findings.map((f) => f.file)).toEqual(["<text>", "<text>", "<text>"]);
+
+    const clean = await call({ text: "The tool reads the file." });
+    expect(clean.hard).toBe(0);
+    expect(clean.empty).toEqual(["<text>"]);
+  });
 });

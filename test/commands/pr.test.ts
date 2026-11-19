@@ -1,20 +1,40 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { update } from "../../commands";
 import { pr } from "../../commands/definitions/pr";
 
-const capture = async (typed: string) => {
-  const seen: Array<{ text: string; sessionID: string }> = [];
+const TMP = Bun.env.TMPDIR ?? "/tmp";
+const roots: Array<string> = [];
+
+afterAll(async () => {
+  for (const dir of roots) await Bun.$`rm -rf ${dir}`.quiet();
+});
+
+const capture = async (typed: string, directory?: string) => {
+  const seen: Array<{
+    text: string;
+    sessionID: string;
+    skills?: ReadonlyArray<{ readonly id: string }>;
+  }> = [];
   const ctx = {
     command: {
       transform: (callback: (editor: { add: (definition: unknown) => void }) => void) =>
         Effect.sync(() => callback({ add: () => {} })),
     },
     session: {
-      prompt: (input: { text: string; sessionID: string }) =>
+      ...(directory === undefined
+        ? {}
+        : {
+            get: () => Effect.succeed({ location: { directory } }),
+          }),
+      prompt: (input: {
+        text: string;
+        sessionID: string;
+        skills?: ReadonlyArray<{ readonly id: string }>;
+      }) =>
         Effect.sync(() => {
-          seen.push({ text: input.text, sessionID: input.sessionID });
+          seen.push({ text: input.text, sessionID: input.sessionID, skills: input.skills });
         }),
     },
   };
@@ -69,6 +89,31 @@ describe("the /pr command", () => {
   test("the prompt delegates PR work to the playbook", async () => {
     const { seen } = await capture("");
     expect(seen[0]?.text).toContain("playbook-opening-a-pr");
+    expect(seen[0]?.skills?.map((s) => s.id)).toEqual(["playbook-opening-a-pr"]);
+  });
+
+  test("attaches deterministic git, forge, and signing preflight when session directory resolves", async () => {
+    const dir = `${TMP}/spectre-cmd-pr-${process.pid}-${Date.now()}`;
+    roots.push(dir);
+    await Bun.$`mkdir -p ${dir} && git -C ${dir} init -b main`.quiet();
+    await Bun.$`git -C ${dir} config user.email t@example.com && git -C ${dir} config user.name T && git -C ${dir} config commit.gpgsign true`.quiet();
+    await Bun.$`git -C ${dir} remote add origin git@gitlab.autodoc.dev:dgt/arch-playground.git`.quiet();
+    await Bun.write(`${dir}/app.ts`, "export const a = 1;\n");
+    await Bun.$`git -C ${dir} add app.ts && git -C ${dir} commit --no-gpg-sign -m "init"`.quiet();
+    await Bun.$`git -C ${dir} switch -c fix-sidecar`.quiet();
+    await Bun.write(`${dir}/app.ts`, "export const a = 2;\n");
+
+    const { seen } = await capture("focus on memory", dir);
+    const text = seen[0]?.text ?? "";
+
+    expect(text.startsWith("Open a pull request")).toBe(true);
+    expect(text).toContain("<pr-preflight>");
+    expect(text).toContain("branch: fix-sidecar");
+    expect(text).toContain("base: main");
+    expect(text).toContain("forge: gitlab");
+    expect(text).toContain("gpgsign: true");
+    expect(text).toContain("M app.ts");
+    expect(text.endsWith("The user added: focus on memory")).toBe(true);
   });
 
   test("the playbook routes independent prep before PR composition", async () => {

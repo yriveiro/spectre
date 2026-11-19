@@ -1,35 +1,32 @@
-import type { Plugin } from "@opencode/plugin/effect";
+import { join } from "node:path";
+import type { Plugin, Skill } from "@opencode/plugin/effect";
 // From the subpath rather than the barrel: the barrel re-exports `Command`, which is the
 // schema namespace holding `Command.Info`, and not the plugin's `CommandDefinition`.
 import type { CommandDefinition } from "@opencode/plugin/effect/command";
-import { join } from "node:path";
 import { Effect } from "effect";
 
-/**
- * One command definition, for the shape every command here shares.
- *
- * A command cannot call a tool: `CommandDefinition.execute` returns `Effect<void>`, so its only
- * move is to hand the session a prompt and let the model act on it. Every definition below
- * does that with the same four lines, so they are written once here and a definition supplies
- * only what differs: its name, its description, and the folder holding its `prompt.md`.
- *
- * The deterministic half of each command therefore belongs in a tool rather than here. `/pr`
- * composes nothing because `tools.spectre.pr` already did it, and a command that composed the
- * title itself would reintroduce the improvisation the tool exists to remove.
- *
- * `directory` is the definition's own folder, so `import.meta.dir` is the caller's to pass.
- * `skills/definitions/definition.ts` reaches a body the same way, and for the same reason: a
- * shared module cannot read the `import.meta` of the file that calls it.
- *
- * `$ARGUMENTS` is the host's config-command feature (`config/plugin/command.ts`), not the plugin
- * API, so anything the user typed is appended rather than substituted.
- */
 const PROMPT = "prompt.md";
+
+const mergeSkills = (
+  existing: ReadonlyArray<{ readonly id: Skill.ID }> | undefined,
+  extra: ReadonlyArray<Skill.ID> | undefined,
+) => {
+  if (extra === undefined || extra.length === 0) return existing;
+  const base = existing ?? [];
+  const seen = new Set(base.map((one) => one.id));
+  const added = extra.filter((id) => !seen.has(id)).map((id) => ({ id }));
+  return [...base, ...added];
+};
 
 export const promptCommand = (
   ctx: Pick<Plugin.Context, "session">,
   directory: string,
-  spec: { readonly name: string; readonly description: string },
+  spec: {
+    readonly name: string;
+    readonly description: string;
+    readonly skills?: ReadonlyArray<Skill.ID>;
+    readonly context?: (sessionDirectory: string) => Promise<string | undefined>;
+  },
 ): CommandDefinition => ({
   name: spec.name,
   description: spec.description,
@@ -37,14 +34,28 @@ export const promptCommand = (
     Effect.gen(function* () {
       const text = yield* Effect.tryPromise({
         try: () => Bun.file(join(directory, PROMPT)).text(),
-        catch: (cause) =>
-          new Error(`Cannot read the /${spec.name} prompt at ${PROMPT}: ${cause}`),
+        catch: (cause) => new Error(`Cannot read the /${spec.name} prompt at ${PROMPT}: ${cause}`),
       }).pipe(Effect.orDie);
+
+      let extra: string | undefined;
+      const contextFn = spec.context;
+      if (contextFn !== undefined && typeof ctx.session.get === "function") {
+        const info = yield* Effect.result(ctx.session.get({ sessionID: input.sessionID }));
+        const sessionDir = info._tag === "Success" ? info.success.location.directory : "";
+        if (sessionDir !== "") {
+          extra = yield* Effect.promise(() => contextFn(sessionDir));
+        }
+      }
+
       const said = input.prompt.text.trim();
+      const body = extra === undefined ? text : `${text}\n\n${extra}`;
+      const skills = mergeSkills(input.prompt.skills, spec.skills);
+
       yield* ctx.session.prompt({
         ...input.prompt,
         sessionID: input.sessionID,
-        text: said === "" ? text : `${text}\n\nThe user added: ${said}`,
+        text: said === "" ? body : `${body}\n\nThe user added: ${said}`,
+        ...(skills === undefined ? {} : { skills }),
         delivery: input.delivery,
       });
     }).pipe(Effect.asVoid),
