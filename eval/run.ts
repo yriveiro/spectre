@@ -78,7 +78,11 @@ const evaluate = async (
         const transcript = await client.transcript(session.id);
         if (transcript.failure !== undefined) throw new Error(transcript.failure.reason);
         const seen = observe(transcript, ids);
-        out[index] = { prompt: row.prompt, ...seen };
+        out[index] = {
+          prompt: row.prompt,
+          ...seen,
+          ...(transcript.usage === undefined ? {} : { usage: transcript.usage }),
+        };
         bar.advance(seen.via === "silent" ? "no assistant text or skill call" : undefined);
       } catch (cause) {
         const why = (cause instanceof Error ? cause.message : String(cause)).slice(0, 80);

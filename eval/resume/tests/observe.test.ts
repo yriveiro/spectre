@@ -4,11 +4,13 @@ import type {
   SessionMessageAssistant,
   SessionMessageAssistantTool,
 } from "@opencode/client";
-import { assertScenario, observed, subagentCalls, type SubagentCall } from "../observe";
+import { assertScenario, observed, type SubagentCall, sessionUsage, subagentCalls } from "../observe";
 import { loadScenario } from "../scenario";
 
 const correction = await loadScenario(`${import.meta.dir}/../scenarios/correction.json`);
 const newUnit = await loadScenario(`${import.meta.dir}/../scenarios/new-unit.json`);
+const correctionGolden = await Bun.file(`${import.meta.dir}/../golden/correction.json`).json();
+const newUnitGolden = await Bun.file(`${import.meta.dir}/../golden/new-unit.json`).json();
 
 const part = (
   input: {
@@ -133,5 +135,100 @@ describe("the new-unit assertion can pass and fail", () => {
     const findings = assertScenario(newUnit, run);
     expect(findings).toContain("call 2: continued the first child, but the unit is new");
     expect(findings).toContain("child sessions: expected 2, got 1");
+  });
+});
+
+describe("sessionUsage and golden compatibility", () => {
+  const assistantMsg = (
+    tokens?: SessionMessageAssistant["tokens"],
+    cost?: number,
+  ): SessionMessageAssistant => ({
+    id: "msg_u",
+    type: "assistant",
+    agent: "spectre",
+    model: { providerID: "mock", id: "resume" },
+    time: { created: 0 },
+    content: [],
+    ...(tokens === undefined ? {} : { tokens }),
+    ...(cost === undefined ? {} : { cost }),
+  });
+
+  test("sessionUsage sums parent and child assistant messages cleanly", () => {
+    const parent = [
+      assistantMsg({ input: 100, output: 20, reasoning: 5, cache: { read: 30, write: 10 } }, 0.002),
+      assistantMsg(),
+    ];
+    const childA = [
+      assistantMsg({ input: 50, output: 15, reasoning: 0, cache: { read: 10, write: 0 } }, 0.001),
+    ];
+    const childB = [
+      assistantMsg({ input: 25, output: 5, reasoning: 5, cache: { read: 0, write: 5 } }, 0.0005),
+    ];
+
+    expect(sessionUsage(parent, [childA, childB])).toEqual({
+      input: 175,
+      output: 40,
+      reasoning: 10,
+      cacheRead: 40,
+      cacheWrite: 15,
+      total: 280,
+      cost: 0.0035,
+    });
+    expect(sessionUsage([])).toEqual({
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      total: 0,
+      cost: 0,
+    });
+  });
+
+  test("observed matches deterministic mock goldens when usage is omitted or zero", () => {
+    const correctionCalls: Array<SubagentCall> = [
+      { agent: "spectre", outputSessionID: "ses_a", status: "completed" },
+      { agent: "spectre", sessionID: "ses_a", outputSessionID: "ses_a", status: "completed" },
+    ];
+    const zero = sessionUsage([assistantMsg()]);
+
+    expect(
+      observed({
+        scenario: correction,
+        mode: "mock",
+        model: "mock/resume",
+        calls: correctionCalls,
+        files: { "notes.txt": "alpha\nBETA-42\ngamma\nORCHID-42" },
+        usage: zero,
+      }),
+    ).toEqual(correctionGolden);
+
+    expect(
+      observed({
+        scenario: newUnit,
+        mode: "mock",
+        model: "mock/resume",
+        calls: [
+          { agent: "spectre", outputSessionID: "ses_a", status: "completed" },
+          { agent: "spectre", outputSessionID: "ses_b", status: "completed" },
+        ],
+        files: { "a.txt": "alpha", "b.txt": "beta" },
+      }),
+    ).toEqual(newUnitGolden);
+  });
+
+  test("observed attaches non-zero usage when provided", () => {
+    const usage = sessionUsage([
+      assistantMsg({ input: 10, output: 5, reasoning: 0, cache: { read: 0, write: 0 } }, 0.001),
+    ]);
+    const run = observed({
+      scenario: correction,
+      mode: "live",
+      model: "opencode-go/deepseek-v4.1-flash#high",
+      calls: [{ agent: "spectre", outputSessionID: "ses_a", status: "completed" }],
+      files: { "notes.txt": "alpha\nBETA-42\ngamma\nORCHID-42" },
+      usage,
+    });
+    expect(run.usage).toEqual(usage);
   });
 });

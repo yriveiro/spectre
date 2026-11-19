@@ -1,4 +1,5 @@
 import type { SessionMessageAssistant, SessionMessageAssistantTool } from "@opencode/client";
+import { addUsage, summarizeUsage, type UsageSummary } from "../opencode";
 import type { Scenario, WorkspacePath } from "./scenario";
 import { readIn } from "./workspace";
 
@@ -28,6 +29,7 @@ export type Observed = {
   }>;
   readonly childSessions: number;
   readonly files: Readonly<Record<string, string>>;
+  readonly usage?: UsageSummary;
 };
 
 const text = (value: unknown): string | undefined =>
@@ -90,17 +92,27 @@ export const readFiles = async (
   return files;
 };
 
+export const sessionUsage = (
+  parent: ReadonlyArray<Pick<SessionMessageAssistant, "tokens" | "cost">>,
+  children: ReadonlyArray<ReadonlyArray<Pick<SessionMessageAssistant, "tokens" | "cost">>> = [],
+): UsageSummary => addUsage([summarizeUsage(parent), ...children.map(summarizeUsage)]);
+
 export const observed = (input: {
   readonly scenario: Scenario;
   readonly mode: "mock" | "live";
   readonly model: string;
   readonly calls: ReadonlyArray<SubagentCall>;
   readonly files: Readonly<Record<string, string>>;
+  readonly usage?: UsageSummary;
 }): Observed => {
   const first = input.calls[0]?.outputSessionID;
   const children = new Set(
     input.calls.flatMap((call) => (call.outputSessionID === undefined ? [] : [call.outputSessionID])),
   );
+  const nonZeroUsage =
+    input.usage !== undefined && (input.usage.total > 0 || input.usage.cost > 0)
+      ? input.usage
+      : undefined;
   return {
     scenario: input.scenario.id,
     mode: input.mode,
@@ -115,6 +127,7 @@ export const observed = (input: {
     })),
     childSessions: children.size,
     files: input.files,
+    ...(nonZeroUsage === undefined ? {} : { usage: nonZeroUsage }),
   };
 };
 

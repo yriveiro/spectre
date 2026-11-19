@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { deltas, deltaTable, flips, type Run, snapshot } from "../record";
-import { type Prediction, score } from "../score";
+import { type Prediction, score, type UsageSummary } from "../score";
 
-const pred = (prompt: string, got: string): Prediction => ({ prompt, got, via: "text" });
+const pred = (prompt: string, got: string, usage?: UsageSummary): Prediction => ({
+  prompt,
+  got,
+  via: "text",
+  ...(usage === undefined ? {} : { usage }),
+});
 
 const rows = [
   { prompt: "a", label: "one", provenance: "judged" as const },
@@ -83,5 +88,61 @@ describe("flips", () => {
   test("a new arm does not report every row as a flip", () => {
     const before: Run = { ...run([]), arms: [] };
     expect(flips(before, run([pred("a", "one")]))).toEqual([]);
+  });
+});
+
+describe("usage snapshots and deltas", () => {
+  const u1: UsageSummary = {
+    input: 200,
+    output: 40,
+    reasoning: 10,
+    cacheRead: 50,
+    cacheWrite: 20,
+    total: 320,
+    cost: 0.005,
+  };
+  const u2: UsageSummary = {
+    input: 120,
+    output: 30,
+    reasoning: 0,
+    cacheRead: 90,
+    cacheWrite: 10,
+    total: 250,
+    cost: 0.0025,
+  };
+
+  test("snapshot carries usage on the arm when predictions report it", () => {
+    const r = run([pred("a", "one", u1)]);
+    expect(r.arms[0]?.usage).toEqual({ ...u1, tokensPerHit: 320 });
+  });
+
+  test("deltas surface token, cache, tokensPerHit, and cost changes when both snapshots carry usage", () => {
+    const before = run([pred("a", "one", u1)]);
+    const after = run([pred("a", "one", u2)]);
+    const d = deltas(before, after);
+    expect(d[0]?.usage).toEqual({
+      before: { ...u1, tokensPerHit: 320 },
+      after: { ...u2, tokensPerHit: 250 },
+      total: -70,
+      cacheRead: 40,
+      cacheWrite: -10,
+      cost: -0.0025,
+      tokensPerHit: -70,
+    });
+
+    const formatted = deltaTable(d);
+    expect(formatted).toContain("-70");
+    expect(formatted).toContain("+40/-10");
+    expect(formatted).toContain("-$0.0025");
+  });
+
+  test("deltas omit usage when an older baseline JSON snapshot lacks usage", () => {
+    const legacyBefore = run([pred("a", "one")]);
+    const after = run([pred("a", "one", u2)]);
+    const d = deltas(legacyBefore, after);
+    expect(d).toEqual([{ arm: "model:x", before: 0.5, after: 0.5, change: 0, state: "same" }]);
+    const formatted = deltaTable(d);
+    expect(formatted).not.toContain("NaN");
+    expect(formatted).not.toContain("cost");
   });
 });

@@ -1,4 +1,4 @@
-import type { Prediction, Report } from "./score";
+import type { Prediction, Report, ReportUsage } from "./score";
 
 export type Run = {
   readonly at: string;
@@ -18,6 +18,7 @@ export type Run = {
       stolen: number;
     }>;
     readonly predictions: ReadonlyArray<Prediction>;
+    readonly usage?: ReportUsage;
   }>;
 };
 
@@ -38,8 +39,19 @@ export const snapshot = (
     abstained: report.abstained,
     perSkill: report.perSkill,
     predictions,
+    ...(report.usage === undefined ? {} : { usage: report.usage }),
   })),
 });
+
+export type UsageDelta = {
+  readonly before: ReportUsage;
+  readonly after: ReportUsage;
+  readonly total: number;
+  readonly cacheRead: number;
+  readonly cacheWrite: number;
+  readonly cost: number;
+  readonly tokensPerHit?: number;
+};
 
 export type Delta = {
   readonly arm: string;
@@ -47,9 +59,13 @@ export type Delta = {
   readonly after: number;
   readonly change?: number;
   readonly state: "new" | "gone" | "up" | "down" | "same";
+  readonly usage?: UsageDelta;
 };
 
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`;
+const signedInt = (value: number) => `${value > 0 ? "+" : ""}${value}`;
+const signedUsd = (value: number) =>
+  `${value > 0 ? "+" : value < 0 ? "-" : ""}$${Math.abs(value).toFixed(4)}`;
 
 /** Signed change per arm, so a sweep can be read as progress rather than a snapshot. */
 export const deltas = (before: Run | undefined, after: Run): ReadonlyArray<Delta> => {
@@ -62,22 +78,58 @@ export const deltas = (before: Run | undefined, after: Run): ReadonlyArray<Delta
     if (a === undefined) return { arm: name, after: b!.hitRate, state: "new" as const };
     if (b === undefined) return { arm: name, before: a.hitRate, after: 0, state: "gone" as const };
     const change = b.hitRate - a.hitRate;
+    const usage: UsageDelta | undefined =
+      a.usage !== undefined && b.usage !== undefined
+        ? {
+            before: a.usage,
+            after: b.usage,
+            total: b.usage.total - a.usage.total,
+            cacheRead: b.usage.cacheRead - a.usage.cacheRead,
+            cacheWrite: b.usage.cacheWrite - a.usage.cacheWrite,
+            cost: b.usage.cost - a.usage.cost,
+            ...(a.usage.tokensPerHit !== undefined && b.usage.tokensPerHit !== undefined
+              ? { tokensPerHit: b.usage.tokensPerHit - a.usage.tokensPerHit }
+              : {}),
+          }
+        : undefined;
     return {
       arm: name,
       before: a.hitRate,
       after: b.hitRate,
       change,
       state: change > 0 ? ("up" as const) : change < 0 ? ("down" as const) : ("same" as const),
+      ...(usage === undefined ? {} : { usage }),
     };
   });
 };
 
 export const deltaTable = (rows: ReadonlyArray<Delta>) => {
   const width = Math.max(24, ...rows.map((r) => r.arm.length));
+  const hasUsage = rows.some((r) => r.usage !== undefined);
+  const paired = rows.map((row) => {
+    const u = row.usage;
+    return {
+      row,
+      u:
+        u === undefined
+          ? { tokens: "-", cache: "-", cost: "-" }
+          : {
+              tokens: signedInt(u.total),
+              cache: `${signedInt(u.cacheRead)}/${signedInt(u.cacheWrite)}`,
+              cost: signedUsd(u.cost),
+            },
+    };
+  });
+  const tokensWidth = Math.max("tokens".length, ...paired.map(({ u }) => u.tokens.length));
+  const cacheWidth = Math.max("cache(r/w)".length, ...paired.map(({ u }) => u.cache.length));
+  const costWidth = Math.max("cost".length, ...paired.map(({ u }) => u.cost.length));
+  const usageHeader = hasUsage
+    ? `  ${"tokens".padStart(tokensWidth)}  ${"cache(r/w)".padStart(cacheWidth)}  ${"cost".padStart(costWidth)}`
+    : "";
   const out = [
-    `${"arm".padEnd(width)}  ${"before".padStart(7)}  ${"after".padStart(7)}  ${"change".padStart(8)}`,
+    `${"arm".padEnd(width)}  ${"before".padStart(7)}  ${"after".padStart(7)}  ${"change".padStart(8)}${usageHeader}`,
   ];
-  for (const row of rows) {
+  for (const { row, u } of paired) {
     const before = row.before === undefined ? "-" : pct(row.before);
     const change =
       row.change === undefined
@@ -85,8 +137,11 @@ export const deltaTable = (rows: ReadonlyArray<Delta>) => {
           ? "new"
           : "gone"
         : `${row.change > 0 ? "+" : ""}${(row.change * 100).toFixed(1)}pp`;
+    const usageSuffix = hasUsage
+      ? `  ${u.tokens.padStart(tokensWidth)}  ${u.cache.padStart(cacheWidth)}  ${u.cost.padStart(costWidth)}`
+      : "";
     out.push(
-      `${row.arm.padEnd(width)}  ${before.padStart(7)}  ${pct(row.after).padStart(7)}  ${change.padStart(8)}`,
+      `${row.arm.padEnd(width)}  ${before.padStart(7)}  ${pct(row.after).padStart(7)}  ${change.padStart(8)}${usageSuffix}`,
     );
   }
   return out.join("\n");

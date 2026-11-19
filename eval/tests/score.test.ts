@@ -1,11 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import type { Row } from "../fixture";
+import { summarizeUsage, type UsageSummary } from "../opencode";
 import { hitRateOf, NONE, type Prediction, permitted, score, table } from "../score";
 
-const p = (prompt: string, got: string, via: Prediction["via"] = "text"): Prediction => ({
+const p = (
+  prompt: string,
+  got: string,
+  via: Prediction["via"] = "text",
+  usage?: UsageSummary,
+): Prediction => ({
   prompt,
   got,
   via,
+  ...(usage === undefined ? {} : { usage }),
 });
 
 const rows: ReadonlyArray<Row> = [
@@ -160,5 +167,161 @@ describe("table", () => {
   test("a skill activation prints 1, not 0, in the first column", () => {
     const report = score([rows[0]!], [p("a", "one", "skill")], catalogue);
     expect(table([{ name: "model:x", report }])).toContain("1/0/0/0");
+  });
+
+  test("prints token, cache, tokens-per-hit, and cost columns when an arm carries usage", () => {
+    const twoRows = rows.filter((row) => row.prompt === "a" || row.prompt === "c");
+    const modelReport = score(
+      twoRows,
+      [
+        p("a", "one", "skill", {
+          input: 100,
+          output: 20,
+          reasoning: 10,
+          cacheRead: 40,
+          cacheWrite: 5,
+          total: 175,
+          cost: 0.0025,
+        }),
+        p("c", "one", "text", {
+          input: 50,
+          output: 10,
+          reasoning: 0,
+          cacheRead: 15,
+          cacheWrite: 0,
+          total: 75,
+          cost: 0.001,
+        }),
+      ],
+      catalogue,
+    );
+    const lexReport = score(twoRows, [], catalogue);
+    const out = table([
+      { name: "lex:bm25-desc", report: lexReport },
+      { name: "model:x", report: modelReport },
+    ]);
+    expect(out).toContain("tokens");
+    expect(out).toContain("cache(r/w)");
+    expect(out).toContain("tok/hit");
+    expect(out).toContain("cost");
+    expect(out).toContain("250");
+    expect(out).toContain("55/5");
+    expect(out).toContain("$0.0035");
+  });
+});
+
+describe("usage accounting", () => {
+  test("summarizeUsage handles empty arrays and missing token/cost metadata", () => {
+    expect(summarizeUsage([])).toEqual({
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      total: 0,
+      cost: 0,
+    });
+    expect(summarizeUsage([{}, { tokens: undefined, cost: undefined }])).toEqual({
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      total: 0,
+      cost: 0,
+    });
+  });
+
+  test("summarizeUsage sums input, output, reasoning, cache, total, and cost", () => {
+    expect(
+      summarizeUsage([
+        {
+          cost: 0.001,
+          tokens: { input: 10, output: 5, reasoning: 2, cache: { read: 8, write: 1 } },
+        },
+        {
+          tokens: { input: 20, output: 10, reasoning: 0, cache: { read: 4, write: 0 } },
+        },
+        { cost: 0.002 },
+      ]),
+    ).toEqual({
+      input: 30,
+      output: 15,
+      reasoning: 2,
+      cacheRead: 12,
+      cacheWrite: 1,
+      total: 60,
+      cost: 0.003,
+    });
+  });
+
+  test("score aggregates prediction usage and computes tokensPerHit when hit > 0", () => {
+    const twoRows = rows.filter((row) => row.prompt === "a" || row.prompt === "c");
+    const r = score(
+      twoRows,
+      [
+        p("a", "one", "skill", {
+          input: 100,
+          output: 20,
+          reasoning: 0,
+          cacheRead: 50,
+          cacheWrite: 10,
+          total: 180,
+          cost: 0.002,
+        }),
+        p("c", "two", "tool", {
+          input: 80,
+          output: 10,
+          reasoning: 10,
+          cacheRead: 20,
+          cacheWrite: 0,
+          total: 120,
+          cost: 0.001,
+        }),
+      ],
+      catalogue,
+    );
+    expect(r.usage).toEqual({
+      input: 180,
+      output: 30,
+      reasoning: 10,
+      cacheRead: 70,
+      cacheWrite: 10,
+      total: 300,
+      cost: 0.003,
+      tokensPerHit: 150,
+    });
+  });
+
+  test("score omits tokensPerHit when hit is zero, and omits usage when predictions lack it", () => {
+    const oneRow = rows.slice(0, 1);
+    const zeroHit = score(
+      oneRow,
+      [
+        p("a", "two", "text", {
+          input: 40,
+          output: 10,
+          reasoning: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          total: 50,
+          cost: 0.0005,
+        }),
+      ],
+      catalogue,
+    );
+    expect(zeroHit.usage).toEqual({
+      input: 40,
+      output: 10,
+      reasoning: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      total: 50,
+      cost: 0.0005,
+    });
+    expect("tokensPerHit" in (zeroHit.usage ?? {})).toBe(false);
+
+    const noUsage = score(oneRow, [p("a", "one", "text")], catalogue);
+    expect(noUsage.usage).toBeUndefined();
   });
 });
