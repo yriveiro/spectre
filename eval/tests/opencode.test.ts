@@ -112,5 +112,76 @@ describe("connect", () => {
       kind: "provider.quota",
       reason: "provider.quota 429: Too many requests",
     });
+    expect(transcript.usage).toEqual({
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      total: 0,
+      cost: 0,
+    });
+  });
+
+  test("transcript() sums assistant token usage and USD cost across messages", async () => {
+    const messages: Array<SessionMessageInfo> = [
+      {
+        id: "msg_u",
+        type: "user",
+        time: { created: 1 },
+        text: "hi",
+      },
+      {
+        id: "msg_a1",
+        type: "assistant",
+        agent: "spectre",
+        model: { providerID: "opencode-go", id: "minimax-m3.1-flash-free" },
+        time: { created: 2 },
+        content: [{ type: "text", text: "thinking" }],
+        cost: 0.0025,
+        tokens: { input: 100, output: 20, reasoning: 15, cache: { read: 40, write: 10 } },
+      },
+      {
+        id: "msg_a2",
+        type: "assistant",
+        agent: "spectre",
+        model: { providerID: "opencode-go", id: "minimax-m3.1-flash-free" },
+        time: { created: 3 },
+        content: [{ type: "text", text: "code-hygiene" }],
+      },
+      {
+        id: "msg_a3",
+        type: "assistant",
+        agent: "spectre",
+        model: { providerID: "opencode-go", id: "minimax-m3.1-flash-free" },
+        time: { created: 4 },
+        content: [{ type: "text", text: "done" }],
+        cost: 0.005,
+        tokens: { input: 50, output: 30, reasoning: 5, cache: { read: 60, write: 0 } },
+      },
+    ];
+
+    using server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url);
+        if (url.pathname !== "/api/session/ses_usage/message")
+          return new Response("not found", { status: 404 });
+        return Response.json({ data: messages, cursor: { next: null } });
+      },
+    });
+
+    const client = connect("/workspace", `http://127.0.0.1:${server.port}`, "secret-pw");
+    const transcript = await client.transcript("ses_usage");
+
+    expect(transcript.usage).toEqual({
+      input: 150,
+      output: 50,
+      reasoning: 20,
+      cacheRead: 100,
+      cacheWrite: 10,
+      total: 330,
+      cost: 0.0075,
+    });
   });
 });

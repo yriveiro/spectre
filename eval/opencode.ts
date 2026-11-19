@@ -12,10 +12,77 @@ import {
 import { Effect } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 
+export type UsageSummary = {
+  readonly input: number;
+  readonly output: number;
+  readonly reasoning: number;
+  readonly cacheRead: number;
+  readonly cacheWrite: number;
+  readonly total: number;
+  readonly cost: number;
+};
+
+export const summarizeUsage = (
+  messages: ReadonlyArray<Pick<SessionMessageAssistant, "tokens" | "cost">>,
+): UsageSummary => {
+  let input = 0;
+  let output = 0;
+  let reasoning = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  let cost = 0;
+  for (const message of messages) {
+    if (message.tokens !== undefined) {
+      input += message.tokens.input;
+      output += message.tokens.output;
+      reasoning += message.tokens.reasoning;
+      cacheRead += message.tokens.cache.read;
+      cacheWrite += message.tokens.cache.write;
+    }
+    if (message.cost !== undefined) cost += message.cost;
+  }
+  return {
+    input,
+    output,
+    reasoning,
+    cacheRead,
+    cacheWrite,
+    total: input + output + reasoning + cacheRead + cacheWrite,
+    cost,
+  };
+};
+
+export const addUsage = (summaries: ReadonlyArray<UsageSummary>): UsageSummary => {
+  let input = 0;
+  let output = 0;
+  let reasoning = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  let cost = 0;
+  for (const one of summaries) {
+    input += one.input;
+    output += one.output;
+    reasoning += one.reasoning;
+    cacheRead += one.cacheRead;
+    cacheWrite += one.cacheWrite;
+    cost += one.cost;
+  }
+  return {
+    input,
+    output,
+    reasoning,
+    cacheRead,
+    cacheWrite,
+    total: input + output + reasoning + cacheRead + cacheWrite,
+    cost,
+  };
+};
+
 export type Transcript = {
   readonly activated: ReadonlyArray<string>;
   readonly messages: ReadonlyArray<SessionMessageAssistant>;
   readonly failure?: TurnFailure;
+  readonly usage?: UsageSummary;
 };
 
 /**
@@ -109,7 +176,8 @@ export const connect = (directory: string, baseUrl: string, password: string): O
         .filter((one) => one !== "");
       const messages = all.filter((one) => one.type === "assistant");
       const failure = messages.map(failureOf).find((one) => one !== undefined);
-      return { activated, messages, failure };
+      const usage = summarizeUsage(messages);
+      return { activated, messages, failure, usage };
     },
   };
 };
