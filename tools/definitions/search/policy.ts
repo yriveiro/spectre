@@ -716,8 +716,8 @@ export const argv = ({ route, root, budget }: ArgvInput): string[] => {
     case "expand":
       return [root, `--expand=${route.symbol}`, "--legend=compact"];
     case "literal":
-      return [root, `--grep=${route.text}`];
+      return [root, `--grep=${route.text}`, "--limit=50"];
     case "regex":
-      return [root, `--regex=${route.pattern}`];
+      return [root, `--regex=${route.pattern}`, "--limit=50"];
   }
 };

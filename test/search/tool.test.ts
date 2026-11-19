@@ -55,6 +55,32 @@ exit 1
       expect(result.output?.status).toBe("refused");
       expect(result.output?.reason).toBe("outside-root");
       expect(result.output?.command).toBe("");
+      expect(result.output?.answer).toBe("");
+      expect(result.content).toBe(
+        `[spectre_search:refused] (outside-root) ../outside is outside ${dir}, so no code index was read.`,
+      );
+    });
+  });
+
+  test("an empty query is refused with diagnostic content while answer stays empty", async () => {
+    const dir = tempDir();
+    const bin = await makeBin(`#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.6.10 (Release, built_from=test)"
+  exit 0
+fi
+echo "must not run" >&2
+exit 1
+`);
+    await withBinary(bin, async () => {
+      const tool = search(contextAt(dir));
+      const result = await Effect.runPromise(tool.execute({}, calling("call_empty_query")));
+      expect(result.output?.status).toBe("refused");
+      expect(result.output?.reason).toBe("empty-query");
+      expect(result.output?.answer).toBe("");
+      expect(result.content).toBe(
+        "[spectre_search:refused] (empty-query) Neither query, pattern, nor expand was given, so nothing was asked.",
+      );
     });
   });
 
@@ -79,15 +105,61 @@ exit 0
     });
   });
 
-  test("an absent binary answers with the install line the native note promises", async () => {
+  test("an absent binary answers with the install line in both note and content", async () => {
     const dir = tempDir();
     const missing = `${dir}/missing-ripwire`;
     await withBinary(missing, async () => {
       const tool = search(contextAt(dir));
       const result = await Effect.runPromise(tool.execute({ pattern: "hello" }, calling("call_absent")));
       expect(result.output?.status).toBe("absent");
+      expect(result.output?.answer).toBe("");
       expect(result.output?.note).toContain("Install it:");
       expect(result.output?.note).toContain("https://raw.githubusercontent.com/redhat-et/ripwire");
+      expect(result.content).toContain("[spectre_search:absent] (no-instrument)");
+      expect(result.content).toContain("Install it:");
+      expect(result.content).toContain("https://raw.githubusercontent.com/redhat-et/ripwire");
+    });
+  });
+
+  test("an empty search result carries status, reason, and empty note in content", async () => {
+    const dir = tempDir();
+    const bin = await makeBin(`#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.6.10 (Release, built_from=test)"
+  exit 0
+fi
+exit 0
+`);
+    await withBinary(bin, async () => {
+      const tool = search(contextAt(dir));
+      const result = await Effect.runPromise(tool.execute({ pattern: "missingSymbol" }, calling("call_empty")));
+      expect(result.output?.status).toBe("empty");
+      expect(result.output?.answer).toBe("");
+      expect(result.content).toBe(
+        "[spectre_search:empty] (pattern) No hits in the indexed tree. That is not proof of absence. Re-issue the text search with a path or include for raw text.",
+      );
+    });
+  });
+
+  test("an answered result with a note appends the note in content", async () => {
+    const dir = tempDir();
+    const bin = await makeBin(`#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.6.10 (Release, built_from=test)"
+  exit 0
+fi
+printf '%s' '<grep pattern="hello" hits="1"/>'
+exit 0
+`);
+    await withBinary(bin, async () => {
+      const tool = search(contextAt(dir));
+      const result = await Effect.runPromise(
+        tool.execute({ pattern: "hello", include: "*.ts" }, calling("call_ignored")),
+      );
+      expect(result.output?.status).toBe("answered");
+      expect(result.content).toBe(
+        '<grep pattern="hello" hits="1"/>\n[Ignored include: the code index does not filter by it.]',
+      );
     });
   });
 });
@@ -117,7 +189,7 @@ exit 0
     });
   });
 
-  test("a thin --for answer with coverage below 50 widens automatically with --limit=40, while coverage at 50 stays single-shot", async () => {
+  test("a thin --for answer with coverage below 50 replaces initial with a budgeted --limit=40 run, while coverage at 50 stays single-shot", async () => {
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
@@ -126,7 +198,7 @@ if [ "$1" = "--version" ]; then
 fi
 case "$*" in
   *"--limit=40"*)
-    printf '%s' '<ctx schema="ripwire.for/v1" task="thin" widened="1"><d n="extra" p="b.ts"/></ctx>'
+    printf '%s' "args:$*|"'<sigs schema="ripwire.candidate-page/v1" task="thin" widened="1"><d n="extra" p="b.ts"/></sigs>'
     ;;
   *"--for=thin"*)
     printf '%s' '<ctx schema="ripwire.for/v1" task="thin" coverage="32"><d n="head" p="a.ts"/></ctx>'
@@ -139,15 +211,19 @@ exit 0
 `);
     await withBinary(bin, async () => {
       const tool = search(contextAt(dir));
-      const thin = await Effect.runPromise(tool.execute({ query: "thin" }, calling("call_thin")));
+      const thin = await Effect.runPromise(
+        tool.execute({ query: "thin", budget: 1500 }, calling("call_thin")),
+      );
       expect(thin.output?.status).toBe("answered");
       expect(thin.output?.verb).toBe("for");
-      expect(thin.output?.command).toContain("--signatures-only");
+      expect(thin.output?.command).toContain("--token-budget=1500");
       expect(thin.output?.command).toContain("--limit=40");
       expect(thin.output?.command).toContain("--legend=compact");
-      expect(thin.output?.answer).toContain('coverage="32"');
       expect(thin.output?.answer).toContain('widened="1"');
-      expect(thin.output?.note).toContain("32%");
+      expect(thin.output?.answer).toContain("--token-budget=1500");
+      expect(thin.output?.answer).not.toContain('coverage="32"');
+      expect(thin.output?.note).toBe("Widened with --limit=40 because initial coverage was 32% (<50%).");
+      expect(thin.content).toBe(`${thin.output?.answer}\n[${thin.output?.note}]`);
 
       const ample = await Effect.runPromise(tool.execute({ query: "ample" }, calling("call_ample")));
       expect(ample.output?.status).toBe("answered");
@@ -155,6 +231,34 @@ exit 0
       expect(ample.output?.answer).toContain('coverage="50"');
       expect(ample.output?.answer).not.toContain('widened="1"');
       expect(ample.output?.note).toBeUndefined();
+      expect(ample.content).toBe(ample.output?.answer);
+    });
+  });
+
+  test("thin widening falls back to the initial answer when the widened run refuses", async () => {
+    const dir = tempDir();
+    const bin = await makeBin(`#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.6.10 (Release, built_from=test)"
+  exit 0
+fi
+case "$*" in
+  *"--limit=40"*)
+    echo "widened failed" >&2
+    exit 1
+    ;;
+  *"--for=thin"*)
+    printf '%s' '<ctx schema="ripwire.for/v1" task="thin" coverage="25"><d n="head" p="a.ts"/></ctx>'
+    ;;
+esac
+exit 0
+`);
+    await withBinary(bin, async () => {
+      const tool = search(contextAt(dir));
+      const result = await Effect.runPromise(tool.execute({ query: "thin" }, calling("call_thin_fallback")));
+      expect(result.output?.status).toBe("answered");
+      expect(result.output?.answer).toBe('<ctx schema="ripwire.for/v1" task="thin" coverage="25"><d n="head" p="a.ts"/></ctx>');
+      expect(result.output?.note).toBeUndefined();
     });
   });
 

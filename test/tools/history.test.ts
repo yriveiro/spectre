@@ -16,6 +16,7 @@ const scratch = async (): Promise<string> => {
   await Bun.$`git init -q -b main`.cwd(dir);
   await Bun.$`git config user.email test@example.com`.cwd(dir).quiet();
   await Bun.$`git config user.name Test`.cwd(dir).quiet();
+  await Bun.$`git config commit.gpgsign false`.cwd(dir).quiet();
   return dir;
 };
 

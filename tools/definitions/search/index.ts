@@ -106,6 +106,20 @@ const withIgnored = (note: string | undefined, ignored: string): { note?: string
   return { note: note === undefined ? ignored : `${note} ${ignored}` };
 };
 
+const contentOf = (output: {
+  readonly status: (typeof SearchOutput.Type)["status"];
+  readonly reason: string;
+  readonly answer: string;
+  readonly note?: string;
+}): string => {
+  if (output.answer !== "") {
+    return output.note !== undefined && output.note !== ""
+      ? `${output.answer}\n[${output.note}]`
+      : output.answer;
+  }
+  return `[spectre_search:${output.status}] (${output.reason}) ${output.note ?? ""}`.trim();
+};
+
 const refusedOutput = (reason: string, note: string) => {
   const output = {
     tool: "spectre_search" as const,
@@ -116,7 +130,7 @@ const refusedOutput = (reason: string, note: string) => {
     reason,
     note,
   };
-  return { output, content: output.answer };
+  return { output, content: contentOf(output) };
 };
 
 const absentOutput = (health: Exclude<Health, { readonly kind: "ready" }>) => {
@@ -133,7 +147,7 @@ const absentOutput = (health: Exclude<Health, { readonly kind: "ready" }>) => {
     reason: "no-instrument",
     note,
   };
-  return { output, content: output.answer };
+  return { output, content: contentOf(output) };
 };
 
 const thinCoverage = (result: RunResult): number | undefined => {
@@ -154,7 +168,7 @@ const mergeWidened = (initial: RunResult, widened: RunResult, coverage: number):
   return {
     status,
     command: `${initial.command} && ${widened.command}`,
-    answer: `${initial.answer}\n${widened.answer}`,
+    answer: widened.answer,
     ...(note === "" ? {} : { note }),
   };
 };
@@ -177,7 +191,13 @@ const runSearchRoute = async (params: {
   if (coverage === undefined) return initial;
   const widened = await run(
     params.root,
-    [params.scoped, `--for=${params.route.task}`, "--limit=40", "--legend=compact"],
+    [
+      params.scoped,
+      `--for=${params.route.task}`,
+      `--token-budget=${params.budget}`,
+      "--limit=40",
+      "--legend=compact",
+    ],
     options,
   );
   return mergeWidened(initial, widened, coverage);
@@ -201,7 +221,7 @@ const formatSearchResult = (
     reason: selected.reason,
     ...withIgnored(result.note, ignored),
   };
-  return { output, content: output.answer };
+  return { output, content: contentOf(output) };
 };
 
 /**
