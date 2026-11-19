@@ -1,59 +1,42 @@
 import type { Finding } from "./fields";
 
-/**
- * `git` and `gh` out, one verdict in. `compose` and `lint` are pure and take no
- * `cwd`, so this is the only module that reads a repository or the forge, and every
- * process it starts goes through `spawn` below.
- *
- * The operation converges. It reads what exists, compares against the desired state,
- * and acts on the difference, in that order: push only what the remote lacks, edit an
- * open pull request when one is on this branch, create only when none is. A run that
- * died after the push finds the branch current and pushes nothing; a run that died
- * after the create finds the pull request and rewrites it to the same bytes, which
- * `changed: false` reports. Nothing here reads what the previous attempt was doing.
- */
-
 export type Run =
   | { readonly ran: true; readonly out: string; readonly err: string; readonly code: number }
   | { readonly ran: false; readonly err: string };
 
-const spawn = async (cwd: string, program: string, args: ReadonlyArray<string>): Promise<Run> => {
-  let proc: Bun.Subprocess<"pipe", "pipe", "pipe">;
+export type Spawn = (
+  cwd: string,
+  program: string,
+  args: ReadonlyArray<string>,
+  stdin?: string,
+) => Promise<Run>;
+
+const spawn: Spawn = async (cwd, program, args, stdin) => {
   try {
-    proc = Bun.spawn([program, ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+    const proc = Bun.spawn([program, ...args], {
+      cwd,
+      stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...Bun.env, GIT_TERMINAL_PROMPT: "0" },
+    });
+    const [out, err, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    return { ran: true, out: out.trim(), err: err.trim(), code };
   } catch (cause) {
     return { ran: false, err: cause instanceof Error ? cause.message : String(cause) };
   }
-  const [out, err, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  return { ran: true, out: out.trim(), err: err.trim(), code };
 };
 
-const git = (cwd: string, args: ReadonlyArray<string>) => spawn(cwd, "git", args);
-const gh = (cwd: string, args: ReadonlyArray<string>) => spawn(cwd, "gh", args);
-
-/** A command that ran and failed has not answered, so its exit is not evidence. */
 const answered = (run: Run): run is Extract<Run, { readonly ran: true }> =>
   run.ran && run.code === 0;
 
-/**
- * Why a command failed, from either arm. A spawn that never ran and one that ran and
- * exited non-zero are the same fact for the caller — this command did not answer — so
- * reporting only one of them would send a reader after the wrong problem.
- */
 const why = (run: Run) =>
   !run.ran ? run.err : run.err === "" ? `exited ${run.code} with no message` : run.err;
 
-/**
- * A branch name reaches an argv slot, and `git` and `gh` parse their own flags, so a
- * leading dash reads as an option: `--repo` is a repository selector, not a branch named
- * `repo`. `git` would refuse to create such a ref, which is what makes the HEAD case
- * unreachable. It is kept because `base` is a caller-supplied field, and nothing
- * upstream validates a field.
- */
 const BRANCH = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 
 export const branchOk = (one: string): boolean => BRANCH.test(one) && !one.includes("..");
@@ -64,7 +47,6 @@ export type Facts =
       readonly branch: string;
       readonly base: string;
       readonly upstream?: string;
-      /** `NaN` when `rev-list` ran and failed, which is neither zero nor a count. */
       readonly ahead: number;
     }
   | { readonly ok: false; readonly problems: string };
@@ -75,13 +57,8 @@ type Named =
   | { readonly kind: "named"; readonly branch: string }
   | { readonly kind: "unreadable"; readonly why: string };
 
-/**
- * The branch this pull request is from, as a sum rather than `string | undefined`: the
- * two failures are different facts, and a caller that collapses them sends a reader
- * after the wrong problem. Nothing is written until this resolves to a name.
- */
-const branchOf = async (cwd: string): Promise<Named> => {
-  const named = await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
+const branchOf = async (cwd: string, run: Spawn): Promise<Named> => {
+  const named = await run(cwd, "git", ["rev-parse", "--abbrev-ref", "HEAD"]);
   if (!answered(named))
     return { kind: "unreadable", why: `${cwd} is not a git repository, or has no commit yet` };
   if (named.out === "" || named.out === "HEAD")
@@ -92,30 +69,25 @@ const branchOf = async (cwd: string): Promise<Named> => {
   return { kind: "named", branch: named.out };
 };
 
-const remoteOf = async (cwd: string, branch: string): Promise<string | undefined> => {
-  const remote = await git(cwd, ["config", "--get", `branch.${branch}.remote`]);
+const remoteOf = async (cwd: string, branch: string, run: Spawn): Promise<string | undefined> => {
+  const remote = await run(cwd, "git", ["config", "--get", `branch.${branch}.remote`]);
   return answered(remote) && remote.out !== "" ? remote.out : undefined;
 };
 
-/**
- * `NaN` when `rev-list` ran and failed, and `NaN` is what the push decision reads as
- * "cannot tell", so the failure is a value here rather than an early return.
- */
-const aheadOf = async (cwd: string, branch: string, upstream?: string): Promise<number> => {
+const aheadOf = async (
+  cwd: string,
+  branch: string,
+  upstream: string | undefined,
+  run: Spawn,
+): Promise<number> => {
   if (upstream === undefined) return Number.NaN;
-  const counted = await git(cwd, ["rev-list", "--count", `${upstream}/${branch}..HEAD`]);
+  const counted = await run(cwd, "git", ["rev-list", "--count", `${upstream}/${branch}..HEAD`]);
   return answered(counted) ? Number(counted.out) : Number.NaN;
 };
 
-/**
- * The caller's `base`, else what the repository says, else `main`. A default branch this
- * read cannot resolve falls back rather than refusing, because `base` is a field the
- * caller can correct and the create reports the branch it used, so a wrong guess is
- * visible rather than silent.
- */
-const baseOf = async (cwd: string, base?: string): Promise<string> => {
+const baseOf = async (cwd: string, base: string | undefined, run: Spawn): Promise<string> => {
   if (base !== undefined) return base;
-  const found = await gh(cwd, [
+  const found = await run(cwd, "gh", [
     "repo",
     "view",
     "--json",
@@ -126,15 +98,11 @@ const baseOf = async (cwd: string, base?: string): Promise<string> => {
   return answered(found) && found.out !== "" ? found.out : DEFAULT_BRANCH;
 };
 
-/**
- * Every read that has to succeed before anything is written, gathered so a create never
- * starts from a directory whose branch nobody has named. The last two reads are
- * independent, so they run together rather than in sequence.
- */
-export const read = async (cwd: string, base?: string): Promise<Facts> => {
-  if (Bun.which("gh") === null) return { ok: false, problems: "`gh` is not on PATH" };
+export const read = async (cwd: string, base?: string, run: Spawn = spawn): Promise<Facts> => {
+  if (run === spawn && Bun.which("gh") === null)
+    return { ok: false, problems: "`gh` is not on PATH" };
 
-  const named = await branchOf(cwd);
+  const named = await branchOf(cwd, run);
   if (named.kind !== "named") return { ok: false, problems: named.why };
 
   if (base !== undefined && !branchOk(base))
@@ -143,10 +111,12 @@ export const read = async (cwd: string, base?: string): Promise<Facts> => {
       problems: `\`base\` is not a branch name this tool will pass to git: ${base}`,
     };
 
-  const [upstream, ahead, target] = await Promise.all([
-    remoteOf(cwd, named.branch),
-    aheadOf(cwd, named.branch),
-    baseOf(cwd, base),
+  const [[upstream, ahead], target] = await Promise.all([
+    remoteOf(cwd, named.branch, run).then(
+      async (foundUpstream) =>
+        [foundUpstream, await aheadOf(cwd, named.branch, foundUpstream, run)] as const,
+    ),
+    baseOf(cwd, base, run),
   ]);
 
   return {
@@ -158,34 +128,111 @@ export const read = async (cwd: string, base?: string): Promise<Facts> => {
   };
 };
 
-/**
- * `NaN` reads as needing a push, because a comparison that failed is not a count of
- * zero: the only way to find out what the remote holds is to tell it.
- */
+export type CommitOutcome =
+  | { readonly ok: true; readonly committed: boolean }
+  | { readonly ok: false; readonly problems: string };
+
+const SIGNING_ERROR = /gpg failed to sign|signing failed|secret key not available|No pinentry/i;
+
+export const commitChanges = async (
+  cwd: string,
+  commitMessage: string,
+  files: ReadonlyArray<string>,
+  run: Spawn = spawn,
+): Promise<CommitOutcome> => {
+  const [headMsg, dirty] = await Promise.all([
+    run(cwd, "git", ["log", "-1", "--format=%B", "HEAD"]),
+    run(cwd, "git", ["status", "--porcelain", "--", ...files]),
+  ]);
+
+  if (
+    answered(headMsg) &&
+    answered(dirty) &&
+    headMsg.out.trim() === commitMessage.trim() &&
+    dirty.out === ""
+  ) {
+    return { ok: true, committed: false };
+  }
+
+  const added = await run(cwd, "git", ["add", "--", ...files]);
+  if (!answered(added)) return { ok: false, problems: `\`git add\` failed: ${why(added)}` };
+
+  const staged = await run(cwd, "git", ["diff", "--cached", "--name-only"]);
+  if (answered(staged) && staged.out === "")
+    return {
+      ok: false,
+      problems: "nothing is staged after `git add --`: none of `commit.files` had changes",
+    };
+
+  const committed = await run(cwd, "git", ["commit", "-m", commitMessage]);
+  if (answered(committed)) return { ok: true, committed: true };
+
+  const detail = why(committed);
+  if (SIGNING_ERROR.test(detail))
+    return {
+      ok: false,
+      problems: `\`git commit\` signing failed (${detail}). Call \`yubikey_unlock\` once to cache your PIN in gpg-agent, then re-run \`tools.spectre.pr\`.`,
+    };
+  return { ok: false, problems: `\`git commit\` failed: ${detail}` };
+};
+
 export const needsPush = (facts: Extract<Facts, { readonly ok: true }>) =>
   facts.upstream === undefined || Number.isNaN(facts.ahead) || facts.ahead > 0;
 
+export type SshRemote = { readonly host: string; readonly prefix: string };
+
+export const sshRemoteHost = (remoteUrl: string): SshRemote | undefined => {
+  const trimmed = remoteUrl.trim();
+  const sshProto = /^ssh:\/\/(?:[^@/\s]+@)?([A-Za-z0-9.-]+)\//.exec(trimmed);
+  if (sshProto?.[1] !== undefined) return { host: sshProto[1], prefix: sshProto[0] };
+
+  if (trimmed.includes("://")) return undefined;
+  const scp = /^([A-Za-z0-9._-]+@([A-Za-z0-9.-]+):)/.exec(trimmed);
+  if (scp?.[1] !== undefined && scp[2] !== undefined) return { host: scp[2], prefix: scp[1] };
+  return undefined;
+};
+
+const SSH_AUTH_REFUSAL =
+  /Permission denied \(publickey\)|signing failed for [A-Z0-9-]+-SK|agent refused operation|Could not read from remote repository/i;
+
 export type Pushed = { readonly pushed: boolean; readonly problems: string };
 
-/**
- * No `--force`, and no flag that rewrites history, and there is no input that produces
- * one. A rejected push comes back as git's own refusal, which is the right answer for a
- * shared branch: a force-push to one is the human's call, every time.
- */
 export const push = async (
   cwd: string,
   facts: Extract<Facts, { readonly ok: true }>,
+  run: Spawn = spawn,
 ): Promise<Pushed> => {
   if (!needsPush(facts)) return { pushed: false, problems: "" };
 
+  const remoteName = facts.upstream ?? "origin";
   const args =
     facts.upstream === undefined
       ? ["push", "--set-upstream", "origin", `HEAD:refs/heads/${facts.branch}`]
       : ["push", facts.upstream, `HEAD:refs/heads/${facts.branch}`];
 
-  const result = await git(cwd, args);
+  const result = await run(cwd, "git", args);
   if (answered(result)) return { pushed: true, problems: "" };
-  return { pushed: false, problems: `\`git push\` was refused: ${why(result)}` };
+
+  const firstProblem = why(result);
+  if (SSH_AUTH_REFUSAL.test(firstProblem)) {
+    const urlRun = await run(cwd, "git", ["remote", "get-url", remoteName]);
+    const ssh = answered(urlRun) ? sshRemoteHost(urlRun.out) : undefined;
+    if (ssh !== undefined) {
+      const auth = await run(cwd, "gh", ["auth", "status", "--hostname", ssh.host]);
+      if (answered(auth)) {
+        const retry = await run(cwd, "git", [
+          "-c",
+          `url.https://${ssh.host}/.insteadOf=${ssh.prefix}`,
+          "-c",
+          `credential.https://${ssh.host}.helper=!gh auth git-credential`,
+          ...args,
+        ]);
+        if (answered(retry)) return { pushed: true, problems: "" };
+      }
+    }
+  }
+
+  return { pushed: false, problems: `\`git push\` was refused: ${firstProblem}` };
 };
 
 export type Existing =
@@ -200,13 +247,12 @@ export type Existing =
 
 type Row = { readonly number?: unknown; readonly title?: unknown; readonly body?: unknown };
 
-/**
- * The reconciliation read. One open pull request on this branch, or none, or a reason the
- * answer is unknown — and unknown is never `none`, because "no pull request exists" is a
- * claim about the forge this read has not established.
- */
-export const openPullRequest = async (cwd: string, branch: string): Promise<Existing> => {
-  const found = await gh(cwd, [
+export const openPullRequest = async (
+  cwd: string,
+  branch: string,
+  run: Spawn = spawn,
+): Promise<Existing> => {
+  const found = await run(cwd, "gh", [
     "pr",
     "list",
     "--head",
@@ -267,13 +313,14 @@ type Confirmed = {
 const carries = (row: Confirmed, draft: Draft) =>
   row.title === draft.title && row.body === draft.body;
 
-/**
- * The read-back is the check. A `gh` that exited zero has still not been believed, because
- * the output a human acts on is the URL and the title, and neither is in that exit code.
- * A pull request this cannot read back is reported unconfirmed rather than created.
- */
-const confirm = async (cwd: string, selector: string): Promise<Confirmed | string> => {
-  const view = await gh(cwd, ["pr", "view", selector, "--json", "number,url,title,body,isDraft"]);
+const confirm = async (cwd: string, selector: string, run: Spawn): Promise<Confirmed | string> => {
+  const view = await run(cwd, "gh", [
+    "pr",
+    "view",
+    selector,
+    "--json",
+    "number,url,title,body,isDraft",
+  ]);
   if (!answered(view)) return `\`gh pr view ${selector}\` failed: ${why(view)}`;
 
   let parsed: unknown;
@@ -300,13 +347,8 @@ const confirm = async (cwd: string, selector: string): Promise<Confirmed | strin
   };
 };
 
-/**
- * The create path. `gh pr create` prints the URL, and that URL is the only handle the
- * read-back has, so a create that exited zero without one is a refusal rather than a
- * guess at which pull request was meant.
- */
-const create = async (cwd: string, draft: Draft, base: string): Promise<Written> => {
-  const made = await gh(cwd, [
+const create = async (cwd: string, draft: Draft, base: string, run: Spawn): Promise<Written> => {
+  const made = await run(cwd, "gh", [
     "pr",
     "create",
     "--title",
@@ -326,51 +368,47 @@ const create = async (cwd: string, draft: Draft, base: string): Promise<Written>
         "`gh pr create` reported success without a URL, so the pull request could not be identified",
     };
 
-  const read = await confirm(cwd, url);
-  if (typeof read === "string")
-    return { ok: false, problems: `the pull request was created but ${read}` };
+  const readBack = await confirm(cwd, url, run);
+  if (typeof readBack === "string")
+    return { ok: false, problems: `the pull request was created but ${readBack}` };
 
   return {
     ok: true,
-    number: read.number,
-    url: read.url,
-    draft: read.isDraft,
+    number: readBack.number,
+    url: readBack.url,
+    draft: readBack.isDraft,
     changed: true,
     problems: "",
   };
 };
 
-/**
- * The edit path. A pull request already on this branch is rewritten to the composed bytes
- * rather than a second one opened, so `held` below is what makes `changed: false` the
- * answer a second run gives.
- */
-const edit = async (cwd: string, number: number, draft: Draft, base: string): Promise<Written> => {
-  const before = await confirm(cwd, String(number));
+// REST PATCH via `--input -` avoids `gh pr edit`'s `read:org` GraphQL query and `gh api -f`'s `{owner}`/`@file` interpolation.
+const edit = async (
+  cwd: string,
+  number: number,
+  draft: Draft,
+  base: string,
+  run: Spawn,
+): Promise<Written> => {
+  const before = await confirm(cwd, String(number), run);
   if (typeof before === "string")
     return {
       ok: false,
       problems: `#${number} could not be read, so nothing was edited: ${before}`,
     };
 
-  const held = carries(before, draft);
-
-  if (!held) {
-    const edited = await gh(cwd, [
-      "pr",
-      "edit",
-      String(number),
-      "--title",
-      draft.title,
-      "--body",
-      draft.body,
-      "--base",
-      base,
-    ]);
+  if (!carries(before, draft)) {
+    const payload = JSON.stringify({ title: draft.title, body: draft.body, base });
+    const edited = await run(
+      cwd,
+      "gh",
+      ["api", `repos/{owner}/{repo}/pulls/${number}`, "-X", "PATCH", "--input", "-"],
+      payload,
+    );
     if (!answered(edited))
-      return { ok: false, problems: `\`gh pr edit #${number}\` failed: ${why(edited)}` };
+      return { ok: false, problems: `updating PR #${number} failed: ${why(edited)}` };
 
-    const after = await confirm(cwd, String(number));
+    const after = await confirm(cwd, String(number), run);
     if (typeof after === "string")
       return { ok: false, problems: `#${number} was edited but could not be read back: ${after}` };
     if (!carries(after, draft))
@@ -401,8 +439,11 @@ export const write = async (
   draft: Draft,
   base: string,
   existing: Existing,
+  run: Spawn = spawn,
 ): Promise<Written> =>
-  existing.kind === "open" ? edit(cwd, existing.number, draft, base) : create(cwd, draft, base);
+  existing.kind === "open"
+    ? edit(cwd, existing.number, draft, base, run)
+    : create(cwd, draft, base, run);
 
 export const findingsText = (found: ReadonlyArray<Finding>) =>
   found.map((one) => `${one.rule}: ${one.detail}`).join("\n");

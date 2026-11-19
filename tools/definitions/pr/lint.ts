@@ -1,28 +1,18 @@
-import type { Fields, Finding } from "./fields";
+import { countWords, lintProse } from "../prose";
+import type { Commit, Fields, Finding } from "./fields";
 import type { Draft } from "./render";
-
-/**
- * The rules that a composition can still break, checked in code because a rule in a
- * skill is a rule the agent follows when it remembers. Every rule here fails on text
- * this tool produced itself, from fields a caller controls, so each one is reachable
- * by an input and none of them is decoration.
- *
- * Rules the composition cannot break are not restated here. A missing heading is
- * absent from the list because `render.ts` always writes it; re-checking it would be a
- * guard nothing can reach. What is left is what a caller can get wrong.
- */
 
 const MAX_TITLE = 72;
 const MAX_BODY_LINES = 40;
+const MIN_COMMIT_DESC_WORDS = 8;
+const MAX_COMMIT_DESC_WORDS = 25;
+const MAX_COMMIT_CHANGES = 4;
 
-/** The eleven types the playbook names, in the shape it requires them. */
 const TITLE =
   /^(feat|fix|refactor|docs|style|test|build|ci|chore|perf|revert)(\([^)]+\))?!?: [^ ].*/;
 
 const SHA = /\b[0-9a-f]{7,40}\b/;
-
 const NUMBERED = /^\s*\d+\.\s/m;
-
 const HEADING = /^\s*#{1,6}\s/m;
 
 const CLOSERS: ReadonlyArray<[RegExp, string]> = [
@@ -32,6 +22,13 @@ const CLOSERS: ReadonlyArray<[RegExp, string]> = [
 ];
 
 const finding = (rule: string, detail: string): Finding => ({ rule, detail });
+
+const proseRule = (name: string, text: string | undefined): Array<Finding> => {
+  if (text === undefined || text.trim() === "") return [];
+  return lintProse(text)
+    .filter((one) => one.level === "hard")
+    .map((one) => finding(`prose-${one.rule}`, `\`${name}\` (${one.text}): ${one.why}`));
+};
 
 const titleRule = (fields: Fields, draft: Draft): Array<Finding> => {
   const found: Array<Finding> = [];
@@ -89,9 +86,6 @@ const bodyRule = (fields: Fields, draft: Draft): Array<Finding> => {
       finding("body-no-commit-list", "a numbered list is a changelog in a pull request's clothes"),
     );
 
-  // The rule is that the summary carries no structure of its own, not that it is one
-  // paragraph. A readable summary is short paragraphs, and a heading above them is
-  // what lets a reader stop at the first one.
   if (HEADING.test(fields.summary))
     found.push(
       finding(
@@ -122,11 +116,66 @@ const bodyRule = (fields: Fields, draft: Draft): Array<Finding> => {
         finding(`${name}-not-none`, `\`${name}\` is \`None.\`, so leave the field out instead`),
       );
 
+  found.push(
+    ...proseRule("summary", fields.summary),
+    ...proseRule("review", fields.review),
+    ...proseRule("risk", fields.risk),
+    ...proseRule("tradeoffs", fields.tradeoffs),
+    ...proseRule("breaking", fields.breaking),
+  );
+
   return found;
 };
 
-/** Fail-closed: any finding refuses the create, and `problems` names each rule. */
+const commitRule = (commit: Commit | undefined): Array<Finding> => {
+  if (commit === undefined) return [];
+  const found: Array<Finding> = [];
+
+  if (commit.files.length === 0 || commit.files.some((f) => f.trim() === "" || f.includes("\0"))) {
+    found.push(
+      finding("commit-files", "`commit.files` must name at least one non-empty project path"),
+    );
+  }
+
+  const desc = commit.description.trim();
+  const words = countWords(desc);
+  if (desc.includes("\n") || HEADING.test(desc)) {
+    found.push(
+      finding("commit-description-line", "`commit.description` must be a single line without `#`"),
+    );
+  }
+  if (words < MIN_COMMIT_DESC_WORDS || words > MAX_COMMIT_DESC_WORDS) {
+    found.push(
+      finding(
+        "commit-description-length",
+        `\`commit.description\` has ${words} words; use ${MIN_COMMIT_DESC_WORDS} to ${MAX_COMMIT_DESC_WORDS} words`,
+      ),
+    );
+  }
+  found.push(...proseRule("commit.description", desc));
+
+  if (commit.changes.length === 0 || commit.changes.length > MAX_COMMIT_CHANGES) {
+    found.push(
+      finding(
+        "commit-changes-count",
+        `\`commit.changes\` must have 1 to ${MAX_COMMIT_CHANGES} bullets`,
+      ),
+    );
+  } else if (commit.changes.some((c) => c.trim() === "" || c.includes("\n"))) {
+    found.push(
+      finding("commit-changes-line", "each `commit.changes` entry must be one non-empty line"),
+    );
+  } else {
+    for (const [idx, line] of commit.changes.entries()) {
+      found.push(...proseRule(`commit.changes[${idx}]`, line));
+    }
+  }
+
+  return found;
+};
+
 export const lint = (fields: Fields, draft: Draft): ReadonlyArray<Finding> => [
   ...titleRule(fields, draft),
   ...bodyRule(fields, draft),
+  ...commitRule(fields.commit),
 ];

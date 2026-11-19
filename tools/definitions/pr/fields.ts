@@ -1,12 +1,6 @@
 import type { Tool } from "@opencode/plugin/effect";
 import { Schema } from "effect";
 
-/**
- * `Fields` is the type every module below this one takes, so a caller cannot hand them
- * a shape they do not handle without the schema refusing it first. What the text breaks is
- * `lint.ts`'s question, not this file's.
- */
-
 export const TYPES = [
   "feat",
   "fix",
@@ -23,7 +17,6 @@ export const TYPES = [
 
 export type Type = (typeof TYPES)[number];
 
-/** The `## Validation` bullet is a pair, because `- check` alone claims nothing ran. */
 const Check = Schema.Struct({
   check: Schema.String.annotate({
     description: "The command or check that ran.",
@@ -33,7 +26,34 @@ const Check = Schema.Struct({
   }),
 });
 
+export const Commit = Schema.Struct({
+  files: Schema.Array(Schema.String).annotate({
+    description:
+      "Project-relative paths to stage with `git add --`. Untracked files outside this list stay untouched.",
+  }),
+  description: Schema.String.annotate({
+    description: "One sentence (8 to 25 words) for `# Description` in the commit message.",
+  }),
+  changes: Schema.Array(Schema.String).annotate({
+    description: "One to four concrete staged-change bullets for `# Changes`.",
+  }),
+});
+
+export type Commit = typeof Commit.Type;
+
 const Fields = Schema.Struct({
+  action: Schema.optional(Schema.Literals(["open", "compose"])).annotate({
+    description:
+      'Defaults to `"open"`. Pass `"compose"` to validate and return `{ title, body }` in memory without calling git or gh.',
+  }),
+  cwd: Schema.optional(Schema.String).annotate({
+    description:
+      "Repository directory to run in. Defaults to the calling session's active worktree directory.",
+  }),
+  commit: Schema.optional(Commit).annotate({
+    description:
+      "Optional atomic commit step run before pushing. Formats the Phase B commit message from `type`, `scope`, `subject`, `breaking`, and these fields, stages `commit.files`, and commits.",
+  }),
   type: Schema.Literals([...TYPES]).annotate({
     description: "Conventional-commit type. One of them, not a new one.",
   }),
@@ -84,10 +104,9 @@ export const Input = Schema.Struct(Fields.fields);
 
 export type Input = typeof Input.Type;
 
-export const DESCRIPTION = `Compose, lint, push, and open or update a GitHub pull request from structured conventional-commit fields.
-Validates title and body against playbook-opening-a-pr before pushing, never force-pushes or opens drafts, and converges idempotently on re-runs. Code changes require validation entries for \`ripwire . --quality-delta\` and \`ripwire . --affected=<paths>\`. A branch that changed no code file states that fact in its test validation entry.`;
+export const DESCRIPTION = `Compose, lint, commit, push, and open or update a GitHub pull request from structured conventional-commit fields.
+Action "compose" validates title, body, and ASD-STE100 prose in memory without calling git or gh. Action "open" optionally stages and commits named files, retries SSH key refusals over gh HTTPS credentials, and converges idempotently. Code changes require validation entries for \`ripwire . --quality-delta\` and \`ripwire . --affected=<paths>\`. A branch that changed no code file states that fact in its test validation entry.`;
 
-/** The lint verdict, as the tool reports it. `detail` names the fix, not the rule. */
 export const Finding = Schema.Struct({
   rule: Schema.String,
   detail: Schema.String,
@@ -97,16 +116,23 @@ export type Finding = typeof Finding.Type;
 
 const Lint = Schema.Struct({
   status: Schema.Literals(["lint-failed"]).annotate({
-    description: "Nothing was pushed and no pull request exists. `problems` says what to change.",
+    description: "Nothing was committed, pushed, or opened. `problems` says what to change.",
   }),
   problems: Schema.String,
   title: Schema.String.annotate({
     description: "The title as composed, so a rule can be read against what it produced.",
   }),
   body: Schema.String.annotate({
-    description:
-      "The body as composed, so a rule can be read against it. A `lint-failed` body is diagnostic: it may carry an empty section, because the rule that refused it is exactly that.",
+    description: "The body as composed, so a rule can be read against it.",
   }),
+});
+
+const Composed = Schema.Struct({
+  status: Schema.Literals(["composed"]).annotate({
+    description: "Validated in memory without calling git or gh.",
+  }),
+  title: Schema.String,
+  body: Schema.String,
 });
 
 const Verdict = Schema.Struct({
@@ -117,6 +143,7 @@ const Verdict = Schema.Struct({
   base: Schema.String,
   title: Schema.String,
   body: Schema.String,
+  committed: Schema.optional(Schema.Boolean),
   pushed: Schema.Boolean.annotate({
     description: "False when the remote already held every commit on this branch.",
   }),
@@ -129,6 +156,7 @@ const Verdict = Schema.Struct({
 const Failed = Schema.Struct({
   status: Schema.Literals(["failed"]),
   problems: Schema.String,
+  committed: Schema.optional(Schema.Boolean),
   pushed: Schema.Boolean,
   draft: Schema.Boolean.annotate({
     description:
@@ -137,7 +165,7 @@ const Failed = Schema.Struct({
   directory: Schema.optional(Schema.String),
 });
 
-export const Output = Schema.Union([Lint, Verdict, Failed]);
+export const Output = Schema.Union([Lint, Composed, Verdict, Failed]);
 
 export type Output = typeof Output.Type;
 

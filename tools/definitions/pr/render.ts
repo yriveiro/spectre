@@ -1,11 +1,4 @@
-import type { Fields } from "./fields";
-
-/**
- * The only place a title and a body are spelled. Pure and total: every field becomes
- * text, no field is consulted twice, and the same fields always produce the same bytes.
- * `read.ts` compares an existing pull request against these bytes rather than against
- * whatever text a caller sent last time, which is what lets a second run converge.
- */
+import type { Commit, Fields } from "./fields";
 
 export type Draft = {
   readonly title: string;
@@ -14,34 +7,31 @@ export type Draft = {
 
 const heading = (name: string) => `## ${name}`;
 
-const bullets = (items: ReadonlyArray<string>) => items.map((one) => `- ${one}`).join("\n");
+const stripBullet = (item: string) => item.trim().replace(/^[-*+]\s+/, "");
+
+const bullets = (items: ReadonlyArray<string>) =>
+  items.map((one) => `- ${stripBullet(one)}`).join("\n");
 
 const checks = (fields: Fields) =>
   fields.validation.map((one) => `- ${one.check} → ${one.result}`).join("\n");
 
-/**
- * Untickable by construction. The playbook asks for a recorded human approval, and
- * this tool has no way to read one, so a ticked box here would be a claim the
- * repository makes about a person who has not looked. The reviewer ticks it.
- */
 const MERGE_GATE = [
   "- [ ] Explicit direct user approval is recorded.",
   "- [ ] All required GitHub Actions checks are green.",
   "- [ ] If checks are not green, the direct user override names the failed checks and reason.",
 ].join("\n");
 
+export const composeTitle = (fields: Pick<Fields, "type" | "scope" | "breaking" | "subject">) =>
+  `${fields.type}(${fields.scope})${fields.breaking === undefined ? "" : "!"}: ${fields.subject}`;
+
 export const compose = (fields: Fields): Draft => {
-  const title = `${fields.type}(${fields.scope})${fields.breaking === undefined ? "" : "!"}: ${fields.subject}`;
+  const title = composeTitle(fields);
 
   const sections = [
     heading("Summary"),
     fields.summary,
     heading("Review"),
     fields.review,
-    // An empty list renders as an empty heading, and the lint refuses that composition
-    // anyway. So this shape only reaches GitHub through a body the lint cleared, which
-    // is what makes `body` in a `lint-failed` result diagnostic output and not something
-    // to hand to `gh pr create`.
     heading("Scope"),
     bullets(fields.scopeItems),
     ...(fields.tradeoffs === undefined ? [] : [heading("Tradeoffs"), fields.tradeoffs]),
@@ -55,4 +45,16 @@ export const compose = (fields: Fields): Draft => {
   ];
 
   return { title, body: sections.join("\n\n") };
+};
+
+export const composeCommit = (fields: Fields, commit: Commit): string => {
+  const blocks = [
+    composeTitle(fields),
+    `# Description\n${commit.description.trim()}`,
+    `# Changes\n${bullets(commit.changes)}`,
+    ...(fields.breaking === undefined
+      ? []
+      : [`# Breaking Changes\n- ${stripBullet(fields.breaking)}`]),
+  ];
+  return blocks.join("\n\n");
 };

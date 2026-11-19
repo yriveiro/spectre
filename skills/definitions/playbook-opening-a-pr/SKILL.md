@@ -1,76 +1,61 @@
 # Playbook opening a PR
 
 Turn finished work into pull requests a reviewer can land. Every other playbook
-ends here, and this one does not go on to babysit or ship.
+ends here, and this one does not continue to babysit or ship.
 
 ## Start
 
-Open a `todolist` with one entry per phase before the first push.
+For a single pull request, run the fast path in three moves without opening a
+`todolist`:
 
-1. Worktree
-2. Commits
-3. Split
-4. Parallel preparation
-5. Title and body
-6. Stack
-7. Open
-8. Handover
+1. Read `<pr-preflight>` when `/pr` attached it. Do not repeat `git status`,
+   `git branch`, `git config commit.gpgsign`, or `which ripwire`.
+2. Run the project validation check plus `ripwire . --quality-delta` and
+   `ripwire . --affected=<paths>` (or `tools.spectre.ripwire({ action: "check" })`)
+   when the branch changed code.
+3. If uncommitted branch files belong in the PR and `gpgsign` is `true`, call
+   `yubikey_unlock` once, then call `tools.spectre.pr` once with `commit` set.
+
+Open a `todolist` only when Phase C splits the branch into a multi-PR stack.
+Never edit source or workflow files during `/pr` unless the user asked for a fix.
+Skip `interrogate`, `code-hygiene`, `technical-writing`, and `grammar` skill loads
+unless the user passed `--review` or a `prose-*` rule refused your draft.
 
 ## Phase A: Worktree
 
-Never edit the main checkout, and never cut a branch to get there. The branch
-comes with the worktree:
+Never edit the main checkout, and never cut a branch in place. Open the branch
+with its worktree:
 
 ```ts
 await tools.spectre.worktrees({ action: "start", name: "fix-login" })
 ```
 
-That is the only way to open one. `git worktree add` is not the fallback for a
-refusal, and the reason is what it leaves behind: it creates the directory and
-**leaves this session standing in main**, so the work goes on where you were and
-the new directory sits beside it unused. A refused call has cost you nothing, so
-read it and call again.
+Never run `git worktree add` as a fallback. That command creates a directory and
+leaves this session standing in `main`. Read `problems` on a refusal and act on
+the exact reason:
 
-The call moves this session, so it refuses rather than guess. `problems` names
-the rule and the answer:
+| `problems` says | Action |
+| --------------- | ------ |
+| this session is not in the main worktree | Work in the current worktree, or move to `main` before opening a second one. |
+| this call has no session | Open a session in the `main` worktree and call again. |
+| the branch already exists | Work in the worktree holding it, or pass `branch` to attach it. |
+| the name is taken | Pick another worktree name. |
+| no base ref resolved | Run `git fetch`, or pass `base` explicitly. |
 
-| `problems` says | Do this |
-| --------------- | ------- |
-| this session is not in the main worktree | Move this session to the `main` worktree it names, and call again. One worktree per session: a session already in one works where it is. |
-| this call has no session | The call has nothing to move. Open a session in the main worktree and call again. |
-| the branch already exists | If a worktree holds it, work in that directory. If none does, pass it as `branch`: the worktree is cut from that branch and this session moves in. |
-| the name is taken | A worktree by that name exists and the host would silently create `<name>-2`. Pick another name. |
-| no base ref resolved | `git fetch`, or pass `base` explicitly. A `branch` that already exists does not need one. |
-
-Only `status: "opened"` means a worktree is ready, and it means this session is
-in it. `unverified` left the directory on disk and did **not** move you: read
-`problems`, remove that directory, and call again.
-
-Subagents inherit the worktree, so brief them with the path. Several runs on the
-same branch each get their own worktree, or you reset between them:
-
-```sh
-git fetch && git reset --hard origin/<branch>
-```
-
-A branch carrying unrelated work: patch it out, take a fresh worktree, apply the
-patch. A worktree too snarled to reason about: reset from main and redo the
-smallest version. Do not untangle it in place.
+Only `status: "opened"` confirms the worktree is ready and this session moved into
+it. On `unverified`, read `problems`, remove the directory, and call again.
 
 ## Phase B: Commits
 
-Commit as you go, then rebase into small ordered commits before opening
-anything. Each commit is a future pull request, landable on its own and ordered
-so the series tells the story.
+Prefer passing `commit` directly to `tools.spectre.pr` when uncommitted branch
+files belong in one commit. The tool stages only `commit.files` (`git add --`) so
+untracked files such as `spectre.json` stay untouched, formats the commit message,
+and converges on retry if `HEAD` already holds that commit.
 
-Amend when a fix belongs in a commit you just made. Make a new commit when the
-change is separable. A series that only reads correctly in the order you happened
-to write it is a series nobody can review.
-
-Each commit message uses this shape:
+Every commit message uses this shape:
 
 ```text
-<type>[optional scope][!]: <concise imperative subject>
+<type>(<scope>)[!]: <concise imperative subject>
 
 # Description
 <one sentence, 8 to 25 words: the primary staged change>
@@ -83,240 +68,111 @@ Each commit message uses this shape:
 - <incompatibility and required migration>]
 ```
 
-The type, scope, and subject come from Phase E. `# Description` and
-`# Changes` are required; `# Breaking Changes` only when the staged change breaks
-something. The `!` before the colon marks it.
+Write one to four `# Changes` bullets with plain verbs (`add`, `remove`, `update`,
+`replace`, `rename`, `refactor`, `correct`). Do not claim behavior stays the same
+or infer runtime effects absent from the diff.
 
-Write one to four bullets, each naming a change visible in the diff. Use `add`,
-`remove`, `update`, `replace`, `rename`, `refactor`, `correct`. Do not claim
-behavior stays the same, and do not claim the change is safe or compatible. Do not
-list files, line numbers, or implementation trivia unless that is the material
-change. Do not infer motivation or runtime effects the diff does not show.
+When `gpgsign` is `true`, call `yubikey_unlock` once before committing. If the PIN
+modal cancels or no card is present, stop and report that in one line. Never loop
+over `gpg`, `scdaemon`, or `ps`.
 
 ## Phase C: Split
 
-Read the subjects as though each were the title of its own pull request.
+Inspect commits ahead of trunk:
 
 ```sh
 git log --oneline <trunk>...HEAD
 ```
 
-Two subjects wanting different scopes, or two justifications that do not overlap,
-are two pull requests. Five subjects across five scopes is five pull requests.
-
-No line count decides this. Google says outright that there are no hard rules
-about how large is too large, and the 200 to 400 line figure the literature
-quotes comes from one Cisco team, dated 2005 by SmartBear.
-
-Two cases split even when the reasons overlap. A refactor belongs in its own
-commit, never beside a behavior change, because a reviewer approves one and is
-never asked about the other. A commit that needs another to be correct is not a
-pull request, so merge those two and split somewhere the change does stand alone.
-
-A large change that passes is not a problem to solve by cutting. Size predicts how
-much a reviewer holds at once, and writing the change faster does not widen that.
-Put the order of the parts in `## Scope` so nobody needs the whole diff in view.
+Two subjects wanting different scopes, or two unrelated justifications, belong in
+two pull requests. Refactoring and behavior changes also split into separate
+commits. When uncommitted edits mix two unrelated scopes and the split is
+ambiguous, ask one question before committing.
 
 ## Phase D: Parallel preparation
 
-Before you fill the PR fields, list the independent checks and reviews. Run command
-checks in parallel when their inputs and outputs do not conflict. Give read-only
-review lanes disjoint diff areas. Do not parallelize dependent work or branch writes.
-Keep one owner for the final split, the PR fields, and the `tools.spectre.pr` call.
-If no useful task can run in parallel, mark this phase `n/a` and state why.
+For a single pull request without `--review`, mark this phase `n/a` and run your
+validation checks directly without spawning subagents.
 
-For each useful subagent lane, load `model-router` and call
-`tools.spectre.routing({ task: "<one lane>" })`. A command check fits `mechanical`
-or its equivalent. A call-site or blast-radius scan fits `search`. Semantic diff
-review or risk judgment fits `judgment`, not `thinking` or `deep`, unless the change
-spans a subsystem. Follow the judge's choice when it answers. When it skips, match
-the task to the profile's `match` line. If you are unsure between profiles, follow
-`model-router` and choose more effort. Follow `model-router` for `setup`,
-`declined`, or `problems`. Never choose a profile by array position or guess a
-model. Pass the selected profile's `agent` and exact `model.ref`.
-
-Launch all independent subagents together. Each one runs in the background. Give each a
-bounded, read-only task and ask for evidence. No subagent edits or commits on the
-branch, or calls `tools.spectre.pr`. Wait for each result, verify its evidence, and
-resolve dependent fixes before you write the fields.
+Use subagents only when opening a multi-PR stack, delegating packaging out of a
+long coding session, or running `--review`. Load `model-router` and call
+`tools.spectre.routing({ task: "<one lane>" })`. A command check or single-PR
+packaging fits `mechanical` or `worker`. A call-site scan fits `search`. Semantic
+diff review under `--review` fits `judgment`, not `thinking` or `deep`. Pass the
+selected profile's `agent` and exact `model.ref`, and keep one owner for branch
+writes.
 
 ## Phase E: Title and body
 
-Do not compose either one. `tools.spectre.pr` writes both from structured fields and
-refuses a body that breaks the rules below, so a pull request opened through it cannot
-have the shape of whatever the run happened to produce.
+Never hand-write pull request markdown or temporary scratch `.md` files on disk.
+`tools.spectre.pr` composes the title and body, checks structure and ASD-STE100
+hard prose rules in memory, pushes, and opens or updates the pull request:
 
 ```js
 const pr = await tools.spectre.pr({
-  type: "fix",                                  // one of the eleven below
-  scope: "spectre",                             // lowercase noun naming the changed area
-  subject: "report reading a PR gh could not",  // imperative, no period, one clause
-  summary: "A row gh could not read looked like a clean row, so a stack read as clear.",
-  review: "Is unknown distinguishable from good news here, or does it still read as clear?",
+  action: "open", // pass "compose" on GitLab or when only title + body text is wanted
+  commit: {       // omit when every change is already committed
+    files: ["tools/definitions/stack/read.ts"],
+    description: "Report unreadable GitHub pull request rows instead of treating them as clean.",
+    changes: ["return unreadable state when gh pr list fails"],
+  },
+  type: "fix",
+  scope: "spectre",
+  subject: "report reading a PR gh could not",
+  summary: "A row gh could not read looked clean, so a broken stack reported clear.",
+  review: "Does unknown stay distinct from clear across every caller?",
   scopeItems: ["tools/definitions/stack/read.ts"],
   validation: [
     { check: "bun test test/stack", result: "17 pass, 0 fail" },
     { check: "ripwire . --quality-delta", result: "regressions=0 gating=0" },
     { check: "ripwire . --affected=tools/definitions/stack", result: "tests=12 reached=64" },
   ],
-  risk: "Changes the `threads` default. Reverting the file restores 0.",
-  tradeoffs: "A sentinel number over a fourth state, because the state is read in three places.",
-  breaking: "The `threads` field becomes a string.",
-  base: "<parent-branch>",
+  risk: "Changes stack error reporting. Reverting the file restores the prior check.",
 })
 ```
 
-It pushes the branch, opens or updates the pull request, and returns the URL. A
-`lint-failed` status means nothing was pushed and nothing was opened, and `problems`
-names each rule that broke, so fix the fields and call it again.
+For GitLab repositories (`forge: gitlab`) or requests that ask only for a title
+and body, pass `action: "compose"`. The tool validates all fields in memory and
+returns `{ status: "composed", title, body }` with zero `git` or `gh` calls.
 
-`tradeoffs`, `breaking` and `base` are the three optional fields. The rest are
-required, which is the point: an empty `validation` list is a claim of evidence that
-does not exist, and the tool refuses it.
+### Rules the tool enforces
 
-### The title
-
-One scope per title, in this pattern:
-
-```text
-<type>(<scope>)!: <imperative subject, at most 72 characters, no final period>
-```
-
-`<type>` is one of `feat`, `fix`, `refactor`, `docs`, `style`, `test`, `build`,
-`ci`, `chore`, `perf`, `revert`. `<scope>` is a lowercase noun naming the changed
-area, written the way the repository writes it. Name a real symbol when one carries
-the change. A `breaking` field puts `!` before the colon.
-
-```text
-fix(spectre): report reading a PR gh could not
-```
-
-Two changes is two pull requests, so two clauses is two titles. A subject joined by
-`and`, `;` or `,` is refused, because that is the split failing in the one place a
-reviewer reads first.
-
-### The body
-
-The fields become this shape, and the tool writes every heading, so you cannot omit
-one or leave a section filled with `None.`:
-
-```markdown
-## Summary
-<Why the change exists, in plain words. Short paragraphs, with no heading inside `summary`.>
-
-## Review
-<The one feedback you want, in one line.>
-
-## Scope
-- <Real symbols and paths, grouped by what belongs together.>
-
-## Tradeoffs
-<The alternative a reviewer would otherwise ask about, and why this one won.>
-
-## Validation
-- <command or check> → <what it returned>
-- ripwire . --quality-delta → <what it printed>
-- ripwire . --affected=<paths> → <what it printed>
-
-## Risk and Rollback
-<What it touches, how to revert it, and what stays broken on trunk if it does not land.>
-
-## Breaking Changes
-<What no longer works and the migration it needs.>
-
-## Merge Gate
-- [ ] Explicit direct user approval is recorded.
-- [ ] All required GitHub Actions checks are green.
-- [ ] If checks are not green, the direct user override names the failed checks and reason.
-```
-
-`## Summary`, `## Review`, `## Scope`, `## Validation`, `## Risk and Rollback` and
-`## Merge Gate` are always present. Drop `tradeoffs` and `breaking` when there is nothing to say. A
-heading holding `None.` is a line a reviewer spends reading nothing, and it is
-refused. Desired feedback is the type that best predicts acceptance (arXiv
-2602.14611, 80,000 pull requests across 156 projects).
-
-Run `ripwire . --quality-delta` and `ripwire . --affected=<paths>` after the last
-code change, and give each its own validation bullet with the output it printed. A
-branch that changed no code file states that fact in the bullet that carries its
-test result.
-
-**The body describes the change, not the commits.** A commit SHA or a numbered list
-in any field is a refusal: `git log` already holds that text, and three commit
-summaries under numbered headings is a changelog wearing a pull request's clothes.
-Name the symbols and paths instead. A reviewer needs the shape of the change, not
-its packaging. The tool refuses a body over forty lines, because a repository
-configured to squash a title and a body into one commit puts this text into `git log`
-verbatim.
-
-Write the summary, the review line and each bullet under `technical-writing`, then
-pass the result through `grammar`. Apply every technical-writing layer except
-Diátaxis. One word for each action, keep the articles, and avoid an `-ing` form
-where a plain verb does the work. Run `interrogate` over the diff before you commit
-only when the branch changes non-trivial behavior or design. Skip `interrogate` on
-docs-only, config-only, or mechanical changes. Run `code-hygiene` before review when
-the branch touches code.
-
-Cut anything a reviewer would not ask about. A branch-protection `GET` returning
-403, a safety argument citing another commit's SHA, and a list of defects found and
-not fixed are all answers to questions nobody asked. A defect you turned up becomes
-an issue, linked from a clause under `scopeItems` and only where a reviewer would ask
-why you left it.
-
-Attach a screenshot or a video when it proves a claim a sentence cannot. Link full
-SHAs, per-lane recitals and file-by-file checklists as an artifact rather than
-pasting them. Do not write a heading inside `summary`, because the tool writes
-`## Summary` above it. Do not add `## Test plan`, because `## Validation` is it.
+- **Title:** `<type>(<scope>)[!]: <subject>` under 72 characters, lowercase scope,
+  no trailing period, and one clause (`and`, `;`, and `,` in `subject` fail).
+- **Body cap and shape:** At most 40 lines, no commit SHAs, no numbered commit
+  lists, no heading inside `summary`, and no optional field set to `None.`.
+- **Prose:** Active voice, plain words, no semicolons, no phrasal verbs, no
+  marketing adjectives, and at most 25 words per sentence.
+- **Validation:** Run `ripwire . --quality-delta` and `ripwire . --affected=<paths>`
+  after the last code change, and give each its own validation bullet with the
+  exact output. A branch that changed no code file states that fact in the bullet
+  that carries its test result.
 
 ## Phase F: Stack
 
-A branch that tripped Phase C becomes a stack. A stack is a chain of base branches:
-the root targets the trunk, and each child rebases onto its parent's exact tip. Name
-that parent as `base` and the pull request targets it:
-
-```js
-await tools.spectre.pr({ /* … */ base: "<parent-branch>" })
-```
-
-Branch from the trunk only for work that is genuinely independent. Rebase on the
-trunk before substantial stack work, not after it.
-
-The forge is `gh`, and the tool drives it. Run `gh auth status` before the
-first call. `tools.spectre.stack` reports an unauthenticated
-`gh` in `problems` rather than as a clear stack, so read `problems` before trusting a
-`clear`.
+A branch that splits in Phase C becomes a stack of base branches. Rebase each
+child onto its parent's exact tip and pass `base: "<parent-branch>"` to
+`tools.spectre.pr`.
 
 ## Phase G: Open
 
-One call opens every pull request ready, never as a draft, and there is no input that
-expresses one. `status: "created"` is the only status that says a pull request
-exists. `status: "updated"` with `changed: false` means the branch already had one
-carrying this exact title and body.
+`status: "created"` or `status: "updated"` confirms the pull request is live on
+GitHub. On SSH remotes where hardware-key signing fails in headless mode, the tool
+automatically retries the push once through `gh` HTTPS credentials without editing
+`.git/config`.
 
-The call converges, so it is safe to repeat after a crash: it finds the open pull
-request on the branch and rewrites it rather than opening a second. It never
-force-pushes and never commits.
+**Authorization and pause boundaries.** Invoking `/pr` authorizes staging branch
+files, committing, pushing without `--force`, and opening or updating the pull
+request, even when CI triggers a `plan` workflow or requests gated deploy
+approval. Pause and ask only before a `--force` push to a shared branch, a
+production deploy you execute directly, a branch or file deletion, or when `main`
+has zero changes.
 
-**Always pause and ask.** A force-push to a shared branch, a deploy, a deletion,
-and anything a customer reads are the human's call, every time, whatever the brief
-says. Say what you would do and wait for the answer. This is the one rule in the
-playbook with no override. `## Merge Gate` stays unticked by the tool for the same
-reason: it cannot observe a human, so it will not record an approval nobody gave.
+## Phase H: Handover
 
-## Phase H: Hand off
+Post the URL, branch, base, and commits, then stop. Do not start `playbook-babysit`
+unless the user asks for it.
 
-Opening a pull request does not start a babysit. Post the URL and keep building.
-Finish the phase or the whole stack first, then run `playbook-babysit` when the
-user asks for it. A babysit per new pull request stalls the build and spends
-checks on commits the next wave will restart anyway.
-
-When a parent delegates opening a pull request to a subagent, route that child on
-`worker` or its equivalent through `model-router`. The child applies the same
-`interrogate` and `code-hygiene` gates and checks its prose under `grammar`. Then it
-calls `tools.spectre.pr` once, posts the URL, and returns to its parent without
-babysitting.
-
-## Outputs
-
-The URL, the branch and its base, the commits in order, and anything you paused
-on.
+When a long coding session delegates PR packaging to a subagent, route that child
+on `worker` or `mechanical` through `model-router` so it runs in a fresh small
+context, calls `tools.spectre.pr` once, and returns the URL.
