@@ -27,6 +27,14 @@ const MID: Model.Info = {
   variants: [{ id: "low" }, { id: "medium" }],
 } as unknown as Model.Info;
 
+/** A model with a price, so a ceiling can be compared against it. */
+const COSTLY: Model.Info = {
+  providerID: "acme",
+  id: "falcon-costly",
+  variants: [{ id: "high" }],
+  cost: [{ input: 3, output: 15 }],
+} as unknown as Model.Info;
+
 const tables = (
   models: Record<string, string>,
   profiles: Record<
@@ -34,9 +42,14 @@ const tables = (
     {
       model?: string | string[];
       effort?: string;
+      maxCost?: { input?: number; output?: number };
       why?: string;
       agent?: string;
-      crosscheck?: { effort?: string; model?: string | string[] };
+      crosscheck?: {
+        effort?: string;
+        model?: string | string[];
+        maxCost?: { input?: number; output?: number };
+      };
     }
   > = {},
 ): Tables => ({
@@ -282,6 +295,82 @@ describe("check", () => {
     test("an effort with an empty allowlist reports the same", () => {
       const found = run(tables({}, { x: { effort: "high" } }));
       expect(found.problems[0]).toContain("No model is allowed.");
+    });
+  });
+
+  describe("the cost ceiling", () => {
+    test("a ceiling with no side states no bound", () => {
+      const found = run(
+        tables({ light: "acme/falcon-mini" }, { worker: { effort: "high", maxCost: {} } }),
+      );
+      expect(found.problems).toContain(
+        'profiles.worker.maxCost: states no bound. Name "input", "output", or both.',
+      );
+    });
+
+    test("a negative ceiling is not a price", () => {
+      const found = run(
+        tables(
+          { light: "acme/falcon-mini" },
+          { worker: { effort: "high", maxCost: { output: -1 } } },
+        ),
+      );
+      expect(found.problems.some((one) => one.includes("is not a price"))).toBe(true);
+    });
+
+    test("a pin above its ceiling is a contradiction", () => {
+      const found = run(
+        tables(
+          { costly: "acme/falcon-costly" },
+          { worker: { model: "costly", maxCost: { output: 2 } } },
+        ),
+        [...catalogue, COSTLY],
+      );
+      expect(found.problems.some((one) => one.includes("A pin and a ceiling contradict"))).toBe(
+        true,
+      );
+    });
+
+    test("a pin within its ceiling is legal", () => {
+      const found = run(
+        tables(
+          { costly: "acme/falcon-costly" },
+          { worker: { model: "costly", maxCost: { output: 15 } } },
+        ),
+        [...catalogue, COSTLY],
+      );
+      expect(found.problems).toEqual([]);
+    });
+
+    test("a crosscheck ceiling with no side states no bound", () => {
+      const found = run(
+        tables(
+          { light: "acme/falcon-mini" },
+          { worker: { effort: "high", crosscheck: { effort: "high", maxCost: {} } } },
+        ),
+      );
+      expect(found.problems).toContain(
+        'profiles.worker.crosscheck.maxCost: states no bound. Name "input", "output", or both.',
+      );
+    });
+
+    test("a crosscheck pin above the effective ceiling is a contradiction", () => {
+      const found = run(
+        tables(
+          { light: "acme/falcon-mini", costly: "acme/falcon-costly" },
+          {
+            worker: {
+              effort: "high",
+              maxCost: { output: 2 },
+              crosscheck: { effort: "high", model: "costly" },
+            },
+          },
+        ),
+        [...catalogue, COSTLY],
+      );
+      expect(found.problems.some((one) => one.includes("A pin and a ceiling contradict"))).toBe(
+        true,
+      );
     });
   });
 

@@ -332,6 +332,82 @@ describe("resolve: the order", () => {
     expect(found.excluded).toEqual([]);
   });
 
+  test("a ceiling skips a qualifying candidate above it, and reports the bound", () => {
+    const found = resolve(
+      "deep",
+      { effort: "max", maxCost: { output: 2 } },
+      kept([allow("kimi", "opencode-go/kimi-k3"), allow("pro", "opencode-go/deepseek-v4-pro")]),
+      "spectre",
+    );
+    expect(found.problem).toBeUndefined();
+    expect(found.resolution?.primary.alias).toBe("pro");
+    expect(found.resolution?.primary.rung).toBe("max");
+    expect(found.excluded).toEqual([
+      {
+        alias: "kimi",
+        ref: "opencode-go/kimi-k3",
+        reason:
+          "costs input $3 / output $15 per million tokens, above the ceiling of output $2 per million tokens",
+        rungs: ["max"],
+        reaches: "max",
+      },
+    ]);
+  });
+
+  test("a ceiling of zero spends the free model and leaves the paid one out", () => {
+    const found = resolve(
+      "deep",
+      { effort: "max", maxCost: { input: 0, output: 0 } },
+      kept([
+        allow("kimi", "opencode-go/kimi-k3"),
+        allow("free", "opencode-go/minimax-m3.1-flash-free"),
+      ]),
+      "spectre",
+    );
+    expect(found.resolution?.primary.alias).toBe("free");
+    expect(found.resolution?.primary.costOutput).toBe(0);
+    expect(found.excluded[0]?.alias).toBe("kimi");
+  });
+
+  test("a ceiling every reaching model exceeds names the bound and the models", () => {
+    const found = resolve(
+      "deep",
+      { effort: "max", maxCost: { output: 1 } },
+      kept([allow("kimi", "opencode-go/kimi-k3"), allow("pro", "opencode-go/deepseek-v4-pro")]),
+      "spectre",
+    );
+    expect(found.resolution).toBeUndefined();
+    expect(found.problem).toContain("profiles.deep.maxCost");
+    expect(found.problem).toContain("output $1 per million tokens");
+    expect(found.problem).toContain("kimi (input $3 / output $15)");
+    expect(found.problem).toContain("pro (input $0.66 / output $1.98)");
+    expect(found.excluded.map((one) => one.alias)).toEqual(["kimi", "pro"]);
+  });
+
+  test("a pin above the ceiling is a problem, not a silent spend", () => {
+    const found = resolve(
+      "worker",
+      { model: ["kimi"], maxCost: { output: 2 } },
+      kept([allow("kimi", "opencode-go/kimi-k3")]),
+      "spectre",
+    );
+    expect(found.resolution).toBeUndefined();
+    expect(found.problem).toContain('the pinned model "kimi"');
+    expect(found.problem).toContain("above the ceiling");
+  });
+
+  test("a pin within the ceiling is spent as before", () => {
+    const found = resolve(
+      "worker",
+      { model: ["muse"], maxCost: { output: 1 } },
+      kept([allow("muse", "opencode-go/muse-spark-1.3-contributor")]),
+      "spectre",
+    );
+    expect(found.problem).toBeUndefined();
+    expect(found.resolution?.primary.alias).toBe("muse");
+    expect(found.resolution?.primary.pinned).toBe(true);
+  });
+
   test("a candidate that cannot reach the requirement is skipped and reports its capacity", () => {
     const found = resolve(
       "thinking",
@@ -592,6 +668,58 @@ describe("resolve: the crosscheck", () => {
     expect(found.resolution?.primary.alias).toBe("glm");
     expect(found.resolution?.crosscheck?.alias).toBe("deep");
     expect(found.resolution?.crosscheck?.costInput).toBe(0.15);
+  });
+
+  test("the profile's ceiling applies to the crosscheck too", () => {
+    const found = resolve(
+      "worker",
+      { effort: "high", maxCost: { output: 0.5 }, crosscheck: { effort: "high" } },
+      kept([
+        allow("glm", "opencode-go/glm-5.3-flash"),
+        allow("deep", "opencode-go/deepseek-v4.1-flash"),
+      ]),
+      "spectre",
+    );
+    expect(found.resolution?.primary.alias).toBe("glm");
+    expect(found.resolution?.crosscheck).toBeUndefined();
+    expect(found.resolution?.crosscheckProblem).toContain("within output $0.5 per million tokens");
+  });
+
+  test("a crosscheck ceiling overrides the profile's ceiling", () => {
+    const found = resolve(
+      "worker",
+      {
+        effort: "high",
+        maxCost: { output: 0.5 },
+        crosscheck: { effort: "high", maxCost: { output: 1 } },
+      },
+      kept([
+        allow("glm", "opencode-go/glm-5.3-flash"),
+        allow("deep", "opencode-go/deepseek-v4.1-flash"),
+      ]),
+      "spectre",
+    );
+    expect(found.resolution?.crosscheck?.alias).toBe("deep");
+    expect(found.resolution?.crosscheck?.costOutput).toBe(0.6);
+  });
+
+  test("a crosscheck pin above the ceiling is a problem", () => {
+    const found = resolve(
+      "worker",
+      {
+        effort: "high",
+        maxCost: { output: 0.5 },
+        crosscheck: { effort: "high", model: "deep" },
+      },
+      kept([
+        allow("glm", "opencode-go/glm-5.3-flash"),
+        allow("deep", "opencode-go/deepseek-v4.1-flash"),
+      ]),
+      "spectre",
+    );
+    expect(found.resolution?.crosscheck).toBeUndefined();
+    expect(found.resolution?.crosscheckProblem).toContain('the crosscheck pin "deep"');
+    expect(found.resolution?.crosscheckProblem).toContain("above the ceiling");
   });
 
   test("the crosscheck follows its own fallback list, not the allowlist order", () => {

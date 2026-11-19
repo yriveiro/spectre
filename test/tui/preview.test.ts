@@ -104,6 +104,7 @@ const draft: Draft = {
     {
       name: "worker",
       effort: "high",
+      maxCost: undefined,
       match: "decided multi-file edits",
       why: "fast",
       crosscheck: undefined,
@@ -267,6 +268,7 @@ describe("preview", () => {
       profiles: Array.from({ length: 25 }, (_, index) => ({
         name: `profile-${index + 1}`,
         effort: "low",
+        maxCost: undefined,
         match: "a task",
         why: "a reason",
         crosscheck: undefined,

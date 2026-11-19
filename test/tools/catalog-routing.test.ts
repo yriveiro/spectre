@@ -11,7 +11,7 @@ import { goal } from "../../tools/definitions/goal";
 import { historyTool } from "../../tools/definitions/history";
 import { pr } from "../../tools/definitions/pr";
 import { prose } from "../../tools/definitions/prose";
-import { routing } from "../../tools/definitions/routing";
+import { routing, routingFeedback } from "../../tools/definitions/routing";
 import { ripwire } from "../../tools/definitions/search";
 import { solidjs } from "../../tools/definitions/solidjs";
 import { stack } from "../../tools/definitions/stack";
@@ -54,6 +54,7 @@ const SPECTRE_TOOLS: ReadonlyArray<RegisteredTool> = [
   prose(directory),
   ripwire(ctx),
   routing(ctx),
+  routingFeedback(ctx),
   solidjs(directory),
   stack(directory),
   worktrees(ctx),
@@ -129,15 +130,22 @@ const UV_DISTRACTORS = Namespace.make({
 });
 
 const BIOME_DISTRACTORS = Namespace.make({
-  description: "Run Biome formatting, linting, and code-quality checks on TypeScript and web files.",
+  description:
+    "Run Biome formatting, linting, and code-quality checks on TypeScript and web files.",
   tools: {
     biome_lint: distractor(
       "Run Biome static lint rules across TypeScript, JavaScript, JSX, CSS, and JSON files to report code diagnostics and fixable issues without writing files.",
-      { paths: Schema.optional(Schema.Array(Schema.String)), changed_only: Schema.optional(Schema.Boolean) },
+      {
+        paths: Schema.optional(Schema.Array(Schema.String)),
+        changed_only: Schema.optional(Schema.Boolean),
+      },
     ),
     biome_check: distractor(
       "Run Biome formatting, linting, and import-sorting assist checks across repository files or changed paths with compact token-efficient diagnostic output.",
-      { paths: Schema.optional(Schema.Array(Schema.String)), changed_only: Schema.optional(Schema.Boolean) },
+      {
+        paths: Schema.optional(Schema.Array(Schema.String)),
+        changed_only: Schema.optional(Schema.Boolean),
+      },
     ),
     biome_format: distractor(
       "Verify Biome code formatting on TypeScript, JSX, and JSON files against configured indentation and line-width rules without modifying files on disk.",
@@ -203,7 +211,8 @@ const ATLASSIAN_DISTRACTORS = Namespace.make({
 });
 
 const PLAYWRIGHT_DISTRACTORS = Namespace.make({
-  description: "Automate headless browser testing, DOM snapshots, and network inspection with Playwright.",
+  description:
+    "Automate headless browser testing, DOM snapshots, and network inspection with Playwright.",
   tools: {
     browser_network_request: distractor(
       "List HTTP and XHR network requests, response status codes, headers, and timing captured by Playwright since page load or navigation.",
@@ -277,6 +286,7 @@ const TASK_QUERIES: ReadonlyArray<readonly [query: string, expectedPath: string]
   ["sessions that skipped ripwire verbs", "tools.spectre.ripwire"],
   ["subagent model routing effort profile", "tools.spectre.routing"],
   ["task judge model allowlist crosscheck", "tools.spectre.routing"],
+  ["append outcome jsonl ledger accepted revised", "tools.spectre.routing_feedback"],
   ["detect solid 1 or solid 2", "tools.spectre.solidjs"],
   ["audit solidjs jsx reactivity", "tools.spectre.solidjs"],
   ["stacked pull requests merge order", "tools.spectre.stack"],
@@ -286,9 +296,9 @@ const TASK_QUERIES: ReadonlyArray<readonly [query: string, expectedPath: string]
 ];
 
 describe("Code Mode catalog routing surface", () => {
-  test("mounts a 40-tool catalog (12 spectre tools + 28 MCP distractors)", () => {
-    expect(SPECTRE_TOOLS).toHaveLength(12);
-    expect(runtime.catalog).toHaveLength(40);
+  test("mounts a 41-tool catalog (13 spectre tools + 28 MCP distractors)", () => {
+    expect(SPECTRE_TOOLS).toHaveLength(13);
+    expect(runtime.catalog).toHaveLength(41);
   });
 
   test("zero tools.spectre.* tools set pinned: true", () => {

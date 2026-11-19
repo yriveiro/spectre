@@ -14,10 +14,26 @@ import { Schema } from "effect";
 const ModelNames = Schema.Union([Schema.String, Schema.Array(Schema.String)]);
 
 /** The second opinion: the effort it is asked for, and an optional pin. */
+/**
+ * The most one profile will pay for a model, in the catalogue's units: dollars
+ * per million tokens. An absent side is unconstrained; zero means free models
+ * only. The ceiling filters the priority order and never sorts it.
+ */
+const CostCeiling = Schema.Struct({
+  input: Schema.optional(Schema.Number),
+  output: Schema.optional(Schema.Number),
+});
+export type CostCeiling = typeof CostCeiling.Type;
+
 const Crosscheck = Schema.Struct({
   effort: Schema.optional(Schema.String),
   /** A pin. It wins over the crosscheck list and the different-family rule. */
   model: Schema.optional(ModelNames),
+  /**
+   * The ceiling for this role. It overrides the profile's own ceiling; with
+   * none, the profile's ceiling applies to the crosscheck too.
+   */
+  maxCost: Schema.optional(CostCeiling),
 });
 export type Crosscheck = typeof Crosscheck.Type;
 
@@ -28,6 +44,8 @@ const Profile = Schema.Struct({
   model: Schema.optional(ModelNames),
   /** The second opinion, stated as a requirement. */
   crosscheck: Schema.optional(Crosscheck),
+  /** The most this profile will pay, per million tokens. */
+  maxCost: Schema.optional(CostCeiling),
   /** The routing surface: the moment, with the nouns a prompt would carry. */
   match: Schema.optional(Schema.String),
   /** The rationale, for the human. The resolver never reads it. */
@@ -119,6 +137,8 @@ export type Profile = {
   readonly model?: ReadonlyArray<string> | undefined;
   /** The second opinion, stated as a requirement. */
   readonly crosscheck?: Crosscheck | undefined;
+  /** The most this profile will pay, per million tokens. */
+  readonly maxCost?: CostCeiling | undefined;
   /** The routing surface. */
   readonly match?: string | undefined;
   /** The rationale, for the human. */
@@ -259,35 +279,35 @@ export const DEFAULT_PROFILES: Readonly<Record<string, Profile>> = {
     agent: OPERATOR_AGENT,
     crosscheck: { effort: "medium" },
     match:
-      "Use when the change is already decided and the task is to carry it out across several files: add the field, write the test, make the edits. Not for choosing between two defensible designs.",
+      "Use when the change is already decided and the target is named: add the field, wire the flag, apply a single named rename or move, bump the version and fix what it breaks. The task is to carry out an instruction, not to choose a shape. A single named rename is worker; a domain-wide rename across a module is refactor. Not for deciding how to restructure working code; that is refactor. Not for mapping a subsystem; that is deep. Not for a formatting, translation or list request.",
     why: "A change that is already decided and has to be executed across several files. The model holds one plan while editing it, so it takes medium effort rather than the floor. A second family at the same effort gives a second opinion on the change.",
   },
   judgment: {
     effort: "high",
     crosscheck: { effort: "high" },
     match:
-      "Use when two defensible options exist and one has to be chosen, and a wrong call is expensive to undo: which design, which of these two parsers, whether to keep the branch. Not for executing a change that is already decided.",
+      "Use when two defensible options exist and one has to be chosen, and a wrong call is expensive to undo: which design, which of these two parsers, whether to keep the branch. Not for executing a change that is already decided; that is worker. Not for mapping how a subsystem works; that is deep.",
     why: "Two defensible options and one has to be chosen. High effort on one family, the same level on the other as the cross-check, because a wrong call is expensive to undo and a second opinion is the cheapest way to catch one. The second opinion comes from another family at the same effort.",
   },
   thinking: {
     effort: "xhigh",
     crosscheck: { effort: "xhigh" },
     match:
-      "Use when one hard problem has one right answer and there is no diff to read the answer out of: prove the invariant, find the one bad input, derive the result. Not for work that spans a subsystem or for reviewing a diff.",
+      "Use when one hard problem has one right answer and there is no diff to read the answer out of: prove the invariant, find the one bad input, derive the result, give a capacity or sizing estimate with one number. Not for work that spans a subsystem; that is deep. Not for reviewing a diff.",
     why: "One hard problem where the answer has to be right and there is no diff to read the answer out of. The escalation goes to another family at the same effort, because a second family beats the same family asked twice.",
   },
   deep: {
     effort: "max",
     crosscheck: { effort: "max" },
     match:
-      "Use when the work spans a subsystem or the whole design: an architecture decision, a cross-cutting change, a bug nobody has localized yet. Not for a single problem with a single answer.",
+      "Use when the work spans a subsystem or the whole design: trace a request across several services, plan a migration, decide whether a plugin system still makes sense. Not for executing a decided change, even across several files; that is worker. Not for one decision between two options; that is judgment. Not for one localized problem with one right answer; that is thinking.",
     why: "Architecture, a cross-cutting design, or a bug nobody has localized yet. The task that decides everything takes the top effort on every model rather than saving on the work that matters most.",
   },
   refactor: {
     effort: "high",
     crosscheck: { effort: "max" },
     match:
-      "Use when the task is to restructure code that already works, across files, without changing behaviour: rename, move, extract, split. Not for a new behaviour.",
+      "Use when the task is to decide and apply a better structure to code that already works: split a large function, extract a module, deduplicate, untangle globals, or apply a domain-wide rename across a module. The target shape is the task. A domain-wide rename across a module is refactor; a single named rename is worker. Not for a field, flag or single-symbol change whose target the caller already named; that is worker.",
     why: "Restructure code that already works, across files, without changing behaviour. It needs thinking plus breadth of reading, so it takes the second-highest effort rather than the top, and keeps the other model's second-highest in reserve for the mechanical part of the move. The second opinion comes from another family at the top effort.",
   },
 };
