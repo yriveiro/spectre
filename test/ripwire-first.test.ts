@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { Tool } from "@opencode/plugin/effect";
+import { type Plugin, Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
-import { Effect, Exit } from "effect";
-import { ripwire } from "../tools/definitions/search";
+import { Effect, Exit, type Schema } from "effect";
+import { attachSearch, ripwire } from "../tools/definitions/search";
+import { endOfWorkSynced } from "../tools/definitions/search/apply";
+import { END_OF_WORK } from "../tools/definitions/search/contract";
 import { contextRule } from "../tools/definitions/search/policy";
 import { memories, rerouted } from "../tools/definitions/search/state";
 import {
@@ -12,7 +14,10 @@ import {
   captureGuard,
   cleanupDirs,
   forget,
+  locationOf,
   makeBin,
+  makeStorage,
+  PROJECT,
   READY_BIN,
   readingContext,
   tempDir,
@@ -366,6 +371,109 @@ exit 1
       if (cleared.output?.action !== "report") throw new Error("expected report output");
       expect(cleared.output.findings).toEqual([]);
 
+      forget(name);
+    });
+  });
+
+  test("attachSearch keeps system byte-identical across edits while syncing spectre.end-of-work through check", async () => {
+    const dir = tempDir();
+    const bin = await makeBin(`#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.6.10 (Release, built_from=test)"
+  exit 0
+fi
+case "$*" in
+  *"--quality-delta"*)
+    printf '%s' '<quality-delta baseline="git-HEAD" regressions="0" gating="0" new-symbol="0" at="f00dbabe"></quality-delta>'
+    exit 0
+    ;;
+  *"--affected="*)
+    printf '%s' '<affected><test p="test/one.test.ts" hops="1"/></affected>'
+    exit 0
+    ;;
+esac
+exit 1
+`);
+    await withBinary(bin, async () => {
+      const values = new Map<string, Schema.Json>();
+      const puts: Array<{ readonly sessionID: Session.ID; readonly key: string; readonly value: unknown }> = [];
+      const removes: Array<{ readonly sessionID: Session.ID; readonly key: string }> = [];
+      const entries = new Map<string, unknown>();
+      let onContext: ((event: unknown) => Effect.Effect<void, never>) | undefined;
+      let onBefore: ((event: unknown) => Effect.Effect<void, Tool.Error>) | undefined;
+      let onAfter: ((event: unknown) => Effect.Effect<void>) | undefined;
+
+      const ctx = {
+        location: locationOf(PROJECT, dir),
+        storage: makeStorage(values),
+        permission: { assert: () => Effect.void },
+        session: {
+          hook: (name: string, cb: (event: unknown) => Effect.Effect<void, never>) => {
+            if (name === "context") onContext = cb;
+            return Effect.succeed({ dispose: Effect.void });
+          },
+          instructions: {
+            entry: {
+              put: (input: { readonly sessionID: Session.ID; readonly key: string; readonly value: unknown }) =>
+                Effect.sync(() => {
+                  puts.push(input);
+                  entries.set(`${input.sessionID}:${input.key}`, input.value);
+                }),
+              remove: (input: { readonly sessionID: Session.ID; readonly key: string }) =>
+                Effect.sync(() => {
+                  removes.push(input);
+                  entries.delete(`${input.sessionID}:${input.key}`);
+                }),
+            },
+          },
+        },
+        tool: {
+          hook: (name: string, cb: (event: unknown) => Effect.Effect<void, Tool.Error>) => {
+            if (name === "execute.before") onBefore = cb;
+            if (name === "execute.after") onAfter = cb as (event: unknown) => Effect.Effect<void>;
+            return Effect.succeed({ dispose: Effect.void });
+          },
+        },
+      } as unknown as Plugin.Context;
+
+      await Effect.runPromise(Effect.scoped(attachSearch(ctx)));
+      if (onContext === undefined || onBefore === undefined || onAfter === undefined) {
+        throw new Error("attachSearch did not register all hooks");
+      }
+
+      const name = "ses_eow_lifecycle";
+      const id = session(name);
+
+      const step1 = contextEvent(name);
+      await Effect.runPromise(onContext(step1));
+      const baseline = JSON.stringify(step1.system);
+      expect(entries.has(`${id}:spectre.end-of-work`)).toBe(false);
+
+      for (const [idx, path] of ["src/one.ts", "src/two.ts"].entries()) {
+        await Effect.runPromise(onBefore(toolEvent("edit", { path }, name, `call_eow_b_${idx}`)));
+        await Effect.runPromise(onAfter(afterEvent("edit", { path }, name, `call_eow_a_${idx}`)));
+      }
+      expect(puts).toEqual([{ sessionID: id, key: "spectre.end-of-work", value: END_OF_WORK }]);
+      expect(entries.get(`${id}:spectre.end-of-work`)).toBe(END_OF_WORK);
+
+      const step2 = contextEvent(name);
+      await Effect.runPromise(onContext(step2));
+      expect(JSON.stringify(step2.system)).toBe(baseline);
+      expect(puts).toHaveLength(1);
+
+      const checked = await Effect.runPromise(ripwire(ctx).execute({ action: "check" }, toolContext(name)));
+      await Effect.runPromise(
+        onAfter(afterEvent("spectre_ripwire", { action: "check" }, name, "call_eow_check", checked.output)),
+      );
+      expect(removes).toEqual([{ sessionID: id, key: "spectre.end-of-work" }]);
+      expect(entries.has(`${id}:spectre.end-of-work`)).toBe(false);
+
+      const step3 = contextEvent(name);
+      await Effect.runPromise(onContext(step3));
+      expect(JSON.stringify(step3.system)).toBe(baseline);
+      expect(removes).toHaveLength(1);
+
+      endOfWorkSynced.delete(id);
       forget(name);
     });
   });

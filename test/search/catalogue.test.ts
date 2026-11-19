@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import type { Plugin } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Effect } from "effect";
+import { attachCatalogue, endOfWorkSynced } from "../../tools/definitions/search/apply";
 import { shape, type Draft } from "../../tools/definitions/search/catalogue";
 import { CONTRACT, END_OF_WORK } from "../../tools/definitions/search/contract";
-import type { Memory } from "../../tools/definitions/search/policy";
+import { contextRule, type Memory } from "../../tools/definitions/search/policy";
 import { memories } from "../../tools/definitions/search/state";
 import { captureContext, cleanupDirs, makeBin, READY_BIN, withBinary } from "./host";
 
@@ -26,6 +28,49 @@ const held = (overrides?: Partial<Memory>): Memory => ({
   subagents: 0,
   ...overrides,
 });
+
+interface EntryPut {
+  readonly sessionID: Session.ID;
+  readonly key: string;
+  readonly value: unknown;
+}
+
+interface EntryRemove {
+  readonly sessionID: Session.ID;
+  readonly key: string;
+}
+
+const captureContextWithEntries = async () => {
+  let callback: ((event: unknown) => Effect.Effect<void, never>) | undefined;
+  const puts: Array<EntryPut> = [];
+  const removes: Array<EntryRemove> = [];
+  const stored = new Map<string, string>();
+  const ctx = {
+    session: {
+      hook: (_name: string, cb: (event: unknown) => Effect.Effect<void, never>) => {
+        callback = cb;
+        return Effect.succeed({ dispose: Effect.void });
+      },
+      instructions: {
+        entry: {
+          put: (input: EntryPut) =>
+            Effect.sync(() => {
+              puts.push(input);
+              stored.set(`${input.sessionID}:${input.key}`, String(input.value));
+            }),
+          remove: (input: EntryRemove) =>
+            Effect.sync(() => {
+              removes.push(input);
+              stored.delete(`${input.sessionID}:${input.key}`);
+            }),
+        },
+      },
+    },
+  } as unknown as Plugin.Context;
+  await Effect.runPromise(Effect.scoped(attachCatalogue(ctx)));
+  if (callback === undefined) throw new Error("catalogue did not register");
+  return { callback, puts, removes, stored };
+};
 
 afterEach(cleanupDirs);
 
@@ -90,24 +135,62 @@ describe("a stock agent's request is left as the host built it", () => {
   });
 });
 
-describe("the context row above the landing", () => {
-  test("an unmeasured edit puts the end-of-work nudge in the request", async () => {
+describe("KV-cache invariant system prefix and durable end-of-work entry", () => {
+  test("event.system stays byte-identical before, during, and after code edits while spectre.end-of-work puts once and removes once", async () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
-      const callback = await captureContext();
+      const { callback, puts, removes, stored } = await captureContextWithEntries();
       const name = Session.ID.make("ses_catalogue_end");
-      memories.set(name, held({ mutation: 2, editedCode: new Set(["src/retry.ts"]) }));
-      const asked = {
+      const base = {
         sessionID: name,
         agent: "spectre",
-        system: [] as Array<{ type: "text"; text: string }>,
+        system: [{ type: "text" as const, text: "agent system prompt" }],
         tools: { spectre_search: { description: "search", input: {} } },
       };
-      await Effect.runPromise(callback(asked));
-      const text = asked.system.at(-1)?.text ?? "";
-      expect(text).toContain(END_OF_WORK);
-      expect(text).toContain(CONTRACT.rule);
+
+      const beforeEdit = structuredClone(base);
+      await Effect.runPromise(callback(beforeEdit));
+      const baseline = JSON.stringify(beforeEdit.system);
+      expect(beforeEdit.system.at(-1)?.text).toBe(
+        contextRule({ kind: "ready", binary: bin, version: "0.6.10" }),
+      );
+      expect(puts).toEqual([]);
+      expect(removes).toEqual([]);
+
+      memories.set(name, held({ mutation: 1, editedCode: new Set(["src/retry.ts"]) }));
+      const duringFirstEdit = structuredClone(base);
+      await Effect.runPromise(callback(duringFirstEdit));
+      expect(JSON.stringify(duringFirstEdit.system)).toBe(baseline);
+      expect(duringFirstEdit.system.some((part) => part.text.includes(END_OF_WORK))).toBe(false);
+      expect(puts).toEqual([{ sessionID: name, key: "spectre.end-of-work", value: END_OF_WORK }]);
+      expect(stored.get(`${name}:spectre.end-of-work`)).toBe(END_OF_WORK);
+
+      memories.set(name, held({ mutation: 2, editedCode: new Set(["src/retry.ts", "src/attach.ts"]) }));
+      const duringSecondEdit = structuredClone(base);
+      await Effect.runPromise(callback(duringSecondEdit));
+      expect(JSON.stringify(duringSecondEdit.system)).toBe(baseline);
+      expect(puts).toHaveLength(1);
+
+      memories.set(
+        name,
+        held({
+          mutation: 2,
+          editedCode: new Set(["src/retry.ts", "src/attach.ts"]),
+          measured: { delta: 2, affected: 2 },
+        }),
+      );
+      const afterMeasure = structuredClone(base);
+      await Effect.runPromise(callback(afterMeasure));
+      expect(JSON.stringify(afterMeasure.system)).toBe(baseline);
+      expect(removes).toEqual([{ sessionID: name, key: "spectre.end-of-work" }]);
+      expect(stored.has(`${name}:spectre.end-of-work`)).toBe(false);
+
+      const afterMeasureAgain = structuredClone(base);
+      await Effect.runPromise(callback(afterMeasureAgain));
+      expect(removes).toHaveLength(1);
+
       memories.delete(name);
+      endOfWorkSynced.delete(name);
     });
   });
 });
