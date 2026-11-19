@@ -371,6 +371,8 @@ describe("the set's own prose", () => {
     // The ripwire-first contract and design slice rewrote the passive voice out of the
     // two playbooks and `features/README.md`, because E13 and E14 require 0 hard and 0
     // advisory on every file they touch: 347 to 337.
+    //
+    // Compacting `spectre-mode`, trimming `ripwire` and `grammar` history, and folding the four legacy principles cut 36 passive lines: 337 to 301.
     const out = await call(["."]);
     const byRule: Record<string, number> = {};
     for (const f of out.findings) byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
@@ -400,7 +402,7 @@ describe("the set's own prose", () => {
       presentPerfect: 0,
       longSentences: 0,
       marketingAdjectives: 9,
-      passiveVoice: 337,
+      passiveVoice: 301,
       otherRules: [],
     });
   }, 120_000);
