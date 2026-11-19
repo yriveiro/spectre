@@ -7,5 +7,10 @@ export const prCanvas: Definition = {
   description:
     '"Review PR 42 visually", "make me a page that walks through this pull request", "I just opened a PR, show it to me". Load it when the reader names a pull request, or an explicit local base and head, and wants a reviewer-facing artifact: what changed, which requirement each hunk answers, and the side-by-side diff behind every claim. Read the diff into evidence with tools.spectre.canvas, interpret it into a typed review where only a requirement carries a source, then publish the walkthrough as an artifact and report its id and relative URL, updating that same artifact when they ask for changes. A direct request naming the PR is consent to build it; after you create a PR yourself, offer once with Generate canvas and Skip and take a skip, a dismissal, or silence as no. An idea that is not a pull request and has no diff is canvas, which owns the standalone page and never names a PR number.',
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "visual",
+    summary: "Build an interactive side-by-side pull request diff walkthrough page via tools.spectre.canvas",
+  },
   path: anchor(import.meta.dir),
 };

@@ -7,5 +7,10 @@ export const playbookEval: Definition = {
   description:
     "Run a blinded comparison of two candidate skills and find out which one to keep. Reach for it when you have a rewritten skill or a changed description and the question is which variant a real prompt routes to, and reading the two side by side does not settle it. It builds a sanitized environment, gives each candidate the same organic prompt, grades the chain from the files it actually read, and puts a judge in front of the result. Not for measuring this repository's own routing across its whole set. You call it. Nothing in this set calls it for you.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "playbook",
+    summary: "running a blinded comparison between two candidate skills or prompts",
+  },
   path: anchor(import.meta.dir),
 };

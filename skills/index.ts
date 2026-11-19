@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Effect } from "effect";
-import { load } from "./definitions";
+import { attachSkillToolContract } from "./catalog";
+import { load, toSkillInfo } from "./definitions";
 import { attach as watchEffectVersion } from "./definitions/effect-best-practices/watch";
 
 const hasRipwire = () =>
@@ -14,13 +15,12 @@ export const update = (ctx: Pick<Plugin.Context, "skill"> & Plugin.Context) =>
     yield* ctx.skill.transform((editor) => {
       const available = hasRipwire();
       for (const skill of skills) {
-        editor.add(skill.id === "ripwire" && !available ? { ...skill, autoinvoke: false } : skill);
+        const info = toSkillInfo(skill);
+        editor.add(info.id === "ripwire" && !available ? { ...info, autoinvoke: false } : info);
       }
     });
 
-    // The watcher is not a skill: it reads `package.json` and reads the event stream, and it
-    // exists to hold one body to one pin. It rides here because that body registers here,
-    // not because every skill needs one.
+    yield* attachSkillToolContract(ctx);
     yield* watchEffectVersion(ctx);
 
     yield* Effect.logInfo("Registered skills", {

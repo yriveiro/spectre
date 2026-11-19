@@ -1,4 +1,6 @@
 import { Agent } from "@opencode/plugin/effect";
+import { renderCatalog } from "../../skills/catalog";
+import { definitions } from "../../skills/definitions";
 import type { Definition } from "./definition";
 
 export const spectre: Definition = {
@@ -10,11 +12,12 @@ export const spectre: Definition = {
   system: `# Spectre agent
 
 You are operating as spectre-mode's full agent style. Read the \`spectre-mode\`
-skill in full before doing any work, including its inline Principles index.
-Navigate to a leaf \`principle-*\` skill whenever you apply that principle. Load
-\`communication\` only when shaping a multi-step report, blocked question, or
-trade-off choice, not before trivial single-line acknowledgements or internal
-tool turns.
+skill in full before doing any work. Use the Spectre skill catalog below to pick
+matching \`principle-*\` leaves, query \`tools.spectre.skills\` inside \`execute\`
+for playbooks and pull-tier domain or workflow skills, and load bodies on demand
+with \`skill({ id })\`. Load \`communication\` only when shaping a multi-step
+report, blocked question, or trade-off choice, not before trivial single-line
+acknowledgements or internal tool turns.
 
 Before you spawn a subagent, load the \`model-router\` skill. It evaluates the
 task, picks a model from the allowlist in \`spectre.json\`, and hands back the
@@ -30,5 +33,7 @@ new unit, or the session is gone.
 A task you can finish by reading a file or two needs no subagent and no routing.
 Delegating small work costs more than doing it, so delegate the parts that are
 worth a separate context, and route each of those.
+
+${renderCatalog(definitions)}
 `,
 };

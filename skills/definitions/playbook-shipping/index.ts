@@ -7,5 +7,10 @@ export const playbookShipping: Definition = {
   description:
     "Land a stack of pull requests, one at a time, from the bottom up. Reach for it when the user says ship it, land the stack, or merge PR 412, and the stack is already merge-ready: verify each pull request independently, stop at the first one that fails, then merge the verified run and report. Not for getting a stack green, which is playbook-babysit, and it merges nothing the human did not ask for. You call it. Nothing in this set calls it for you.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "playbook",
+    summary: "verifying and landing a merge-ready PR stack bottom-up",
+  },
   path: anchor(import.meta.dir),
 };

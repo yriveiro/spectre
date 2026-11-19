@@ -7,5 +7,10 @@ export const principleTypeSystemDiscipline: Definition = {
   description:
     "Let the checker prove what tests can only sample. Load it when a string is sometimes an id and sometimes a name, when a config object's fields agree only by convention, when a new variant compiles without touching every match, and at every boundary where outside data enters: parse once into the narrow type the inside uses, brand primitives like UserId and OrderId so they cannot cross, and match exhaustively so the next variant breaks the build instead of slipping through. Three questions quote the test: can you write one sentence explaining when this field combination is valid, can a UserId pass where an OrderId belongs, does adding a variant break the build. The language-agnostic claim is principle-make-states-unrepresentable; this leaf owns the concrete forms.",
   autoinvoke: false,
+  catalog: {
+    tier: "push",
+    group: "leaf",
+    trigger: "branded ids, unknown parsing at boundaries, and exhaustive matching",
+  },
   path: anchor(import.meta.dir),
 };

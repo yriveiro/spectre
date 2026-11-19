@@ -7,5 +7,10 @@ export const principleEvidence: Definition = {
   description:
     "A check you have never seen fail proves nothing, so make it fail on purpose before you trust it. Load it when you write a test, a linter rule, a benchmark, or a scanner, and before you trust a suite that is green, before you compare two implementations, and before you report a number: accuracy, recall, speed, size, a regression count. How do I know this test can fail? Break it on purpose and watch the check fail. Should I use a map or a lookup table? Which of these two should I use? Measure both and take the number. What does it actually return? Read the code, not the type. Then find the oracle instead of arguing, and measure the population rather than the specimen. A number from three hand-picked cases is an anecdote with a decimal point, and a corpus nobody regenerates is a claim again. Reporting a number you did not measure is principle-verification, which owns the other half: a fact nobody checked is not a fact.",
   autoinvoke: false,
+  catalog: {
+    tier: "push",
+    group: "leaf",
+    trigger: "proving a new check can fail, or settling two designs with an oracle",
+  },
   path: anchor(import.meta.dir),
 };

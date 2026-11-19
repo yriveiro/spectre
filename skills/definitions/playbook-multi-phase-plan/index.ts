@@ -7,5 +7,10 @@ export const playbookMultiPhasePlan: Definition = {
   description:
     "Write the plan for a change too big for one pull request, and stop there. Reach for it when the work spans several pull requests, has an order they must land in, or has an open question only a run can answer: settle the questions with prototypes, explore in subagents, and produce a checklist an owner runs box by box with a verification block per pull request. Not for one or two files with an obvious approach, where a plan is ceremony. You call it. Nothing in this set calls it for you.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "playbook",
+    summary: "writing a phased multi-PR plan when the plan is the deliverable",
+  },
   path: anchor(import.meta.dir),
 };

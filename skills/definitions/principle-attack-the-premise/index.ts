@@ -7,5 +7,10 @@ export const principleAttackThePremise: Definition = {
   description:
     "Stop tuning fixes that share one failed belief. Load it when two or more fixes built on the same premise fail the same gate, when you are about to start the third attempt at a failure you have already seen twice, or when each new fix narrows to a parameter of the same idea. Write the premise down in one sentence, count the failures against it, and attack the sentence before writing another fix: negate it, replace it, or prove it from scratch. A single failure is principle-verification, reproduce and check before diagnosing, and a choice with no precedent at all is principle-exhaust-the-design-space.",
   autoinvoke: false,
+  catalog: {
+    tier: "push",
+    group: "leaf",
+    trigger: "two fixes on one belief failed the same gate — stop a third try",
+  },
   path: anchor(import.meta.dir),
 };

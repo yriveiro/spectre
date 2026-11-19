@@ -7,5 +7,10 @@ export const elysiaBestPractices: Definition = {
   description:
     "Reach for it while you are writing or changing an Elysia server: routes and handlers, TypeBox or Standard-Schema validation, guards and macros, auth, plugins (CORS, OpenAPI, static, JWT), websockets, tests, project structure and deployment. It is the map to the references, plugins, integrations, examples and patterns this skill carries, and the llms.txt source of truth it leans on. You call it. Nothing in this set calls it for you.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "stack",
+    summary: "Elysia routes, validation, guards, macros, plugins, websockets, and test patterns",
+  },
   path: anchor(import.meta.dir),
 };

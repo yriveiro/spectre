@@ -7,5 +7,10 @@ export const playbookInvestigation: Definition = {
   description:
     "Answer a question about this repository without changing it: read the code, git and the pull request bodies, then come back with an explanation someone can act on, or a recommendation with the tradeoffs written down. Reach for it when the question is still being chosen, or when someone asks 'are we sure' about something the tree already answers. `how` explains one subsystem; this is the whole read-only engagement around it, from framing the question to saying what the answer changes. A question that turns out to need a code change belongs to `playbook-bug-fix` or `playbook-feature`, not here.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "playbook",
+    summary: "answering a read-only repo question with cited code and git history",
+  },
   path: anchor(import.meta.dir),
 };

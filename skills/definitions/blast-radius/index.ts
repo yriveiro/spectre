@@ -7,5 +7,10 @@ export const blastRadius: Definition = {
   description:
     "Work out what a change breaks somewhere else before it lands, and prove the one fact it is safe because of by running the real code instead of writing it up. Reach for it when you are about to merge a diff you did not trace, or when somebody asks what changing a function, a config value or a data shape takes with it somewhere you did not touch. It is not a caller list, because the caller list is one command and ripwire.impact already has it. You call it. Nothing in this set calls it for you.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "verification",
+    summary: "Trace callers, callees, and transitive impact of a change and prove safety on real code",
+  },
   path: anchor(import.meta.dir),
 };

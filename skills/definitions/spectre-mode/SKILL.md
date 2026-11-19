@@ -6,7 +6,7 @@ Spectre mode is a disposition, not a formatting spec: ultra focus, assertive, an
 
 Short is not the goal. Decodable is. A message the reader reads twice fails even when brief. When brevity and clarity disagree, clarity wins. `communication` owns message shape: keep the reader's budget and cut the padding.
 
-This file is also the index. Every discipline lives in a leaf skill. Read this hub first, then load only the leaf the task needs.
+This file holds the disposition and non-negotiable rules. The Spectre skill catalog in the system prompt pushes every `principle-*` leaf trigger line, and `tools.spectre.skills` searches playbooks and pull-tier domain and workflow guides. Load only the body the task needs via `skill({ id })`.
 
 ## The one contract
 
@@ -50,76 +50,22 @@ A second unit of work is a second worktree, never a second branch in the current
 
 Turn Spectre mode off only when the reader says "stop spectre mode" or "normal mode". Confirm in one line, then return to default style.
 
-## Triggers
+## Triggers and catalog
 
-A trigger is a mandate. Load the leaf when it fires, or state which trigger you skipped and why.
+A trigger is a mandate. Load the matching skill via `skill({ id })` when a trigger in the Spectre skill catalog or below fires, or state which trigger you skipped and why.
 
 | When this is true | Load |
 | ----------------- | ---- |
-| Shaping a multi-step report, blocked question, trade-off choice, or tight summary | `communication` |
-| Prose fails STE rules: over 25 words, unnamed actor, marketing words, noun headings, or semicolons | `grammar` |
-| Stating an unread fact, or settling two defensible designs with an oracle | `principle-evidence` |
-| Reporting a number, passing check, manifest pin, or "done" | `principle-verification` |
-| Editing code with adjacent rot, or changing a decision stated in other files | `principle-hygiene` |
-| Wiring a CLI, config, route, or adapter, or adding checks or wire types below the edge | `principle-boundary-discipline` |
-| Refactoring, threading values across layers, adding a wrapper, or fighting the current shape | `principle-laziness-protocol` |
-| Syncing flags or optional fields, sharing primitive ids, growing `if/else`, or using `any` or casts | `principle-make-states-unrepresentable` |
-| Writing state mutations that rerun after crashes, restarts, or retries | `principle-make-operations-idempotent` |
-| Adding an internal API, name, or config key that supersedes an existing one | `principle-migrate-callers-then-delete-legacy-apis` |
-| Spanning multiple commits, or landing part of a multi-step plan | `principle-outcome-oriented-execution` |
-| Writing or keeping tests, pinning constants, or trusting a green suite | `principle-test-behavior-not-implementation` |
-| Triaging a red test, pricing coverage, or tempted to skip a check | `principle-test-for-truth` |
-| Reading a file, log, or file list too large to hold in context at once | `principle-guard-the-context-window` |
-| You are about to spawn a subagent, a delegated result needs correcting, or a task splits into mechanical and judgement | `model-router` |
-| A request is a whole task whose order matters, rather than one claim | `playbook` |
-| Nobody measured a claim about the code and you are about to report it | `ripwire` |
 | You are about to type a `//` or a `/**` | the comment disposition, above |
 | You are about to create a branch, or to change files in a worktree you did not open | the worktree rule, above |
-| Code you wrote carries comments or lint suppressions | `code-hygiene` |
-| The reader asks for a visual page, report, or UI artifact they can open | `canvas` |
-| The reader asks to review a pull request or diff visually as a page | `pr-canvas` |
+| You are about to spawn a subagent, a delegated result needs correcting, or a task splits into mechanical and judgement | `model-router` |
+| Nobody measured a claim about the code and you are about to report it | `ripwire` |
+| A request is a whole multi-phase task whose step order matters | `playbook` or `tools.spectre.skills({ category: "playbook" })` |
+| You touch a domain stack, visual page, diagram, PR review page, verification flow, or design workflow | `tools.spectre.skills` |
+
+`ripwire` maps each leaf's test to a command, names the nine leaves with no instrument, and lists tool blind spots. Whole tasks whose order matters run under a `playbook-*` procedure via `playbook` or `tools.spectre.skills({ category: "playbook" })`.
 
 Read at source before writing technical claims. Verify receipts after finishing work, before reporting done.
-
-## Principles index
-
-Load only the leaf the task needs. Whole tasks whose order matters live in `playbook`, which indexes the `playbook-*` procedures.
-
-- `communication`. Shapes multi-step reports, blocked questions, and trade-off choices under eleven stable rules.
-- `playbook`. Indexes ordered `playbook-*` procedures for whole tasks whose sequence matters.
-- `ripwire`. Maps each leaf's test to a command, names the nine leaves with no instrument, and lists tool blind spots.
-- `code-hygiene`. Spawns `sicko` to review code comments and lint suppressions on your diff.
-- `grammar`. Enforces ASD-STE100 sentence length, active voice, plain words, headings, and semicolons via `tools.spectre.prose`.
-- `look-first`. Ranks unfamiliar files by churn so you open moving code before asserting anything.
-- `model-router`. Evaluates delegated tasks, resolves `spectre.json` profiles, and resumes rejected children via `sessionID`.
-- `principle-attack-the-premise`. Stops a third fix after two fixes on one premise fail the same gate.
-- `principle-boundary-discipline`. Parses untrusted input into domain types at the edge and drops interior guards.
-- `principle-build-the-lever`. Replaces multi-site hand edits with a script, codemod, generator, or subagent in the diff.
-- `principle-encode-lessons-in-structure`. Converts repeated prose warnings into lint rules, types, runtime checks, or scripts.
-- `principle-evidence`. Settles competing designs with an oracle and proves every new check can fail.
-- `principle-exhaust-the-design-space`. Compares two or three prototypes on shared evidence before committing to novel designs.
-- `principle-experience-first`. Pays build cost once rather than charging every user a setting or rough edge forever.
-- `principle-fix-root-causes`. Traces symptoms upstream to the defect instead of patching the report site.
-- `principle-foundational-thinking`. Fixes core data structures and scaffolds early so later phases inherit clean ground.
-- `principle-guard-the-context-window`. Delegates oversized files, logs, and sweeps to subagents and keeps summaries only.
-- `principle-hygiene`. Cleans adjacent rot while context is warm and updates every copy of changed decisions together.
-- `principle-laziness-protocol`. Cuts pass-through hops and wide state, and asks what deletion avoids before adding.
-- `principle-make-operations-idempotent`. Reconciles state by content and lock expiry so reruns and crashes converge.
-- `principle-make-states-unrepresentable`. Replaces synced flags, optional bags, and casts with unions and branded types.
-- `principle-migrate-callers-then-delete-legacy-apis`. Lists callers, migrates one group per commit, and deletes empty legacy paths.
-- `principle-minimize-reader-load`. Cuts hops to trace and mutable state to hold in existing code.
-- `principle-model-the-domain`. Moves domain rules out of growing `if/else` chains into unions, state machines, or tables.
-- `principle-never-block-on-the-human`. Runs reversible work and shows the diff, asking only before irreversible actions.
-- `principle-outcome-oriented-execution`. Names the converged end state for multi-commit work and checks each commit boundary.
-- `principle-prove-it-works`. Checks the real user-facing artifact rather than stopping at builds or isolated unit tests.
-- `principle-redesign-from-first-principles`. Integrates new requirements from scratch design rather than bolting on flags.
-- `principle-separate-before-serializing-shared-state`. Removes shared writers before adding locks, queues, or retry loops.
-- `principle-sequence-verifiable-units`. Brackets work into small green-to-green units with one change and one check each.
-- `principle-subtract-before-you-add`. Deletes dead code and unused options first, checks green, then builds on clean ground.
-- `principle-test-behavior-not-implementation`. Asserts concrete inputs against literal outputs so tests fail if imports return `undefined`.
-- `principle-test-for-truth`. Ties each test to a defect seen red and never edits tests just to reach green.
-- `principle-type-system-discipline`. Uses strict compiler flags, boundary parsing, branded primitives, and exhaustive matching.
-- `principle-verification`. Runs checks before making claims and keeps manifests, pins, docs, and working trees honest.
 
 ## How to work
 

@@ -7,5 +7,10 @@ export const playbookBrain: Definition = {
   description:
     "The question is what the project already knows about itself, or a fact landed that the repo does not contain. Loads the brain for a recall, and records a gotcha, a decision or a lesson as tools.spectre.brain neurons and synapses.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "playbook",
+    summary: "recalling or recording project gotchas, decisions, and lessons in brain",
+  },
   path: anchor(import.meta.dir),
 };

@@ -8,7 +8,14 @@ import { canvas } from "./canvas";
 import { codeHygiene } from "./code-hygiene";
 import { communication } from "./communication";
 import { createVerificationSkill } from "./create-verification-skill";
-import { type Definition } from "./definition";
+import {
+  type Definition,
+  type LoadedSkill,
+  type PullCategory,
+  type PushGroup,
+  type SkillCatalog,
+  toSkillInfo,
+} from "./definition";
 import { diagram } from "./diagram";
 import { effectBestPractices } from "./effect-best-practices";
 import { elysiaBestPractices } from "./elysia-best-practices";
@@ -86,7 +93,7 @@ import { typescriptBestPractices } from "./typescript-best-practices";
 import { why } from "./why";
 import { worktreeCleanup } from "./worktree-cleanup";
 
-const definitions: ReadonlyArray<Definition> = [
+export const definitions: ReadonlyArray<Definition> = [
   architect,
   why,
   worktreeCleanup,
@@ -174,67 +181,20 @@ const definitions: ReadonlyArray<Definition> = [
   swarm,
 ];
 
-/**
- * Registered and reader-called rather than indexed, so they carry no row in the
- * ripwire map and do not move its `none` count: `skills/FOR_AGENTS.md`,
- * "Porting a principle from elsewhere", item 3. `spectre-mode` is the hub;
- * `ripwire` is the map.
- */
-export const notALeaf: ReadonlySet<string> = new Set([
-  "architect",
-  "arena",
-  "automate-me",
-  "blast-radius",
-  "bro",
-  "canvas",
-  "communication",
-  "create-verification-skill",
-  "diagram",
-  "effect-best-practices",
-  "elysia-best-practices",
-  "figure-it-out",
-  "how",
-  "interrogate",
-  "maintain-verification-skill",
-  "opencode-platform",
-  "playbook",
-  "playbook-authoring-a-skill",
-  "playbook-autonomous-run",
-  "playbook-autopilot-full",
-  "playbook-autopilot-stack",
-  "playbook-babysit",
-  "playbook-brain",
-  "playbook-bug-fix",
-  "playbook-eval",
-  "playbook-feature",
-  "playbook-hillclimb",
-  "playbook-investigation",
-  "playbook-multi-phase-plan",
-  "playbook-opening-a-pr",
-  "playbook-orchestrate",
-  "playbook-pause-safely",
-  "playbook-perf-issue",
-  "playbook-prototype",
-  "playbook-refactoring",
-  "playbook-runtime-forensics",
-  "playbook-session-pickup",
-  "playbook-shipping",
-  "playbook-trace-forensics",
-  "playbook-visual-parity",
-  "playbook-worktree-init",
-  "pr-canvas",
-  "ripwire",
-  "show-me-your-work",
-  "solidjs-best-practices",
-  "spectre-mode",
-  "swarm",
-  "tdd",
-  "teach",
-  "technical-writing",
-  "typescript-best-practices",
-  "why",
-  "worktree-cleanup",
-]);
+export {
+  type Definition,
+  type LoadedSkill,
+  type PullCategory,
+  type PushGroup,
+  type SkillCatalog,
+  toSkillInfo,
+};
+
+export const notALeaf: ReadonlySet<string> = new Set(
+  definitions
+    .filter((definition) => !(definition.catalog.tier === "push" && definition.catalog.group === "leaf"))
+    .map((definition) => definition.id),
+);
 
 const ROOT = import.meta.dir;
 
@@ -253,17 +213,22 @@ const body = (definition: Definition) =>
       new Error(`Cannot read the body of ${definition.id}: ${definition.path} (${cause})`),
   }).pipe(Effect.orDie);
 
-export const load = Effect.fn("skills.load")(function* () {
+let cached: ReadonlyArray<LoadedSkill> | undefined;
+
+export const load = Effect.fn("skills.load")(function* (options?: { readonly fresh?: boolean }) {
+  if (cached !== undefined && options?.fresh !== true) return cached;
+
   const onDisk = yield* Effect.promise(() => bodies());
-  // Each definition's own `path`, named the way the scan names it.
   const listed = new Set(definitions.map((definition) => definition.path.slice(ROOT.length + 1)));
-  const forgotten = onDisk.filter((body) => !listed.has(body));
+  const forgotten = onDisk.filter((entry) => !listed.has(entry));
 
   if (forgotten.length > 0) {
     return yield* Effect.die(`Add these to skills/definitions/index.ts: ${forgotten.join(", ")}`);
   }
 
-  return yield* Effect.forEach(definitions, (definition) =>
-    Effect.map(body(definition), (content) => ({ ...definition, content })),
+  const loaded = yield* Effect.forEach(definitions, (definition) =>
+    Effect.map(body(definition), (content): LoadedSkill => ({ ...definition, content })),
   );
+  cached = loaded;
+  return loaded;
 });
