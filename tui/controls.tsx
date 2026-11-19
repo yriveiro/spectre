@@ -129,6 +129,7 @@ export const applied = (draft: Draft, edit: Edit): Draft => {
         {
           name: edit.name,
           effort: edit.effort,
+          maxCost: undefined,
           match: edit.match,
           why: edit.why,
           crosscheck: undefined,
@@ -802,8 +803,9 @@ export const crosscheckEffortOptionsFor = (
       profile.name,
       {
         effort: profile.effort,
+        maxCost: profile.maxCost,
         model: profile.pinned === undefined ? undefined : [profile.pinned],
-        crosscheck: { effort },
+        crosscheck: { effort, maxCost: profile.crosscheck?.maxCost ?? profile.maxCost },
         match: profile.match,
         why: profile.why,
         agent: profile.agent,
@@ -947,7 +949,7 @@ export const crosscheckModelPicker = async (input: {
   return {
     kind: "crosscheck",
     profile: input.profile.name,
-    crosscheck: { effort: held?.effort, pinned },
+    crosscheck: { effort: held?.effort, maxCost: held?.maxCost, pinned },
   };
 };
 
@@ -1011,7 +1013,7 @@ export const crosscheckEffortPicker = async (input: {
             finish({
               kind: "crosscheck",
               profile: input.profile.name,
-              crosscheck: { effort: chosen, pinned: held?.pinned },
+              crosscheck: { effort: chosen, maxCost: held?.maxCost, pinned: held?.pinned },
             });
           },
           onCancel: () => finish(undefined),

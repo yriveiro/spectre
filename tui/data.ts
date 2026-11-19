@@ -3,6 +3,7 @@ import { Model as ModelSchema } from "@opencode/plugin/effect";
 import type { Route } from "@opencode/plugin/tui/context";
 import { Effect, Option, Schema } from "effect";
 import {
+  type CostCeiling,
   candidates,
   clampEffort,
   crosscheckOf,
@@ -33,11 +34,15 @@ export type Model = Known;
 export type Profile = {
   readonly name: string;
   readonly effort: string | undefined;
+  /** The most this profile will pay, per million tokens. */
+  readonly maxCost: CostCeiling | undefined;
   readonly match: string | undefined;
   readonly why: string | undefined;
   readonly crosscheck:
     | {
         readonly effort: string | undefined;
+        /** The most the second opinion will pay, overriding the profile's ceiling. */
+        readonly maxCost: CostCeiling | undefined;
         /** The alias the profile pins the second opinion to, or `undefined` for the list. */
         readonly pinned: string | undefined;
       }
@@ -77,12 +82,17 @@ export const defaultProfiles = (enabled = true): ReadonlyArray<Profile> =>
   Object.entries(DEFAULT_PROFILES).map(([name, entry]) => ({
     name,
     effort: entry.effort,
+    maxCost: entry.maxCost,
     match: entry.match,
     why: entry.why,
     crosscheck:
       entry.crosscheck === undefined
         ? undefined
-        : { effort: entry.crosscheck.effort, pinned: undefined },
+        : {
+            effort: entry.crosscheck.effort,
+            maxCost: entry.crosscheck.maxCost,
+            pinned: undefined,
+          },
     agent: entry.agent ?? DEFAULT_AGENT,
     pinned: undefined,
     enabled,
@@ -326,6 +336,7 @@ export const read = async (directory: string): Promise<Draft> => {
     return {
       name,
       effort: entry.effort,
+      maxCost: entry.maxCost,
       match: entry.match,
       why: entry.why,
       crosscheck:
@@ -333,6 +344,7 @@ export const read = async (directory: string): Promise<Draft> => {
           ? undefined
           : {
               effort: entry.crosscheck.effort,
+              maxCost: entry.crosscheck.maxCost,
               pinned: crossNamed.find((one) => held.has(one)) ?? crossNamed[0],
             },
       agent: entry.agent ?? DEFAULT_AGENT,
@@ -376,12 +388,14 @@ export const resolve = (draft: Draft, models: ReadonlyArray<Model>): ReadonlyArr
       profile.name,
       {
         effort: profile.effort,
+        maxCost: profile.maxCost,
         model: profile.pinned === undefined ? undefined : [profile.pinned],
         crosscheck:
           profile.crosscheck === undefined
             ? undefined
             : {
                 effort: profile.crosscheck.effort,
+                maxCost: profile.crosscheck.maxCost,
                 model:
                   profile.crosscheck.pinned === undefined ? undefined : [profile.crosscheck.pinned],
               },
@@ -450,12 +464,14 @@ const written = (draft: Draft): Parameters<typeof writeConfig>[1] => ({
       one.name,
       {
         effort: one.effort,
+        maxCost: one.maxCost,
         model: one.pinned,
         crosscheck:
           one.crosscheck === undefined
             ? undefined
             : {
                 effort: one.crosscheck.effort,
+                maxCost: one.crosscheck.maxCost,
                 model: one.crosscheck.pinned,
               },
         match: one.match,

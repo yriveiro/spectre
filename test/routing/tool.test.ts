@@ -12,6 +12,7 @@ type Thin = {
   readonly id: string;
   readonly family?: string;
   readonly variants: ReadonlyArray<{ readonly id: string }>;
+  readonly cost?: ReadonlyArray<{ readonly input: number; readonly output: number }>;
 };
 
 const listOf = (models: ReadonlyArray<Thin>) => () =>
@@ -101,6 +102,7 @@ describe("tools.spectre.routing", () => {
       name: "explorer",
       match: "one named file",
       effort: "high",
+      topology: { calls: 1, primary: 0, crosscheck: 0, total: 0 },
       agent: "spectre",
       model: {
         ref: "acme/falcon-mini#high",
@@ -128,6 +130,82 @@ describe("tools.spectre.routing", () => {
     ]);
     expect(out.sources).toEqual([`${scratch.projectDir()}/spectre.json`]);
     expect(out.asked).toEqual([]);
+  });
+
+  test("the profile row carries the topology's calls and total rate", async () => {
+    const costed: ReadonlyArray<Thin> = [
+      {
+        providerID: "acme",
+        id: "falcon-primary",
+        family: "falcon",
+        variants: [{ id: "high" }],
+        cost: [{ input: 1, output: 2 }],
+      },
+      {
+        providerID: "acme",
+        id: "falcon-review",
+        family: "raptor",
+        variants: [{ id: "high" }],
+        cost: [{ input: 3, output: 4 }],
+      },
+    ];
+
+    await scratch.writeProject(
+      JSON.stringify({
+        models: { primary: "acme/falcon-primary", review: "acme/falcon-review" },
+        priority: ["primary", "review"],
+        crosscheck: ["review"],
+        profiles: {
+          explorer: {
+            effort: "high",
+            crosscheck: { effort: "high" },
+            match: "one",
+            why: "w",
+          },
+        },
+      }),
+    );
+
+    const out = at(await call(scratch.projectDir(), {}, listOf(costed)), "resolved");
+    expect(out.profiles[0]?.topology).toEqual({
+      calls: 2,
+      primary: 3,
+      crosscheck: 7,
+      total: 10,
+    });
+  });
+
+  test("a maxCost ceiling skips a qualifying model above it and echoes the ceiling", async () => {
+    const costed: ReadonlyArray<Thin> = [
+      {
+        providerID: "acme",
+        id: "falcon-pricey",
+        variants: [{ id: "high" }],
+        cost: [{ input: 3, output: 15 }],
+      },
+      {
+        providerID: "acme",
+        id: "falcon-cheap",
+        variants: [{ id: "high" }],
+        cost: [{ input: 0, output: 0 }],
+      },
+    ];
+
+    await scratch.writeProject(
+      JSON.stringify({
+        models: { pricey: "acme/falcon-pricey", cheap: "acme/falcon-cheap" },
+        priority: ["pricey", "cheap"],
+        profiles: {
+          explorer: { effort: "high", maxCost: { output: 2 }, match: "one", why: "w" },
+        },
+      }),
+    );
+
+    const out = at(await call(scratch.projectDir(), {}, listOf(costed)), "resolved");
+    expect(out.profiles[0]?.maxCost).toEqual({ output: 2 });
+    expect(out.profiles[0]?.model.ref).toBe("acme/falcon-cheap#high");
+    expect(out.profiles[0]?.excluded[0]).toMatchObject({ name: "pricey", reaches: "high" });
+    expect(out.profiles[0]?.excluded[0]?.reason).toContain("above the ceiling");
   });
 
   test("the config is read from the invoking session's directory, not the plugin's", async () => {

@@ -64,10 +64,11 @@ the model reads.
   only some models reach, and that is information, not an error.
 - **R3. The allowlist stays the user's, and its order is explicit.** `models`
   keeps its entries, and `priority` names the order. The first entry in
-  `priority` that fits is the one that is spent. The page can reorder the
-  list, so the order is a decision rather than the order in which the user
-  added models. The report states the cost beside each candidate and never uses
-  it to reorder.
+  `priority` that fits and fits the profile's `maxCost` is the one that is
+  spent. The page can reorder the list, so the order is a decision rather than
+  the order in which the user added models. The report states the cost beside
+  each candidate and never uses it to reorder. A ceiling filters the order
+  rather than sorting it.
 - **R4. An alias names a model, never a policy.** Aliases are standardized
   (below) and a rename changes nothing about routing, because the cross-check
   rule reads the catalogue's `family`, not the alias.
@@ -202,6 +203,8 @@ profile's `model` pin wins over its `effort`.
 | `crosscheck` | An optional subset of `models`, once each, in fallback order. A model that is absent cannot serve a second opinion. |
 | `profiles[*].effort` | An effort name from the catalogue. Not a closed enum: the range is read per call. |
 | `profiles[*].model` | Optional. A pin. It wins over `effort`. |
+| `profiles[*].maxCost` | Optional. The most this profile will pay, in dollars per million tokens: `{ input?, output? }`. A candidate above it is skipped, the crosscheck included, and the order still decides among the affordable. A pin above it is a problem, because the two statements contradict. |
+| `profiles[*].crosscheck.maxCost` | Optional. The ceiling for the second opinion. It overrides the profile's `maxCost`; with neither, the profile has no ceiling. |
 | `profiles[*].crosscheck.effort` | Optional. The effort the second opinion is asked for. |
 | `profiles[*].crosscheck.model` | Optional. A pin for the second opinion. It wins over the crosscheck effort, the crosscheck list and the family rule. |
 | `profiles[*].match` | The routing surface: the moment, with the nouns a prompt would carry, and one exclusion. |
@@ -253,7 +256,8 @@ resolve(profile, allowlist, catalogue):
   2. rung(m)    ← the lowest rung of m's ladder at or above profile.effort
                   (exact match only for a name outside the known order;
                    a model with no ladder qualifies only for "none")
-  3. primary    ← the FIRST candidate that qualifies        ← the priority order
+  3. primary    ← the FIRST candidate that qualifies and fits maxCost
+                                                              ← the priority order
   4. crosscheck ← the pinned model when the profile names one; otherwise the
                   first candidate in `crosscheck` order whose catalogue family
                   differs from the primary's and meets the crosscheck effort;
@@ -264,6 +268,14 @@ resolve(profile, allowlist, catalogue):
 
 Raising the effort moves the choice to a model that can serve it. That is what
 makes a later policy possible: spend more where the judgement is unsure.
+
+`maxCost` is a constraint on that order, not a replacement for it. The resolver
+does not sort by price, because a rung is a thinking level and not a capability
+score: a free model at `high` and a frontier model at `high` are not
+interchangeable. The order says which model the user trusts. The ceiling says
+which prices they refuse. A profile with no ceiling behaves exactly as before.
+The ceiling covers the whole topology: the crosscheck must fit the profile's
+`maxCost` unless `crosscheck.maxCost` names a different one.
 
 ## The architecture
 
@@ -342,9 +354,11 @@ tools/definitions/routing/
   order.ts      the explicit allowlist order and its problems.
   effort.ts     the effort rule. Pure, and it knows no module below it.
   catalogue.ts  what a Model.Info means: family, ladder, cost, capacity.
+  ceiling.ts    the cost ceiling: the affordability test, its wording, its checks.
+  feedback.ts   the outcome ledger: one JSON line per run, written by the session.
   resolve.ts    the selection policy and the report.
   check.ts      validation against the catalogue and the order.
-  host.ts       the session directory and the catalogue read.
+  host.ts       the session state (its directory and model) and the catalogue read.
   write.ts      writing the config, and the alias proposal.
   index.ts      the tool declarations, the setup outcome, the public barrel.
 
@@ -352,7 +366,7 @@ tui.tsx         the page, at the repository root, exported as "./tui".
 ```
 
 The dependency direction is one way: `effort` at the bottom, `catalogue` above
-it, `resolve` and `check` above that, `index` at the top. The page is outside
+it, `ceiling` above that, `resolve` and `check` above it, `index` at the top. The page is outside
 the folder and reads the **barrel**, never a sibling, so the folder rule in
 `AGENTS.md` survives its second consumer.
 
@@ -485,8 +499,10 @@ task statement is the input, and one `choice` question offers the profiles'
 `match` lines as its choices. The host resolves the decision model from its
 catalogue and finds the endpoint and the credential through the model's
 provider (`packages/core/src/generate.ts` at `v2.3.0`), so the plugin sends no
-request of its own. The answer carries the choice and the probability for every
-choice, so one call returns the profile and the confidence.
+request of its own. The answer carries the choice. The host currently returns
+the probability for the chosen choice. The other choices are not carried, so
+`judge.alternatives` is often empty even when the answer is a profile. A margin
+rule waits for an answer shape that carries the whole distribution.
 
 The measurement decides the rest. A judge that does not beat the lexical arm
 on the corpus, priced by regret, is not worth a network call in the hot path,
@@ -601,8 +617,10 @@ the seven fires on the negative rows.
 | a model asked to name a profile | 39/42 | 92.9% | 2.250 | 0 of 8 |
 
 The System One arm ties the best of the others on the hit rate, matches it on
-the silence, and adds the one thing neither of the others has: a **calibrated
-probability** on the profile it chose. It costs 668 input tokens and 73 output
+the silence, and adds the one thing neither of the others has: a **reported
+probability** on the profile it chose. It is not a calibrated probability: two
+of the three misses in the corpus arrive at 0.98, so a threshold can catch only
+the one low-confidence miss at 0.46. It costs 668 input tokens and 73 output
 tokens per question, and it answers a closed question with a label rather than
 with prose. The corpus measured the arm the way it measures everything else:
 two writers who never saw the surface, and a surface they never read.
@@ -681,9 +699,11 @@ fired once, on a row the judge got wrong anyway, where it spent more for
 nothing. It is not a measured gain. It is a bounded cost against an
 unmeasured risk.
 
-The judge's other readings travel with the answer in `judge.alternatives`, best
-first. They are the second readings of the same task, and a session that
-disagrees with the judge can see them and take the row it prefers.
+The judge's other readings travel with the answer in `judge.alternatives` when
+the arm reports them, best first. They are the second readings of the same task,
+and a session that disagrees with the judge can see them and take the row it
+prefers. The host currently carries only the chosen probability, so the list is
+often empty. A session should not wait for it.
 
 ### Who plays safe when there is no judge
 
@@ -694,6 +714,35 @@ nothing and the session is unsure between two profiles, the session takes the
 one that asks for more thinking. A task done on the wrong model costs a redo,
 and a task done with too little thinking costs a wrong answer.
 
+
+## The outcome ledger
+
+The router can say which profile it chose. It cannot say whether the choice was
+right: the answer leaves the process, and the router never sees what happened to
+it. `tools.spectre.routing_feedback` is the missing half. After the run, the
+session records one line:
+
+```jsonc
+{
+  "at": "2026-11-17T10:12:00.000Z",
+  "profile": "worker",
+  "model": "opencode-go/muse-spark-1.3-contributor#high",
+  "outcome": "accepted",
+  "confidence": 0.82,
+  "task": "add the missing field to the response"
+}
+```
+
+The outcome is the session's label, not a measurement: `accepted` means the
+result stood, `revised` means it needed a follow-up, `failed` means it did not
+land, and `unknown` is the honest default. The tool appends to
+`.spectre/routing.jsonl` under the session's directory; it never rewrites a line.
+The file is local and is not read by the router.
+
+The ledger is the only path from the corpus to production. It answers the
+questions the static corpus cannot: which profiles the session confused on real traffic,
+whether the judge's confidence tracks the outcome, and what a wrong profile
+costs. It does not answer them by itself. A later report has to read it.
 
 ## The open questions, restated
 

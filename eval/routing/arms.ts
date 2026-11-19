@@ -16,6 +16,8 @@ export type Prediction = {
   readonly prompt: string;
   /** The profile it named, or `none` when it stayed quiet. */
   readonly got: string;
+  /** Why the arm stayed quiet, when it did. A quiet arm is not a wrong answer. */
+  readonly why?: string;
 };
 
 /** The answer for a prompt that matched nothing. */
@@ -106,6 +108,7 @@ export const jev = async (
     out.push({
       prompt,
       got: verdict.kind === "profile" ? verdict.profile : "none",
+      ...(verdict.kind === "quiet" ? { why: verdict.why } : {}),
     });
   }
   return out;

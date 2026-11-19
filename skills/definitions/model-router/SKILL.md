@@ -33,9 +33,28 @@ A skipped judge is a complete answer. The table is whole either way, and every r
 
 A probability below the threshold means the judge does not know which profile this is. Not knowing is a reason to spend **more**, not less. The tool asks for that profile one effort step higher and sets `judge.escalated` to `true`. `judge.effort` names the effort it used. The resolver resolves the profile again at the higher effort, so the row can name a different model. At the top rung there is nothing above, so the row stays at its own effort. A name the effort order cannot rank has no step above it, so that row stays too.
 
-The judge's other readings come with it in `judge.alternatives`, best first. They are the second readings of the same task, not mistakes. When the judge was unsure, look at the rows you can see. If one fits your own evaluation better, take it and say so in one line. When nothing fits better, spend the escalated row.
+When the arm reports them, the judge's other readings come with it in `judge.alternatives`, best first. They are the second readings of the same task, not mistakes. A build that reports only the chosen probability sends an empty list. Do not wait for it. When the judge was unsure, look at the rows you can see. If one fits your own evaluation better, take it and say so in one line. When nothing fits better, spend the escalated row.
 
 When the judge says nothing, **you** are the one who does not know. The same rule is yours: if you are unsure between two profiles, take the one that asks for more thinking. A task you do on the wrong model costs a redo, and a task you do with too little thinking costs a wrong answer.
+
+## Record the outcome
+
+After the run ends, record one line so the profile choice can be measured on real
+traffic:
+
+```text
+await tools.spectre.routing_feedback({
+  profile: "worker",
+  model: "<the ref you spent>",
+  outcome: "accepted", // revised | failed | unknown
+  confidence: 0.82,    // when the judge reported one
+})
+```
+
+`accepted` means the result stood, `revised` means it needed a follow-up,
+`failed` means it did not land, and `unknown` is the honest default. The tool
+appends one JSON line to `.spectre/routing.jsonl`. The router never reads it. A
+later report can.
 
 ## What a profile is for
 

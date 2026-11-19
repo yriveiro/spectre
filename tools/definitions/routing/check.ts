@@ -1,9 +1,34 @@
 import { Model } from "@opencode/plugin/effect";
+import { known as readKnown } from "./catalogue";
+import { ceilingProblems, pinCeilingProblem } from "./ceiling";
 import { effortOf, fit, ladderOf } from "./effort";
 import { crosscheckOf, priorityOf } from "./order";
-import { defaultAgentFor, formatRef, modelNames, type Tables } from "./types";
+import { type CostCeiling, defaultAgentFor, formatRef, modelNames, type Tables } from "./types";
 
 export type Row = { name: string; model: string };
+
+/**
+ * The contradiction between a pin and a ceiling, for one role.
+ *
+ * A pin names a model and a ceiling names a price. When the first is above the
+ * second, the profile says two things that cannot both hold, and the report
+ * names the role so the reader knows which one to change.
+ */
+const pinCeilingProblems = (
+  label: string,
+  pins: ReadonlyArray<string>,
+  ceiling: CostCeiling | undefined,
+  resolved: ReadonlyMap<string, string>,
+  known: ReadonlyMap<string, Model.Info>,
+): ReadonlyArray<string> => {
+  if (ceiling === undefined) return [];
+  const spent = pins.find((asked) => resolved.has(asked));
+  const found = spent === undefined ? undefined : known.get(spent);
+  const pin =
+    spent === undefined || found === undefined ? undefined : { alias: spent, ...readKnown(found) };
+  const problem = pinCeilingProblem(label, pin, ceiling);
+  return problem === undefined ? [] : [problem];
+};
 
 export type Checked = {
   readonly models: ReadonlyArray<Row>;
@@ -123,6 +148,21 @@ export const check = (
     const pinned = entry.model ?? [];
     let ok = true;
 
+    // A ceiling is a price, so it must be a finite number at or above zero, and
+    // a ceiling that names no side constrains nothing.
+    const ceiling = entry.maxCost;
+    const checkedCeiling = ceilingProblems(`profiles.${name}.maxCost`, ceiling);
+    problems.push(...checkedCeiling.problems);
+    if (!checkedCeiling.ok) ok = false;
+
+    const crossCeiling = entry.crosscheck?.maxCost;
+    const checkedCrossCeiling = ceilingProblems(
+      `profiles.${name}.crosscheck.maxCost`,
+      crossCeiling,
+    );
+    problems.push(...checkedCrossCeiling.problems);
+    if (!checkedCrossCeiling.ok) ok = false;
+
     const agent = entry.agent ?? defaultAgentFor(name, defaultAgent);
     if (!spectreAgents.includes(agent)) {
       problems.push(
@@ -182,6 +222,14 @@ export const check = (
     }
     if (rows.length !== pinned.length) ok = false;
 
+    // A pin and a ceiling are two statements about the same spend. A pin above
+    // the ceiling contradicts it, and the resolver cannot honour both.
+    const primaryPinProblems = ok
+      ? pinCeilingProblems(`profiles.${name}.maxCost`, pinned, ceiling, resolved, known)
+      : [];
+    problems.push(...primaryPinProblems);
+    if (primaryPinProblems.length > 0) ok = false;
+
     // A crosscheck pin names an allowlist model too. The resolver spends the
     // first name it finds, so a name no model carries is a problem rather than
     // a silent fall back to the crosscheck list.
@@ -196,6 +244,21 @@ export const check = (
         ok = false;
       }
     }
+
+    // The crosscheck's own ceiling wins; with none, the profile's ceiling is
+    // the budget for the whole topology, the second call included.
+    const crossLimit = crossCeiling ?? ceiling;
+    const crossPinProblems = ok
+      ? pinCeilingProblems(
+          `profiles.${name}.crosscheck.maxCost`,
+          modelNames(entry.crosscheck?.model),
+          crossLimit,
+          resolved,
+          known,
+        )
+      : [];
+    problems.push(...crossPinProblems);
+    if (crossPinProblems.length > 0) ok = false;
 
     if (!ok) continue;
     profiles.push({ name, models: rows, agent, why: entry.why ?? "" });

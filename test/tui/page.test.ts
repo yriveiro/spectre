@@ -92,6 +92,7 @@ const draft: Draft = {
     {
       name: "worker",
       effort: "high",
+      maxCost: undefined,
       match: "a decided change across several files",
       why: "cheap",
       crosscheck: undefined,
@@ -101,6 +102,7 @@ const draft: Draft = {
     {
       name: "pinned",
       effort: "max",
+      maxCost: undefined,
       match: undefined,
       why: undefined,
       crosscheck: undefined,
@@ -325,7 +327,9 @@ describe("the modal draws what the session would spend", () => {
     const configured: Draft = {
       ...draft,
       profiles: draft.profiles.map((one, at) =>
-        at === 0 ? { ...one, crosscheck: { effort: "high", pinned: undefined } } : one,
+        at === 0
+          ? { ...one, crosscheck: { effort: "high", pinned: undefined, maxCost: undefined } }
+          : one,
       ),
     };
     const firstRow = rows[0];
@@ -910,7 +914,10 @@ describe("the page changes the draft and writes it only when asked", () => {
   });
 
   test("the profile info modal shows the crosscheck model's cost beside its effort", async () => {
-    const cross: Profile = { ...first, crosscheck: { effort: "high", pinned: undefined } };
+    const cross: Profile = {
+      ...first,
+      crosscheck: { effort: "high", pinned: undefined, maxCost: undefined },
+    };
     const { context } = host();
     const infoSetup = await testRender(
       () =>
@@ -1046,6 +1053,7 @@ describe("the page changes the draft and writes it only when asked", () => {
         {
           name: "thinking",
           effort: "max",
+          maxCost: undefined,
           match: undefined,
           why: undefined,
           crosscheck: undefined,
@@ -1127,7 +1135,7 @@ describe("the page changes the draft and writes it only when asked", () => {
     expect(pinned).toEqual({
       kind: "crosscheck",
       profile: "worker",
-      crosscheck: { effort: undefined, pinned: "glm-flash" },
+      crosscheck: { effort: undefined, pinned: "glm-flash", maxCost: undefined },
     });
 
     if (pinned === undefined) throw new Error("the pin was not chosen");
@@ -1158,7 +1166,9 @@ describe("the page changes the draft and writes it only when asked", () => {
     const configured: Draft = {
       ...draft,
       profiles: draft.profiles.map((one, at) =>
-        at === 0 ? { ...one, crosscheck: { effort: undefined, pinned: "glm-flash" } } : one,
+        at === 0
+          ? { ...one, crosscheck: { effort: undefined, pinned: "glm-flash", maxCost: undefined } }
+          : one,
       ),
     };
     const worker = configured.profiles[0];
@@ -1195,7 +1205,7 @@ describe("the page changes the draft and writes it only when asked", () => {
     expect(await pending).toEqual({
       kind: "crosscheck",
       profile: "worker",
-      crosscheck: { effort: "high", pinned: "glm-flash" },
+      crosscheck: { effort: "high", pinned: "glm-flash", maxCost: undefined },
     });
     await setup.dispose();
   });
@@ -1204,7 +1214,9 @@ describe("the page changes the draft and writes it only when asked", () => {
     const pinned: Draft = {
       ...draft,
       profiles: draft.profiles.map((one, at) =>
-        at === 0 ? { ...one, crosscheck: { effort: "high", pinned: "glm-flash" } } : one,
+        at === 0
+          ? { ...one, crosscheck: { effort: "high", pinned: "glm-flash", maxCost: undefined } }
+          : one,
       ),
     };
     const worker = pinned.profiles[0];
@@ -1237,7 +1249,7 @@ describe("the page changes the draft and writes it only when asked", () => {
           ? {
               ...one,
               effort: "medium",
-              crosscheck: { effort: undefined, pinned: "glm-flash" },
+              crosscheck: { effort: undefined, pinned: "glm-flash", maxCost: undefined },
             }
           : one,
       ),
@@ -1260,7 +1272,7 @@ describe("the page changes the draft and writes it only when asked", () => {
               ...one,
               effort: undefined,
               pinned: "muse",
-              crosscheck: { effort: undefined, pinned: "glm-flash" },
+              crosscheck: { effort: undefined, pinned: "glm-flash", maxCost: undefined },
             }
           : one,
       ),

@@ -232,7 +232,7 @@ describe("the page reads the repository's own file", () => {
       ...draft,
       profiles: draft.profiles.map((one) =>
         one.name === "worker"
-          ? { ...one, crosscheck: { effort: "high", pinned: "glm-flash" } }
+          ? { ...one, crosscheck: { effort: "high", maxCost: undefined, pinned: "glm-flash" } }
           : one,
       ),
     };
@@ -418,6 +418,37 @@ describe("the page resolves what the tool resolves", () => {
     const empty = rows.find((one) => one.profile === "empty");
     expect(empty?.problem).toContain("states no effort and no model");
   });
+
+  test("a ceiling is read into the row and spent by the resolver", async () => {
+    const at = scratch();
+    await Bun.write(`${at}/.keep`, "");
+    await Bun.write(
+      `${at}/spectre.json`,
+      JSON.stringify({
+        models: {
+          deep: "opencode-go/deepseek-v4.1-flash",
+          free: "opencode-go/minimax-m3.1-flash-free",
+        },
+        priority: ["deep", "free"],
+        profiles: {
+          worker: {
+            effort: "high",
+            maxCost: { output: 0.55 },
+            crosscheck: { effort: "high", maxCost: { output: 1 } },
+          },
+        },
+      }),
+    );
+
+    const draft = await read(at);
+    const worker = draft.profiles.find((one) => one.name === "worker");
+    expect(worker?.maxCost).toEqual({ output: 0.55 });
+    expect(worker?.crosscheck?.maxCost).toEqual({ output: 1 });
+
+    const resolved = resolve(draft, catalogue(models)).find((one) => one.profile === "worker");
+    expect(resolved?.alias).toBe("free");
+    expect(resolved?.cost).toBe("$0/$0");
+  });
 });
 
 describe("the effort dots fit the four levels the defaults spend", () => {
@@ -453,6 +484,43 @@ describe("the page writes through the writer", () => {
     expect(written.setup).toBeUndefined();
     const profiles = written.profiles as Record<string, { effort?: string }>;
     expect(profiles.mechanical?.effort).toBe("high");
+  });
+
+  test("a ceiling survives a save the page did not ask to change", async () => {
+    const at = scratch();
+    await Bun.write(`${at}/.keep`, "");
+    await Bun.write(
+      `${at}/spectre.json`,
+      JSON.stringify({
+        models: { free: "opencode-go/minimax-m3.1-flash-free" },
+        priority: ["free"],
+        profiles: {
+          worker: {
+            effort: "high",
+            maxCost: { input: 0, output: 0 },
+            crosscheck: { effort: "high", maxCost: { output: 0.5 } },
+          },
+        },
+      }),
+    );
+
+    const draft = await read(at);
+    await save({
+      ...draft,
+      profiles: draft.profiles.map((one) =>
+        one.name === "worker" ? { ...one, effort: "medium" } : one,
+      ),
+    });
+
+    const written = (await Bun.file(`${at}/spectre.json`).json()) as {
+      profiles: Record<
+        string,
+        { effort?: string; maxCost?: unknown; crosscheck?: { maxCost?: unknown } }
+      >;
+    };
+    expect(written.profiles.worker?.effort).toBe("medium");
+    expect(written.profiles.worker?.maxCost).toEqual({ input: 0, output: 0 });
+    expect(written.profiles.worker?.crosscheck?.maxCost).toEqual({ output: 0.5 });
   });
 
   test("a file that does not decode is reported, refused, and left alone", async () => {

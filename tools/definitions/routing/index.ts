@@ -14,6 +14,7 @@ import { decide } from "./policy";
 import { resolve } from "./resolve";
 import {
   type Candidate,
+  type CostCeiling,
   DEFAULT_AGENT,
   DEFAULT_PROFILES,
   type Excluded as ExcludedRow,
@@ -76,12 +77,32 @@ const NotThis = Schema.Struct({
   reaches: Schema.optional(Schema.String),
 });
 
+const Topology = Schema.Struct({
+  /** One call, or two when the profile asks for a second opinion. */
+  calls: Schema.Number,
+  /** The primary's blended rate per million tokens: input + output. */
+  primary: Schema.Number,
+  /** The crosscheck's blended rate, or zero when there is none. */
+  crosscheck: Schema.Number,
+  /** The profile's whole rate: primary + crosscheck. */
+  total: Schema.Number,
+});
+
 const Profile = Schema.Struct({
   name: Schema.String,
   /** The routing surface: when this profile fits. */
   match: Schema.optional(Schema.String),
   /** The requirement the user wrote. */
   effort: Schema.optional(Schema.String),
+  /** The most the profile will pay, per million tokens, when it states one. */
+  maxCost: Schema.optional(
+    Schema.Struct({
+      input: Schema.optional(Schema.Number),
+      output: Schema.optional(Schema.Number),
+    }),
+  ),
+  /** What the profile costs as a topology, not as one model. */
+  topology: Topology,
   agent: Schema.String,
   model: Spent,
   crosscheck: Schema.optional(Spent),
@@ -242,6 +263,19 @@ const notThis = (one: ExcludedRow): typeof NotThis.Type => ({
   reaches: one.reaches,
 });
 
+/** The profile's cost as a topology: one call, or two with a crosscheck. */
+const topology = (one: Resolution): typeof Topology.Type => {
+  const rate = (pick: Pick): number => pick.costInput + pick.costOutput;
+  const primary = rate(one.primary);
+  const crosscheck = one.crosscheck === undefined ? 0 : rate(one.crosscheck);
+  return {
+    calls: one.crosscheck === undefined ? 1 : 2,
+    primary,
+    crosscheck,
+    total: primary + crosscheck,
+  };
+};
+
 /** A judge that gave no profile, and why. */
 const skipped = (reason: string): typeof Judged.Type => ({ status: "skipped", reason });
 
@@ -366,10 +400,13 @@ const toProfileRow = (
   match: string | undefined,
   effort: string | undefined,
   resolution: Resolution,
+  maxCost: CostCeiling | undefined,
 ): typeof Profile.Type => ({
   name,
   match,
   effort,
+  maxCost,
+  topology: topology(resolution),
   agent: resolution.agent,
   model: spent(resolution.primary),
   crosscheck: resolution.crosscheck === undefined ? undefined : spent(resolution.crosscheck),
@@ -407,7 +444,7 @@ const escalateChoice = (
     args.tables.crosscheck,
   );
   if (resolved.problem !== undefined || resolved.resolution === undefined) return undefined;
-  const row = toProfileRow(profile, entry.match, nextEffort, resolved.resolution);
+  const row = toProfileRow(profile, entry.match, nextEffort, resolved.resolution, entry.maxCost);
   return {
     table: args.shown.map((item) => (item.name === profile ? row : item)),
     judgement: {
@@ -522,7 +559,7 @@ const resolveSessionDefaults = (args: {
       );
       return one.resolution === undefined
         ? []
-        : [toProfileRow(name, entry.match, entry.effort, one.resolution)];
+        : [toProfileRow(name, entry.match, entry.effort, one.resolution, entry.maxCost)];
     });
     const { table, judgement } = yield* judgeAndEscalate({
       ctx: args.ctx,
@@ -754,7 +791,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
           continue;
         }
         if (one.resolution === undefined) continue;
-        shown.push(toProfileRow(name, entry.match, entry.effort, one.resolution));
+        shown.push(toProfileRow(name, entry.match, entry.effort, one.resolution, entry.maxCost));
       }
       if (found.configuredProfiles || shown.length === 0) lines.push(...profileProblems);
       if (lines.length > 0) return failedWithOrder(lines);
@@ -784,6 +821,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
 
 export { candidates, isFree, known, ladder } from "./catalogue";
 export { clampEffort, effortOf, fit, KNOWN_ORDER, ladderOf, rungs } from "./effort";
+export { routingFeedback } from "./feedback";
 export { hostCatalogue, sessionState } from "./host";
 export type { Decide, JevSettings } from "./jev";
 export { DEFAULT_TIMEOUT_MS, JEV_MODEL, jevJudge, judgeRef } from "./jev";
@@ -799,6 +837,7 @@ export { resolve as resolveProfile } from "./resolve";
 export type {
   Allowed,
   Candidate,
+  CostCeiling,
   Crosscheck,
   Excluded,
   JudgeConfig,

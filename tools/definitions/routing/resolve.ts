@@ -1,7 +1,9 @@
 import { ladder } from "./catalogue";
+import { affordable, ceilingOf, ceilingReason } from "./ceiling";
 import { type Effort, effortOf, type Fit, fit, type Ladder, ladderOf } from "./effort";
 import {
   type Candidate,
+  type CostCeiling,
   defaultAgentFor,
   type Excluded,
   modelNames,
@@ -40,6 +42,50 @@ const qualifies = (got: Fit, want: Effort): boolean => {
   if (got.kind === "rung") return true;
   if (got.kind === "floor") return want.kind === "known" && want.name === "none";
   return false;
+};
+
+/** Why every model that reaches a requirement is still not spent. */
+const ceilingProblem = (
+  profile: string,
+  want: Effort,
+  reaching: ReadonlyArray<Row>,
+  ceiling: CostCeiling | undefined,
+): string => {
+  const detail = reaching
+    .map((one) => {
+      const model = one.candidate.model;
+      return `${one.candidate.alias} (input $${model.costInput} / output $${model.costOutput})`;
+    })
+    .join("; ");
+  return `profiles.${profile}.maxCost: no allowed model reaches "${want.name}" within ${ceiling === undefined ? "the ceiling" : ceilingOf(ceiling)}. Models that reach it: ${detail}.`;
+};
+
+/** Why no model reaches a requirement at all. */
+const capacityProblem = (profile: string, want: Effort, rows: ReadonlyArray<Row>): string => {
+  const capacity = rows.map(
+    (one) =>
+      `${one.candidate.alias} ${one.got === undefined ? "no rung" : (reaches(one.got) ?? "no rung")}`,
+  );
+  const verb = want.kind === "known" ? "reaches" : "declares";
+  return `profiles.${profile}.effort: no allowed model ${verb} "${want.name}". Highest rungs: ${capacity.join(", ") || "none"}.`;
+};
+
+/** The one candidate to spend, or why none can be spent. */
+const choosePrimary = (
+  profile: string,
+  rows: ReadonlyArray<Row>,
+  want: Effort,
+  ceiling: CostCeiling | undefined,
+):
+  | { readonly kind: "chosen"; readonly row: Row }
+  | { readonly kind: "none"; readonly problem: string } => {
+  const reaching = rows.filter((one) => one.got !== undefined && qualifies(one.got, want));
+  if (reaching.length === 0) return { kind: "none", problem: capacityProblem(profile, want, rows) };
+
+  const chosen = reaching.find((one) => affordable(one.candidate, ceiling));
+  return chosen === undefined
+    ? { kind: "none", problem: ceilingProblem(profile, want, reaching, ceiling) }
+    : { kind: "chosen", row: chosen };
 };
 
 /** The highest rung a fit names, which is how far a candidate reaches. */
@@ -154,6 +200,7 @@ const crossOf = (
   primary: Candidate,
   crossWant: Effort,
   crosscheck: ReadonlyArray<string> | undefined,
+  ceiling: CostCeiling | undefined,
 ): Row | undefined => {
   const family = primary.model.family;
   // A second opinion needs two stated families. A row whose catalogue gives no
@@ -172,6 +219,7 @@ const crossOf = (
     const theirs = one.candidate.model.family;
     if (theirs === undefined || theirs === family) continue;
     if (!qualifies(one.cross, crossWant)) continue;
+    if (!affordable(one.candidate, ceiling)) continue;
     return one;
   }
   return undefined;
@@ -193,6 +241,7 @@ const excludedBy = (
   crossWant: Effort | undefined,
   crossRow: Row | undefined,
   crosscheck: ReadonlyArray<string> | undefined,
+  ceiling: CostCeiling | undefined,
 ): ReadonlyArray<Excluded> => {
   const excluded: Array<Excluded> = [];
   const listed = crosscheck === undefined ? undefined : new Set(crosscheck);
@@ -204,6 +253,10 @@ const excludedBy = (
       if (one.got === undefined || !qualifies(one.got, want)) {
         if (one.got !== undefined)
           excluded.push(excludedRow(one.candidate, one.got, reason(one.got, "effort", want)));
+        continue;
+      }
+      if (ceiling !== undefined && !affordable(one.candidate, ceiling)) {
+        excluded.push(excludedRow(one.candidate, one.got, ceilingReason(one.candidate, ceiling)));
         continue;
       }
     }
@@ -242,10 +295,16 @@ type Cross = {
 const noCross: Cross = { pick: undefined, row: undefined, problem: undefined };
 
 /** Why a declared crosscheck found no model. */
-const crossProblem = (want: Effort, crosscheck: ReadonlyArray<string> | undefined): string =>
+const crossProblem = (
+  want: Effort,
+  crosscheck: ReadonlyArray<string> | undefined,
+  ceiling: CostCeiling | undefined,
+): string =>
   crosscheck !== undefined && crosscheck.length === 0
     ? "the crosscheck list is empty, so no second opinion can be asked."
-    : `the crosscheck at "${want.name}" found no model in the crosscheck list from another family.`;
+    : ceiling === undefined
+      ? `the crosscheck at "${want.name}" found no model in the crosscheck list from another family.`
+      : `the crosscheck at "${want.name}" found no model in the crosscheck list from another family within ${ceilingOf(ceiling)}.`;
 
 /**
  * The second opinion. A pin wins over the fallback list, the family rule and
@@ -258,16 +317,23 @@ const crossFor = (
   want: Effort | undefined,
   crosscheck: ReadonlyArray<string> | undefined,
   pinned: Candidate | undefined,
+  ceiling: CostCeiling | undefined,
 ): Cross => {
   if (pinned !== undefined) {
+    if (ceiling !== undefined && !affordable(pinned, ceiling))
+      return {
+        pick: undefined,
+        row: undefined,
+        problem: `the crosscheck pin "${pinned.alias}" costs input $${pinned.model.costInput} / output $${pinned.model.costOutput} per million tokens, above the ceiling of ${ceilingOf(ceiling)}.`,
+      };
     const got = want === undefined ? undefined : rungFor(pinned, want);
     const row = rows.find((one) => one.candidate === pinned);
     return { pick: spent(pinned, got, true), row, problem: undefined };
   }
   if (want === undefined) return noCross;
-  const row = crossOf(rows, primary, want, crosscheck);
+  const row = crossOf(rows, primary, want, crosscheck, ceiling);
   if (row === undefined || row.cross === undefined)
-    return { pick: undefined, row: undefined, problem: crossProblem(want, crosscheck) };
+    return { pick: undefined, row: undefined, problem: crossProblem(want, crosscheck, ceiling) };
   return { pick: spent(row.candidate, row.cross, false), row, problem: undefined };
 };
 
@@ -334,6 +400,9 @@ export const resolve = (
   const crossName =
     entry.crosscheck === undefined ? undefined : (entry.crosscheck.effort ?? entry.effort);
   const crossWant = crossName === undefined ? undefined : effortOf(crossName);
+  // The crosscheck's own ceiling wins. With none, the profile's ceiling is the
+  // budget for the whole topology, the second call included.
+  const crossCeiling = entry.crosscheck?.maxCost ?? entry.maxCost;
 
   // A crosscheck pin wins over the fallback list and the family rule, so the
   // first pinned name the allowlist holds is the second opinion.
@@ -351,12 +420,21 @@ export const resolve = (
     };
 
   if (pinned !== undefined) {
+    // A pin is an explicit model choice, and a ceiling is an explicit price
+    // refusal. When they contradict, say so instead of silently honouring one.
+    if (entry.maxCost !== undefined && !affordable(pinned, entry.maxCost))
+      return {
+        resolution: undefined,
+        excluded: [],
+        problem: `profiles.${profile}.maxCost: the pinned model "${pinned.alias}" costs input $${pinned.model.costInput} / output $${pinned.model.costOutput} per million tokens, above the ceiling of ${ceilingOf(entry.maxCost)}.`,
+      };
+
     const pinnedGot =
       entry.effort !== undefined && pinned.model.rungs.includes(entry.effort)
         ? rungFor(pinned, effortOf(entry.effort))
         : undefined;
     const rows = rowsFor(candidates, undefined, crossWant);
-    const cross = crossFor(rows, pinned, crossWant, crosscheck, crossPinned);
+    const cross = crossFor(rows, pinned, crossWant, crosscheck, crossPinned, crossCeiling);
     return spentBy(
       profile,
       agent,
@@ -369,6 +447,7 @@ export const resolve = (
         crossPinned === undefined ? crossWant : undefined,
         cross.row,
         crosscheck,
+        entry.maxCost,
       ),
     );
   }
@@ -384,15 +463,10 @@ export const resolve = (
   const rows = rowsFor(candidates, want, crossWant);
 
   // The primary is the first candidate in the allowlist's order that meets the
-  // requirement. Cost is never read here.
-  const chosen = rows.find((one) => one.got !== undefined && qualifies(one.got, want));
-
-  if (chosen === undefined) {
-    const capacity = rows.map(
-      (one) =>
-        `${one.candidate.alias} ${one.got === undefined ? "no rung" : (reaches(one.got) ?? "no rung")}`,
-    );
-    const verb = want.kind === "known" ? "reaches" : "declares";
+  // requirement and the profile's ceiling. Cost filters the order; it never
+  // sorts it.
+  const primary = choosePrimary(profile, rows, want, entry.maxCost);
+  if (primary.kind === "none")
     return {
       resolution: undefined,
       excluded: excludedBy(
@@ -402,12 +476,13 @@ export const resolve = (
         crossPinned === undefined ? crossWant : undefined,
         undefined,
         crosscheck,
+        entry.maxCost,
       ),
-      problem: `profiles.${profile}.effort: no allowed model ${verb} "${want.name}". Highest rungs: ${capacity.join(", ") || "none"}.`,
+      problem: primary.problem,
     };
-  }
 
-  const cross = crossFor(rows, chosen.candidate, crossWant, crosscheck, crossPinned);
+  const chosen = primary.row;
+  const cross = crossFor(rows, chosen.candidate, crossWant, crosscheck, crossPinned, crossCeiling);
   return spentBy(
     profile,
     agent,
@@ -420,6 +495,7 @@ export const resolve = (
       crossPinned === undefined ? crossWant : undefined,
       cross.row,
       crosscheck,
+      entry.maxCost,
     ),
   );
 };

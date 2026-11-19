@@ -45,23 +45,25 @@ const BLIND = Bun.argv.includes("--blind");
 const TUNED = Bun.argv.includes("--tuned");
 const NO_MODEL = Bun.argv.includes("--no-model");
 const ROWS = Number(Bun.argv.find((a) => a.startsWith("--rows="))?.slice("--rows=".length) ?? 0);
-const ARM_MODEL = Bun.env.SPECTRE_ROUTING_MODEL ?? "opencode-go/minimax-m3.1-flash-free";
+/** An override. With none, the first allowed model is the arm, because a
+ * hardcoded model may not be in this project's allowlist at all. */
+const ARM_MODEL = Bun.env.SPECTRE_ROUTING_MODEL;
 // `Model.Ref` on the wire is a struct of provider, id and an optional variant
 // (`packages/schema/src/model.ts:19-23` at `v2.1.1`), even though its `parse`
 // takes a string. The written ref is split once, here, and sent split.
-const armRef = (() => {
-  const slash = ARM_MODEL.indexOf("/");
-  if (slash <= 0) throw new Error(`SPECTRE_ROUTING_MODEL: "${ARM_MODEL}" is not provider/id`);
-  const hash = ARM_MODEL.indexOf("#", slash + 1);
-  const id = hash === -1 ? ARM_MODEL.slice(slash + 1) : ARM_MODEL.slice(slash + 1, hash);
-  if (id === "") throw new Error(`SPECTRE_ROUTING_MODEL: "${ARM_MODEL}" is not provider/id`);
-  const variant = hash === -1 ? undefined : ARM_MODEL.slice(hash + 1);
+const refOf = (model: string): { providerID: string; id: string; variant?: string } => {
+  const slash = model.indexOf("/");
+  if (slash <= 0) throw new Error(`SPECTRE_ROUTING_MODEL: "${model}" is not provider/id`);
+  const hash = model.indexOf("#", slash + 1);
+  const id = hash === -1 ? model.slice(slash + 1) : model.slice(slash + 1, hash);
+  if (id === "") throw new Error(`SPECTRE_ROUTING_MODEL: "${model}" is not provider/id`);
+  const variant = hash === -1 ? undefined : model.slice(hash + 1);
   return {
-    providerID: ARM_MODEL.slice(0, slash),
+    providerID: model.slice(0, slash),
     id,
     ...(variant === undefined || variant === "" ? {} : { variant }),
   };
-})();
+};
 const CONCURRENCY = Math.max(1, Number(Bun.env.SPECTRE_ROUTING_CONCURRENCY ?? 3));
 const DELAY = Number(Bun.env.SPECTRE_ROUTING_DELAY ?? 0);
 const TIMEOUT_MS = Number(Bun.env.SPECTRE_ROUTING_TIMEOUT ?? 120_000);
@@ -137,7 +139,17 @@ const allowed = Object.entries(tables.models).map(([alias, ref]) => ({
 }));
 if (allowed.length === 0) refuse(`${PROJECT}spectre.json: models is empty, so no model routes`);
 
+// The arm defaults to a model this project allows. A hardcoded model that the
+// project removed is a run that fails every row with "Model not found".
+const armModel = ARM_MODEL ?? allowed[0]?.ref ?? refuse("no allowed model can be the model arm");
+const armRef = refOf(armModel);
+
 // The judge's settings, from the same config the tool reads.
+//
+// Jev is an `opencode` provider model. This harness boots its own server, and
+// that provider's credential is not the `opencode-go` one it resolves here; the
+// quiet table says `Invalid credential`, and the model arm is the measurement
+// that works in the harness. The live host's judge is measured by the tool.
 const judgeSettings = tables.judge;
 
 const slice = BLIND ? "blind" : TUNED ? "tuned" : "all";
@@ -237,7 +249,13 @@ try {
     refuse("no profile carries a match line, so there is no surface to rank");
 
   const prompts = corpus.map((row) => row.prompt);
-  const arms: Array<{ name: string; report: Report }> = [
+  type ArmRun = {
+    readonly name: string;
+    readonly report: Report;
+    /** The rows the arm refused to answer, and the reason it gave. */
+    readonly quiet?: ReadonlyArray<{ readonly prompt: string; readonly why: string }>;
+  };
+  const arms: Array<ArmRun> = [
     { name: "lex:match", report: score(corpus, lexical(described, prompts), priceList) },
   ];
 
@@ -251,12 +269,19 @@ try {
       ),
       decide,
     );
-    arms.push({ name: "jev", report: score(corpus, await jev(judge, prompts), priceList) });
+    const predictions = await jev(judge, prompts);
+    arms.push({
+      name: "jev",
+      report: score(corpus, predictions, priceList),
+      quiet: predictions.flatMap((one) =>
+        one.why === undefined ? [] : [{ prompt: one.prompt, why: one.why }],
+      ),
+    });
   }
 
   if (!NO_MODEL) {
-    say(`\n  model arm: ${ARM_MODEL}, ${CONCURRENCY} at a time`);
-    const bar = progress({ label: ARM_MODEL, total: corpus.length });
+    say(`\n  model arm: ${armModel}, ${CONCURRENCY} at a time`);
+    const bar = progress({ label: armModel, total: corpus.length });
     const failures: Array<{ prompt: string; reason: string }> = [];
     const reasons: Array<string | undefined> = [];
     let halted: string | undefined;
@@ -308,7 +333,7 @@ try {
               halted = systemic(reasons, ABORT_AFTER);
               if (halted !== undefined)
                 say(
-                  `  halted   ${ARM_MODEL}: ${ABORT_AFTER} rows failed with the same reason, not a routing result`,
+                  `  halted   ${armModel}: ${ABORT_AFTER} rows failed with the same reason, not a routing result`,
                 );
               return "";
             }
@@ -330,16 +355,41 @@ try {
     if (failures.length > 0) {
       const distinct = [...new Set(failures.map((one) => one.reason))];
       say(
-        `  skipped  ${ARM_MODEL}: ${failures.length} of ${corpus.length} rows failed upstream, which is not a result`,
+        `  skipped  ${armModel}: ${failures.length} of ${corpus.length} rows failed upstream, which is not a result`,
       );
       for (const why of distinct.slice(0, 4)) say(`           ${why}`);
       if (distinct.length > 4) say(`           ... and ${distinct.length - 4} more`);
     } else {
-      arms.push({ name: `model:${ARM_MODEL}`, report: score(corpus, predictions, priceList) });
+      arms.push({ name: `model:${armModel}`, report: score(corpus, predictions, priceList) });
     }
   }
 
   say(`\n${table(arms)}`);
+
+  // Why an arm stayed quiet. A quiet row is not a wrong answer, and a run where
+  // every row is quiet is not a measurement of the arm.
+  for (const arm of arms) {
+    if (arm.quiet === undefined || arm.quiet.length === 0) continue;
+    const reasons = new Map<string, number>();
+    for (const one of arm.quiet) reasons.set(one.why, (reasons.get(one.why) ?? 0) + 1);
+    say(`\nquiet — ${arm.name} (${arm.quiet.length} of ${corpus.length}):`);
+    for (const [why, count] of [...reasons].sort((a, b) => b[1] - a[1]))
+      say(`  ${String(count).padStart(3)}  ${why}`);
+  }
+
+  // Which profile is mistaken for which. A confusion pair is a property of the
+  // `match` surface, not of one row, and it is the first thing to rewrite.
+  for (const arm of arms) {
+    const pairs = new Map<string, number>();
+    for (const miss of arm.report.misses) {
+      const pair = `${miss.want} -> ${miss.got}`;
+      pairs.set(pair, (pairs.get(pair) ?? 0) + 1);
+    }
+    if (pairs.size === 0) continue;
+    say(`\nconfusion — ${arm.name}:`);
+    for (const [pair, count] of [...pairs].sort((a, b) => b[1] - a[1]))
+      say(`  ${String(count).padStart(3)}  ${pair}`);
+  }
 
   // The rows, priced and sorted by what they cost. A row that fired on a
   // negative row costs zero and sits at the foot of the list.

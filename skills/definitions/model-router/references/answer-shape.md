@@ -40,6 +40,8 @@ When no `spectre.json` exists, or when no configured model is usable here, the t
 | `name` | The profile name. |
 | `match` | The routing surface, when the profile states one. |
 | `effort` | The requirement the config states, when it states one. |
+| `maxCost` | The most the profile will pay per million tokens, when it states a ceiling. |
+| `topology` | What the profile costs as a whole: `calls` (1, or 2 with a crosscheck), `primary`, `crosscheck`, and `total`, as blended rates per million tokens. |
 | `agent` | The spectre agent the profile names, or `spectre` when it names none. |
 | `model` | The model the resolver will spend. |
 | `crosscheck` | The second opinion, when the profile asks for one and the resolver found one. |

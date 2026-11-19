@@ -81,12 +81,17 @@ const copy = (draft: Draft): MutableDraft => ({
   ).map((one) => ({
     name: one.name,
     effort: one.effort,
+    maxCost: one.maxCost,
     match: one.match,
     why: one.why,
     crosscheck:
       one.crosscheck === undefined
         ? undefined
-        : { effort: one.crosscheck.effort, pinned: one.crosscheck.pinned },
+        : {
+            effort: one.crosscheck.effort,
+            maxCost: one.crosscheck.maxCost,
+            pinned: one.crosscheck.pinned,
+          },
     agent: one.agent,
     pinned: one.pinned,
     enabled: one.enabled,

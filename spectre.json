@@ -27,7 +27,7 @@
       "crosscheck": {
         "effort": "high"
       },
-      "match": "Use when the change is already decided and the task is to carry it out across several files: add the field, write the test, make the edits. Not for choosing between two defensible designs.",
+      "match": "Use when the change is already decided and the target is named: add the field, wire the flag, apply a single named rename or move, bump the version and fix what it breaks. The task is to carry out an instruction, not to choose a shape. A single named rename is worker; a domain-wide rename across a module is refactor. Not for deciding how to restructure working code; that is refactor. Not for mapping a subsystem; that is deep. Not for a formatting, translation or list request.",
       "why": "A change that is already decided and has to be executed across several files. The model holds one plan while editing it, so it takes a high effort rather than the floor. A second family at the same effort gives a second opinion on the change."
     },
     "judgment": {
@@ -36,7 +36,7 @@
       "crosscheck": {
         "effort": "high"
       },
-      "match": "Use when two defensible options exist and one has to be chosen, and a wrong call is expensive to undo: which design, which of these two parsers, whether to keep the branch. Not for executing a change that is already decided.",
+      "match": "Use when two defensible options exist and one has to be chosen, and a wrong call is expensive to undo: which design, which of these two parsers, whether to keep the branch. Not for executing a change that is already decided; that is worker. Not for mapping how a subsystem works; that is deep.",
       "why": "Two defensible options and one has to be chosen. High effort on one family, the same level on the other as the cross-check, because a wrong call is expensive to undo and a second opinion is the cheapest way to catch one. The second opinion comes from another family at the same effort."
     },
     "thinking": {
@@ -45,7 +45,7 @@
       "crosscheck": {
         "effort": "max"
       },
-      "match": "Use when one hard problem has one right answer and there is no diff to read the answer out of: prove the invariant, find the one bad input, derive the result. Not for work that spans a subsystem or for reviewing a diff.",
+      "match": "Use when one hard problem has one right answer and there is no diff to read the answer out of: prove the invariant, find the one bad input, derive the result, give a capacity or sizing estimate with one number. Not for work that spans a subsystem; that is deep. Not for reviewing a diff.",
       "why": "One hard problem where the answer has to be right and there is no diff to read the answer out of. The escalation goes to another family at its top effort, because a second family beats the same family asked twice."
     },
     "deep": {
@@ -54,7 +54,7 @@
       "crosscheck": {
         "effort": "max"
       },
-      "match": "Use when the work spans a subsystem or the whole design: an architecture decision, a cross-cutting change, a bug nobody has localized yet. Not for a single problem with a single answer.",
+      "match": "Use when the work spans a subsystem or the whole design: trace a request across several services, plan a migration, decide whether a plugin system still makes sense. Not for executing a decided change, even across several files; that is worker. Not for one decision between two options; that is judgment. Not for one localized problem with one right answer; that is thinking.",
       "why": "Architecture, a cross-cutting design, or a bug nobody has localized yet. The task that decides everything takes the top effort on every model rather than saving on the work that matters most."
     },
     "refactor": {
@@ -63,7 +63,7 @@
       "crosscheck": {
         "effort": "max"
       },
-      "match": "Use when the task is to restructure code that already works, across files, without changing behaviour: rename, move, extract, split. Not for a new behaviour.",
+      "match": "Use when the task is to decide and apply a better structure to code that already works: split a large function, extract a module, deduplicate, untangle globals, or apply a domain-wide rename across a module. The target shape is the task. A domain-wide rename across a module is refactor; a single named rename is worker. Not for a field, flag or single-symbol change whose target the caller already named; that is worker.",
       "why": "Restructure code that already works, across files, without changing behaviour. It needs thinking plus breadth of reading, so it takes the second-highest effort rather than the top. The second opinion comes from another family at the top effort."
     }
   },
