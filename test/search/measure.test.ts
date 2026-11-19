@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import type { Plugin } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Effect } from "effect";
-import { recordsOf } from "../../tools/definitions/search/measure";
-import { memories, memoryOf } from "../../tools/definitions/search/state";
+import { endOfWorkSynced } from "../../tools/definitions/search/apply";
+import { attachMeasure, recordsOf } from "../../tools/definitions/search/measure";
+import { memories, memoryOf, remember } from "../../tools/definitions/search/state";
 import {
   type After,
   afterEvent,
@@ -10,8 +12,10 @@ import {
   captureGuard,
   cleanupDirs,
   failedEvent,
+  locationOf,
   makeBin,
   makeStorage,
+  PROJECT,
   READY_BIN,
   toolEvent,
   withBinary,
@@ -321,6 +325,63 @@ describe("a spawn is counted and a follow-up is not", () => {
       expect((await records(after)).length).toBe(2);
       expect((await stored(after, child))?.parent).toBe(name);
       memories.delete(Session.ID.make(name));
+    });
+  });
+});
+
+describe("execute.after reconciles spectre.end-of-work after Code Mode ripwire check", () => {
+  test("removes spectre.end-of-work on execute.after once memory is measured and skips duplicate removes", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      let callback: ((event: unknown) => Effect.Effect<void>) | undefined;
+      const removes: Array<{ readonly sessionID: Session.ID; readonly key: string }> = [];
+      const ctx = {
+        location: locationOf(PROJECT),
+        storage: makeStorage(new Map()),
+        tool: {
+          hook: (_name: string, cb: (event: unknown) => Effect.Effect<void>) => {
+            callback = cb;
+            return Effect.succeed({ dispose: Effect.void });
+          },
+        },
+        session: {
+          instructions: {
+            entry: {
+              put: () => Effect.void,
+              remove: (input: { readonly sessionID: Session.ID; readonly key: string }) =>
+                Effect.sync(() => {
+                  removes.push(input);
+                }),
+            },
+          },
+        },
+      } as unknown as Plugin.Context;
+
+      await Effect.runPromise(Effect.scoped(attachMeasure(ctx)));
+      if (callback === undefined) throw new Error("measure did not register");
+
+      const name = "ses_measure_eow";
+      const id = Session.ID.make(name);
+      const base = memoryOf(id);
+      remember(id, {
+        ...base,
+        mutation: 1,
+        edited: new Set(["src/a.ts"]),
+        editedCode: new Set(["src/a.ts"]),
+        measured: { delta: 1, affected: 1 },
+      });
+      endOfWorkSynced.add(id);
+
+      await Effect.runPromise(
+        callback(afterEvent("spectre_ripwire", { action: "check" }, name, "call_m_ripwire", { status: "ok" })),
+      );
+      expect(removes).toEqual([{ sessionID: id, key: "spectre.end-of-work" }]);
+
+      await Effect.runPromise(callback(afterEvent("execute", { code: "return 1" }, name, "call_m_exec", {})));
+      expect(removes).toHaveLength(1);
+
+      memories.delete(id);
+      endOfWorkSynced.delete(id);
     });
   });
 });

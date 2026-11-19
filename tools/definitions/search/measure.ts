@@ -2,12 +2,12 @@ import type { Agent, Plugin, Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Effect, Option, Schema, Semaphore, type Scope } from "effect";
 import { isSpectre } from "./agents";
-import { envOf } from "./apply";
+import { envOf, needsEndOfWork, syncEndOfWork, syncEndOfWorkFromMemory } from "./apply";
 import { decide, type Outcome, type SurfaceAsk } from "./policy";
 import { probe } from "./probe";
 import { rootOf } from "./root";
 import { readAsk, shellAsk, subagentAsk } from "./signals";
-import { memoryOf, remember } from "./state";
+import { memories, memoryOf, remember } from "./state";
 
 /**
  * The usage record: one small row per session, written on `tool.execute.after`
@@ -245,7 +245,10 @@ const observe = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
 
     const root = yield* rootOf(ctx, event.sessionID);
     const observation = readEvent(event, root);
-    if (observation === undefined) return;
+    if (observation === undefined) {
+      yield* syncEndOfWorkFromMemory(ctx, event.sessionID);
+      return;
+    }
 
     const health = yield* Effect.promise(() => probe());
     if (health.kind !== "ready") return;
@@ -260,6 +263,11 @@ const observe = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
       change: observation.change,
       ...(observation.child === undefined ? {} : { child: observation.child }),
     });
+
+    const memory = memories.get(event.sessionID);
+    if (memory !== undefined) {
+      yield* syncEndOfWork(ctx, event.sessionID, needsEndOfWork(memory, health));
+    }
   });
 
 export const attachMeasure = (ctx: Plugin.Context): Effect.Effect<void, never, Scope.Scope> =>

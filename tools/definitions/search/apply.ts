@@ -1,15 +1,26 @@
 import { type Agent, type Plugin, Tool } from "@opencode/plugin/effect";
+import { InstructionEntry } from "@opencode/schema/instruction-entry";
 import type { Session } from "@opencode/schema/session";
 import type { SessionMessage } from "@opencode/schema/session-message";
 import { Effect, type Scope } from "effect";
 import { isSpectre } from "./agents";
 import { shape } from "./catalogue";
-import { CONTRACT } from "./contract";
-import { decide, type Ask, type Env, type Health, type ShellAsk, type TextAsk, type Verdict } from "./policy";
+import { CONTRACT, END_OF_WORK } from "./contract";
+import {
+  contextRule,
+  decide,
+  type Ask,
+  type Env,
+  type Health,
+  type Memory,
+  type ShellAsk,
+  type TextAsk,
+  type Verdict,
+} from "./policy";
 import { probe } from "./probe";
 import { rootOf } from "./root";
 import { contextAsk, grepAsk, mutateAsk, readAsk, shellAsk } from "./signals";
-import { markRerouted, memoryOf, remember } from "./state";
+import { markRerouted, memories, memoryOf, remember } from "./state";
 
 /**
  * The appliers. A verdict is a decision; this file is what it costs on the host:
@@ -129,6 +140,70 @@ const healthOf = (): Effect.Effect<Health | undefined> =>
     ),
   );
 
+const END_OF_WORK_KEY = InstructionEntry.Key.make("spectre.end-of-work");
+const MAX_SYNCED = 256;
+
+export const endOfWorkSynced: Set<Session.ID> = new Set();
+
+export const needsEndOfWork = (memory: Memory, health: Health): boolean => {
+  if (health.kind !== "ready") return false;
+  const { verdict } = decide({ surface: "context", tools: [] }, memory, envOf(health));
+  return verdict.kind === "prose" && verdict.key === "end-of-work";
+};
+
+export const syncEndOfWork = (
+  ctx: Plugin.Context,
+  sessionID: Session.ID,
+  active: boolean,
+): Effect.Effect<void> => {
+  const entry = ctx.session?.instructions?.entry;
+  if (entry === undefined) return Effect.void;
+  const present = endOfWorkSynced.has(sessionID);
+  if (active === present) return Effect.void;
+  if (active) {
+    return entry.put({ sessionID, key: END_OF_WORK_KEY, value: END_OF_WORK }).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          if (endOfWorkSynced.size >= MAX_SYNCED) {
+            const oldest = endOfWorkSynced.values().next();
+            if (!oldest.done) endOfWorkSynced.delete(oldest.value);
+          }
+          endOfWorkSynced.add(sessionID);
+        }),
+      ),
+      Effect.catchCause((cause) =>
+        Effect.logWarning("search end-of-work put failed", { sessionID, cause }).pipe(Effect.asVoid),
+      ),
+    );
+  }
+  return entry.remove({ sessionID, key: END_OF_WORK_KEY }).pipe(
+    Effect.tap(() =>
+      Effect.sync(() => {
+        endOfWorkSynced.delete(sessionID);
+      }),
+    ),
+    Effect.catchCause((cause) =>
+      Effect.logWarning("search end-of-work remove failed", { sessionID, cause }).pipe(Effect.asVoid),
+    ),
+  );
+};
+
+export const syncEndOfWorkFromMemory = (
+  ctx: Plugin.Context,
+  sessionID: Session.ID,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const memory = memories.get(sessionID);
+    if (memory === undefined) {
+      if (endOfWorkSynced.has(sessionID)) yield* syncEndOfWork(ctx, sessionID, false);
+      return;
+    }
+    if (!endOfWorkSynced.has(sessionID) && memory.editedCode.size === 0) return;
+    const health = yield* healthOf();
+    if (health === undefined) return;
+    yield* syncEndOfWork(ctx, sessionID, needsEndOfWork(memory, health));
+  });
+
 /**
  * The search and landing guard: a code-shaped `grep`/`ripgrep` or a bare `rg`/
  * `git grep` is answered by `spectre_search` in the same call, the first code
@@ -173,6 +248,7 @@ export const attachGuard = (ctx: Plugin.Context, read?: AskReader): Effect.Effec
         }
 
         remember(event.sessionID, decision.next);
+        yield* syncEndOfWork(ctx, event.sessionID, needsEndOfWork(decision.next, health));
       }),
     );
 
@@ -180,10 +256,11 @@ export const attachGuard = (ctx: Plugin.Context, read?: AskReader): Effect.Effec
   });
 
 /**
- * The request catalogue. The rule the part carries is the one `decide` chose for
- * this request, so a session with no instrument is told that it is native. A
- * defect is logged, never thrown: the request is the model's next turn, and a
- * broken shape must not lose it.
+ * The request catalogue. The rule the part carries is `contextRule(health)`,
+ * while unmeasured code-edit reminders sync through durable instruction entries
+ * so `event.system` stays identical across edits. A defect is logged, never
+ * thrown: the request is the model's next turn, and a broken shape must not
+ * lose it.
  */
 export const attachCatalogue = (ctx: Plugin.Context): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
@@ -201,8 +278,13 @@ export const attachCatalogue = (ctx: Plugin.Context): Effect.Effect<void, never,
 
         const decision = decide(ask, memoryOf(event.sessionID), envOf(health));
         const { verdict } = decision;
-        shape(event, verdict.kind === "prose" ? { ...CONTRACT, rule: verdict.text } : CONTRACT);
+        shape(event, { ...CONTRACT, rule: contextRule(health) });
         remember(event.sessionID, decision.next);
+        yield* syncEndOfWork(
+          ctx,
+          event.sessionID,
+          health.kind === "ready" && verdict.kind === "prose" && verdict.key === "end-of-work",
+        );
       }).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("search context failed", { cause }).pipe(Effect.asVoid),

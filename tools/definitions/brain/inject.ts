@@ -1,11 +1,12 @@
 import { join } from "node:path";
-import { Message } from "@opencode/ai/effect";
 import type { Plugin } from "@opencode/plugin/effect";
+import { InstructionEntry } from "@opencode/schema/instruction-entry";
 import { AbsolutePath } from "@opencode/schema/schema";
 import { Effect } from "effect";
 import { ledger } from "./ledger";
 import type { Claim } from "./neuron";
 
+const BRAIN_KEY = InstructionEntry.Key.make("spectre.brain");
 const CAP = 600;
 const COLD =
   "brain is cold: 0 claims. tools.spectre.brain action=recall answers nothing until it has claims; mnemonic seeds it";
@@ -70,14 +71,16 @@ const seen = new Map<string, string>();
 
 export const attach = (ctx: Plugin.Context) =>
   Effect.gen(function* () {
-    yield* ctx.session.hook("context", (event) =>
+    yield* ctx.session.hook("prompt", (event) =>
       Effect.gen(function* () {
-        if (event.agent === "mnemonic") return;
+        if (event.prompt.agents?.some((agent) => agent.name === "mnemonic") === true) return;
         const info = yield* Effect.catch(ctx.session.get({ sessionID: event.sessionID }), () =>
           Effect.succeed(undefined),
         );
-        if (info === undefined || info.parentID !== undefined) return;
-        const project = AbsolutePath.make(ctx.location.directory);
+        if (info === undefined || info.parentID !== undefined || info.agent === "mnemonic") return;
+        const entry = ctx.session.instructions?.entry;
+        if (entry === undefined) return;
+        const project = AbsolutePath.make(info.location?.directory ?? ctx.location.directory);
         const index = yield* Effect.catch(readIndex(project), () => Effect.succeed(undefined));
         if (index === undefined) return;
         if (seen.get(event.sessionID) === index.key) return;
@@ -85,12 +88,11 @@ export const attach = (ctx: Plugin.Context) =>
           index.claims.length === 0
             ? `<UNTRUSTED_CONTENT>\n${COLD}\n</UNTRUSTED_CONTENT>`
             : build(index.claims);
-        // Before the user's prompt, matching where agent-switch reminders land.
-        const at =
-          event.messages.at(-1)?.role === "user"
-            ? event.messages.length - 1
-            : event.messages.length;
-        event.messages.splice(at, 0, Message.user(text));
+        yield* entry.put({
+          sessionID: event.sessionID,
+          key: BRAIN_KEY,
+          value: text,
+        });
         seen.set(event.sessionID, index.key);
       }).pipe(
         Effect.catchCause((cause) =>
@@ -99,5 +101,5 @@ export const attach = (ctx: Plugin.Context) =>
       ),
     );
 
-    yield* Effect.logInfo("Registered brain injection", { trigger: "session.context" });
+    yield* Effect.logInfo("Registered brain injection", { trigger: "session.prompt" });
   });

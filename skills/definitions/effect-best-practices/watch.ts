@@ -1,5 +1,5 @@
-import { Message } from "@opencode/ai/effect";
 import type { Plugin } from "@opencode/plugin/effect";
+import { InstructionEntry } from "@opencode/schema/instruction-entry";
 import { AbsolutePath } from "@opencode/schema/schema";
 import { Effect, Stream } from "effect";
 import { join } from "node:path";
@@ -15,7 +15,7 @@ import { VERIFIED } from "./verified";
  * pre-commit. This catches it in the session, where nobody is running either.
  *
  * Why two mechanisms for one check. The stream can see a file change but cannot add a turn,
- * and the session hook can add a message but only fires when a turn is already starting. So
+ * and the session hook can attach an instruction entry when a turn starts. So
  * the stream records the drift and the hook delivers it, which means the reminder costs
  * nothing on a session that never opens.
  *
@@ -28,6 +28,7 @@ import { VERIFIED } from "./verified";
  */
 
 const PIN = "package.json";
+const WATCH_KEY = InstructionEntry.Key.make("spectre.effect-watch");
 
 const pinned = async (project: AbsolutePath) => {
   const file = Bun.file(join(project, PIN));
@@ -112,9 +113,9 @@ export const attach = (ctx: Plugin.Context) =>
       )
       .pipe(Effect.catchCause((cause) => Effect.logWarning("effect watch failed", { cause }).pipe(Effect.asVoid)));
 
-    yield* ctx.session.hook("context", (event) =>
+    yield* ctx.session.hook("prompt", (event) =>
       Effect.gen(function* () {
-        if (event.agent === "mnemonic") return;
+        if (event.prompt.agents?.some((agent) => agent.name === "mnemonic") === true) return;
         const project = AbsolutePath.make(ctx.location.directory);
         const version = pendingReminder(drifted, told, project, event.sessionID);
         if (version === undefined) return;
@@ -122,9 +123,14 @@ export const attach = (ctx: Plugin.Context) =>
           ctx.session.get({ sessionID: event.sessionID }),
           () => Effect.succeed(undefined),
         );
-        if (info === undefined || info.parentID !== undefined) return;
-        const at = event.messages.at(-1)?.role === "user" ? event.messages.length - 1 : event.messages.length;
-        event.messages.splice(at, 0, Message.user(REMINDER));
+        if (info === undefined || info.parentID !== undefined || info.agent === "mnemonic") return;
+        const entry = ctx.session.instructions?.entry;
+        if (entry === undefined) return;
+        yield* entry.put({
+          sessionID: event.sessionID,
+          key: WATCH_KEY,
+          value: REMINDER,
+        });
         told.set(event.sessionID, version);
       }).pipe(
         Effect.catchCause((cause) =>

@@ -2,11 +2,22 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { type Plugin, Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Effect, Exit } from "effect";
+import { attachGuard, endOfWorkSynced } from "../../tools/definitions/search/apply";
+import { END_OF_WORK } from "../../tools/definitions/search/contract";
 import { attachSearch } from "../../tools/definitions/search/index";
 import { contextRule, judge, rerouteInput, type Health } from "../../tools/definitions/search/policy";
 import { probe } from "../../tools/definitions/search/probe";
 import { memories, rerouted } from "../../tools/definitions/search/state";
-import { captureContext, captureGuard, cleanupDirs, guardEvent, makeBin, READY_BIN, withBinary } from "./host";
+import {
+  captureContext,
+  captureGuard,
+  cleanupDirs,
+  guardEvent,
+  makeBin,
+  READY_BIN,
+  toolEvent,
+  withBinary,
+} from "./host";
 
 const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
 
@@ -166,5 +177,69 @@ describe("attachSearch composes the surfaces", () => {
 
     await Effect.runPromise(Effect.scoped(attachSearch(ctx)));
     expect(names).toEqual(["session:context", "tool:execute.before", "tool:execute.after"]);
+  });
+});
+
+describe("attachGuard syncs spectre.end-of-work on edits and measurements", () => {
+  test("puts once on code edits, skips doc edits, and removes once both measurements run", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      let callback: ((event: unknown) => Effect.Effect<void, Tool.Error>) | undefined;
+      const puts: Array<{ readonly sessionID: Session.ID; readonly key: string; readonly value: unknown }> = [];
+      const removes: Array<{ readonly sessionID: Session.ID; readonly key: string }> = [];
+      const ctx = {
+        location: { directory: "/tmp" },
+        tool: {
+          hook: (_name: string, cb: (event: unknown) => Effect.Effect<void, Tool.Error>) => {
+            callback = cb;
+            return Effect.succeed({ dispose: Effect.void });
+          },
+        },
+        permission: { assert: () => Effect.void },
+        session: {
+          instructions: {
+            entry: {
+              put: (input: { readonly sessionID: Session.ID; readonly key: string; readonly value: unknown }) =>
+                Effect.sync(() => {
+                  puts.push(input);
+                }),
+              remove: (input: { readonly sessionID: Session.ID; readonly key: string }) =>
+                Effect.sync(() => {
+                  removes.push(input);
+                }),
+            },
+          },
+        },
+      } as unknown as Plugin.Context;
+
+      await Effect.runPromise(Effect.scoped(attachGuard(ctx)));
+      if (callback === undefined) throw new Error("guard did not register");
+
+      const name = "ses_guard_eow";
+      const id = Session.ID.make(name);
+
+      await Effect.runPromise(callback(toolEvent("edit", { path: "README.md" }, name, "call_eow_doc")));
+      expect(puts).toEqual([]);
+
+      await Effect.runPromise(callback(toolEvent("edit", { path: "src/a.ts" }, name, "call_eow_a")));
+      expect(puts).toEqual([{ sessionID: id, key: "spectre.end-of-work", value: END_OF_WORK }]);
+
+      await Effect.runPromise(callback(toolEvent("write", { path: "src/b.ts" }, name, "call_eow_b")));
+      expect(puts).toHaveLength(1);
+      expect(removes).toEqual([]);
+
+      await Effect.runPromise(
+        callback(toolEvent("shell", { command: "ripwire . --quality-delta" }, name, "call_eow_delta")),
+      );
+      expect(removes).toEqual([]);
+
+      await Effect.runPromise(
+        callback(toolEvent("shell", { command: "ripwire . --affected=src/a.ts,src/b.ts" }, name, "call_eow_aff")),
+      );
+      expect(removes).toEqual([{ sessionID: id, key: "spectre.end-of-work" }]);
+
+      memories.delete(id);
+      endOfWorkSynced.delete(id);
+    });
   });
 });

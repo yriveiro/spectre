@@ -1,21 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { AbsolutePath } from "@opencode/schema/schema";
+import { Effect, Exit, PubSub, Stream } from "effect";
 import {
+  attach,
   isPin,
   pendingReminder,
   pinned,
 } from "../../skills/definitions/effect-best-practices/watch";
 import { useTempDirs } from "../fixture";
-
-/**
- * The watcher cannot be tested end to end without an OpenCode event stream, so these cover the
- * two pure decisions it makes: which file wakes it, and what it reads out of that file.
- *
- * The subscription itself is not covered here and `principle-evidence` is the reason. A test
- * that built a fake stream would prove that a fake stream works. What matters is the filter
- * and the comparison, because those are where a rename or a schema change silently stops the
- * watcher from ever firing.
- */
 
 const temp = useTempDirs("effect-watch");
 
@@ -24,6 +16,22 @@ const manifest = async (body: string) => {
   await Bun.write(`${dir}/package.json`, body);
   return AbsolutePath.make(dir);
 };
+
+interface PromptEvent {
+  readonly sessionID: string;
+  readonly messageID: string;
+  prompt: {
+    text: string;
+    agents?: Array<{ readonly name: string }>;
+  };
+  delivery: "steer" | "queue";
+}
+
+interface EntryPut {
+  readonly sessionID: string;
+  readonly key: string;
+  readonly value: unknown;
+}
 
 describe("the effect watcher wakes on the right file", () => {
   test("a bare package.json and a nested one both match", () => {
@@ -118,5 +126,112 @@ describe("the reminder reaches every session once per drift", () => {
 
   test("drift in another project tells nothing here", () => {
     expect(pendingReminder(drifted("4.0.1"), new Map(), "/other", "ses_a")).toBeUndefined();
+  });
+});
+
+describe("attach delivers spectre.effect-watch durably on prompt", () => {
+  const promptEvent = (sessionID: string, agents?: Array<{ readonly name: string }>): PromptEvent => ({
+    sessionID,
+    messageID: "msg_watch",
+    prompt: { text: "continue", ...(agents === undefined ? {} : { agents }) },
+    delivery: "steer",
+  });
+
+  const setupWatch = async (
+    sessions: Record<string, { readonly parentID?: string; readonly agent?: string }>,
+    withInstructions: boolean = true,
+  ) => {
+    const dir = temp();
+    const hub = await Effect.runPromise(
+      PubSub.unbounded<{ readonly type: string; readonly data: { readonly event: string; readonly file: string } }>(),
+    );
+    let hookName: string | undefined;
+    let handler: ((event: PromptEvent) => Effect.Effect<void>) | undefined;
+    const puts: Array<EntryPut> = [];
+    const stored = new Map<string, Map<string, unknown>>();
+    const ctx = {
+      location: { directory: dir },
+      event: {
+        subscribe: () => Stream.fromPubSub(hub),
+      },
+      session: {
+        hook: (name: string, cb: (event: PromptEvent) => Effect.Effect<void>) => {
+          hookName = name;
+          handler = cb;
+          return Effect.void;
+        },
+        get: (input: { readonly sessionID: string }) => Effect.succeed(sessions[input.sessionID]),
+        ...(withInstructions
+          ? {
+              instructions: {
+                entry: {
+                  put: (input: EntryPut) =>
+                    Effect.sync(() => {
+                      puts.push(input);
+                      const byKey = stored.get(input.sessionID) ?? new Map<string, unknown>();
+                      byKey.set(input.key, input.value);
+                      stored.set(input.sessionID, byKey);
+                    }),
+                },
+              },
+            }
+          : {}),
+      },
+    };
+    await Effect.runPromise(attach(ctx as never) as Effect.Effect<void>);
+    if (handler === undefined || hookName === undefined) throw new Error("watch hook did not register");
+    const emitPinChange = async (version: string) => {
+      await Bun.write(`${dir}/package.json`, JSON.stringify({ devDependencies: { effect: version } }));
+      await Effect.runPromise(
+        PubSub.publish(hub, {
+          type: "filesystem.changed",
+          data: { event: "change", file: "package.json" },
+        }),
+      );
+      await Bun.sleep(25);
+    };
+    return { dir, hookName, handler, puts, stored, emitPinChange };
+  };
+
+  test("puts spectre.effect-watch once per drift on root sessions, persists across steps, and skips mnemonic and subagents", async () => {
+    const { hookName, handler, puts, stored, emitPinChange } = await setupWatch({
+      ses_watch_root: { agent: "spectre" },
+      ses_watch_mnemonic: { agent: "mnemonic" },
+      ses_watch_subagent: { agent: "spectre", parentID: "ses_watch_root" },
+    });
+
+    expect(hookName).toBe("prompt");
+    await emitPinChange("9.9.9");
+
+    await Effect.runPromise(handler(promptEvent("ses_watch_mnemonic")));
+    await Effect.runPromise(handler(promptEvent("ses_watch_subagent")));
+    await Effect.runPromise(handler(promptEvent("ses_watch_root", [{ name: "mnemonic" }])));
+    expect(puts).toEqual([]);
+
+    await Effect.runPromise(handler(promptEvent("ses_watch_root")));
+    expect(puts.length).toBe(1);
+    expect(puts[0]?.sessionID).toBe("ses_watch_root");
+    expect(puts[0]?.key).toBe("spectre.effect-watch");
+    const reminder = String(puts[0]?.value ?? "");
+    expect(reminder).toContain("<UNTRUSTED_CONTENT>");
+    expect(reminder).toContain("/effect-align");
+
+    expect(stored.get("ses_watch_root")?.get("spectre.effect-watch")).toBe(reminder);
+    expect(stored.get("ses_watch_root")?.get("spectre.effect-watch")).toBe(reminder);
+
+    await Effect.runPromise(handler(promptEvent("ses_watch_root")));
+    expect(puts.length).toBe(1);
+
+    await emitPinChange("9.9.10");
+    await Effect.runPromise(handler(promptEvent("ses_watch_root")));
+    expect(puts.length).toBe(2);
+    expect(puts[1]?.key).toBe("spectre.effect-watch");
+  });
+
+  test("degrades gracefully when session.instructions is omitted", async () => {
+    const { handler, emitPinChange } = await setupWatch({ ses_watch_plain: { agent: "spectre" } }, false);
+    await emitPinChange("9.9.9");
+    const exit = await Effect.runPromiseExit(handler(promptEvent("ses_watch_plain")));
+    expect(Exit.isSuccess(exit)).toBe(true);
   });
 });
