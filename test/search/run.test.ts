@@ -139,7 +139,7 @@ exit 1
     });
   });
 
-  test("0.6.8 is stale with its version", async () => {
+  test("0.6.8 is stale with its version and re-probes after an in-place upgrade, while ready stays cached", async () => {
     const { bin } = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
   echo "ripwire 0.6.8 (Release, AppleClang 21.0.0.21000101, emit=std::print, built_from=stale)"
@@ -149,8 +149,49 @@ echo "unexpected: $@" >&2
 exit 1
 `);
     await withBinary(bin, async () => {
-      const health = await probe();
-      expect(health).toEqual({ kind: "stale", binary: bin, version: "0.6.8" });
+      expect(await probe()).toEqual({ kind: "stale", binary: bin, version: "0.6.8" });
+
+      await Bun.write(
+        bin,
+        `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.6.10 (Release, built_from=upgraded)"
+  exit 0
+fi
+exit 1
+`,
+      );
+      expect(await probe()).toEqual({ kind: "ready", binary: bin, version: "0.6.10" });
+
+      await Bun.write(
+        bin,
+        `#!/bin/sh
+exit 1
+`,
+      );
+      expect(await probe()).toEqual({ kind: "ready", binary: bin, version: "0.6.10" });
+    });
+  });
+
+  test("an absent binary is not cached and re-probes once installed in place", async () => {
+    const dir = tempDir();
+    const bin = `${dir}/ripwire`;
+    await withBinary(bin, async () => {
+      expect((await probe()).kind).toBe("absent");
+
+      await Bun.write(
+        bin,
+        `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.6.10 (Release, built_from=installed)"
+  exit 0
+fi
+exit 1
+`,
+      );
+      await Bun.spawn(["chmod", "+x", bin]).exited;
+
+      expect(await probe()).toEqual({ kind: "ready", binary: bin, version: "0.6.10" });
     });
   });
 });

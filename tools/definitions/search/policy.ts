@@ -49,7 +49,6 @@ export const CODE_TOKENS: readonly string[] = [
   "=>",
   "::",
   "->",
-  "(",
 ];
 
 const REGEX_METACHARACTERS: readonly string[] = [
@@ -159,13 +158,27 @@ export type Ask =
   | { readonly surface: "context"; readonly tools: ReadonlyArray<string> }
   | { readonly surface: "text"; readonly id: "grep" | "ripgrep"; readonly ask: TextAsk }
   | { readonly surface: "shell"; readonly command: string; readonly parsed: ShellAsk }
-  | { readonly surface: "read"; readonly path: string; readonly code: boolean; readonly insideRoot: boolean }
-  | { readonly surface: "mutate"; readonly tool: "edit" | "write"; readonly path: string; readonly code: boolean }
+  | {
+      readonly surface: "read";
+      readonly path: string;
+      readonly code: boolean;
+      readonly insideRoot: boolean;
+    }
+  | {
+      readonly surface: "mutate";
+      readonly tool: "edit" | "write";
+      readonly path: string;
+      readonly code: boolean;
+      readonly insideRoot?: boolean;
+    }
   | { readonly surface: "subagent"; readonly child: string; readonly agent?: string }
   | { readonly surface: "complete"; readonly text: string; readonly outcome: Outcome };
 
 /** One arm of `Ask`, so a reader can name the surface it read. */
-export type SurfaceAsk<Surface extends Ask["surface"]> = Extract<Ask, { readonly surface: Surface }>;
+export type SurfaceAsk<Surface extends Ask["surface"]> = Extract<
+  Ask,
+  { readonly surface: Surface }
+>;
 
 export type Outcome = "answered" | "empty" | "partial" | "absent" | "refused";
 
@@ -173,7 +186,9 @@ export type Outcome = "answered" | "empty" | "partial" | "absent" | "refused";
  * What a session holds about one text it asked for: the reroute records the ask,
  * and the answer arrives with its outcome. A pattern with no entry was never asked.
  */
-export type Answer = { readonly kind: "pending" } | { readonly kind: "answered"; readonly outcome: Outcome };
+export type Answer =
+  | { readonly kind: "pending" }
+  | { readonly kind: "answered"; readonly outcome: Outcome };
 
 export type Why =
   | "no-instrument"
@@ -302,7 +317,25 @@ const GREP_FLAGS: SearchFlags = {
     "--invert-match",
     "--no-messages",
   ]),
-  short: new Set(["r", "R", "n", "E", "F", "i", "w", "I", "l", "L", "c", "v", "h", "H", "o", "s", "q"]),
+  short: new Set([
+    "r",
+    "R",
+    "n",
+    "E",
+    "F",
+    "i",
+    "w",
+    "I",
+    "l",
+    "L",
+    "c",
+    "v",
+    "h",
+    "H",
+    "o",
+    "s",
+    "q",
+  ]),
 };
 
 const FIXED_LONG: ReadonlySet<string> = new Set(["--fixed-strings", "--literal"]);
@@ -351,7 +384,7 @@ const lex = (command: string): Lexed => {
       started = true;
       continue;
     }
-    if (char === "|" || char === "&" || char === ";" || char === "<" || char === ">" || char === "`" || char === "\n") {
+    if ("|&;<>`\n".includes(char)) {
       composed = true;
       continue;
     }
@@ -378,7 +411,10 @@ const lex = (command: string): Lexed => {
 const isGitGrep = (command: string): boolean => /^\s*git\s+grep(?:\s|$)/.test(command);
 
 /** One token's flag meaning, or `undefined` when the token is a pattern or a path. */
-const readFlag = (word: string, flags: SearchFlags): { readonly fixed: boolean; readonly recursive: boolean } | "unmappable" | undefined => {
+const readFlag = (
+  word: string,
+  flags: SearchFlags,
+): { readonly fixed: boolean; readonly recursive: boolean } | "unmappable" | undefined => {
   if (word.startsWith("--")) {
     if (!flags.long.has(word)) return "unmappable";
     return { fixed: FIXED_LONG.has(word), recursive: word === "--recursive" };
@@ -480,7 +516,10 @@ const parseSearch = (command: string, kind: "rg" | "git" | "grep"): ShellAsk => 
  * ripwire lookup, a landing command, or nothing this reader recognises.
  */
 export const shellParse = (command: string): ShellAsk => {
-  const words = command.trim().split(/\s+/).filter((word) => word !== "");
+  const words = command
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word !== "");
   const head = words[0] ?? "";
   const name = head.slice(head.lastIndexOf("/") + 1);
   if (name === "ripwire") {
@@ -518,7 +557,7 @@ const MOMENTS = [
   "- Contract edit: `ripwire . --impact=<sym> --uses=<sym>`, then `--edit-check=<file:sym>`.",
   "- Subagent fan-out: `ripwire . --pack-task=<task> --partition=<n>`.",
   "- Branch cleanup: `ripwire . --stray-content` before `--plan`.",
-  "- Before commit/PR: call `tools.spectre.ripwire({ action: \"check\" })` in `execute` (or run `ripwire . --quality-delta` and `ripwire . --affected=<paths>`).",
+  '- Before commit/PR: call `tools.spectre.ripwire({ action: "check" })` in `execute` (or run `ripwire . --quality-delta` and `ripwire . --affected=<paths>`).',
 ].join("\n");
 
 /** The rule the context part carries. Ready sessions carry the moment cues; native sessions carry the fallback note. */
@@ -551,9 +590,13 @@ const measuredFresh = (memory: Memory): boolean => {
 };
 
 /** The context part: the rule alone, with the end-of-work nudge while a code edit is unmeasured. */
-const contextProse = (memory: Memory, health: Health): Extract<Verdict, { readonly kind: "prose" }> => {
+const contextProse = (
+  memory: Memory,
+  health: Health,
+): Extract<Verdict, { readonly kind: "prose" }> => {
   const rule = contextRule(health);
-  if (memory.editedCode.size === 0 || measuredFresh(memory)) return { kind: "prose", key: "rule", text: rule };
+  if (memory.editedCode.size === 0 || measuredFresh(memory))
+    return { kind: "prose", key: "rule", text: rule };
   return { kind: "prose", key: "end-of-work", text: `${END_OF_WORK}\n\n${rule}` };
 };
 
@@ -574,7 +617,10 @@ const onText = (ask: TextAsk, memory: Memory, health: Health): Decision => {
   };
 };
 
-const onShellSearch = (parsed: Extract<ShellAsk, { readonly kind: "search" }>, memory: Memory): Decision => {
+const onShellSearch = (
+  parsed: Extract<ShellAsk, { readonly kind: "search" }>,
+  memory: Memory,
+): Decision => {
   if (parsed.pattern.trim().length < 3) return passed("too-broad", memory);
   if (
     (parsed.path !== undefined && hasPlainExtension(parsed.path)) ||
@@ -583,11 +629,14 @@ const onShellSearch = (parsed: Extract<ShellAsk, { readonly kind: "search" }>, m
   ) {
     return passed("plain-text", memory);
   }
-  if (parsed.pattern.includes("\n") || parsed.pattern.includes("\r")) return passed("plain-text", memory);
+  if (parsed.pattern.includes("\n") || parsed.pattern.includes("\r"))
+    return passed("plain-text", memory);
   if (memory.asked.has(parsed.pattern)) return passed("already-asked", memory);
   if (!memory.search) return passed("search-unavailable", memory);
   const route =
-    parsed.literal === true ? { kind: "literal", text: parsed.pattern } : patternRoute(parsed.pattern);
+    parsed.literal === true
+      ? { kind: "literal", text: parsed.pattern }
+      : patternRoute(parsed.pattern);
   const input: Record<string, unknown> = {
     pattern: parsed.pattern,
     ...(parsed.path === undefined ? {} : { path: parsed.path }),
@@ -653,6 +702,7 @@ const onRead = (ask: SurfaceAsk<"read">, memory: Memory): Decision => {
 };
 
 const onMutate = (ask: SurfaceAsk<"mutate">, memory: Memory): Decision => {
+  if (ask.insideRoot === false) return passed("outside-root", memory);
   const edited = new Set(memory.edited);
   edited.add(ask.path);
   const editedCode = new Set(memory.editedCode);
@@ -712,7 +762,13 @@ export type ArgvInput = {
 export const argv = ({ route, root, budget }: ArgvInput): string[] => {
   switch (route.kind) {
     case "task":
-      return [root, `--for=${route.task}`, "--signatures-only", `--token-budget=${budget}`, "--legend=compact"];
+      return [
+        root,
+        `--for=${route.task}`,
+        "--signatures-only",
+        `--token-budget=${budget}`,
+        "--legend=compact",
+      ];
     case "expand":
       return [root, `--expand=${route.symbol}`, "--legend=compact"];
     case "literal":

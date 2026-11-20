@@ -9,7 +9,15 @@ import {
   trackedChanges,
   trackedOf,
 } from "./classify";
-import { answered, listed, mainOf, type PullRequest, pullRequests, git as run } from "./read";
+import {
+  answered,
+  listed,
+  mainOf,
+  type PullRequest,
+  pullRequests,
+  git as run,
+  statusPorcelain,
+} from "./read";
 
 export type Row = {
   readonly path: string;
@@ -133,8 +141,8 @@ export const audit = async (directory: string): Promise<Report> => {
       }
 
       const at = Number(stamped.out);
-      const status = await run(one.directory, ["status", "--porcelain"]);
-      const spread = await landing(main, one.branch ?? "", head);
+      const status = await statusPorcelain(one.directory);
+      const spread = await landing(main, one.branch ?? head, head);
       const where = await remote(one.directory, one.branch ?? "", head);
 
       const dirty: Tracked = answered(status)

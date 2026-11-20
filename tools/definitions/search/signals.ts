@@ -89,7 +89,8 @@ const decodeRead = Schema.decodeUnknownOption(ReadInput);
 const decodeSubagent = Schema.decodeUnknownOption(SubagentInput);
 const decodeSpawned = Schema.decodeUnknownOption(SpawnedOutput);
 
-const isTextID = (tool: string): tool is "grep" | "ripgrep" => tool === "grep" || tool === "ripgrep";
+const isTextID = (tool: string): tool is "grep" | "ripgrep" =>
+  tool === "grep" || tool === "ripgrep";
 
 const isMutateID = (tool: string): tool is "edit" | "write" => tool === "edit" || tool === "write";
 
@@ -128,18 +129,31 @@ export const readAsk = (input: unknown, root: string): SurfaceAsk<"read"> | unde
 };
 
 /** The `edit` or `write` payload. A tool that is neither names no mutation. */
-export const mutateAsk = (input: unknown, tool: string): SurfaceAsk<"mutate"> | undefined => {
+export const mutateAsk = (
+  input: unknown,
+  tool: string,
+  root?: string,
+): SurfaceAsk<"mutate"> | undefined => {
   if (!isMutateID(tool)) return undefined;
   const ask = Option.getOrUndefined(decodeRead(input));
   if (ask === undefined) return undefined;
-  return { surface: "mutate", tool, path: ask.path, code: codePath(ask.path) };
+  return {
+    surface: "mutate",
+    tool,
+    path: ask.path,
+    code: codePath(ask.path),
+    ...(root === undefined ? {} : { insideRoot: scope(root, ask.path) !== undefined }),
+  };
 };
 
 /**
  * The `subagent` payload, read with the call's output. A follow-up names a child
  * and is not a spawn; a spawn names its child only in the output.
  */
-export const subagentAsk = (input: unknown, output: unknown): SurfaceAsk<"subagent"> | undefined => {
+export const subagentAsk = (
+  input: unknown,
+  output: unknown,
+): SurfaceAsk<"subagent"> | undefined => {
   const ask = Option.getOrUndefined(decodeSubagent(input));
   if (ask === undefined) return undefined;
   if (ask.sessionID !== undefined && ask.sessionID !== "") return undefined;

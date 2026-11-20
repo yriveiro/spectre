@@ -65,8 +65,22 @@ interface MessageTally {
   readonly toolMap: Map<string, MutableToolStat>;
 }
 
+const recordNestedToolCalls = (toolMap: Map<string, MutableToolStat>, toolCalls: unknown): void => {
+  if (!Array.isArray(toolCalls)) return;
+  for (const item of toolCalls) {
+    if (typeof item !== "object" || item === null) continue;
+    const record = item as { tool?: unknown; status?: unknown };
+    if (typeof record.tool !== "string") continue;
+    const stat = toolMap.get(record.tool) ?? { calls: 0, errors: 0 };
+    stat.calls += 1;
+    if (record.status === "error") stat.errors += 1;
+    toolMap.set(record.tool, stat);
+  }
+};
+
 const recordToolPart = (
   toolMap: Map<string, MutableToolStat>,
+  skills: Set<string>,
   part: SessionMessage.AssistantTool,
 ): number => {
   const stat = toolMap.get(part.name) ?? { calls: 0, errors: 0 };
@@ -76,6 +90,20 @@ const recordToolPart = (
     if (stat.sampleError === undefined) {
       stat.sampleError = clipText(`${part.state.error.type}: ${part.state.error.message}`, 160);
     }
+  } else if (part.state.status === "completed") {
+    if (
+      part.name === "skill" &&
+      typeof part.state.input === "object" &&
+      part.state.input !== null
+    ) {
+      const skillId = (part.state.input as { id?: unknown }).id;
+      if (typeof skillId === "string") skills.add(skillId);
+    }
+    const metadata = part.state.metadata as { error?: unknown; toolCalls?: unknown } | undefined;
+    if (part.name === "execute" && metadata?.error === true) {
+      stat.errors += 1;
+    }
+    recordNestedToolCalls(toolMap, metadata?.toolCalls);
   }
   toolMap.set(part.name, stat);
   return part.name === "subagent" ? 1 : 0;
@@ -102,7 +130,9 @@ const accumulateMessage = (tally: MessageTally, message: SessionMessage.Info): v
     tally.assistantSteps += 1;
     if (message.retry !== undefined) tally.retries += 1;
     for (const part of message.content) {
-      if (part.type === "tool") tally.subagentsSpawned += recordToolPart(tally.toolMap, part);
+      if (part.type === "tool") {
+        tally.subagentsSpawned += recordToolPart(tally.toolMap, tally.skills, part);
+      }
     }
   }
 };
@@ -117,7 +147,9 @@ const sortedToolStats = (toolMap: ReadonlyMap<string, MutableToolStat>): Array<T
     }))
     .toSorted(
       (left, right) =>
-        right.errors - left.errors || right.calls - left.calls || left.name.localeCompare(right.name),
+        right.errors - left.errors ||
+        right.calls - left.calls ||
+        left.name.localeCompare(right.name),
     );
 
 const computeAnomalyScore = (
@@ -213,8 +245,13 @@ export interface InspectedEvent {
   readonly calls?: Array<InspectedCall>;
 }
 
-const previewContent = (content: ReadonlyArray<Tool.Content>, maxChars: number): string | undefined => {
-  const texts = content.flatMap((item) => (item.type === "text" ? [item.text] : [`[file:${item.mime}]`]));
+const previewContent = (
+  content: ReadonlyArray<Tool.Content>,
+  maxChars: number,
+): string | undefined => {
+  const texts = content.flatMap((item) =>
+    item.type === "text" ? [item.text] : [`[file:${item.mime}]`],
+  );
   if (texts.length === 0) return undefined;
   return clipText(texts.join(" "), maxChars);
 };
@@ -267,7 +304,8 @@ const inspectAssistantMessage = (
       : ` [retry #${message.retry.attempt}: ${clipText(message.retry.error.message, 80)}]`;
   const errorTag =
     message.error === undefined ? "" : ` [error: ${clipText(message.error.message, 80)}]`;
-  const baseText = texts.length > 0 ? clipText(texts.join(" "), maxChars) : `${calls.length} tool call(s)`;
+  const baseText =
+    texts.length > 0 ? clipText(texts.join(" "), maxChars) : `${calls.length} tool call(s)`;
 
   return {
     messageID: message.id,
@@ -288,7 +326,10 @@ const inspectCompaction = (
   return {
     messageID: message.id,
     kind: "compaction",
-    summary: detail.length > 0 ? `${message.status} (${message.reason}): ${detail}` : `${message.status} (${message.reason})`,
+    summary:
+      detail.length > 0
+        ? `${message.status} (${message.reason}): ${detail}`
+        : `${message.status} (${message.reason})`,
   };
 };
 

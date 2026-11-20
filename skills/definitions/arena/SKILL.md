@@ -23,13 +23,14 @@ The candidates get the same prompt, so the prompt is the contract.
    three to six criteria you could actually grade. The rubric is the picker's
    tool, not the candidates': they see the task and nothing about the rubric.
 3. Pick the seats. Call `tools.spectre.routing({})` and take one model per
-   candidate from the profiles, plus the `agent` each profile names. A spawn
-   without `agent` lands on OpenCode's default agent, which holds none of
-   spectre's permissions — a candidate that cannot write to its output path is
-   a dropout you caused. An arena of three wants three different families,
-   because two candidates on one model share its blind spots and their agreement
-   proves very little. That constraint is the feature, so if the profiles only
-   offer one family, say so before spending the run.
+   candidate from the profiles. Pass `agent: "operator"` for every seat instead
+   of `profile.agent`, which mixes `spectre` and `operator` across profiles and
+   breaks prompt parity. `operator` holds all `~/.local/share/spectre/`
+   permissions, whereas a spawn without `agent` lands on OpenCode's default
+   agent and cannot write to its output path. An arena of three wants three
+   different families, because two candidates on one model share its blind spots
+   and their agreement proves very little. That constraint is the feature, so if
+   the profiles only offer one family, say so before spending the run.
 4. Give each candidate its own output path under the shared root:
    `~/.local/share/spectre/<worktree-name>/arenas/<slug>/seat-<n>/`, and
    `mkdir -p` it before the fan-out. The shared root is the location that clears
@@ -45,8 +46,7 @@ The candidates get the same prompt, so the prompt is the contract.
 
 ## Phase B: Fan out
 
-Spawn every candidate in one message. A `subagent` child always runs in the background. Each gets the `agent`
-from its seat, the task, its own output path, and a request for the artifact plus
+Spawn every candidate in one message. A `subagent` child always runs in the background. Each gets `agent: "operator"`, `model: row.model.ref`, the task, its own output path, and a request for the artifact plus
 a short rationale naming the alternatives it considered and what it rejected.
 
 If a candidate produces nothing, carry on with the rest and name the dropout in
@@ -55,9 +55,9 @@ the note. Do not silently run a smaller arena than the one you said you would.
 ## Phase C: Cross-judge
 
 Once every candidate has finished, pick one model for the judge and prefer a
-different family from yours. Spawn one read-only judge on it, with the profile's
-`agent` like every other spawn — it reads the answers off the shared root, which
-needs the grant. It sees the rubric
+different family from yours. Spawn one read-only judge on it, with
+`agent: "operator"` like every other spawn. `operator` holds all
+`~/.local/share/spectre/` permissions to read the answers off the shared root. It sees the rubric
 and the answers by path label, scores each criterion, and recommends a base.
 
 The judge runs alongside your own reading, not alongside the candidates. Do not

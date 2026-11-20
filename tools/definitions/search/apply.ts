@@ -7,9 +7,10 @@ import { isSpectre } from "./agents";
 import { shape } from "./catalogue";
 import { CONTRACT, END_OF_WORK } from "./contract";
 import {
-  contextRule,
-  decide,
   type Ask,
+  contextRule,
+  type Decision,
+  decide,
   type Env,
   type Health,
   type Memory,
@@ -18,7 +19,7 @@ import {
   type Verdict,
 } from "./policy";
 import { probe } from "./probe";
-import { rootOf } from "./root";
+import { sessionScopeOf } from "./root";
 import { contextAsk, grepAsk, mutateAsk, readAsk, shellAsk } from "./signals";
 import { markRerouted, memories, memoryOf, remember } from "./state";
 
@@ -127,7 +128,7 @@ const askOf = (root: string, event: ToolBefore): Ask | undefined => {
       return readAsk(event.input, root);
     case "edit":
     case "write":
-      return mutateAsk(event.input, event.tool);
+      return mutateAsk(event.input, event.tool, root);
     default:
       return undefined;
   }
@@ -136,7 +137,9 @@ const askOf = (root: string, event: ToolBefore): Ask | undefined => {
 const healthOf = (): Effect.Effect<Health | undefined> =>
   Effect.promise(() => probe()).pipe(
     Effect.catchDefect((defect) =>
-      Effect.logWarning("search guard could not probe ripwire", { defect }).pipe(Effect.as(undefined)),
+      Effect.logWarning("search guard could not probe ripwire", { defect }).pipe(
+        Effect.as(undefined),
+      ),
     ),
   );
 
@@ -172,7 +175,9 @@ export const syncEndOfWork = (
         }),
       ),
       Effect.catchCause((cause) =>
-        Effect.logWarning("search end-of-work put failed", { sessionID, cause }).pipe(Effect.asVoid),
+        Effect.logWarning("search end-of-work put failed", { sessionID, cause }).pipe(
+          Effect.asVoid,
+        ),
       ),
     );
   }
@@ -183,7 +188,9 @@ export const syncEndOfWork = (
       }),
     ),
     Effect.catchCause((cause) =>
-      Effect.logWarning("search end-of-work remove failed", { sessionID, cause }).pipe(Effect.asVoid),
+      Effect.logWarning("search end-of-work remove failed", { sessionID, cause }).pipe(
+        Effect.asVoid,
+      ),
     ),
   );
 };
@@ -204,54 +211,92 @@ export const syncEndOfWorkFromMemory = (
     yield* syncEndOfWork(ctx, sessionID, needsEndOfWork(memory, health));
   });
 
-/**
- * The search and landing guard: a code-shaped `grep`/`ripgrep` or a bare `rg`/
- * `git grep` is answered by `spectre_search` in the same call, the first code
- * read without a lookup is refused once, and a landing is refused once until
- * the two measurements ran against the last mutation. `edit` and `write` only
- * record, because the landing gate reads that count.
- *
- * Only the probe is defect-protected. A plain permission decline is a defect at
- * `v2.3.0:packages/core/src/permission.ts:273-278`, so it must reach the host
- * and end the step. Catching it here would turn a "no" into a search.
- */
-export const attachGuard = (ctx: Plugin.Context, read?: AskReader): Effect.Effect<void, never, Scope.Scope> =>
+const rerouteAsksOf = (ask: Ask, root: string): RerouteAsks | undefined => {
+  if (ask.surface === "text") return textAsks(ask.ask, root);
+  if (ask.surface === "shell") return shellAsks(ask.parsed, ask.command, root);
+  return undefined;
+};
+
+interface GuardStep {
+  readonly ctx: Plugin.Context;
+  readonly event: ToolBefore;
+  readonly root: string;
+  readonly childSubagent: boolean;
+  readonly ask: Ask;
+  readonly prev: Memory;
+  readonly decision: Decision;
+  readonly health: Health;
+}
+
+const applyRefusal = (
+  step: GuardStep,
+  verdict: Extract<Verdict, { readonly kind: "refuse" }>,
+): Effect.Effect<void, Tool.Error> =>
   Effect.gen(function* () {
-    yield* ctx.tool.hook("execute.before", (event) =>
-      Effect.gen(function* () {
-        if (!isSpectre(event.agent)) return;
+    if (verdict.gate === "read" && step.childSubagent) {
+      const bypassed = { ...step.prev, reads: step.prev.reads + 1 };
+      remember(step.event.sessionID, bypassed);
+      yield* syncEndOfWork(step.ctx, step.event.sessionID, needsEndOfWork(bypassed, step.health));
+      return;
+    }
+    remember(step.event.sessionID, step.decision.next);
+    yield* Effect.fail(new Tool.Error({ message: verdict.message }));
+  });
 
-        const root = yield* rootOf(ctx, event.sessionID);
-        const ask = read === undefined ? askOf(root, event) : read(event);
-        if (ask === undefined) return;
-
-        const health = yield* healthOf();
-        if (health === undefined) return;
-
-        const decision = decide(ask, memoryOf(event.sessionID), envOf(health));
-        const { verdict } = decision;
-
-        if (verdict.kind === "refuse") {
-          remember(event.sessionID, decision.next);
-          yield* Effect.fail(new Tool.Error({ message: verdict.message }));
-          return;
-        }
-
-        if (verdict.kind === "reroute") {
-          const asks =
-            ask.surface === "text"
-              ? textAsks(ask.ask, root)
-              : ask.surface === "shell"
-                ? shellAsks(ask.parsed, ask.command, root)
-                : undefined;
-          if (asks !== undefined) yield* applyReroute(ctx, event, asks, verdict);
-        }
-
-        remember(event.sessionID, decision.next);
-        yield* syncEndOfWork(ctx, event.sessionID, needsEndOfWork(decision.next, health));
-      }),
+const applyVerdict = (step: GuardStep): Effect.Effect<void, Tool.Error> =>
+  Effect.gen(function* () {
+    const { verdict } = step.decision;
+    if (verdict.kind === "refuse") {
+      yield* applyRefusal(step, verdict);
+      return;
+    }
+    if (verdict.kind === "reroute") {
+      const asks = rerouteAsksOf(step.ask, step.root);
+      if (asks !== undefined) yield* applyReroute(step.ctx, step.event, asks, verdict);
+    }
+    remember(step.event.sessionID, step.decision.next);
+    yield* syncEndOfWork(
+      step.ctx,
+      step.event.sessionID,
+      needsEndOfWork(step.decision.next, step.health),
     );
+  });
 
+const resolveAsk = (root: string, event: ToolBefore, read?: AskReader): Ask | undefined =>
+  read === undefined ? askOf(root, event) : read(event);
+
+const guardBefore = (
+  ctx: Plugin.Context,
+  event: ToolBefore,
+  read?: AskReader,
+): Effect.Effect<void, Tool.Error> =>
+  Effect.gen(function* () {
+    if (!isSpectre(event.agent)) return;
+    const sessionScope = yield* sessionScopeOf(ctx, event.sessionID);
+    const ask = resolveAsk(sessionScope.directory, event, read);
+    if (ask === undefined) return;
+    const health = yield* healthOf();
+    if (health === undefined) return;
+    const prev = memoryOf(event.sessionID);
+    const decision = decide(ask, prev, envOf(health));
+    yield* applyVerdict({
+      ctx,
+      event,
+      root: sessionScope.directory,
+      childSubagent: event.agent !== "spectre" || sessionScope.hasParent,
+      ask,
+      prev,
+      decision,
+      health,
+    });
+  });
+
+export const attachGuard = (
+  ctx: Plugin.Context,
+  read?: AskReader,
+): Effect.Effect<void, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    yield* ctx.tool.hook("execute.before", (event) => guardBefore(ctx, event, read));
     yield* Effect.logInfo("Registered search guard", { trigger: "tool.execute.before" });
   });
 

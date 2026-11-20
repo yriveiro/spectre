@@ -12,7 +12,11 @@ let seq = 0;
 const context = { progress: () => Effect.void } as unknown as Tool.Context;
 
 const git = async (cwd: string, args: ReadonlyArray<string>) => {
-  const proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn(["git", "-c", "commit.gpgsign=false", ...args], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
@@ -256,7 +260,48 @@ describe("removing the worktree the session is standing in", () => {
     const outcome = await remove(fake, other);
 
     expect(outcome.status).toBe("rejected");
-    if (outcome.status === "rejected") expect(outcome.problems).toContain("session could not be read");
+    if (outcome.status === "rejected")
+      expect(outcome.problems).toContain("session could not be read");
     expect(await isDirectory(other)).toBe(true);
+  });
+
+  test("removes cleanly when .spectre/run.md is the only untracked file", async () => {
+    const { bare, main, other } = await layout();
+    await Bun.write(`${other}/.spectre/run.md`, "# completed goal\n");
+    const fake = host(bare, other);
+
+    const outcome = await remove(fake, other);
+
+    expect(outcome.status).toBe("removed");
+    expect(fake.session.where).toBe(main);
+    expect(await isDirectory(other)).toBe(false);
+  });
+
+  test("does not delete .spectre/run.md when other untracked files exist", async () => {
+    const { bare, main, other } = await layout();
+    await Bun.write(`${other}/.spectre/run.md`, "# completed goal\n");
+    await Bun.write(`${other}/scratch.txt`, "keep me\n");
+    const fake = host(bare, main);
+
+    const outcome = await remove(fake, other);
+
+    expect(outcome.status).toBe("failed");
+    expect(await isDirectory(other)).toBe(true);
+    expect(await Bun.file(`${other}/.spectre/run.md`).exists()).toBe(true);
+  });
+
+  test("removes a detached worktree cleanly", async () => {
+    const { bare, main } = await layout();
+    const detached = `${main}/../detached-wt`;
+    await git(bare, ["worktree", "add", "-q", "--detach", detached, "main"]);
+    const detachedTop = await toplevel(detached);
+    const fake = host(bare, detachedTop);
+
+    const outcome = await remove(fake, detachedTop);
+
+    expect(outcome.status).toBe("removed");
+    if (outcome.status === "removed") expect(outcome.branch).toBeUndefined();
+    expect(fake.session.where).toBe(main);
+    expect(await isDirectory(detachedTop)).toBe(false);
   });
 });

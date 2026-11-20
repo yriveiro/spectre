@@ -3,7 +3,7 @@ import type { Plugin } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Effect } from "effect";
 import { attachCatalogue, endOfWorkSynced } from "../../tools/definitions/search/apply";
-import { shape, type Draft } from "../../tools/definitions/search/catalogue";
+import { type Draft, shape } from "../../tools/definitions/search/catalogue";
 import { CONTRACT, END_OF_WORK } from "../../tools/definitions/search/contract";
 import { contextRule, type Memory } from "../../tools/definitions/search/policy";
 import { memories } from "../../tools/definitions/search/state";
@@ -91,9 +91,12 @@ describe("search context shape", () => {
     const asked = draft({ tools: { grep } });
     shape(asked);
     expect("grep" in asked.tools).toBe(false);
-    expect(asked.tools["ripgrep"]?.description).toBe(CONTRACT.ripgrep);
-    expect(asked.tools["ripgrep"]?.input).toBe(input);
-    expect(asked.tools["ripgrep"]).toBe(grep);
+    expect(asked.tools.ripgrep?.description).toBe(CONTRACT.ripgrep);
+    expect(asked.tools.ripgrep?.description).toContain(
+      "Pass one existing file or directory in `path`; put multi-folder globs such as `{test,scripts}/**` in `include`.",
+    );
+    expect(asked.tools.ripgrep?.input).toBe(input);
+    expect(asked.tools.ripgrep).toBe(grep);
   });
 
   test("a draft that already has ripgrep keeps its description and loses grep", () => {
@@ -105,7 +108,7 @@ describe("search context shape", () => {
     });
     shape(asked);
     expect("grep" in asked.tools).toBe(false);
-    expect(asked.tools["ripgrep"]?.description).toBe("kept");
+    expect(asked.tools.ripgrep?.description).toBe("kept");
   });
 
   test("the appended rule names both spectre_search and ripgrep", () => {
@@ -130,7 +133,7 @@ describe("a stock agent's request is left as the host built it", () => {
     await Effect.runPromise(callback(asked));
 
     expect(asked.system).toEqual([]);
-    expect(asked.tools["grep"]?.description).toBe("grep");
+    expect(asked.tools.grep?.description).toBe("grep");
     expect("ripgrep" in asked.tools).toBe(false);
   });
 });
@@ -165,7 +168,10 @@ describe("KV-cache invariant system prefix and durable end-of-work entry", () =>
       expect(puts).toEqual([{ sessionID: name, key: "spectre.end-of-work", value: END_OF_WORK }]);
       expect(stored.get(`${name}:spectre.end-of-work`)).toBe(END_OF_WORK);
 
-      memories.set(name, held({ mutation: 2, editedCode: new Set(["src/retry.ts", "src/attach.ts"]) }));
+      memories.set(
+        name,
+        held({ mutation: 2, editedCode: new Set(["src/retry.ts", "src/attach.ts"]) }),
+      );
       const duringSecondEdit = structuredClone(base);
       await Effect.runPromise(callback(duringSecondEdit));
       expect(JSON.stringify(duringSecondEdit.system)).toBe(baseline);

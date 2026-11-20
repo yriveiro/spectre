@@ -1,6 +1,6 @@
 # communication
 
-The channel between an agent and the person reading. This is the skill for the
+The channel between an agent and the person reading. Child subagents reporting to a parent session skip `communication`, `grammar`, and `tools.spectre.prose`. This is the skill for the
 moments when the work is done or stuck and the agent has to say something: report
 the outcome, ask the question that unblocks the next step, hand back the options
 with a recommendation, or say what it does not know.
@@ -205,15 +205,13 @@ Deleting is the easy half. The rest of this check protects the message:
 5. Put back anything you cut that carried meaning. If a sentence is the only place the reader learns a fact, a caveat, or a limit, it was never padding.
 6. A table cell should be a phrase. If a cell needs a comma and a clause to make sense, it belongs in prose under the table.
 
-Then run the mechanical half, which is a script rather than a judgement:
+Then run the mechanical half on `.md` files, skill bodies, Canvas reports, and PR or commit prose:
 
 ```js
 await tools.spectre.prose({ text: "<the message you are about to send>" })
 ```
 
-A finding is a sentence to read, not a defect to clear before you send. What the
-tool cannot check is the active requirements above, which is why the pass is two
-steps and not one.
+Chat replies skip `tools.spectre.prose` unless the user asks for STE chat replies. Child subagents reporting to a parent session also skip `tools.spectre.prose`. A finding is a sentence to read, not a defect to clear before you send. What the tool cannot check is the active requirements above, which is why the pass is two steps and not one.
 
 Then verify two things. If the reader read only the first line, do they know what to do next? If they read only the last line, do they know what just happened?
 

@@ -4,7 +4,14 @@ import { Effect, Exit } from "effect";
 import { DESCRIPTION } from "../../tools/definitions/brain";
 import { attach, COLD } from "../../tools/definitions/brain/inject";
 
-const ACTIONS: ReadonlyArray<string> = ["recall", "assert", "relate", "supersede", "demote"];
+const ACTIONS: ReadonlyArray<string> = [
+  "recall",
+  "assert",
+  "relate",
+  "supersede",
+  "demote",
+  "status",
+];
 
 const TMP = Bun.env.TMPDIR ?? "/tmp";
 const roots: Array<string> = [];
@@ -74,7 +81,10 @@ const setup = async (tag: string, info: SessionInfoStub = {}, withInstructions: 
   return { dir, sessionID: `ses_${tag}_${seq}`, hookName, handler, puts, stored };
 };
 
-const promptEvent = (sessionID: string, agents?: Array<{ readonly name: string }>): PromptEvent => ({
+const promptEvent = (
+  sessionID: string,
+  agents?: Array<{ readonly name: string }>,
+): PromptEvent => ({
   sessionID,
   messageID: "msg_prompt",
   prompt: { text: "help", ...(agents === undefined ? {} : { agents }) },
@@ -100,7 +110,9 @@ const seed = async (dir: string, count: number, start: number = 0): Promise<void
 
 describe("brain injection", () => {
   test("a primary root session puts one durable spectre.brain entry on prompt that persists across steps", async () => {
-    const { dir, sessionID, hookName, handler, puts, stored } = await setup("one", { agent: "spectre" });
+    const { dir, sessionID, hookName, handler, puts, stored } = await setup("one", {
+      agent: "spectre",
+    });
     expect(hookName).toBe("prompt");
     await seed(dir, 3);
     await Effect.runPromise(handler(promptEvent(sessionID)));
@@ -243,7 +255,9 @@ describe("brain injection", () => {
   });
 
   test("demoting the sole active claim updates spectre.brain without claiming the brain is unseeded", async () => {
-    const { dir, sessionID, handler, puts, stored } = await setup("all_retired", { agent: "spectre" });
+    const { dir, sessionID, handler, puts, stored } = await setup("all_retired", {
+      agent: "spectre",
+    });
     await seed(dir, 1);
     const sole = `01K${String(0).padStart(24, "0")}`;
     await Effect.runPromise(handler(promptEvent(sessionID)));
@@ -269,7 +283,9 @@ describe("brain injection", () => {
   });
 
   test("re-puts spectre.brain when a timed demotion expires without any file mtime change", async () => {
-    const { dir, sessionID, handler, puts, stored } = await setup("clock_expiry", { agent: "spectre" });
+    const { dir, sessionID, handler, puts, stored } = await setup("clock_expiry", {
+      agent: "spectre",
+    });
     await seed(dir, 1);
     const sole = `01K${String(0).padStart(24, "0")}`;
     const until = new Date(Date.now() + 80).toISOString();
@@ -300,6 +316,22 @@ describe("brain injection", () => {
     await seed(dir, 2);
     const exit = await Effect.runPromiseExit(handler(promptEvent(sessionID)));
     expect(Exit.isSuccess(exit)).toBe(true);
+  });
+
+  test("seen map evicts the oldest session key FIFO once it reaches 256 entries", async () => {
+    const { dir, handler, puts } = await setup("fifo_cap", { agent: "spectre" });
+    await seed(dir, 1);
+
+    for (let i = 0; i < 257; i++) {
+      await Effect.runPromise(handler(promptEvent(`ses_fifo_${process.pid}_${i}`)));
+    }
+    expect(puts.length).toBe(257);
+
+    await Effect.runPromise(handler(promptEvent(`ses_fifo_${process.pid}_1`)));
+    expect(puts.length).toBe(257);
+
+    await Effect.runPromise(handler(promptEvent(`ses_fifo_${process.pid}_0`)));
+    expect(puts.length).toBe(258);
   });
 });
 

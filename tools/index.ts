@@ -8,7 +8,7 @@ import { historyTool } from "./definitions/history";
 import { nocturnaTool } from "./definitions/nocturna";
 import { pr } from "./definitions/pr";
 import { prose } from "./definitions/prose";
-import { routing } from "./definitions/routing";
+import { attachRoutingGuard, routing } from "./definitions/routing";
 import { load } from "./definitions/routing/load";
 import { attachSearch, ripwire, search } from "./definitions/search";
 import { skillsTool } from "./definitions/skills";
@@ -74,4 +74,5 @@ export const update = (ctx: Plugin.Context) =>
     yield* sessionReturn(ctx);
     yield* attach(ctx);
     yield* attachSearch(ctx);
+    yield* attachRoutingGuard(ctx);
   });

@@ -31,8 +31,9 @@ inventory in a readme: when one of those moves, every place it is written moves 
 the same change. Then search the whole tree for the superseded value and confirm it
 is gone:
 
-```sh
-grep -R '<old-value>' . | grep -v '<generated-or-vendored>'   # expect no hits
+```ts
+ripgrep({ pattern: "<old-value>", literal: true })
+spectre_search({ pattern: "<old-value>" })
 ```
 
 The command differs per toolchain. The assertion does not.

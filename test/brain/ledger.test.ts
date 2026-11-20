@@ -10,7 +10,18 @@ const run = <A>(effect: Effect.Effect<A, Error>): Promise<A> => Effect.runPromis
 
 const git = async (root: string, args: ReadonlyArray<string>): Promise<string> => {
   const done = Bun.spawnSync({
-    cmd: ["git", "-C", root, "-c", "user.email=worker@spectre", "-c", "user.name=worker", ...args],
+    cmd: [
+      "git",
+      "-C",
+      root,
+      "-c",
+      "commit.gpgsign=false",
+      "-c",
+      "user.email=worker@spectre",
+      "-c",
+      "user.name=worker",
+      ...args,
+    ],
     stdout: "pipe",
     stderr: "pipe",
   });

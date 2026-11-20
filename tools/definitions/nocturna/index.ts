@@ -38,13 +38,15 @@ export const CollectInput = Schema.Struct({
 
 export const InspectInput = Schema.Struct({
   action: Schema.Literals(["inspect"]).annotate({
-    description: "Read compact turn-by-turn message, skill, and tool-call traces for outlier sessions.",
+    description:
+      "Read compact turn-by-turn message, skill, and tool-call traces for outlier sessions.",
   }),
   sessions: Schema.Array(Schema.String).annotate({
     description: "Session IDs (1..10) returned by collect to inspect in detail.",
   }),
   maxChars: Schema.optional(Schema.Int).annotate({
-    description: "Maximum characters per text, input, output, or error snippet (80..2000). Default 300.",
+    description:
+      "Maximum characters per text, input, output, or error snippet (80..2000). Default 300.",
   }),
 });
 
@@ -170,15 +172,26 @@ const MarkedOutput = Schema.Struct({
 
 export const NocturnaOutput = Schema.Union([CollectedOutput, InspectedOutput, MarkedOutput]);
 
-const clampFinite = (value: number | undefined, fallback: number, min: number, max: number): number => {
+const clampFinite = (
+  value: number | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+): number => {
   const chosen = value !== undefined && Number.isFinite(value) ? value : fallback;
   return Math.min(max, Math.max(min, chosen));
 };
 
-const isExcludedSession = (info: Session.Info, callerSessionID: string | undefined): boolean => {
+interface CallerFilter {
+  readonly sessionID: string | undefined;
+  readonly parentID: string | undefined;
+}
+
+const isExcludedSession = (info: Session.Info, caller: CallerFilter): boolean => {
   if (info.agent === "nocturna") return true;
-  if (callerSessionID === undefined) return false;
-  return info.id === callerSessionID || info.parentID === callerSessionID;
+  if (caller.parentID !== undefined && info.id === caller.parentID) return true;
+  if (caller.sessionID === undefined) return false;
+  return info.id === caller.sessionID || info.parentID === caller.sessionID;
 };
 
 interface WindowScan {
@@ -198,7 +211,7 @@ interface PageStep {
 const partitionWindowPage = (
   rows: ReadonlyArray<Session.Info>,
   cutoffAt: number,
-  callerSessionID: string | undefined,
+  caller: CallerFilter,
   ledger: ReadonlyMap<string, LedgerEntry>,
   includeAnalyzed: boolean,
 ): PageStep => {
@@ -209,7 +222,7 @@ const partitionWindowPage = (
   for (const item of rows) {
     const updatedAt = toMillis(item.time.updated);
     if (updatedAt < cutoffAt) return { pending, inWindow, skipped, reachedCutoff: true };
-    if (isExcludedSession(item, callerSessionID)) continue;
+    if (isExcludedSession(item, caller)) continue;
     inWindow += 1;
     const watermark = ledger.get(item.id)?.updatedAt;
     if (!includeAnalyzed && watermark !== undefined && watermark >= updatedAt) {
@@ -225,7 +238,7 @@ const partitionWindowPage = (
 const scanWindowSessions = (
   ctx: Plugin.Context,
   cutoffAt: number,
-  callerSessionID: string | undefined,
+  caller: CallerFilter,
   ledger: ReadonlyMap<string, LedgerEntry>,
   includeAnalyzed: boolean,
 ): Effect.Effect<WindowScan, Tool.Error> =>
@@ -259,7 +272,7 @@ const scanWindowSessions = (
       const step = partitionWindowPage(
         page.success.data,
         cutoffAt,
-        callerSessionID,
+        caller,
         ledger,
         includeAnalyzed,
       );
@@ -299,7 +312,9 @@ const aggregateTools = (digests: ReadonlyArray<SessionDigest>): Array<ToolStat> 
     }))
     .toSorted(
       (left, right) =>
-        right.errors - left.errors || right.calls - left.calls || left.name.localeCompare(right.name),
+        right.errors - left.errors ||
+        right.calls - left.calls ||
+        left.name.localeCompare(right.name),
     )
     .slice(0, 20);
 };
@@ -315,7 +330,9 @@ const aggregateSkills = (
   }
   return [...counts.entries()]
     .map(([skill, sessions]) => ({ skill, sessions }))
-    .toSorted((left, right) => right.sessions - left.sessions || left.skill.localeCompare(right.skill))
+    .toSorted(
+      (left, right) => right.sessions - left.sessions || left.skill.localeCompare(right.skill),
+    )
     .slice(0, 20);
 };
 
@@ -369,6 +386,46 @@ const resolveProjectSession = (
     return infoRes.success;
   });
 
+const activeTokens = (info: Session.Info): number =>
+  info.tokens.input + info.tokens.output + info.tokens.reasoning;
+
+const comparePending = (left: Session.Info, right: Session.Info): number =>
+  (right.outcome === "failed" ? 1 : 0) - (left.outcome === "failed" ? 1 : 0) ||
+  activeTokens(right) - activeTokens(left) ||
+  right.cost - left.cost ||
+  toMillis(right.time.updated) - toMillis(left.time.updated);
+
+const resolveCallerFilter = (
+  ctx: Plugin.Context,
+  callerSessionID: string | undefined,
+): Effect.Effect<CallerFilter> =>
+  Effect.gen(function* () {
+    if (callerSessionID === undefined) return { sessionID: undefined, parentID: undefined };
+    const info = yield* resolveProjectSession(ctx, callerSessionID);
+    return { sessionID: callerSessionID, parentID: info?.parentID };
+  });
+
+const digestBatch = (
+  ctx: Plugin.Context,
+  batch: ReadonlyArray<Session.Info>,
+): Effect.Effect<{ readonly ranked: Array<SessionDigest>; readonly unreadable: Array<string> }> =>
+  Effect.gen(function* () {
+    const digests: Array<SessionDigest> = [];
+    const unreadable: Array<string> = [];
+    for (const session of batch) {
+      const history = yield* Effect.result(ctx.session.context({ sessionID: session.id }));
+      if (Result.isFailure(history)) {
+        unreadable.push(session.id);
+        continue;
+      }
+      digests.push(digestSession(session, history.success));
+    }
+    const ranked = digests.toSorted(
+      (left, right) => right.anomalyScore - left.anomalyScore || right.updatedAt - left.updatedAt,
+    );
+    return { ranked, unreadable };
+  });
+
 const runCollect = (
   ctx: Plugin.Context,
   input: typeof CollectInput.Type,
@@ -381,31 +438,20 @@ const runCollect = (
     const limit = clampFinite(input.limit, DEFAULT_LIMIT, 1, PAGE_SIZE);
     const cutoffAt = now - windowDays * DAY_MS;
 
+    const caller = yield* resolveCallerFilter(ctx, callerSessionID);
     const ledger = yield* openLedger(ctx.storage, project, now);
     const scanned = yield* scanWindowSessions(
       ctx,
       cutoffAt,
-      callerSessionID,
+      caller,
       ledger,
       Boolean(input.includeAnalyzed),
     );
 
-    const batch = scanned.pending.slice(0, limit);
-    const digests: Array<SessionDigest> = [];
-    const unreadable: Array<string> = [];
-
-    for (const session of batch) {
-      const history = yield* Effect.result(ctx.session.context({ sessionID: session.id }));
-      if (Result.isFailure(history)) {
-        unreadable.push(session.id);
-        continue;
-      }
-      digests.push(digestSession(session, history.success));
-    }
-
-    const ranked = digests.toSorted(
-      (left, right) => right.anomalyScore - left.anomalyScore || right.updatedAt - left.updatedAt,
-    );
+    const ordered =
+      scanned.pending.length > limit ? scanned.pending.toSorted(comparePending) : scanned.pending;
+    const batch = ordered.slice(0, limit);
+    const { ranked, unreadable } = yield* digestBatch(ctx, batch);
 
     const output: typeof CollectedOutput.Type = {
       status: "collected",

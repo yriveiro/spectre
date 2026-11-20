@@ -1,12 +1,13 @@
 import type { Agent, Plugin, Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
-import { Effect, Option, Schema, Semaphore, type Scope } from "effect";
+import { Effect, Option, Schema, type Scope, Semaphore } from "effect";
 import { isSpectre } from "./agents";
 import { envOf, needsEndOfWork, syncEndOfWork, syncEndOfWorkFromMemory } from "./apply";
 import { decide, type Outcome, type SurfaceAsk } from "./policy";
 import { probe } from "./probe";
-import { rootOf } from "./root";
-import { readAsk, shellAsk, subagentAsk } from "./signals";
+import { rootOf, sessionScopeOf } from "./root";
+import { scope } from "./run";
+import { mutateAsk, readAsk, shellAsk, subagentAsk } from "./signals";
 import { memories, memoryOf, remember } from "./state";
 
 /**
@@ -134,7 +135,8 @@ const advance = (
   project: string,
   event: Observed,
 ): ReadonlyArray<UsageRecord> => {
-  const prior = records.find((one) => one.session === event.session) ?? blank(event.session, project);
+  const prior =
+    records.find((one) => one.session === event.session) ?? blank(event.session, project);
   const others = records.filter((one) => one.session !== event.session);
   const child =
     event.child === undefined ||
@@ -149,7 +151,11 @@ const advance = (
 // key would drop one of them. `ctx.storage` offers no compare-and-set.
 const writes = Semaphore.makeUnsafe(1);
 
-const write = (storage: Plugin.Context["storage"], project: string, event: Observed): Effect.Effect<void> =>
+const write = (
+  storage: Plugin.Context["storage"],
+  project: string,
+  event: Observed,
+): Effect.Effect<void> =>
   writes.withPermits(1)(
     Effect.gen(function* () {
       const records = yield* recordsOf(storage, project);
@@ -161,12 +167,13 @@ export const recordCheck = (
   storage: Plugin.Context["storage"] | undefined,
   project: string,
   session: Session.ID,
+  affected: boolean = true,
 ): Effect.Effect<void> =>
   storage === undefined
     ? Effect.void
     : write(storage, project, {
         session,
-        change: { kind: "ripwire", lookup: true, delta: true, affected: true, fanout: false },
+        change: { kind: "ripwire", lookup: true, delta: true, affected, fanout: false },
       });
 
 const SearchInput = Schema.Struct({
@@ -190,7 +197,8 @@ type ToolAfter = {
   readonly input: unknown;
 } & ({ readonly status: "completed"; readonly result: Tool.Result } | { readonly status: "error" });
 
-const outputOf = (event: ToolAfter): unknown => (event.status === "completed" ? event.result.output : undefined);
+const outputOf = (event: ToolAfter): unknown =>
+  event.status === "completed" ? event.result.output : undefined;
 
 const readSearch = (event: ToolAfter): Observation | undefined => {
   const answer = Option.getOrUndefined(decodeSearchAnswer(outputOf(event)));
@@ -201,6 +209,12 @@ const readSearch = (event: ToolAfter): Observation | undefined => {
     ask: { surface: "complete", text, outcome: answer.status },
     change: { kind: "search", outcome: answer.status },
   };
+};
+
+const readMutate = (event: ToolAfter, root: string): Observation | undefined => {
+  const ask = mutateAsk(event.input, event.tool);
+  if (ask === undefined || !ask.code || scope(root, ask.path) === undefined) return undefined;
+  return { change: { kind: "edit" } };
 };
 
 const readEvent = (event: ToolAfter, root: string): Observation | undefined => {
@@ -221,10 +235,10 @@ const readEvent = (event: ToolAfter, root: string): Observation | undefined => {
     }
     case "edit":
     case "write":
-      return { change: { kind: "edit" } };
+      return readMutate(event, root);
     case "subagent": {
       const ask = subagentAsk(event.input, outputOf(event));
-      if (ask === undefined) return undefined;
+      if (ask === undefined || ask.agent === "nocturna" || ask.agent === "sicko") return undefined;
       // A stock child never writes a row, so a seed would be a tombstone: it
       // inflates the report's session count and takes a slot at the cap.
       const seed = ask.agent !== undefined && isSpectre(ask.agent);
@@ -270,10 +284,23 @@ const observe = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
     }
   });
 
+const observeFiltered = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    if (event.agent === "nocturna" || event.agent === "sicko") return;
+    if (event.tool === "read") {
+      const scope = yield* sessionScopeOf(ctx, event.sessionID);
+      if (event.agent !== "spectre" || scope.hasParent) {
+        yield* syncEndOfWorkFromMemory(ctx, event.sessionID);
+        return;
+      }
+    }
+    yield* observe(ctx, event);
+  });
+
 export const attachMeasure = (ctx: Plugin.Context): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
     yield* ctx.tool.hook("execute.after", (event) =>
-      observe(ctx, event).pipe(
+      observeFiltered(ctx, event).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("search measurement failed", { cause }).pipe(Effect.asVoid),
         ),

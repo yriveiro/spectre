@@ -10,7 +10,7 @@ export const lookFirst: Definition = {
   catalog: {
     tier: "push",
     group: "leaf",
-    trigger: "landing cold in unfamiliar files — rank high-churn targets first",
+    trigger: "orienting in an unfamiliar repo with no symbol or task query — rank churn first",
   },
   path: anchor(import.meta.dir),
 };
