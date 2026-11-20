@@ -155,7 +155,19 @@ export const PrContent = Schema.Struct({
 });
 export type PrContent = Schema.Schema.Type<typeof PrContent>;
 
-export const Content = Schema.Union([PageContent, ReportContent, DiagramContent, PrContent]);
+export const BrainContent = Schema.Struct({
+  kind: Schema.Literals(["brain"]),
+  focus: Schema.optional(Schema.String),
+});
+export type BrainContent = Schema.Schema.Type<typeof BrainContent>;
+
+export const Content = Schema.Union([
+  PageContent,
+  ReportContent,
+  DiagramContent,
+  PrContent,
+  BrainContent,
+]);
 export type Content = Schema.Schema.Type<typeof Content>;
 
 export const DiffInput = Schema.Struct({

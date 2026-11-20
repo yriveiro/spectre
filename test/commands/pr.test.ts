@@ -144,6 +144,7 @@ describe("registration", () => {
     await Effect.runPromise(Effect.scoped(update(ctx as never)));
     expect(added.map((one) => one.name).toSorted()).toEqual([
       "babysit",
+      "brain",
       "drive",
       "effect-align",
       "pr",

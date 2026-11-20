@@ -17,6 +17,7 @@ export type Draft = {
   readonly kind: Claim["kind"];
   readonly claim: string;
   readonly subject: ReadonlyArray<string>;
+  readonly body?: string | undefined;
 };
 
 export type Brain = {
@@ -174,7 +175,7 @@ export const ledger = (project: AbsolutePath) => {
         at: new Date().toISOString(),
         path,
       };
-      yield* write(path, render(claim));
+      yield* write(path, render(claim, draft.body));
       return claim;
     });
 

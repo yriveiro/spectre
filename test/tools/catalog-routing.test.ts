@@ -267,6 +267,7 @@ const TASK_QUERIES: ReadonlyArray<readonly [query: string, expectedPath: string]
   ["record lesson constraint", "tools.spectre.brain"],
   ["publish html page mermaid diagram", "tools.spectre.canvas"],
   ["visual pull request review artifact", "tools.spectre.canvas"],
+  ["publish brain graph canvas artifact", "tools.spectre.canvas"],
   ["inventory code comments lint suppressions", "tools.spectre.comments"],
   ["find ts-ignore eslint-disable comments", "tools.spectre.comments"],
   ["arm autonomous goal loop ledger", "tools.spectre.goal"],

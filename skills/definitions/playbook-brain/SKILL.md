@@ -78,4 +78,6 @@ not a code index. A fact `ripwire` can answer is not a neuron.
 What was recalled and which note decided the answer, the claims asserted with
 their subjects, the relations drawn with their reasons, and the sweep handed to
 `mnemonic` with its scope. Plus the groupings the evidence refuted and what
-replaced them, which is the part a reviewer cannot reconstruct.
+replaced them, which is the part a reviewer cannot reconstruct. When the reader
+asks to inspect neurons and synapses visually, call `tools.spectre.canvas` with
+`{ action: "publish", content: { kind: "brain" } }`.

@@ -66,6 +66,14 @@ describe("render", () => {
       expect(render({ ...CLAIM, kind })).toContain(`kind: ${kind}`);
     }
   });
+
+  test("an explicit markdown body renders below frontmatter while parse still returns the headline claim", async () => {
+    const body = "- Sub-feature A\n- Sub-feature B";
+    const note = render(CLAIM, `${body}   \n`);
+    expect(note).toContain("---\n\n- Sub-feature A\n- Sub-feature B\n");
+    expect(note).not.toMatch(/[ \t]+$/m);
+    expect(await run(parse(note, NOTE))).toEqual(CLAIM);
+  });
 });
 
 describe("parse", () => {

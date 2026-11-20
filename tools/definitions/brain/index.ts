@@ -7,6 +7,14 @@ import type { Claim } from "./neuron";
 import { recall } from "./recall";
 
 export { attach } from "./inject";
+export {
+  type BrainAnomaly,
+  type BrainSnapshot,
+  type LatentBridge,
+  type NeuronNode,
+  type SubjectStatus,
+  snapshot,
+} from "./snapshot";
 
 const CLAIMS = ["feature", "gotcha", "decision", "constraint", "lesson"] as const;
 const EDGES = ["relates", "supersedes", "contradicts", "derived-from", "demoted"] as const;
@@ -48,6 +56,10 @@ export const Assert = Schema.Struct({
   claim: Schema.String.annotate({
     description:
       "One sentence. Headline only — the body is never carried in context, and this is the whole of what `recall` returns.",
+  }),
+  body: Schema.optional(Schema.String).annotate({
+    description:
+      "Optional Markdown detail written below frontmatter in the neuron file (`Read` fetches it, and `recall` never carries it). Omit when the one-sentence `claim` needs no sub-points.",
   }),
 });
 
@@ -232,6 +244,7 @@ const runAssert = (ctx: Plugin.Context) =>
       kind: input.kind,
       claim: input.claim,
       subject: input.subject,
+      body: input.body,
     });
 
     return {

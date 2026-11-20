@@ -44,6 +44,7 @@ await tools.spectre.brain({
   kind: "gotcha",
   subject: ["tools/definitions/canvas/content.ts"],
   claim: "A canvas is never overwritten: save allocates the directory, the write tool writes the page.",
+  body: "- Repro: run save twice with the same title\n- Second call allocates a fresh artifact id",
 })
 
 // 3. A fact that replaced another fact. An edge, not an edit.
@@ -113,7 +114,13 @@ export type Claim = {
 // Accepts unknown fields and migrates on read. Never rejects an older note.
 export const parse = (text: string): Effect<Claim> => not implemented;
 
-export const render = (claim: Claim): string => not implemented;
+export const render = (claim: Claim, body?: string): string => not implemented;
+```
+
+```ts
+// tools/definitions/brain/standing.ts — active claims, demotions, and transitive supersedes.
+export const standing = (claims: ReadonlyArray<Claim>, edges: ReadonlyArray<Edge>): Standing =>
+  not implemented;
 ```
 
 ```ts
@@ -153,9 +160,11 @@ export type Answer = {
   readonly clipped: boolean;
 };
 
-// Tricky: BM25 over headline fields, then personalised PageRank from the query's
-// subjects, two hops, damping 0.85. Relevance is the score; recency is a
-// tiebreak on equal relevance and never a decay factor.
+// Tricky: standing resolves demotions and transitive supersedes chains first,
+// then BM25 scores headline fields and projects hits onto live terminal claims,
+// followed by personalised PageRank two associative hops out, damping 0.85.
+// Relevance is the score; recency is a tiebreak on equal relevance and never a
+// decay factor.
 export const recall = (input: {
   readonly claims: ReadonlyArray<Claim>;
   readonly edges: ReadonlyArray<Edge>;
@@ -187,12 +196,11 @@ export const evidence = (
 ```ts
 // tools/definitions/brain/inject.ts — what a session may see without asking.
 export const attach = (ctx: Plugin.Context): Effect<void> => not implemented;
-// Registers session.hook("context"), appends ONE <UNTRUSTED_CONTENT> part capped
-// at 600 tokens, keyed on the ledger's mtime so an unchanged brain costs nothing.
-// Filters on event.agent: the hook fires for subagent sessions too, so mnemonic
-// is skipped (it is about to hold the whole ledger) and so is any agent the
-// session spawned, because 600 tokens in every arena seat is the dilution
-// skills/FOR_AGENTS.md already measured against this repo.
+// Registers session.hook("prompt") and puts ONE durable spectre.brain instruction
+// entry wrapped in <UNTRUSTED_CONTENT> and capped at 600 tokens, keyed on the
+// ledger's mtime so an unchanged brain costs nothing. Filters out superseded and
+// demoted claims via standing, orders active claims newest first, and skips
+// mnemonic plus child subagent sessions so arena seats pay zero dilution.
 ```
 
 ```ts
@@ -205,7 +213,7 @@ export const brain = (ctx: Plugin.Context): Tool.Info<typeof Action, typeof Answ
   not implemented;
 ```
 
-`options: { namespace: "spectre", codemode: true, pinned: true, permission: "brain" }`.
+`options: { namespace: "spectre", codemode: true, permission: "brain" }`.
 Numeric fields are `Schema.Number`, never `Schema.Int`. No `Int`, `Trim`,
 `NonEmptyString`, `URL`, `Natural` or brand anywhere in either schema.
 
@@ -214,12 +222,16 @@ Numeric fields are `Schema.Number`, never `Schema.Int`. No `Int`, `Trim`,
 ```
 tools/definitions/brain/
   index.ts     the tool. Five actions, five structs in one Union, one permission.
-  neuron.ts    a claim.      NoteFrontmatter (private) → Claim (exported).
+  neuron.ts    a claim.      NoteFrontmatter (private) → Claim (exported), plus optional body render.
   ledger.ts    the substrate. Two write primitives, tmp→rename, ULIDs,
                content compare, `live`. The only module that writes.
-  recall.ts    a question.   Glob, BM25, two-hop spread, budget, `problems`.
+  standing.ts  the graph.    Active claims, demotions, transitive supersedes, cycle detection.
+  snapshot.ts  the view.     Full ledger read, bodies, cortex meter, latent bridges, anomalies.
+  recall.ts    a question.   BM25 projected onto live terminals, two-hop spread, budget, `problems`.
   evidence.ts  an objection. git over the subject paths. Read-only.
-  inject.ts    a session.    context hook, <UNTRUSTED_CONTENT>, mtime cache key.
+  inject.ts    a session.    prompt hook, instruction entry, <UNTRUSTED_CONTENT>, newest active first.
+tools/definitions/canvas/brain.ts     fixed Brain artifact composer (`content: { kind: "brain" }`).
+commands/definitions/brain/           `/brain` slash command (`index.ts` + `prompt.md`).
 agents/definitions/mnemonic.ts        flat .ts, following agents/definitions/sicko.ts.
 agents/index.ts                       invariant 8: { action: "edit", resource: ".spectre/brain/*", effect: "deny" }
                                       on every agent, then { action: "edit", resource: ".spectre/brain/*", effect: "allow" }

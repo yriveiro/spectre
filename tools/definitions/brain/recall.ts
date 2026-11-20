@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { Edge } from "./ledger";
 import type { Claim } from "./neuron";
+import { type Standing, standing } from "./standing";
 
 export type Answer = {
   readonly claims: ReadonlyArray<Claim>;
@@ -18,9 +19,8 @@ const DAMPING = 0.85;
 const HOPS = 2;
 const ROUNDS = 20;
 
-const SPREADABLE: ReadonlySet<Edge["kind"]> = new Set([
+const ASSOCIATIVE: ReadonlySet<Edge["kind"]> = new Set([
   "relates",
-  "supersedes",
   "contradicts",
   "derived-from",
 ]);
@@ -56,6 +56,125 @@ const score = (claims: ReadonlyArray<Claim>, query: string): ReadonlyMap<string,
   return out;
 };
 
+const projectRelevance = (
+  raw: ReadonlyMap<string, number>,
+  state: Standing,
+): ReadonlyMap<string, number> => {
+  const out = new Map<string, number>();
+  for (const [id, hit] of raw) {
+    if (hit <= 0) continue;
+    for (const target of state.resolve(id)) {
+      out.set(target, Math.max(out.get(target) ?? 0, hit));
+    }
+  }
+  return out;
+};
+
+const expandEdge = (edge: Edge, state: Standing): ReadonlyArray<Edge> => {
+  if (!ASSOCIATIVE.has(edge.kind) || edge.to === null) return [];
+  const rights = state.resolve(edge.to);
+  return state.resolve(edge.from).flatMap((from) =>
+    rights
+      .filter((to) => from !== to)
+      .map((to) => (from === edge.from && to === edge.to ? edge : { ...edge, from, to })),
+  );
+};
+
+const projectEdges = (edges: ReadonlyArray<Edge>, state: Standing): ReadonlyArray<Edge> => {
+  const projected: Array<Edge> = [];
+  const seen = new Set<string>();
+  for (const edge of edges.flatMap((one) => expandEdge(one, state))) {
+    const key = `${edge.kind}\0${edge.from}\0${edge.to}\0${edge.why}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    projected.push(edge);
+  }
+  return projected;
+};
+
+const buildNeighbours = (
+  edges: ReadonlyArray<Edge>,
+): ReadonlyMap<string, ReadonlySet<string>> => {
+  const neighbours = new Map<string, Set<string>>();
+  const link = (from: string, to: string): void => {
+    const ends = neighbours.get(from) ?? new Set<string>();
+    ends.add(to);
+    neighbours.set(from, ends);
+  };
+  for (const edge of edges) {
+    if (edge.to === null) continue;
+    link(edge.from, edge.to);
+    link(edge.to, edge.from);
+  }
+  return neighbours;
+};
+
+const spreadWithin = (
+  seeds: ReadonlyArray<Claim>,
+  neighbours: ReadonlyMap<string, ReadonlySet<string>>,
+): ReadonlySet<string> => {
+  const within = new Set(seeds.map((claim) => claim.id));
+  let frontier = [...within];
+  for (let hop = 0; hop < HOPS; hop += 1) {
+    const next: Array<string> = [];
+    for (const id of frontier) {
+      for (const other of neighbours.get(id) ?? []) {
+        if (within.has(other)) continue;
+        within.add(other);
+        next.push(other);
+      }
+    }
+    frontier = next;
+  }
+  return within;
+};
+
+const subgraphOf = (
+  within: ReadonlySet<string>,
+  neighbours: ReadonlyMap<string, ReadonlySet<string>>,
+): ReadonlyMap<string, ReadonlyArray<string>> =>
+  new Map(
+    [...within].map((id) => [
+      id,
+      [...(neighbours.get(id) ?? [])].filter((end) => within.has(end)),
+    ]),
+  );
+
+const inflowOf = (
+  peers: ReadonlyArray<string>,
+  withinPeers: ReadonlyMap<string, ReadonlyArray<string>>,
+  rank: ReadonlyMap<string, number>,
+): number => {
+  let inflow = 0;
+  for (const other of peers) {
+    const degree = withinPeers.get(other)?.length ?? 0;
+    if (degree > 0) inflow += (rank.get(other) ?? 0) / degree;
+  }
+  return inflow;
+};
+
+const pageRank = (
+  seeds: ReadonlyArray<Claim>,
+  within: ReadonlySet<string>,
+  relevant: ReadonlyMap<string, number>,
+  neighbours: ReadonlyMap<string, ReadonlySet<string>>,
+): ReadonlyMap<string, number> => {
+  const withinPeers = subgraphOf(within, neighbours);
+  const mass = seeds.reduce((sum, claim) => sum + (relevant.get(claim.id) ?? 0), 0);
+  const prior = new Map<string, number>();
+  for (const id of within) prior.set(id, 0);
+  for (const claim of seeds) prior.set(claim.id, (relevant.get(claim.id) ?? 0) / mass);
+  let rank: ReadonlyMap<string, number> = prior;
+  for (let round = 0; round < ROUNDS; round += 1) {
+    const next = new Map<string, number>();
+    for (const [id, peers] of withinPeers) {
+      next.set(id, (1 - DAMPING) * (prior.get(id) ?? 0) + DAMPING * inflowOf(peers, withinPeers, rank));
+    }
+    rank = next;
+  }
+  return rank;
+};
+
 export const recall = (input: {
   readonly claims: ReadonlyArray<Claim>;
   readonly edges: ReadonlyArray<Edge>;
@@ -72,70 +191,22 @@ export const recall = (input: {
     });
   }
 
-  const problems: Array<string> = [];
-  const byId = new Map(input.claims.map((claim) => [claim.id, claim]));
-  const known = (edge: Edge): boolean =>
-    byId.has(edge.from) && (edge.to === null || byId.has(edge.to));
-  const wellFormed = (edge: Edge): boolean =>
-    known(edge) && (edge.kind === "demoted" ? true : edge.to !== null) && edge.why.length > 0;
-  const spreadable = input.edges.filter((edge) => wellFormed(edge) && SPREADABLE.has(edge.kind));
-  for (const edge of input.edges) {
-    if (wellFormed(edge)) continue;
-    const reason = known(edge) && edge.why.length === 0 ? "empty why" : "unknown claim";
-    problems.push(`edge ${edge.kind} ${edge.from}->${edge.to ?? "null"} skipped: ${reason}`);
-  }
-
-  const relevant = score(input.claims, input.query);
-  const seeds = input.claims.filter((claim) => (relevant.get(claim.id) ?? 0) > 0);
+  const state = standing(input.claims, input.edges);
+  const problems: Array<string> = [
+    ...state.invalidEdges,
+    ...state.cycles.map((cycle) => cycle.summary),
+  ];
+  const associative = projectEdges(state.validEdges, state);
+  const relevant = projectRelevance(score(input.claims, input.query), state);
+  const seeds = state.active.filter((claim) => (relevant.get(claim.id) ?? 0) > 0);
   if (seeds.length === 0) {
     problems.push(`no match for query "${input.query}"`);
     return Effect.succeed({ claims: [], edges: [], sources: [], problems, clipped: false });
   }
 
-  const neighbours = new Map<string, Set<string>>();
-  const link = (from: string, to: string): void => {
-    const ends = neighbours.get(from) ?? new Set<string>();
-    ends.add(to);
-    neighbours.set(from, ends);
-  };
-  for (const edge of spreadable) {
-    if (edge.to === null) continue;
-    link(edge.from, edge.to);
-    link(edge.to, edge.from);
-  }
-
-  const within = new Set(seeds.map((claim) => claim.id));
-  let frontier = [...within];
-  for (let hop = 0; hop < HOPS; hop += 1) {
-    const next: Array<string> = [];
-    for (const id of frontier) {
-      for (const other of neighbours.get(id) ?? []) {
-        if (within.has(other)) continue;
-        within.add(other);
-        next.push(other);
-      }
-    }
-    frontier = next;
-  }
-
-  const mass = seeds.reduce((sum, claim) => sum + (relevant.get(claim.id) ?? 0), 0);
-  const prior = new Map<string, number>();
-  for (const id of within) prior.set(id, 0);
-  for (const claim of seeds) prior.set(claim.id, (relevant.get(claim.id) ?? 0) / mass);
-  let rank = new Map(prior);
-  for (let round = 0; round < ROUNDS; round += 1) {
-    const next = new Map<string, number>();
-    for (const id of within) {
-      let inflow = 0;
-      for (const other of neighbours.get(id) ?? []) {
-        if (!within.has(other)) continue;
-        const degree = [...(neighbours.get(other) ?? [])].filter((end) => within.has(end)).length;
-        if (degree > 0) inflow += (rank.get(other) ?? 0) / degree;
-      }
-      next.set(id, (1 - DAMPING) * (prior.get(id) ?? 0) + DAMPING * inflow);
-    }
-    rank = next;
-  }
+  const neighbours = buildNeighbours(associative);
+  const within = spreadWithin(seeds, neighbours);
+  const rank = pageRank(seeds, within, relevant, neighbours);
   const rankOf = (id: string): number => rank.get(id) ?? 0;
 
   // Contract: relevance ranks, recency breaks ties only and never scales a score,
@@ -144,7 +215,7 @@ export const recall = (input: {
   const seedIds = new Set(seeds.map((claim) => claim.id));
   const byBm25 = (id: string): number => relevant.get(id) ?? 0;
   const ordered = [...within]
-    .map((id) => byId.get(id))
+    .map((id) => state.byId.get(id))
     .filter((claim) => claim !== undefined)
     .toSorted(
       (a, b) =>
@@ -154,18 +225,10 @@ export const recall = (input: {
         (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     );
 
-  const replaced = new Set<string>();
-  for (const edge of spreadable) {
-    if (edge.kind === "supersedes" && edge.to !== null && within.has(edge.to)) {
-      replaced.add(edge.from);
-    }
-  }
-
   const picked: Array<Claim> = [];
   let used = 0;
   let clipped = false;
   for (const claim of ordered) {
-    if (replaced.has(claim.id)) continue;
     const cost = costOf(claim);
     if (used + cost > input.budget) {
       clipped = true;
@@ -179,7 +242,7 @@ export const recall = (input: {
   const chosen = new Set(picked.map((claim) => claim.id));
   return Effect.succeed({
     claims: picked,
-    edges: spreadable.filter(
+    edges: associative.filter(
       (edge) => edge.to !== null && chosen.has(edge.from) && chosen.has(edge.to),
     ),
     sources: picked.map((claim) => claim.path),
