@@ -17,6 +17,7 @@ const TOOLS = [
   "comments",
   "goal",
   "history",
+  "nocturna",
   "pr",
   "prose",
   "ripwire",
@@ -49,6 +50,7 @@ describe("every registered tool is reachable from some skill", () => {
       (await import("../../tools/definitions/comments")).comments(ctx),
       (await import("../../tools/definitions/goal")).goal(ctx),
       (await import("../../tools/definitions/history")).historyTool(ctx),
+      (await import("../../tools/definitions/nocturna")).nocturnaTool(ctx),
       (await import("../../tools/definitions/pr")).pr(ctx),
       (await import("../../tools/definitions/prose")).prose(ctx),
       (await import("../../tools/definitions/search")).ripwire(ctx),
@@ -59,7 +61,7 @@ describe("every registered tool is reachable from some skill", () => {
       (await import("../../tools/definitions/worktrees")).worktrees(ctx),
     ];
 
-    // The list covers the twelve `tools.spectre.*` Code Mode tools. The direct
+    // The list covers the `tools.spectre.*` Code Mode tools. The direct
     // `spectre_search` tool is outside that namespace and is covered by
     // `test/search/tool.test.ts`, which asserts `codemode: false`.
     expect(registered.map((tool) => tool.options?.namespace)).toEqual(TOOLS.map(() => "spectre"));
