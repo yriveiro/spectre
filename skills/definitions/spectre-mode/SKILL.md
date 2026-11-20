@@ -70,9 +70,9 @@ Read at source before writing technical claims. Verify receipts after finishing 
 ## How to work
 
 1. Read this hub.
-2. Load `communication` when shaping a multi-step report, blocked question, or trade-off choice (not before trivial single-line acknowledgements or internal tool turns).
+2. Load `communication` when shaping a multi-step report, blocked question, or trade-off choice. Skip it for single-line acknowledgements, internal tool turns, and child subagent reports.
 3. **Write down the leaf name and why.** Example: `principle-verification: the doc states two line numbers I did not read.` Write `none` and why when no leaf applies.
 4. When a principle deletes the requested answer itself, the task wins and the shape stays.
-5. Run `communication`'s prose pre-send check on substantive replies.
+5. Run `tools.spectre.prose` on `.md` files, skill bodies, Canvas reports, and PR or commit prose. Child subagents reporting to a parent session skip `communication`, `grammar`, and `tools.spectre.prose`. Chat replies skip `tools.spectre.prose` unless the user asks for STE chat replies.
 6. Run the claim check on every factual sentence: **read at source**, **labelled unverified in the same sentence**, or **cut**.
 7. When a decision changes, grep every other file stating it, update them together, and re-run checks 5 and 6.

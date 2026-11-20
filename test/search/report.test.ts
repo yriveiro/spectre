@@ -26,7 +26,10 @@ const FANOUT = "ripwire . --pack-task=<task> --partition=<n>";
 
 const callReport = (values: Map<string, Schema.Json>, project: string = PROJECT) =>
   Effect.runPromise(
-    ripwire(readingContext(project, values)).execute({ action: "report" }, toolContext("ses_report_reader")),
+    ripwire(readingContext(project, values)).execute(
+      { action: "report" },
+      toolContext("ses_report_reader"),
+    ),
   );
 
 const readReport = async (values: Map<string, Schema.Json>, project: string = PROJECT) => {
@@ -39,7 +42,9 @@ const readReport = async (values: Map<string, Schema.Json>, project: string = PR
 
 const edit = (after: Awaited<ReturnType<typeof captureAfter>>, session: string, index: number) =>
   Effect.runPromise(
-    after.callback(afterEvent("edit", { path: `src/file_${index}.ts` }, session, `call_report_edit_${index}`)),
+    after.callback(
+      afterEvent("edit", { path: `src/file_${index}.ts` }, session, `call_report_edit_${index}`),
+    ),
   );
 
 afterEach(cleanupDirs);
@@ -142,10 +147,16 @@ describe("the report arm names edits, reads, and spawns that skipped verbs", () 
     await withBinary(bin, async () => {
       const after = await captureAfter();
       const name = "ses_report_reads";
-      await Effect.runPromise(after.callback(afterEvent("read", { path: "/tmp/src/a.ts" }, name, "call_report_r1")));
-      await Effect.runPromise(after.callback(afterEvent("read", { path: "/tmp/src/b.ts" }, name, "call_report_r2")));
+      await Effect.runPromise(
+        after.callback(afterEvent("read", { path: "/tmp/src/a.ts" }, name, "call_report_r1")),
+      );
+      await Effect.runPromise(
+        after.callback(afterEvent("read", { path: "/tmp/src/b.ts" }, name, "call_report_r2")),
+      );
 
-      expect((await readReport(after.values)).output.findings).toEqual([{ session: name, count: 2, missing: LOOKUP }]);
+      expect((await readReport(after.values)).output.findings).toEqual([
+        { session: name, count: 2, missing: LOOKUP },
+      ]);
 
       await Effect.runPromise(
         after.callback(
@@ -160,28 +171,59 @@ describe("the report arm names edits, reads, and spawns that skipped verbs", () 
     });
   });
 
-  test("a session with a spawn and no fan-out is named, and a pack-task clears it", async () => {
+  test("a session with two spawns and no fan-out is named, while a single spawn or nocturna/sicko is not, and pack-task clears it", async () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
       const after = await captureAfter();
       const name = "ses_report_fanout";
+      for (const [idx, agent] of ["nocturna", "sicko"].entries()) {
+        await Effect.runPromise(
+          after.callback(
+            afterEvent("subagent", { agent, prompt: "audit" }, name, `call_report_exempt_${idx}`, {
+              sessionID: `ses_report_exempt_${idx}`,
+              status: "completed",
+              output: "done",
+            }),
+          ),
+        );
+      }
+      expect((await readReport(after.values)).output.sessions).toBe(0);
+
       await Effect.runPromise(
         after.callback(
-          afterEvent("subagent", { agent: "explore", prompt: "x" }, name, "call_report_spawn", {
-            sessionID: "ses_report_child",
+          afterEvent("subagent", { agent: "explore", prompt: "x" }, name, "call_report_spawn_1", {
+            sessionID: "ses_report_child_1",
             status: "completed",
             output: "done",
           }),
         ),
       );
-
-      expect((await readReport(after.values)).output.findings).toEqual([{ session: name, count: 1, missing: FANOUT }]);
+      expect((await readReport(after.values)).output.findings).toEqual([]);
 
       await Effect.runPromise(
         after.callback(
-          afterEvent("shell", { command: 'ripwire . --pack-task="map" --partition=2' }, name, "call_report_pack", {
-            output: "core",
+          afterEvent("subagent", { agent: "explore", prompt: "y" }, name, "call_report_spawn_2", {
+            sessionID: "ses_report_child_2",
+            status: "completed",
+            output: "done",
           }),
+        ),
+      );
+      expect((await readReport(after.values)).output.findings).toEqual([
+        { session: name, count: 2, missing: FANOUT },
+      ]);
+
+      await Effect.runPromise(
+        after.callback(
+          afterEvent(
+            "shell",
+            { command: 'ripwire . --pack-task="map" --partition=2' },
+            name,
+            "call_report_pack",
+            {
+              output: "core",
+            },
+          ),
         ),
       );
 
@@ -222,22 +264,50 @@ describe("the report arm names edits, reads, and spawns that skipped verbs", () 
       const child = "ses_report_stock_child";
       await Effect.runPromise(
         after.callback(
-          afterEvent("subagent", { agent: "explore", prompt: "x" }, parent, "call_report_stock_birth", {
-            sessionID: child,
-            status: "completed",
-            output: "done",
-          }),
+          afterEvent(
+            "subagent",
+            { agent: "explore", prompt: "x" },
+            parent,
+            "call_report_stock_birth",
+            {
+              sessionID: child,
+              status: "completed",
+              output: "done",
+            },
+          ),
         ),
       );
       await Effect.runPromise(
         after.callback(
-          afterEvent("edit", { path: "src/stock.ts" }, child, "call_report_stock_edit", undefined, "explore"),
+          afterEvent(
+            "subagent",
+            { agent: "explore", prompt: "y" },
+            parent,
+            "call_report_stock_birth_2",
+            {
+              sessionID: "ses_report_stock_child_2",
+              status: "completed",
+              output: "done",
+            },
+          ),
+        ),
+      );
+      await Effect.runPromise(
+        after.callback(
+          afterEvent(
+            "edit",
+            { path: "src/stock.ts" },
+            child,
+            "call_report_stock_edit",
+            undefined,
+            "explore",
+          ),
         ),
       );
 
       const out = (await readReport(after.values)).output;
       expect(out.sessions).toBe(1);
-      expect(out.findings).toEqual([{ session: parent, count: 1, missing: FANOUT }]);
+      expect(out.findings).toEqual([{ session: parent, count: 2, missing: FANOUT }]);
       memories.delete(Session.ID.make(parent));
       memories.delete(Session.ID.make(child));
     });
@@ -249,7 +319,10 @@ describe("the check arm runs quality-delta and affected, parses XML, and clears 
     const dir = tempDir();
     await withBinary(`${dir}/missing-ripwire`, async () => {
       const absentRes = await Effect.runPromise(
-        ripwire(readingContext(PROJECT, new Map(), dir)).execute({}, toolContext("ses_check_absent")),
+        ripwire(readingContext(PROJECT, new Map(), dir)).execute(
+          {},
+          toolContext("ses_check_absent"),
+        ),
       );
       expect(absentRes.output).toMatchObject({ action: "check", status: "absent" });
       expect(absentRes.output?.summary).toContain("Install it:");
@@ -309,8 +382,12 @@ exit 1
       const name = "ses_check_ok";
 
       for (const [idx, path] of ["src/two.ts", "src/one.ts"].entries()) {
-        await Effect.runPromise(guard.callback(toolEvent("edit", { path }, name, `call_chk_b_${idx}`)));
-        await Effect.runPromise(after.callback(afterEvent("edit", { path }, name, `call_chk_a_${idx}`)));
+        await Effect.runPromise(
+          guard.callback(toolEvent("edit", { path }, name, `call_chk_b_${idx}`)),
+        );
+        await Effect.runPromise(
+          after.callback(afterEvent("edit", { path }, name, `call_chk_a_${idx}`)),
+        );
       }
 
       const beforeReport = await readReport(after.values, "prj_check_ok");
@@ -326,7 +403,9 @@ exit 1
         gating: 0,
         regressions: 1,
         newSymbols: 1,
-        newSymbolRows: ['<r kind="api-surface" sym="src/one.ts:helper" origin="new-symbol" now="1"/>'],
+        newSymbolRows: [
+          '<r kind="api-surface" sym="src/one.ts:helper" origin="new-symbol" now="1"/>',
+        ],
         testsToRun: ["test/a.test.ts", "test/b.test.ts", "test/z.test.ts"],
         paths: ["src/one.ts", "src/two.ts"],
         commands: [
@@ -338,7 +417,11 @@ exit 1
       });
 
       const landing = decide(
-        { surface: "shell", command: "git commit -m land", parsed: shellParse("git commit -m land") },
+        {
+          surface: "shell",
+          command: "git commit -m land",
+          parsed: shellParse("git commit -m land"),
+        },
         memoryOf(Session.ID.make(name)),
         { health: { kind: "ready", binary: bin, version: "0.6.10" } },
       );
@@ -442,8 +525,12 @@ exit 1
       const name = "ses_check_subset";
 
       for (const [idx, path] of ["src/one.ts", "src/two.ts"].entries()) {
-        await Effect.runPromise(guard.callback(toolEvent("edit", { path }, name, `call_sub_b_${idx}`)));
-        await Effect.runPromise(after.callback(afterEvent("edit", { path }, name, `call_sub_a_${idx}`)));
+        await Effect.runPromise(
+          guard.callback(toolEvent("edit", { path }, name, `call_sub_b_${idx}`)),
+        );
+        await Effect.runPromise(
+          after.callback(afterEvent("edit", { path }, name, `call_sub_a_${idx}`)),
+        );
       }
 
       const subset = await Effect.runPromise(
@@ -459,20 +546,25 @@ exit 1
         testsToRun: ["test/one.test.ts"],
       });
       expect(memoryOf(Session.ID.make(name)).touched).toBe(1);
-      expect(memoryOf(Session.ID.make(name)).measured).toEqual({});
+      expect(memoryOf(Session.ID.make(name)).measured).toEqual({ delta: 2 });
 
       const stillUnmeasured = decide(
-        { surface: "shell", command: "git commit -m land", parsed: shellParse("git commit -m land") },
+        {
+          surface: "shell",
+          command: "git commit -m land",
+          parsed: shellParse("git commit -m land"),
+        },
         memoryOf(Session.ID.make(name)),
         { health: { kind: "ready", binary: bin, version: "0.6.10" } },
       );
       expect(stillUnmeasured.verdict.kind).toBe("refuse");
-      expect((await readReport(after.values, "prj_check_subset")).output.findings).toEqual([
-        { session: name, count: 2, missing: DELTA },
-      ]);
+      expect((await readReport(after.values, "prj_check_subset")).output.findings).toEqual([]);
 
       const full = await Effect.runPromise(
-        ripwire(readingContext("prj_check_subset", after.values, dir)).execute({}, toolContext(name)),
+        ripwire(readingContext("prj_check_subset", after.values, dir)).execute(
+          {},
+          toolContext(name),
+        ),
       );
       expect(full.output).toMatchObject({
         action: "check",
@@ -485,6 +577,85 @@ exit 1
       expect((await readReport(after.values, "prj_check_subset")).output.findings).toEqual([]);
 
       memories.delete(Session.ID.make(name));
+    });
+  });
+
+  test("falls back to git status --porcelain -uall when input.paths is omitted and editedCode is empty", async () => {
+    const repo = tempDir();
+    const git = (args: ReadonlyArray<string>) => {
+      const res = Bun.spawnSync(["git", ...args], {
+        cwd: repo,
+        env: {
+          ...Bun.env,
+          GIT_CONFIG_COUNT: "2",
+          GIT_CONFIG_KEY_0: "commit.gpgsign",
+          GIT_CONFIG_VALUE_0: "false",
+          GIT_CONFIG_KEY_1: "tag.gpgsign",
+          GIT_CONFIG_VALUE_1: "false",
+        },
+      });
+      if (res.exitCode !== 0) throw new Error(res.stderr.toString());
+    };
+
+    git(["init"]);
+    git(["config", "user.name", "Spectre"]);
+    git(["config", "user.email", "spectre@local"]);
+    await Bun.write(`${repo}/src/base.ts`, "export const a = 1;\n");
+    await Bun.write(`${repo}/src/old.ts`, "export const b = 1;\n");
+    await Bun.write(`${repo}/src/deleted.ts`, "export const c = 1;\n");
+    await Bun.write(`${repo}/README.md`, "# Doc\n");
+    git(["add", "."]);
+    git(["commit", "-m", "init"]);
+
+    const bin = await makeBin(`#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.6.10 (Release, built_from=test)"
+  exit 0
+fi
+case "$*" in
+  *"--quality-delta"*)
+    printf '%s' '<quality-delta baseline="git-HEAD" regressions="0" gating="0" new-symbol="0" at="abcd1234"></quality-delta>'
+    exit 0
+    ;;
+  *"--affected=src/base.ts,src/new.ts,src/renamed file.ts"*)
+    printf '%s' '<affected><test p="test/git.test.ts" hops="1"/></affected>'
+    exit 0
+    ;;
+esac
+exit 1
+`);
+
+    await withBinary(bin, async () => {
+      await Bun.write(`${repo}/README.md`, "# Updated doc\n");
+      const docOnly = await Effect.runPromise(
+        ripwire(readingContext("prj_git_fallback", new Map(), repo)).execute(
+          {},
+          toolContext("ses_git_doc_only"),
+        ),
+      );
+      expect(docOnly.output).toMatchObject({ action: "check", status: "nothing-edited" });
+
+      await Bun.write(`${repo}/src/base.ts`, "export const a = 2;\n");
+      git(["mv", "src/old.ts", "src/renamed file.ts"]);
+      await Bun.file(`${repo}/src/deleted.ts`).delete();
+      await Bun.write(`${repo}/src/new.ts`, "export const d = 4;\n");
+
+      const checked = await Effect.runPromise(
+        ripwire(readingContext("prj_git_fallback", new Map(), repo)).execute(
+          {},
+          toolContext("ses_git_dirty"),
+        ),
+      );
+      expect(checked.output).toMatchObject({
+        action: "check",
+        status: "ok",
+        sha: "abcd1234",
+        paths: ["src/base.ts", "src/new.ts", "src/renamed file.ts"],
+        testsToRun: ["test/git.test.ts"],
+      });
+
+      memories.delete(Session.ID.make("ses_git_doc_only"));
+      memories.delete(Session.ID.make("ses_git_dirty"));
     });
   });
 

@@ -7,7 +7,18 @@ const temp = useTempDirs("brain-tool");
 
 const git = (root: string, args: ReadonlyArray<string>): void => {
   const done = Bun.spawnSync({
-    cmd: ["git", "-C", root, "-c", "user.email=worker@spectre", "-c", "user.name=worker", ...args],
+    cmd: [
+      "git",
+      "-C",
+      root,
+      "-c",
+      "commit.gpgsign=false",
+      "-c",
+      "user.email=worker@spectre",
+      "-c",
+      "user.name=worker",
+      ...args,
+    ],
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -55,7 +66,9 @@ describe("tools.spectre.brain end-to-end", () => {
     const recalled = await call({ action: "recall", query: "Feature module public entry" });
     expect(recalled.status).toBe("recalled");
     if (recalled.status !== "recalled") return;
-    expect(recalled.claims.map((one) => one.claim)).toEqual(["Feature module owns the public entry."]);
+    expect(recalled.claims.map((one) => one.claim)).toEqual([
+      "Feature module owns the public entry.",
+    ]);
   });
 
   test("demote hides a claim from recall until its window expires", async () => {

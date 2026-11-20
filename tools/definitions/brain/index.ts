@@ -5,6 +5,7 @@ import { evidence } from "./evidence";
 import { type Edge, ledger, live } from "./ledger";
 import type { Claim } from "./neuron";
 import { recall } from "./recall";
+import { snapshot } from "./snapshot";
 
 export { attach } from "./inject";
 export {
@@ -104,7 +105,13 @@ export const Demote = Schema.Struct({
   }),
 });
 
-export const Action = Schema.Union([Assert, Relate, Supersede, Demote, Recall]);
+export const Status = Schema.Struct({
+  action: Schema.Literals(["status"]).annotate({
+    description: "Return brain health totals, cortex window usage, anomalies, and latent bridges.",
+  }),
+});
+
+export const Action = Schema.Union([Assert, Relate, Supersede, Demote, Status, Recall]);
 
 const ClaimRow = Schema.Struct({
   id: Schema.String,
@@ -185,15 +192,64 @@ export const Demoted = Schema.Struct({
   wrote: Schema.Boolean,
 });
 
+export const BrainStatus = Schema.Struct({
+  status: Schema.Literals(["status"]),
+  totals: Schema.Struct({
+    total: Schema.Number,
+    active: Schema.Number,
+    superseded: Schema.Number,
+    demoted: Schema.Number,
+    edges: Schema.Number,
+    isolatedActive: Schema.Number,
+    subjects: Schema.Number,
+    missingSubjects: Schema.Number,
+  }),
+  cortex: Schema.Struct({
+    shown: Schema.Number,
+    total: Schema.Number,
+    usedTokens: Schema.Number,
+    cap: Schema.Number,
+  }),
+  anomalies: Schema.Array(
+    Schema.Struct({
+      kind: Schema.Literals([
+        "missing-subject",
+        "supersedes-fork",
+        "contradiction",
+        "supersedes-cycle",
+        "ledger-problem",
+      ]),
+      severity: Schema.Literals(["high", "medium"]),
+      summary: Schema.String,
+      neuronIds: Schema.Array(Schema.String),
+    }),
+  ),
+  latentBridges: Schema.Array(
+    Schema.Struct({
+      from: Schema.String,
+      to: Schema.String,
+      shared: Schema.Array(Schema.String),
+    }),
+  ),
+});
+
 export const Rejected = Schema.Struct({
   status: Schema.Literals(["rejected"]).annotate({
     description: "Nothing was written. `problems` says which rule.",
   }),
-  action: Schema.Literals(["recall", "assert", "relate", "supersede", "demote"]),
+  action: Schema.Literals(["recall", "assert", "relate", "supersede", "demote", "status"]),
   problems: Schema.String,
 });
 
-export const Answered = Schema.Union([Recalled, Asserted, Related, Superseded, Demoted, Rejected]);
+export const Answered = Schema.Union([
+  Recalled,
+  Asserted,
+  Related,
+  Superseded,
+  Demoted,
+  BrainStatus,
+  Rejected,
+]);
 
 const DEFAULT_BUDGET = 400;
 
@@ -339,8 +395,34 @@ const runRecall = (ctx: Plugin.Context) =>
     };
   });
 
+const runStatus = (ctx: Plugin.Context) =>
+  Effect.fn("spectre.brain.status")(function* () {
+    const snap = yield* snapshot(ctx.location.project.directory);
+    return {
+      status: "status" as const,
+      totals: snap.totals,
+      cortex: {
+        shown: snap.cortex.shownCount,
+        total: snap.cortex.activeCount,
+        usedTokens: snap.cortex.usedTokens,
+        cap: snap.cortex.budget,
+      },
+      anomalies: snap.anomalies,
+      latentBridges: snap.latentBridges,
+    };
+  });
+
+const dispatch = (ctx: Plugin.Context, input: typeof Action.Type) => {
+  if (input.action === "assert") return runAssert(ctx)(input);
+  if (input.action === "relate") return runRelate(ctx)(input);
+  if (input.action === "supersede") return runSupersede(ctx)(input);
+  if (input.action === "demote") return runDemote(ctx)(input);
+  if (input.action === "status") return runStatus(ctx)();
+  return runRecall(ctx)(input);
+};
+
 export const DESCRIPTION = `Query and record persistent project memory for architecture decisions, gotchas, lessons, constraints, and features.
-Stores immutable markdown notes under .spectre/brain/neurons and typed edges in synapses.ndjson. Use action=recall to search headlines and paths, action=assert to record a verified claim with git co-change evidence, action=relate to link or contradict claims, action=supersede to replace outdated notes, and action=demote to mute untrusted claims.`;
+Stores immutable markdown notes under .spectre/brain/neurons and typed edges in synapses.ndjson. Use action=recall to search headlines and paths, action=status to inspect brain totals and anomalies, action=assert to record a verified claim with git co-change evidence, action=relate to link or contradict claims, action=supersede to replace outdated notes, and action=demote to mute untrusted claims.`;
 
 export const brain = (ctx: Plugin.Context): Tool.Info<typeof Action, typeof Answered> => ({
   name: "brain",
@@ -350,17 +432,8 @@ export const brain = (ctx: Plugin.Context): Tool.Info<typeof Action, typeof Answ
   options: { namespace: "spectre", codemode: true, permission: "brain" },
   execute: (input) =>
     Effect.gen(function* () {
-      const answer =
-        input.action === "assert"
-          ? yield* runAssert(ctx)(input)
-          : input.action === "relate"
-            ? yield* runRelate(ctx)(input)
-            : input.action === "supersede"
-              ? yield* runSupersede(ctx)(input)
-              : input.action === "demote"
-                ? yield* runDemote(ctx)(input)
-                : yield* runRecall(ctx)(input);
-      return { output: answer };
+      const output = yield* dispatch(ctx, input);
+      return { output };
     }).pipe(
       // A note the ledger could not read, or a write the filesystem refused. A
       // refusal about the request itself — a missing subject path, an edge with no

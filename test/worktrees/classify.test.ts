@@ -3,7 +3,6 @@ import {
   bucket,
   count,
   dirtyLabel,
-  dirtyOf,
   type Evidence,
   type PullRequest,
   prFor,
@@ -19,15 +18,19 @@ import {
 const clean: Evidence = { dirty: { kind: "clean" }, merged: true, patches: "landed", pushed: true };
 const wip: Evidence = { ...clean, dirty: { kind: "wip", count: 1 } };
 const scratch: Evidence = { ...clean, dirty: { kind: "scratch", count: 1 } };
+const ledgerScratch: Evidence = {
+  ...clean,
+  dirty: { kind: "scratch", count: 1, ledgerOnly: true },
+};
 
 describe("what outranks what", () => {
   test("tracked edits hold a worktree that also landed", () => {
     expect(bucket(wip)).toBe("hold-wip");
   });
 
-  test("a branch that landed is safe whatever else is true", () => {
+  test("a branch that landed is safe when clean or holding only the goal ledger", () => {
     expect(bucket(clean)).toBe("safe");
-    expect(bucket({ ...clean, dirty: { kind: "scratch", count: 1 } })).toBe("safe");
+    expect(bucket(ledgerScratch)).toBe("safe");
   });
 
   test("squash evidence counts as landed on its own, since ancestry cannot see it", () => {
@@ -36,8 +39,8 @@ describe("what outranks what", () => {
     ).toBe("safe");
   });
 
-  test("untracked files are not WIP, and do not hold a landed branch", () => {
-    expect(bucket(scratch)).toBe("safe");
+  test("non-ledger untracked files move a landed branch to review", () => {
+    expect(bucket(scratch)).toBe("review");
   });
 });
 
@@ -111,6 +114,24 @@ describe("tracked edits, counted once for both consumers", () => {
 
   test("nothing at all is clean", () => {
     expect(dirtyLabel(trackedChanges(""))).toBe("clean");
+  });
+
+  test("ledger-only scratch is marked ledgerOnly while arbitrary scratch is not", () => {
+    expect(trackedChanges("?? .spectre/run.md")).toEqual({
+      tracked: 0,
+      scratch: 1,
+      ledgerOnly: true,
+    });
+    expect(trackedChanges("?? .spectre/run.md\n?? extra.txt")).toEqual({
+      tracked: 0,
+      scratch: 2,
+      ledgerOnly: false,
+    });
+    expect(trackedChanges(" M a.ts\n?? .spectre/run.md")).toEqual({
+      tracked: 1,
+      scratch: 1,
+      ledgerOnly: false,
+    });
   });
 });
 

@@ -196,6 +196,8 @@ A plugin uses `ctx`. That context is the Effect client for the connected server,
 - **Code mode is the default.** A tool with no `codemode` option never reaches the native tool list. Set `codemode: false` to be called directly (`packages/core/src/tool.ts`).
 - **`ctx.location` is where the plugin loaded.** It is not where every session or event lives, so read the session data when that distinction matters (`plugins/migrate-v1.mdx`).
 
+`node_modules/@opencode/*` ships compiled `dist/` files only, and fresh worktrees hold no `node_modules` before `bun install`. Read every `packages/*` source path from the `opencode-source-code` reference repository via `git -C <ref-path> show v2.3.0:<path>`.
+
 ## Lookup table
 
 | Question | File at the tag | What to read |

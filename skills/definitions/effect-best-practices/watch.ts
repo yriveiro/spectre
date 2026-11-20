@@ -1,8 +1,8 @@
+import { join } from "node:path";
 import type { Plugin } from "@opencode/plugin/effect";
 import { InstructionEntry } from "@opencode/schema/instruction-entry";
 import { AbsolutePath } from "@opencode/schema/schema";
 import { Effect, Stream } from "effect";
-import { join } from "node:path";
 import { VERIFIED } from "./verified";
 
 /**
@@ -41,7 +41,7 @@ const pinned = async (project: AbsolutePath) => {
     // Either section counts. A project that runs effect through a published plugin declares
     // it as a dependency, one that only typechecks with it declares it as a dev dependency,
     // and the drift this watches for is the same in both.
-    return parsed.devDependencies?.["effect"] ?? parsed.dependencies?.["effect"];
+    return parsed.devDependencies?.effect ?? parsed.dependencies?.effect;
   } catch (cause) {
     // A half-written package.json is a normal state while an editor holds the buffer, so
     // this is a skip rather than a failure. The next change event re-reads it.
@@ -85,59 +85,82 @@ const isPin = (file: string) => {
   return file === PIN || file.endsWith(`/${PIN}`);
 };
 
+const recordPinChange = (project: AbsolutePath) =>
+  Effect.gen(function* () {
+    const version = yield* Effect.promise(() => pinned(project));
+    if (version === undefined) return;
+    if (version === VERIFIED.effect) {
+      drifted.delete(project);
+      return;
+    }
+    drifted.set(project, version);
+    yield* Effect.logWarning("effect version moved", {
+      pinned: version,
+      verified: VERIFIED.effect,
+      command: "/effect-align",
+    });
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning("effect watch failed", { cause }).pipe(Effect.asVoid),
+    ),
+  );
+
+const deliverReminder = (
+  ctx: Plugin.Context,
+  event: {
+    readonly sessionID: Parameters<Plugin.Context["session"]["get"]>[0]["sessionID"];
+    readonly prompt: { readonly agents?: ReadonlyArray<{ readonly name: string }> };
+  },
+) =>
+  Effect.gen(function* () {
+    if (event.prompt.agents?.some((agent) => agent.name === "mnemonic") === true) return;
+    const project = AbsolutePath.make(ctx.location.directory);
+    const version = pendingReminder(drifted, told, project, event.sessionID);
+    if (version === undefined) {
+      if (!drifted.has(project) && told.has(event.sessionID)) {
+        const entry = ctx.session.instructions?.entry;
+        if (entry?.remove !== undefined) {
+          yield* entry.remove({ sessionID: event.sessionID, key: WATCH_KEY });
+        }
+        told.delete(event.sessionID);
+      }
+      return;
+    }
+    const info = yield* Effect.catch(ctx.session.get({ sessionID: event.sessionID }), () =>
+      Effect.succeed(undefined),
+    );
+    if (info === undefined || info.parentID !== undefined || info.agent === "mnemonic") return;
+    const entry = ctx.session.instructions?.entry;
+    if (entry === undefined) return;
+    yield* entry.put({
+      sessionID: event.sessionID,
+      key: WATCH_KEY,
+      value: REMINDER,
+    });
+    told.set(event.sessionID, version);
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning("effect reminder failed", { cause }).pipe(Effect.asVoid),
+    ),
+  );
+
 export const attach = (ctx: Plugin.Context) =>
   Effect.gen(function* () {
     yield* ctx.event
-      .subscribe()
+      .subscribe({ types: ["filesystem.changed"] })
       .pipe(
-        Stream.filter((event) => event.type === "filesystem.changed"),
         Stream.filter((event) => event.data.event !== "unlink" && isPin(event.data.file)),
-        Stream.runForEach((event) =>
-          Effect.gen(function* () {
-            const project = AbsolutePath.make(ctx.location.directory);
-            const version = yield* Effect.promise(() => pinned(project));
-            if (version === undefined || version === VERIFIED.effect) return;
-            drifted.set(project, version);
-            yield* Effect.logWarning("effect version moved", {
-              pinned: version,
-              verified: VERIFIED.effect,
-              command: "/effect-align",
-            });
-          }).pipe(Effect.catchCause((cause) => Effect.logWarning("effect watch failed", { cause }).pipe(Effect.asVoid))),
-        ),
-        // Detached so the plugin's own `effect` returns and the host keeps booting. A
-        // subscription is meant to outlive the caller that registered it, which is the one
-        // case where nothing registering a finalizer is the right answer.
-        Effect.forkDetach,
+        Stream.runForEach(() => recordPinChange(AbsolutePath.make(ctx.location.directory))),
+        Effect.forkScoped({ startImmediately: true }),
         Effect.asVoid,
       )
-      .pipe(Effect.catchCause((cause) => Effect.logWarning("effect watch failed", { cause }).pipe(Effect.asVoid)));
-
-    yield* ctx.session.hook("prompt", (event) =>
-      Effect.gen(function* () {
-        if (event.prompt.agents?.some((agent) => agent.name === "mnemonic") === true) return;
-        const project = AbsolutePath.make(ctx.location.directory);
-        const version = pendingReminder(drifted, told, project, event.sessionID);
-        if (version === undefined) return;
-        const info = yield* Effect.catch(
-          ctx.session.get({ sessionID: event.sessionID }),
-          () => Effect.succeed(undefined),
-        );
-        if (info === undefined || info.parentID !== undefined || info.agent === "mnemonic") return;
-        const entry = ctx.session.instructions?.entry;
-        if (entry === undefined) return;
-        yield* entry.put({
-          sessionID: event.sessionID,
-          key: WATCH_KEY,
-          value: REMINDER,
-        });
-        told.set(event.sessionID, version);
-      }).pipe(
+      .pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning("effect reminder failed", { cause }).pipe(Effect.asVoid),
+          Effect.logWarning("effect watch failed", { cause }).pipe(Effect.asVoid),
         ),
-      ),
-    );
+      );
+
+    yield* ctx.session.hook("prompt", (event) => deliverReminder(ctx, event));
 
     yield* Effect.logInfo("Registered effect version watcher", { verified: VERIFIED.effect });
   });

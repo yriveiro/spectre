@@ -13,7 +13,11 @@ let seq = 0;
 const context = { progress: () => Effect.void } as unknown as Tool.Context;
 
 const git = async (cwd: string, args: ReadonlyArray<string>) => {
-  const proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn(["git", "-c", "commit.gpgsign=false", ...args], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
@@ -201,9 +205,9 @@ const start = async (
   fake: ReturnType<typeof host>,
   sessionDirectory: string,
   name: string,
-  options: { base?: string; branch?: string } = {},
+  options: { base?: string; branch?: string; detached?: boolean } = {},
 ) => {
-  const { base, branch } = options;
+  const { base, branch, detached } = options;
   const result = await Effect.runPromise(
     worktrees(fake.context(sessionDirectory)).execute(
       {
@@ -211,6 +215,7 @@ const start = async (
         name,
         ...(base === undefined ? {} : { base }),
         ...(branch === undefined ? {} : { branch }),
+        ...(detached === undefined ? {} : { detached }),
       },
       { ...context, sessionID: "test" as never },
     ),
@@ -496,5 +501,35 @@ describe("start when the session cannot follow it in", () => {
     // in the worktree is standing in the old one, writing files nowhere.
     expect(outcome.status).not.toBe("opened");
     expect(fake.moved).toEqual([]);
+  });
+});
+
+describe("start in detached mode", () => {
+  test("opens on detached HEAD at base, creates zero local branches, and moves session", async () => {
+    const { resolved, bare, main } = await bareLayout();
+    const fake = host(bare, resolved);
+    const branchesBefore = await git(bare, [
+      "for-each-ref",
+      "--format=%(refname:short)",
+      "refs/heads",
+    ]);
+
+    const outcome = await start(fake, main, "audit-check", { detached: true });
+
+    expect(outcome.status).toBe("opened");
+    if (outcome.status !== "opened") throw new Error(`expected opened, got ${outcome.status}`);
+    expect(outcome.branch).toBe("(detached)");
+    expect(fake.moved).toEqual([outcome.directory]);
+
+    const headRef = await git(outcome.directory, ["rev-parse", "--abbrev-ref", "HEAD"]);
+    expect(headRef.out).toBe("HEAD");
+
+    const branchesAfter = await git(bare, [
+      "for-each-ref",
+      "--format=%(refname:short)",
+      "refs/heads",
+    ]);
+    expect(branchesAfter.out).toBe(branchesBefore.out);
+    expect(branchesAfter.out.split("\n")).toEqual(["main"]);
   });
 });

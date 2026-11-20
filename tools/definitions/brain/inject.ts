@@ -41,7 +41,11 @@ const render = (shown: ReadonlyArray<string>, total: number): string => {
 
 export const cortexWindow = (
   claims: ReadonlyArray<string>,
-): { readonly shown: ReadonlyArray<string>; readonly text: string; readonly usedTokens: number } => {
+): {
+  readonly shown: ReadonlyArray<string>;
+  readonly text: string;
+  readonly usedTokens: number;
+} => {
   let shown = claims;
   while (shown.length > 0 && tokens(render(shown, claims.length)) > CORTEX_CAP)
     shown = shown.slice(0, -1);
@@ -77,8 +81,7 @@ const readIndex = (project: AbsolutePath): Effect.Effect<Index, Error> =>
     const latest = yield* Effect.promise(() =>
       latestOf(AbsolutePath.make(join(project, ".spectre", "brain"))),
     );
-    if (brain.claims.length === 0 && latest < 0)
-      return { key: "cold", claims: [], totalOnDisk: 0 };
+    if (brain.claims.length === 0 && latest < 0) return { key: "cold", claims: [], totalOnDisk: 0 };
     const claims = standing(brain.claims, brain.edges).active.toSorted(newestFirst).map(headline);
     return {
       key: `${latest}:${brain.claims.length}:${Bun.hash(claims.join("\n"))}`,
@@ -93,6 +96,7 @@ const renderIndex = (index: Index): string => {
   return build(index.claims);
 };
 
+const MAX_SEEN = 256;
 const seen = new Map<string, string>();
 
 export const attach = (ctx: Plugin.Context) =>
@@ -116,6 +120,10 @@ export const attach = (ctx: Plugin.Context) =>
           key: BRAIN_KEY,
           value: text,
         });
+        if (!seen.has(event.sessionID) && seen.size >= MAX_SEEN) {
+          const oldest = seen.keys().next().value;
+          if (oldest !== undefined) seen.delete(oldest);
+        }
         seen.set(event.sessionID, index.key);
       }).pipe(
         Effect.catchCause((cause) =>

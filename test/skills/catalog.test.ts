@@ -12,9 +12,17 @@ import {
   renderCatalog,
   SKILL_ID_DESCRIPTION,
   SKILL_TOOL_DESCRIPTION,
+  SUBAGENT_SKILL_ID_DESCRIPTION,
+  SUBAGENT_SKILL_TOOL_DESCRIPTION,
   shapeSkillTool,
 } from "../../skills/catalog";
-import { type Definition, definitions, load, notALeaf, toSkillInfo } from "../../skills/definitions";
+import {
+  type Definition,
+  definitions,
+  load,
+  notALeaf,
+  toSkillInfo,
+} from "../../skills/definitions";
 
 interface ContextEvent {
   readonly agent: string;
@@ -33,12 +41,36 @@ const makeFixtureSkill = (id: string, catalog: Definition["catalog"]): Definitio
 describe("renderCatalog", () => {
   test("renders communication first, sorted leaves, and the playbook + pull guide", () => {
     const fixture: ReadonlyArray<Definition> = [
-      makeFixtureSkill("principle-b", { tier: "push", group: "leaf", trigger: "second leaf moment" }),
-      makeFixtureSkill("playbook-z", { tier: "pull", category: "playbook", summary: "zeta task shape" }),
-      makeFixtureSkill("communication", { tier: "push", group: "communication", trigger: "message shape" }),
-      makeFixtureSkill("principle-a", { tier: "push", group: "leaf", trigger: "first leaf moment" }),
-      makeFixtureSkill("playbook-a", { tier: "pull", category: "playbook", summary: "alpha task shape" }),
-      makeFixtureSkill("opencode-platform", { tier: "pull", category: "stack", summary: "host contract" }),
+      makeFixtureSkill("principle-b", {
+        tier: "push",
+        group: "leaf",
+        trigger: "second leaf moment",
+      }),
+      makeFixtureSkill("playbook-z", {
+        tier: "pull",
+        category: "playbook",
+        summary: "zeta task shape",
+      }),
+      makeFixtureSkill("communication", {
+        tier: "push",
+        group: "communication",
+        trigger: "message shape",
+      }),
+      makeFixtureSkill("principle-a", {
+        tier: "push",
+        group: "leaf",
+        trigger: "first leaf moment",
+      }),
+      makeFixtureSkill("playbook-a", {
+        tier: "pull",
+        category: "playbook",
+        summary: "alpha task shape",
+      }),
+      makeFixtureSkill("opencode-platform", {
+        tier: "pull",
+        category: "stack",
+        summary: "host contract",
+      }),
       makeFixtureSkill("spectre-mode", { tier: "hub", summary: "hub rules" }),
     ];
 
@@ -174,7 +206,7 @@ describe("skill tool contract", () => {
     ).toBe(SKILL_ID_DESCRIPTION);
   });
 
-  test("attachSkillToolContract rewrites skill tool only for agent === spectre", async () => {
+  test("attachSkillToolContract rewrites skill tool for spectre and subagents, leaving mnemonic and build untouched", async () => {
     let hookName: string | undefined;
     let handler: ((event: ContextEvent) => Effect.Effect<void>) | undefined;
     const ctx = {
@@ -191,16 +223,30 @@ describe("skill tool contract", () => {
     expect(hookName).toBe("context");
     if (handler === undefined) throw new Error("expected context hook");
 
-    const buildEvent: ContextEvent = { agent: "build", ...makeDraft() };
-    await Effect.runPromise(handler(buildEvent));
-    expect(buildEvent.tools.skill?.description).toBe("Original OpenCode skill description");
+    const idDescriptionOf = (event: ContextEvent) => {
+      const skill = event.tools.skill;
+      if (skill === undefined) throw new Error("expected skill tool");
+      return (skill.input as { properties: { id: { description: string } } }).properties.id
+        .description;
+    };
 
-    const operatorEvent: ContextEvent = { agent: "operator", ...makeDraft() };
-    await Effect.runPromise(handler(operatorEvent));
-    expect(operatorEvent.tools.skill?.description).toBe("Original OpenCode skill description");
+    for (const agent of ["build", "mnemonic"]) {
+      const event: ContextEvent = { agent, ...makeDraft() };
+      await Effect.runPromise(handler(event));
+      expect(event.tools.skill?.description).toBe("Original OpenCode skill description");
+      expect(idDescriptionOf(event)).toBe("Original id description");
+    }
+
+    for (const agent of ["nocturna", "operator", "sicko"]) {
+      const event: ContextEvent = { agent, ...makeDraft() };
+      await Effect.runPromise(handler(event));
+      expect(event.tools.skill?.description).toBe(SUBAGENT_SKILL_TOOL_DESCRIPTION);
+      expect(idDescriptionOf(event)).toBe(SUBAGENT_SKILL_ID_DESCRIPTION);
+    }
 
     const spectreEvent: ContextEvent = { agent: "spectre", ...makeDraft() };
     await Effect.runPromise(handler(spectreEvent));
     expect(spectreEvent.tools.skill?.description).toBe(SKILL_TOOL_DESCRIPTION);
+    expect(idDescriptionOf(spectreEvent)).toBe(SKILL_ID_DESCRIPTION);
   });
 });

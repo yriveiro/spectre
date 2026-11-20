@@ -44,7 +44,9 @@ blind spots and their agreement is close to no signal. If the table offers one
 family only, say so before you spend the run. Never write a model id from memory.
 
 Do not assign personas. A lens per reviewer gets you the union of one model reading
-everything, which is what asking that model once would have given you.
+everything, which is what asking that model once would have given you. Spawn every
+reviewer with `agent: "operator"` and `model: row.model.ref`, so reviewers run
+without `spectre-mode` bootstrap or skill-catalog overhead.
 
 ## Phase D: Write the brief
 
@@ -76,7 +78,8 @@ valid answer, so say so in the brief and nobody pads the review to look thorough
 
 ## Phase E: Fan out
 
-Spawn every reviewer in one message. Each one runs in the background. If one produces
+Spawn every reviewer in one message with `agent: "operator"` and `model: row.model.ref`.
+Each one runs in the background. If one produces
 nothing, carry on and name the dropout rather than running a smaller review than
 the one you announced.
 

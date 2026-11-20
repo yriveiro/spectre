@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { AbsolutePath } from "@opencode/schema/schema";
 import { Effect, Exit, PubSub, Stream } from "effect";
+import { VERIFIED } from "../../skills/definitions/effect-best-practices/verified";
 import {
   attach,
   isPin,
@@ -31,6 +32,11 @@ interface EntryPut {
   readonly sessionID: string;
   readonly key: string;
   readonly value: unknown;
+}
+
+interface EntryRemove {
+  readonly sessionID: string;
+  readonly key: string;
 }
 
 describe("the effect watcher wakes on the right file", () => {
@@ -130,108 +136,149 @@ describe("the reminder reaches every session once per drift", () => {
 });
 
 describe("attach delivers spectre.effect-watch durably on prompt", () => {
-  const promptEvent = (sessionID: string, agents?: Array<{ readonly name: string }>): PromptEvent => ({
+  const promptEvent = (
+    sessionID: string,
+    agents?: Array<{ readonly name: string }>,
+  ): PromptEvent => ({
     sessionID,
     messageID: "msg_watch",
     prompt: { text: "continue", ...(agents === undefined ? {} : { agents }) },
     delivery: "steer",
   });
 
-  const setupWatch = async (
+  const makeInstructionsEntry = (
+    puts: Array<EntryPut>,
+    removes: Array<EntryRemove>,
+    stored: Map<string, Map<string, unknown>>,
+  ) => ({
+    put: (input: EntryPut) =>
+      Effect.sync(() => {
+        puts.push(input);
+        const byKey = stored.get(input.sessionID) ?? new Map<string, unknown>();
+        byKey.set(input.key, input.value);
+        stored.set(input.sessionID, byKey);
+      }),
+    remove: (input: EntryRemove) =>
+      Effect.sync(() => {
+        removes.push(input);
+        stored.get(input.sessionID)?.delete(input.key);
+      }),
+  });
+
+  const setupWatch = (
     sessions: Record<string, { readonly parentID?: string; readonly agent?: string }>,
     withInstructions: boolean = true,
-  ) => {
-    const dir = temp();
-    const hub = await Effect.runPromise(
-      PubSub.unbounded<{ readonly type: string; readonly data: { readonly event: string; readonly file: string } }>(),
-    );
-    let hookName: string | undefined;
-    let handler: ((event: PromptEvent) => Effect.Effect<void>) | undefined;
-    const puts: Array<EntryPut> = [];
-    const stored = new Map<string, Map<string, unknown>>();
-    const ctx = {
-      location: { directory: dir },
-      event: {
-        subscribe: () => Stream.fromPubSub(hub),
-      },
-      session: {
-        hook: (name: string, cb: (event: PromptEvent) => Effect.Effect<void>) => {
-          hookName = name;
-          handler = cb;
-          return Effect.void;
+  ) =>
+    Effect.gen(function* () {
+      const dir = temp();
+      const hub = yield* PubSub.unbounded<{
+        readonly type: string;
+        readonly data: { readonly event: string; readonly file: string };
+      }>();
+      let hookName: string | undefined;
+      let handler: ((event: PromptEvent) => Effect.Effect<void>) | undefined;
+      const subscribeInputs: Array<unknown> = [];
+      const puts: Array<EntryPut> = [];
+      const removes: Array<EntryRemove> = [];
+      const stored = new Map<string, Map<string, unknown>>();
+      const ctx = {
+        location: { directory: dir },
+        event: {
+          subscribe: (input?: unknown) => {
+            subscribeInputs.push(input);
+            return Stream.fromPubSub(hub);
+          },
         },
-        get: (input: { readonly sessionID: string }) => Effect.succeed(sessions[input.sessionID]),
-        ...(withInstructions
-          ? {
-              instructions: {
-                entry: {
-                  put: (input: EntryPut) =>
-                    Effect.sync(() => {
-                      puts.push(input);
-                      const byKey = stored.get(input.sessionID) ?? new Map<string, unknown>();
-                      byKey.set(input.key, input.value);
-                      stored.set(input.sessionID, byKey);
-                    }),
-                },
-              },
-            }
-          : {}),
-      },
-    };
-    await Effect.runPromise(attach(ctx as never) as Effect.Effect<void>);
-    if (handler === undefined || hookName === undefined) throw new Error("watch hook did not register");
-    const emitPinChange = async (version: string) => {
-      await Bun.write(`${dir}/package.json`, JSON.stringify({ devDependencies: { effect: version } }));
-      await Effect.runPromise(
-        PubSub.publish(hub, {
-          type: "filesystem.changed",
-          data: { event: "change", file: "package.json" },
-        }),
-      );
-      await Bun.sleep(25);
-    };
-    return { dir, hookName, handler, puts, stored, emitPinChange };
-  };
-
-  test("puts spectre.effect-watch once per drift on root sessions, persists across steps, and skips mnemonic and subagents", async () => {
-    const { hookName, handler, puts, stored, emitPinChange } = await setupWatch({
-      ses_watch_root: { agent: "spectre" },
-      ses_watch_mnemonic: { agent: "mnemonic" },
-      ses_watch_subagent: { agent: "spectre", parentID: "ses_watch_root" },
+        session: {
+          hook: (name: string, cb: (event: PromptEvent) => Effect.Effect<void>) => {
+            hookName = name;
+            handler = cb;
+            return Effect.void;
+          },
+          get: (input: { readonly sessionID: string }) => Effect.succeed(sessions[input.sessionID]),
+          ...(withInstructions
+            ? { instructions: { entry: makeInstructionsEntry(puts, removes, stored) } }
+            : {}),
+        },
+      };
+      yield* attach(ctx as never);
+      if (handler === undefined || hookName === undefined)
+        throw new Error("watch hook did not register");
+      const emitPinChange = async (version: string) => {
+        await Bun.write(
+          `${dir}/package.json`,
+          JSON.stringify({ devDependencies: { effect: version } }),
+        );
+        await Effect.runPromise(
+          PubSub.publish(hub, {
+            type: "filesystem.changed",
+            data: { event: "change", file: "package.json" },
+          }),
+        );
+        await Bun.sleep(60);
+      };
+      return { dir, hookName, handler, subscribeInputs, puts, removes, stored, emitPinChange };
     });
 
-    expect(hookName).toBe("prompt");
-    await emitPinChange("9.9.9");
+  test("puts spectre.effect-watch once per drift on root sessions, persists across steps, and skips mnemonic and subagents", () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const { hookName, handler, subscribeInputs, puts, removes, stored, emitPinChange } =
+            yield* setupWatch({
+              ses_watch_root: { agent: "spectre" },
+              ses_watch_mnemonic: { agent: "mnemonic" },
+              ses_watch_subagent: { agent: "spectre", parentID: "ses_watch_root" },
+            });
 
-    await Effect.runPromise(handler(promptEvent("ses_watch_mnemonic")));
-    await Effect.runPromise(handler(promptEvent("ses_watch_subagent")));
-    await Effect.runPromise(handler(promptEvent("ses_watch_root", [{ name: "mnemonic" }])));
-    expect(puts).toEqual([]);
+          expect(hookName).toBe("prompt");
+          expect(subscribeInputs).toEqual([{ types: ["filesystem.changed"] }]);
+          yield* Effect.promise(() => emitPinChange("9.9.9"));
 
-    await Effect.runPromise(handler(promptEvent("ses_watch_root")));
-    expect(puts.length).toBe(1);
-    expect(puts[0]?.sessionID).toBe("ses_watch_root");
-    expect(puts[0]?.key).toBe("spectre.effect-watch");
-    const reminder = String(puts[0]?.value ?? "");
-    expect(reminder).toContain("<UNTRUSTED_CONTENT>");
-    expect(reminder).toContain("/effect-align");
+          yield* handler(promptEvent("ses_watch_mnemonic"));
+          yield* handler(promptEvent("ses_watch_subagent"));
+          yield* handler(promptEvent("ses_watch_root", [{ name: "mnemonic" }]));
+          expect(puts).toEqual([]);
 
-    expect(stored.get("ses_watch_root")?.get("spectre.effect-watch")).toBe(reminder);
-    expect(stored.get("ses_watch_root")?.get("spectre.effect-watch")).toBe(reminder);
+          yield* handler(promptEvent("ses_watch_root"));
+          expect(puts.length).toBe(1);
+          expect(puts[0]?.sessionID).toBe("ses_watch_root");
+          expect(puts[0]?.key).toBe("spectre.effect-watch");
+          const reminder = String(puts[0]?.value ?? "");
+          expect(reminder).toContain("<UNTRUSTED_CONTENT>");
+          expect(reminder).toContain("/effect-align");
 
-    await Effect.runPromise(handler(promptEvent("ses_watch_root")));
-    expect(puts.length).toBe(1);
+          expect(stored.get("ses_watch_root")?.get("spectre.effect-watch")).toBe(reminder);
+          expect(stored.get("ses_watch_root")?.get("spectre.effect-watch")).toBe(reminder);
 
-    await emitPinChange("9.9.10");
-    await Effect.runPromise(handler(promptEvent("ses_watch_root")));
-    expect(puts.length).toBe(2);
-    expect(puts[1]?.key).toBe("spectre.effect-watch");
-  });
+          yield* handler(promptEvent("ses_watch_root"));
+          expect(puts.length).toBe(1);
 
-  test("degrades gracefully when session.instructions is omitted", async () => {
-    const { handler, emitPinChange } = await setupWatch({ ses_watch_plain: { agent: "spectre" } }, false);
-    await emitPinChange("9.9.9");
-    const exit = await Effect.runPromiseExit(handler(promptEvent("ses_watch_plain")));
-    expect(Exit.isSuccess(exit)).toBe(true);
-  });
+          yield* Effect.promise(() => emitPinChange("9.9.10"));
+          yield* handler(promptEvent("ses_watch_root"));
+          expect(puts.length).toBe(2);
+          expect(puts[1]?.key).toBe("spectre.effect-watch");
+
+          yield* Effect.promise(() => emitPinChange(VERIFIED.effect));
+          yield* handler(promptEvent("ses_watch_root"));
+          expect(removes).toEqual([{ sessionID: "ses_watch_root", key: "spectre.effect-watch" }]);
+          expect(stored.get("ses_watch_root")?.has("spectre.effect-watch")).toBe(false);
+        }),
+      ),
+    ));
+
+  test("degrades gracefully when session.instructions is omitted", () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const { handler, emitPinChange } = yield* setupWatch(
+            { ses_watch_plain: { agent: "spectre" } },
+            false,
+          );
+          yield* Effect.promise(() => emitPinChange("9.9.9"));
+          const exit = yield* Effect.exit(handler(promptEvent("ses_watch_plain")));
+          expect(Exit.isSuccess(exit)).toBe(true);
+        }),
+      ),
+    ));
 });

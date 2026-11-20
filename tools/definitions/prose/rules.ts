@@ -153,16 +153,16 @@ const stripSpans = (
 
   for (const { line, text: raw } of lines) {
     if (isStructural(raw)) continue;
-    const stripped = raw.replace(/\[[^\]]*\]\([^)]*\)/g, " link ");
     let bare = "";
-    for (const ch of stripped) {
+    for (const ch of raw) {
       if (ch === "`") {
         inSpan = !inSpan;
-        if (!inSpan) bare += " code ";
+        if (!inSpan) bare += " `code` ";
         continue;
       }
       if (!inSpan) bare += ch;
     }
+    bare = bare.replace(/\[[^\]]*\]\([^)]*\)/g, " `link` ");
     if (bare.trim().length > 0) out.push({ line, text: bare });
   }
 
@@ -185,11 +185,13 @@ const ruleFindings = (
   for (const sentence of sentences(bare)) {
     const n = wordList(sentence).length;
     if (n <= WORD_LIMIT) continue;
+    const clean = sentence.trim().replace(/\s+/g, " ");
+    const snippet = clean.length <= 80 ? clean : `${clean.slice(0, 79)}…`;
     out.push({
       rule: "long-sentence",
       level: "hard",
       line,
-      text: `${n} words`,
+      text: `${n} words (${snippet})`,
       why: `STE 6.3 caps descriptive prose at ${WORD_LIMIT} words. Split it.`,
     });
   }

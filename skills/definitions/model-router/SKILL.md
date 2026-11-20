@@ -70,13 +70,9 @@ A literature, citation, or research task does not go on the cheap profile. A che
 
 ## The model string is a closed list
 
-`tools.spectre.routing` returns a ref that it checked against the live catalogue. **Use it exactly as returned**, variant suffix included.
+`tools.spectre.routing` returns a ref checked against the live catalogue. **Use it exactly as returned**, variant suffix included.
 
-That ref is the whole vocabulary. The user wrote down the models they allow, and the list is usually shorter than what the provider offers. A model outside the list is not in this vocabulary. If nothing in the list fits the task, say so and ask. Do not look in the provider for something better.
-
-Never write a model id from memory. Never assemble one from a provider you remember. Never guess a variant. A string this tool did not return is one nobody checked. Nothing enforces the allowlist at the subagent boundary, so the call can run a model outside it.
-
-This matters more than it sounds. You are choosing what the work costs. A model you invent is a cost nobody agreed to, and the answer does not show the cost.
+Never write a model id from memory, assemble one from a provider, or guess a variant. If nothing in the configured list fits the task, say so and ask. Spectre enforces the configured `spectre.json` allowlist at the `subagent` tool boundary on new spawns.
 
 The order is `priority` in the config, never the order the `models` object happens to have. The top-level `crosscheck` list sets the fallback order for a second opinion. Call `tools.spectre.routing({})` when you need either order: the `models` and `crosscheck` arrays on a `resolved` answer carry both, with the catalogue facts behind each model.
 

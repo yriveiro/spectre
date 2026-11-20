@@ -13,6 +13,15 @@ export const SKILL_TOOL_DESCRIPTION = [
 export const SKILL_ID_DESCRIPTION =
   "The ID of an available skill, a Spectre skill catalog entry, a skill returned by tools.spectre.skills, or a skill explicitly referenced by the user";
 
+export const SUBAGENT_SKILL_TOOL_DESCRIPTION = [
+  "Load a specialized skill's instructions and resources into the current conversation when the task at hand matches its description.",
+  "",
+  "The skill ID must match an available skill, a skill returned by tools.spectre.skills, a skill named in your system instructions, or a skill explicitly referenced by the user.",
+].join("\n");
+
+export const SUBAGENT_SKILL_ID_DESCRIPTION =
+  "The ID of an available skill, a skill returned by tools.spectre.skills, a skill named in your system instructions, or a skill explicitly referenced by the user";
+
 export interface SkillToolDraft {
   tools: Record<string, { description: string; input: unknown }>;
 }
@@ -78,14 +87,18 @@ export const renderCatalog = (skills: ReadonlyArray<Definition>): string => {
   return lines.join("\n");
 };
 
-export const shapeSkillTool = (draft: SkillToolDraft): void => {
+export const shapeSkillTool = (
+  draft: SkillToolDraft,
+  toolDescription: string = SKILL_TOOL_DESCRIPTION,
+  idDescription: string = SKILL_ID_DESCRIPTION,
+): void => {
   const skill = draft.tools.skill;
   if (skill === undefined) return;
-  skill.description = SKILL_TOOL_DESCRIPTION;
+  skill.description = toolDescription;
   if (typeof skill.input !== "object" || skill.input === null) return;
   const schema = skill.input as { properties?: { id?: { description?: string } } };
   if (schema.properties?.id !== undefined) {
-    schema.properties.id.description = SKILL_ID_DESCRIPTION;
+    schema.properties.id.description = idDescription;
   }
 };
 
@@ -93,6 +106,13 @@ export const attachSkillToolContract = (ctx: Plugin.Context) =>
   ctx.session
     .hook("context", (event) => {
       if (event.agent === "spectre") shapeSkillTool(event);
+      else if (
+        event.agent === "nocturna" ||
+        event.agent === "operator" ||
+        event.agent === "sicko"
+      ) {
+        shapeSkillTool(event, SUBAGENT_SKILL_TOOL_DESCRIPTION, SUBAGENT_SKILL_ID_DESCRIPTION);
+      }
       return Effect.void;
     })
     .pipe(

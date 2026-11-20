@@ -86,7 +86,9 @@ const makeHost = (
         const project = input?.project ?? "proj_spectre";
         const sorted = [...rows.values()]
           .filter((row) => (row.projectID ?? "proj_spectre") === project)
-          .toSorted((left, right) => right.updatedAt - left.updatedAt || right.id.localeCompare(left.id));
+          .toSorted(
+            (left, right) => right.updatedAt - left.updatedAt || right.id.localeCompare(left.id),
+          );
         const offset = input?.cursor === undefined ? 0 : Number(input.cursor);
         const pageSize = input?.limit ?? 100;
         const slice = sorted.slice(offset, offset + pageSize).map(toSessionInfo);
@@ -143,7 +145,13 @@ describe("tools.spectre.nocturna", () => {
             summary: "Earlier exploration compacted.",
           },
           { id: "msg_1", type: "user", text: "build feature" },
-          { id: "msg_2", type: "skill", skill: "playbook-feature", name: "playbook-feature", text: "" },
+          {
+            id: "msg_2",
+            type: "skill",
+            skill: "playbook-feature",
+            name: "playbook-feature",
+            text: "",
+          },
           {
             id: "msg_3",
             type: "assistant",
@@ -287,9 +295,7 @@ describe("tools.spectre.nocturna", () => {
           callContext(),
         ),
       ),
-      Effect.runPromise(
-        tool.execute({ action: "mark", sessions: ["ses_two"] }, callContext()),
-      ),
+      Effect.runPromise(tool.execute({ action: "mark", sessions: ["ses_two"] }, callContext())),
     ]);
 
     if (m1.output?.status !== "marked" || m2.output?.status !== "marked") {
@@ -387,5 +393,101 @@ describe("tools.spectre.nocturna", () => {
       "idle",
     ]);
     expect(res.output.sessions[0]?.events[0]?.summary).toContain("Compacted prior steps");
+  });
+
+  test("collect records completed skill tool calls, nested Code Mode toolCalls and metadata.error, excludes callerParentID, and pre-ranks pending sessions before limit slicing", async () => {
+    const { ctx } = makeHost([
+      {
+        id: "ses_caller_parent",
+        agent: "spectre",
+        updatedAt: NOW - 500,
+      },
+      {
+        id: "ses_caller",
+        parentID: "ses_caller_parent",
+        agent: "spectre",
+        updatedAt: NOW - 200,
+      },
+      {
+        id: "ses_small_newest",
+        agent: "operator",
+        updatedAt: NOW - 1_000,
+        cost: 0.01,
+        tokens: { input: 100, output: 50, reasoning: 0 },
+      },
+      {
+        id: "ses_failed_older",
+        agent: "spectre",
+        outcome: "failed",
+        updatedAt: NOW - 2 * DAY_MS,
+        cost: 0.2,
+        tokens: { input: 4_000, output: 1_000, reasoning: 0 },
+        messages: [
+          {
+            id: "msg_a",
+            type: "assistant",
+            agent: "spectre",
+            model: { providerID: "anthropic", id: "claude-sonnet-4" },
+            content: [
+              {
+                type: "tool",
+                id: "call_skill",
+                name: "skill",
+                state: {
+                  status: "completed",
+                  input: { id: "effect-best-practices" },
+                  content: [{ type: "text", text: "loaded" }],
+                },
+              },
+              {
+                type: "tool",
+                id: "call_exec",
+                name: "execute",
+                state: {
+                  status: "completed",
+                  input: { code: "return 1;" },
+                  content: [{ type: "text", text: "ok" }],
+                  metadata: {
+                    error: true,
+                    toolCalls: [
+                      { tool: "spectre.brain", status: "completed" },
+                      { tool: "spectre.comments", status: "error" },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "ses_heavy_tokens",
+        agent: "spectre",
+        updatedAt: NOW - DAY_MS,
+        cost: 0.5,
+        tokens: { input: 80_000, output: 20_000, reasoning: 0 },
+      },
+    ]);
+
+    const tool = nocturnaTool(ctx, () => NOW);
+    const res = await Effect.runPromise(tool.execute({ limit: 2 }, callContext("ses_caller")));
+    expect(res.output?.status).toBe("collected");
+    if (res.output?.status !== "collected") throw new Error("expected collected");
+
+    expect(res.output.scannedInWindow).toBe(3);
+    expect(res.output.remainingUnanalyzed).toBe(1);
+    expect(res.output.sessions.map((one) => one.id)).toEqual([
+      "ses_failed_older",
+      "ses_heavy_tokens",
+    ]);
+
+    const failedDigest = res.output.sessions[0];
+    expect(failedDigest?.skillsLoaded).toEqual(["effect-best-practices"]);
+    expect(failedDigest?.tools).toEqual([
+      { name: "execute", calls: 1, errors: 1 },
+      { name: "spectre.comments", calls: 1, errors: 1 },
+      { name: "skill", calls: 1, errors: 0 },
+      { name: "spectre.brain", calls: 1, errors: 0 },
+    ]);
   });
 });

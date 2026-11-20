@@ -19,7 +19,7 @@ answered, empty, partial, absent, refused. Use \`ripgrep\` for plain text.`,
   ripgrep: `Search PLAIN TEXT — logs, docs prose, fixture data, lock files, and
 any file the code index does not hold. It takes ripgrep's regular expression
 syntax or literal text matching. For a symbol, a definition, a call site, or
-"where is this implemented", call \`spectre_search\` first.`,
+"where is this implemented", call \`spectre_search\` first. Pass one existing file or directory in \`path\`; put multi-folder globs such as \`{test,scripts}/**\` in \`include\`.`,
   sentinel: `[spectre_search] this ripgrep was a code search, so spectre_search answered it.`,
   ripwire: `Run pre-landing ripwire quality-delta and affected-test checks, or audit session ripwire usage.
 Default action=check runs ripwire --quality-delta and --affected over edited code files, returning gating regressions, new-symbol debt rows, the measured at SHA, and affected test paths to run before commit or PR. Pass action=report to list project sessions that skipped ripwire verbs.`,
@@ -32,7 +32,8 @@ export const END_OF_WORK = `This session holds code edits and no measurement sin
 export const INSTALL = `RIPWIRE_REPO=redhat-et/ripwire bash -c "$(curl -fsSL https://raw.githubusercontent.com/redhat-et/ripwire/main/scripts/install.sh)"`;
 
 /** The read gate's one refusal: name the instrument, then let the second call through. */
-export const readRefusal = (path: string): string => `\`${path}\` is a code file, and this session has not searched the code index yet. Ask \`spectre_search\` first: a \`query\` for a question, a \`pattern\` for a symbol. Re-issue the read if the symbol's body is still what you need. The gate refuses once, then it is advisory by design, because a blocked model must be able to read.`;
+export const readRefusal = (path: string): string =>
+  `\`${path}\` is a code file, and this session has not searched the code index yet. Ask \`spectre_search\` first: a \`query\` for a question, a \`pattern\` for a symbol. Re-issue the read if the symbol's body is still what you need. The gate refuses once, then it is advisory by design, because a blocked model must be able to read.`;
 
 /** The landing gate's one refusal: the two commands it watched for, and the paths it watched. */
 export const landRefusal = (paths: ReadonlyArray<string>): string => {

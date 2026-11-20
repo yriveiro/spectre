@@ -10,7 +10,7 @@ const git = async (
   args: ReadonlyArray<string>,
   env: Record<string, string> = {},
 ): Promise<string> => {
-  const proc = Bun.spawn(["git", ...args], {
+  const proc = Bun.spawn(["git", "-c", "commit.gpgsign=false", ...args], {
     cwd,
     stdout: "pipe",
     stderr: "pipe",

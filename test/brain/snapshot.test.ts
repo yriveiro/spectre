@@ -9,7 +9,18 @@ const temp = useTempDirs("brain-snapshot");
 
 const git = (root: string, args: ReadonlyArray<string>): void => {
   const done = Bun.spawnSync({
-    cmd: ["git", "-C", root, "-c", "user.email=worker@spectre", "-c", "user.name=worker", ...args],
+    cmd: [
+      "git",
+      "-C",
+      root,
+      "-c",
+      "commit.gpgsign=false",
+      "-c",
+      "user.email=worker@spectre",
+      "-c",
+      "user.name=worker",
+      ...args,
+    ],
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -86,10 +97,16 @@ describe("brain snapshot", () => {
     expect(nodeA?.body).toBe("- Point one\n- Point two");
     expect(nodeA?.inCortex).toBe(true);
 
-    expect(snap.latentBridges.some((b) =>
-      (b.from === branchB.id && b.to === peer.id) || (b.from === peer.id && b.to === branchB.id),
-    )).toBe(true);
+    expect(
+      snap.latentBridges.some(
+        (b) =>
+          (b.from === branchB.id && b.to === peer.id) ||
+          (b.from === peer.id && b.to === branchB.id),
+      ),
+    ).toBe(true);
 
-    expect(snap.anomalies.some((a) => a.kind === "supersedes-fork" && a.neuronIds.includes(branchA.id))).toBe(true);
+    expect(
+      snap.anomalies.some((a) => a.kind === "supersedes-fork" && a.neuronIds.includes(branchA.id)),
+    ).toBe(true);
   });
 });

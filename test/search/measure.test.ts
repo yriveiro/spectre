@@ -34,7 +34,9 @@ const stored = (after: After, session: string) =>
   records(after).then((all) => all.find((one) => one.session === session));
 
 const search = (after: After, session: string, id: string, status: string) =>
-  Effect.runPromise(after.callback(afterEvent("spectre_search", { query: "decide" }, session, id, { status })));
+  Effect.runPromise(
+    after.callback(afterEvent("spectre_search", { query: "decide" }, session, id, { status })),
+  );
 
 afterEach(cleanupDirs);
 
@@ -45,14 +47,56 @@ describe("the record is written on execute.after", () => {
       const after = await captureAfter();
       const name = "ses_measure_edit";
 
-      await Effect.runPromise(after.callback(afterEvent("edit", { path: "src/a.ts" }, name, "call_m_edit")));
       await Effect.runPromise(
-        after.callback(afterEvent("write", { path: "src/b.ts", content: "x" }, name, "call_m_write")),
+        after.callback(afterEvent("edit", { path: "src/a.ts" }, name, "call_m_edit")),
       );
-      await Effect.runPromise(after.callback(afterEvent("shell", { command: "git status" }, name, "call_m_other")));
+      await Effect.runPromise(
+        after.callback(
+          afterEvent("write", { path: "src/b.ts", content: "x" }, name, "call_m_write"),
+        ),
+      );
+      await Effect.runPromise(
+        after.callback(afterEvent("shell", { command: "git status" }, name, "call_m_other")),
+      );
 
       expect((await stored(after, name))?.edits).toBe(2);
       expect((await records(after)).length).toBe(1);
+      memories.delete(Session.ID.make(name));
+    });
+  });
+
+  test("markdown and outside-root edits or writes do not count as code edits", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const after = await captureAfter();
+      const name = "ses_measure_non_code_edit";
+
+      await Effect.runPromise(
+        after.callback(
+          afterEvent("write", { path: "README.md", content: "docs" }, name, "call_m_doc_write"),
+        ),
+      );
+      await Effect.runPromise(
+        after.callback(afterEvent("edit", { path: "/elsewhere/report.md" }, name, "call_m_ext_md")),
+      );
+      await Effect.runPromise(
+        after.callback(
+          afterEvent(
+            "write",
+            { path: "/elsewhere/outside.ts", content: "x" },
+            name,
+            "call_m_ext_ts",
+          ),
+        ),
+      );
+
+      expect(await stored(after, name)).toBeUndefined();
+      expect(await records(after)).toEqual([]);
+
+      await Effect.runPromise(
+        after.callback(afterEvent("edit", { path: "/tmp/src/inside.ts" }, name, "call_m_in_ts")),
+      );
+      expect((await stored(after, name))?.edits).toBe(1);
       memories.delete(Session.ID.make(name));
     });
   });
@@ -66,8 +110,12 @@ describe("the record is written on execute.after", () => {
       await Effect.runPromise(
         after.callback(afterEvent("read", { path: "/tmp/src/decide.ts" }, name, "call_m_code")),
       );
-      await Effect.runPromise(after.callback(afterEvent("read", { path: "/tmp/README.md" }, name, "call_m_doc")));
-      await Effect.runPromise(after.callback(afterEvent("read", { path: "/elsewhere/x.ts" }, name, "call_m_out")));
+      await Effect.runPromise(
+        after.callback(afterEvent("read", { path: "/tmp/README.md" }, name, "call_m_doc")),
+      );
+      await Effect.runPromise(
+        after.callback(afterEvent("read", { path: "/elsewhere/x.ts" }, name, "call_m_out")),
+      );
 
       expect((await stored(after, name))?.reads).toBe(1);
       memories.delete(Session.ID.make(name));
@@ -80,7 +128,9 @@ describe("the record is written on execute.after", () => {
       const after = await captureAfter();
       const name = "ses_measure_failed";
 
-      await Effect.runPromise(after.callback(afterEvent("edit", { path: "src/a.ts" }, name, "call_m_ok")));
+      await Effect.runPromise(
+        after.callback(afterEvent("edit", { path: "src/a.ts" }, name, "call_m_ok")),
+      );
       await Effect.runPromise(
         after.callback(failedEvent("edit", { path: "src/b.ts" }, name, "call_m_failed")),
       );
@@ -99,7 +149,9 @@ describe("the record is written on execute.after", () => {
       const after = await captureAfter();
       for (let index = 0; index < 65; index += 1) {
         const name = `ses_measure_cap_${index}`;
-        await Effect.runPromise(after.callback(afterEvent("edit", { path: "src/a.ts" }, name, `call_m_cap_${index}`)));
+        await Effect.runPromise(
+          after.callback(afterEvent("edit", { path: "src/a.ts" }, name, `call_m_cap_${index}`)),
+        );
         memories.delete(Session.ID.make(name));
       }
       const all = await records(after);
@@ -116,7 +168,14 @@ describe("the record is written on execute.after", () => {
 
       await Effect.runPromise(
         after.callback(
-          afterEvent("edit", { path: "src/a.ts" }, "ses_measure_stock", "call_m_stock", undefined, "build"),
+          afterEvent(
+            "edit",
+            { path: "src/a.ts" },
+            "ses_measure_stock",
+            "call_m_stock",
+            undefined,
+            "build",
+          ),
         ),
       );
 
@@ -130,7 +189,9 @@ describe("the record is written on execute.after", () => {
     await withBinary(bin, async () => {
       const after = await captureAfter("prj_measure_a");
       await Effect.runPromise(
-        after.callback(afterEvent("edit", { path: "src/a.ts" }, "ses_measure_scope", "call_m_scope")),
+        after.callback(
+          afterEvent("edit", { path: "src/a.ts" }, "ses_measure_scope", "call_m_scope"),
+        ),
       );
       const other = await Effect.runPromise(recordsOf(makeStorage(after.values), "prj_measure_b"));
       expect(other).toEqual([]);
@@ -148,13 +209,9 @@ describe("a completed search is a lookup", () => {
       const name = "ses_measure_search";
       await Effect.runPromise(
         after.callback(
-          afterEvent(
-            "spectre_search",
-            { pattern: "resolveTool" },
-            name,
-            "call_m_search",
-            { status: "answered" },
-          ),
+          afterEvent("spectre_search", { pattern: "resolveTool" }, name, "call_m_search", {
+            status: "answered",
+          }),
         ),
       );
 
@@ -210,8 +267,12 @@ describe("a ripwire lookup records its measurement", () => {
     await withBinary(bin, async () => {
       const after = await captureAfter();
       const name = "ses_measure_delta";
-      await Effect.runPromise(after.callback(afterEvent("edit", { path: "src/a.ts" }, name, "call_m_d1")));
-      await Effect.runPromise(after.callback(afterEvent("edit", { path: "src/b.ts" }, name, "call_m_d2")));
+      await Effect.runPromise(
+        after.callback(afterEvent("edit", { path: "src/a.ts" }, name, "call_m_d1")),
+      );
+      await Effect.runPromise(
+        after.callback(afterEvent("edit", { path: "src/b.ts" }, name, "call_m_d2")),
+      );
       await Effect.runPromise(
         after.callback(
           afterEvent("shell", { command: "ripwire . --quality-delta" }, name, "call_m_delta", {
@@ -234,7 +295,9 @@ describe("a ripwire lookup records its measurement", () => {
     await withBinary(bin, async () => {
       const after = await captureAfter();
       const name = "ses_measure_help";
-      await Effect.runPromise(after.callback(afterEvent("shell", { command: "ripwire --help" }, name, "call_m_help")));
+      await Effect.runPromise(
+        after.callback(afterEvent("shell", { command: "ripwire --help" }, name, "call_m_help")),
+      );
 
       const row = await stored(after, name);
       expect(row?.lookups).toBe(0);
@@ -289,6 +352,29 @@ describe("a spawn is counted and a follow-up is not", () => {
       expect(await stored(after, "ses_measure_stock_child")).toBeUndefined();
       expect((await records(after)).length).toBe(1);
       memories.delete(Session.ID.make(name));
+    });
+  });
+
+  test("nocturna and sicko spawns do not count as slice-fanout subagents", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const after = await captureAfter();
+      const name = "ses_measure_auditor_spawn";
+
+      for (const [idx, agent] of ["nocturna", "sicko"].entries()) {
+        await Effect.runPromise(
+          after.callback(
+            afterEvent("subagent", { agent, prompt: "audit" }, name, `call_m_audit_${idx}`, {
+              sessionID: `ses_measure_audit_child_${idx}`,
+              status: "completed",
+              output: "done",
+            }),
+          ),
+        );
+      }
+
+      expect(memories.get(Session.ID.make(name))).toBeUndefined();
+      expect(await records(after)).toEqual([]);
     });
   });
 
@@ -373,11 +459,17 @@ describe("execute.after reconciles spectre.end-of-work after Code Mode ripwire c
       endOfWorkSynced.add(id);
 
       await Effect.runPromise(
-        callback(afterEvent("spectre_ripwire", { action: "check" }, name, "call_m_ripwire", { status: "ok" })),
+        callback(
+          afterEvent("spectre_ripwire", { action: "check" }, name, "call_m_ripwire", {
+            status: "ok",
+          }),
+        ),
       );
       expect(removes).toEqual([{ sessionID: id, key: "spectre.end-of-work" }]);
 
-      await Effect.runPromise(callback(afterEvent("execute", { code: "return 1" }, name, "call_m_exec", {})));
+      await Effect.runPromise(
+        callback(afterEvent("execute", { code: "return 1" }, name, "call_m_exec", {})),
+      );
       expect(removes).toHaveLength(1);
 
       memories.delete(id);

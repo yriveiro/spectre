@@ -32,12 +32,14 @@ advisory: the actor is genuinely irrelevant in a sentence about how a prompt rea
 
 ## What has an instrument
 
-`tools.spectre.prose` checks the mechanical half. Six rules: semicolon, phrasal
-verb, nominalization, marketing adjective, long sentence, and passive voice. Four
-are hard and two are advisory, so a clean run is not a clean sentence.
+`tools.spectre.prose` checks the mechanical half. Seven rules: semicolon, phrasal
+verb, nominalization, marketing adjective, long sentence, passive voice, and
+present perfect. Five are hard and two are advisory, so a clean run is not a
+clean sentence.
 
 ```js
 await tools.spectre.prose({ targets: ["skills/definitions/grammar/SKILL.md"], disable: ["marketing-adjective"] })
+await tools.spectre.prose({ text: "<markdown>" })
 ```
 
 That one disables the marketing adjectives, because the section below names them

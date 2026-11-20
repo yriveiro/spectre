@@ -198,6 +198,12 @@ export const attachBranch = async (cwd: string, branch: string, from?: string) =
  */
 export const takeBranch = (cwd: string, branch: string) => git(cwd, ["switch", branch]);
 
+export const detachHead = (cwd: string, target: string) =>
+  git(cwd, ["checkout", "--detach", target]);
+
+export const statusPorcelain = (cwd: string): Promise<Result> =>
+  git(cwd, ["status", "--porcelain", "-uall"]);
+
 export const isWorktree = async (directory: string): Promise<boolean> =>
   answered(await git(directory, ["rev-parse", "--git-dir"]));
 

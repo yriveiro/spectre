@@ -8,16 +8,20 @@ import {
   BUCKETS,
   branchState as branchStateOf,
   escort,
+  isLedgerOnlyPorcelain,
+  LEDGER_PATH,
   mismatch,
   refusal as policyRefusal,
   type Reads,
 } from "./classify";
 import {
+  answered,
   attachBranch,
   bareOf,
   branchExists,
   commitOf,
   currentBranch,
+  detachHead,
   firstResolving,
   head,
   hostRefusal,
@@ -27,6 +31,7 @@ import {
   mainOf,
   resolves,
   rootFor,
+  statusPorcelain,
   takeBranch,
   toplevel,
 } from "./read";
@@ -81,6 +86,10 @@ export const Start = Schema.Struct({
   base: Schema.optional(Schema.String).annotate({
     description:
       "Ref to branch from. Defaults to the first of origin/HEAD, origin/main, main, HEAD that resolves.",
+  }),
+  detached: Schema.optional(Schema.Boolean).annotate({
+    description:
+      "Open the worktree on a detached HEAD at `base` without creating or checking out a branch.",
   }),
 });
 
@@ -175,12 +184,67 @@ const whereIs = (ctx: Plugin.Context, sessionID: Session.ID | undefined) =>
         ),
       );
 
+const prepareWorktree = async (
+  directory: string,
+  cut: string,
+  branch: string,
+  existing: boolean,
+  detached: boolean,
+): Promise<string | undefined> => {
+  const attached = detached
+    ? await detachHead(directory, cut)
+    : existing
+      ? await takeBranch(directory, branch)
+      : await attachBranch(directory, branch, cut);
+  if (attached.ran && attached.code === 0) return undefined;
+  const detail = attached.err || (attached.ran ? attached.out : "");
+  return detached
+    ? `created worktree but could not detach HEAD at ${cut}: ${detail}. Left intact, and this session has not moved.`
+    : `created on a detached HEAD and could not get onto ${branch}: ${detail}. Left intact, and this session has not moved.`;
+};
+
+const verifyWorktree = async (
+  projectDirectory: string,
+  directory: string,
+  expected: string,
+  branch: string,
+  detached: boolean,
+) => {
+  const [after, gotHead, gotBranch] = await Promise.all([
+    listed(projectDirectory),
+    head(directory),
+    currentBranch(directory),
+  ]);
+  const reads: Reads = {
+    listed: after.kind === "listed" && after.rows.some((one) => one.directory === directory),
+    head: gotHead.kind === "read" ? gotHead.value : undefined,
+    expected,
+    branch: gotBranch.kind === "read" ? gotBranch.value : undefined,
+    wanted: detached ? "HEAD" : branch,
+  };
+  return {
+    wrong: mismatch(reads),
+    head: gotHead.kind === "read" ? gotHead.value : gotHead.why,
+  };
+};
+
+const clearLedgerScratch = async (directory: string): Promise<Uint8Array | undefined> => {
+  const treeStatus = await statusPorcelain(directory);
+  if (!answered(treeStatus) || !isLedgerOnlyPorcelain(treeStatus.out)) return undefined;
+  const file = Bun.file(`${directory}/${LEDGER_PATH}`);
+  if (!(await file.exists())) return undefined;
+  const saved = await file.bytes();
+  await file.delete();
+  return saved;
+};
+
 const runStart = (ctx: Plugin.Context) =>
   Effect.fn("spectre.worktrees.start")(function* (
     input: typeof Start.Type,
     sessionID: Session.ID | undefined,
   ) {
     const projectDirectory = ctx.location.project.directory;
+    const detached = input.detached === true;
     const branch = input.branch ?? input.name;
 
     const listing = yield* Effect.promise(() => listed(projectDirectory));
@@ -191,7 +255,7 @@ const runStart = (ctx: Plugin.Context) =>
 
     const [branchTaken, base, sessionDirectory] = yield* Effect.promise(async () => {
       const [exists, resolved, where] = await Promise.all([
-        branchExists(projectDirectory, branch),
+        detached ? Promise.resolve(false) : branchExists(projectDirectory, branch),
         input.base === undefined
           ? firstResolving(projectDirectory, BASES)
           : resolves(projectDirectory, input.base).then((ok) => (ok ? input.base : undefined)),
@@ -200,7 +264,7 @@ const runStart = (ctx: Plugin.Context) =>
       return [exists, resolved, where] as const;
     });
 
-    const state = branchStateOf(branch, branchTaken, rows);
+    const state = detached ? { kind: "new" as const } : branchStateOf(branch, branchTaken, rows);
 
     const blocked = policyRefusal({
       name: input.name,
@@ -262,36 +326,24 @@ const runStart = (ctx: Plugin.Context) =>
     }
 
     const directory = made.success.directory;
-    const attached = yield* Effect.promise(() =>
-      state.kind === "existing"
-        ? takeBranch(directory, branch)
-        : attachBranch(directory, branch, cut),
+    const prepError = yield* Effect.promise(() =>
+      prepareWorktree(directory, cut, branch, state.kind === "existing", detached),
     );
-    if (!attached.ran || attached.code !== 0)
+    if (prepError !== undefined)
       return {
         status: "unverified" as const,
         directory,
-        problems: `created on a detached HEAD and could not get onto ${branch}: ${attached.err || (attached.ran ? attached.out : "")}. Left intact, and this session has not moved.`,
+        problems: prepError,
       };
 
-    const [after, gotHead, gotBranch] = yield* Effect.promise(async () =>
-      Promise.all([listed(projectDirectory), head(directory), currentBranch(directory)]),
+    const verified = yield* Effect.promise(() =>
+      verifyWorktree(projectDirectory, directory, gotExpected.value, branch, detached),
     );
-
-    const reads: Reads = {
-      listed: after.kind === "listed" && after.rows.some((one) => one.directory === directory),
-      head: gotHead.kind === "read" ? gotHead.value : undefined,
-      expected: gotExpected.value,
-      branch: gotBranch.kind === "read" ? gotBranch.value : undefined,
-      wanted: branch,
-    };
-    const wrong = mismatch(reads);
-
-    if (wrong !== undefined)
+    if (verified.wrong !== undefined)
       return {
         status: "unverified" as const,
         directory,
-        problems: `${wrong}. Left intact, and this session has not moved.`,
+        problems: `${verified.wrong}. Left intact, and this session has not moved.`,
       };
 
     if (sessionID !== undefined) {
@@ -307,9 +359,9 @@ const runStart = (ctx: Plugin.Context) =>
     return {
       status: "opened" as const,
       directory,
-      branch,
+      branch: detached ? "(detached)" : branch,
       cut,
-      head: gotHead.kind === "read" ? gotHead.value : gotHead.why,
+      head: verified.head,
     };
   });
 
@@ -361,9 +413,7 @@ const goalHolding = (ctx: Plugin.Context) =>
     if (session._tag === "Failure")
       return "This session could not be read, and a read that did not answer is not proof that it is not standing in the target. Run /goal to inspect it, then remove. Nothing was removed.";
 
-    const where = yield* Effect.promise(() =>
-      toplevel(session.success.location.directory),
-    );
+    const where = yield* Effect.promise(() => toplevel(session.success.location.directory));
     if (where === undefined)
       return "This session's working directory could not be placed, and a place that did not answer is not proof that it is not the target. Run /goal to inspect it, then remove. Nothing was removed.";
     if (where !== target) return undefined;
@@ -396,6 +446,39 @@ const runStanding = (directory: string, rows: ReadonlyArray<ListedWorktree>) =>
       listed: rows.some((one) => one.directory === directory),
       branch: named.kind === "read" && named.value !== "HEAD" ? named.value : undefined,
     };
+  });
+
+const removeDirectoryWithLedgerRollback = (
+  ctx: Plugin.Context,
+  directory: string,
+  kept: { readonly branch?: string; readonly moved?: string },
+) =>
+  Effect.gen(function* () {
+    const savedLedger = yield* Effect.promise(() => clearLedgerScratch(directory));
+    const removed = yield* Effect.result(
+      ctx.worktree.remove({
+        projectID: ctx.location.project.id,
+        directory: AbsolutePath.make(directory),
+        force: false,
+      }),
+    );
+    if (removed._tag === "Failure") {
+      if (savedLedger !== undefined) {
+        yield* Effect.promise(() => Bun.write(`${directory}/${LEDGER_PATH}`, savedLedger)).pipe(
+          Effect.catchCause(() => Effect.void),
+        );
+      }
+      const why = hostRefusal(removed.failure);
+      return {
+        status: "failed" as const,
+        directory,
+        ...kept,
+        problems: why.forceRequired
+          ? `${why.message} Nothing was deleted — that refusal is the guard.`
+          : `${why.message}`,
+      };
+    }
+    return { status: "removed" as const, directory, ...kept };
   });
 
 const runRemove = (ctx: Plugin.Context) =>
@@ -442,31 +525,7 @@ const runRemove = (ctx: Plugin.Context) =>
       ...(escorted.kind === "moved" ? { moved: escorted.to } : {}),
     };
 
-    const removed = yield* Effect.result(
-      ctx.worktree.remove({
-        projectID: ctx.location.project.id,
-        directory: AbsolutePath.make(input.directory),
-        force: false,
-      }),
-    );
-
-    if (removed._tag === "Failure") {
-      const why = hostRefusal(removed.failure);
-      return {
-        status: "failed" as const,
-        directory: input.directory,
-        ...kept,
-        problems: why.forceRequired
-          ? `${why.message} Nothing was deleted — that refusal is the guard.`
-          : `${why.message}`,
-      };
-    }
-
-    return {
-      status: "removed" as const,
-      directory: input.directory,
-      ...kept,
-    };
+    return yield* removeDirectoryWithLedgerRollback(ctx, input.directory, kept);
   });
 
 const Input = Schema.Union([List, Start, Remove]);

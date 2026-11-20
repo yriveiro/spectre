@@ -72,7 +72,9 @@ const findingsOf = (records: ReadonlyArray<UsageRecord>): Array<Finding> =>
   records.flatMap((record) => [
     ...(record.edits > 0 && !deltaFresh(record) ? [named(record, record.edits, DELTA)] : []),
     ...(record.reads > 0 && record.lookups === 0 ? [named(record, record.reads, LOOKUP)] : []),
-    ...(record.subagents > 0 && record.packed === 0 ? [named(record, record.subagents, FANOUT)] : []),
+    ...(record.subagents >= 2 && record.packed === 0
+      ? [named(record, record.subagents, FANOUT)]
+      : []),
   ]);
 
 const describeReport = (
@@ -83,7 +85,9 @@ const describeReport = (
   if (records.length === 0) return `No session in ${project} has been recorded yet.`;
   if (findings.length === 0)
     return `No session in ${project} skipped a ripwire verb across ${records.length} recorded.`;
-  const rows = findings.map((one) => `- ${one.session} (${one.count}): \`${one.missing}\` never ran`);
+  const rows = findings.map(
+    (one) => `- ${one.session} (${one.count}): \`${one.missing}\` never ran`,
+  );
   return `${findings.length} findings across ${records.length} sessions in ${project}:\n${rows.join("\n")}`;
 };
 
@@ -201,6 +205,37 @@ type SelectedPaths =
   | { readonly kind: "empty" }
   | { readonly kind: "ready"; readonly paths: Array<string> };
 
+const unquotePorcelainPath = (raw: string): string =>
+  raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1).replace(/\\(["\\])/g, "$1") : raw;
+
+const parsePorcelainLine = (line: string): string | undefined => {
+  const clean = line.endsWith("\r") ? line.slice(0, -1) : line;
+  if (clean.length < 4 || clean[2] !== " ") return undefined;
+  const status = clean.slice(0, 2);
+  if (status === "!!" || status[1] === "D" || status === "D ") return undefined;
+  const rest = clean.slice(3);
+  const arrow = status.includes("R") || status.includes("C") ? rest.lastIndexOf(" -> ") : -1;
+  const target = arrow >= 0 ? rest.slice(arrow + 4) : rest;
+  return unquotePorcelainPath(target);
+};
+
+const parsePorcelainCodePaths = (stdout: string, root: string): Array<string> => {
+  const found = new Set<string>();
+  for (const line of stdout.split("\n")) {
+    const path = parsePorcelainLine(line);
+    if (path !== undefined && codePath(path) && scope(root, path) !== undefined) {
+      found.add(path);
+    }
+  }
+  return [...found].sort();
+};
+
+const gitWorkingTreeCodePaths = async (root: string): Promise<Array<string>> => {
+  const outcome = await spawnRipwire(["git", "status", "--porcelain", "-uall"], root);
+  if (!outcome.ok || outcome.code !== 0) return [];
+  return parsePorcelainCodePaths(outcome.stdout, root);
+};
+
 const selectTargetPaths = (
   root: string,
   inputPaths: ReadonlyArray<string> | undefined,
@@ -209,13 +244,27 @@ const selectTargetPaths = (
   if (inputPaths !== undefined && inputPaths.length > 0) {
     const escaped = inputPaths.find((candidate) => scope(root, candidate) === undefined);
     if (escaped !== undefined) {
-      return { kind: "refused", summary: `${escaped} is outside ${root}, so no code index was read.` };
+      return {
+        kind: "refused",
+        summary: `${escaped} is outside ${root}, so no code index was read.`,
+      };
     }
     const paths = [...new Set(inputPaths.filter((candidate) => codePath(candidate)))].sort();
     return paths.length === 0 ? { kind: "empty" } : { kind: "ready", paths };
   }
   const paths = [...editedCode].sort();
   return paths.length === 0 ? { kind: "empty" } : { kind: "ready", paths };
+};
+
+const resolveTargetPaths = async (
+  root: string,
+  inputPaths: ReadonlyArray<string> | undefined,
+  editedCode: ReadonlySet<string>,
+): Promise<SelectedPaths> => {
+  const selected = selectTargetPaths(root, inputPaths, editedCode);
+  if (selected.kind !== "empty" || inputPaths !== undefined) return selected;
+  const gitPaths = await gitWorkingTreeCodePaths(root);
+  return gitPaths.length === 0 ? { kind: "empty" } : { kind: "ready", paths: gitPaths };
 };
 
 const buildCheckOutput = (
@@ -292,9 +341,13 @@ const recordCompletedCheck = (
     remember(sessionID, {
       ...prev,
       touched: prev.touched + 1,
-      ...(full ? { measured: { delta: prev.editedCode.size, affected: prev.editedCode.size } } : {}),
+      measured: {
+        ...prev.measured,
+        delta: prev.editedCode.size,
+        ...(full ? { affected: prev.editedCode.size } : {}),
+      },
     });
-    if (full) yield* recordCheck(ctx.storage, ctx.location.project.id, sessionID);
+    yield* recordCheck(ctx.storage, ctx.location.project.id, sessionID, full);
   });
 
 const absentSummary = (health: Exclude<Health, { readonly kind: "ready" }>): string =>
@@ -302,11 +355,7 @@ const absentSummary = (health: Exclude<Health, { readonly kind: "ready" }>): str
     ? `${health.binary} is version ${health.version}, older than 0.6.10. Run ripwire --doctor.`
     : `${health.why}. Install it:\n${INSTALL}`;
 
-const runCheck = (
-  ctx: Plugin.Context,
-  input: typeof RipwireInput.Type,
-  context: Tool.Context,
-) =>
+const runCheck = (ctx: Plugin.Context, input: typeof RipwireInput.Type, context: Tool.Context) =>
   Effect.gen(function* () {
     const root = yield* rootOf(ctx, context.sessionID);
     yield* ctx.permission.assert({
@@ -323,7 +372,9 @@ const runCheck = (
       return { output, content: output.summary };
     }
 
-    const selected = selectTargetPaths(root, input.paths, memoryOf(context.sessionID).editedCode);
+    const selected = yield* Effect.promise(() =>
+      resolveTargetPaths(root, input.paths, memoryOf(context.sessionID).editedCode),
+    );
     if (selected.kind === "refused") {
       const output = emptyCheck("refused", selected.summary);
       return { output, content: output.summary };
@@ -333,12 +384,16 @@ const runCheck = (
       return { output, content: output.summary };
     }
 
-    const run = yield* Effect.promise(() => executeCheckSpawns(health.binary, root, selected.paths));
+    const run = yield* Effect.promise(() =>
+      executeCheckSpawns(health.binary, root, selected.paths),
+    );
     if (run.ok) yield* recordCompletedCheck(ctx, context.sessionID, root, selected.paths);
     return { output: run.output, content: run.output.summary };
   });
 
-export const ripwire = (ctx: Plugin.Context): Tool.Info<typeof RipwireInput, typeof RipwireOutput> => ({
+export const ripwire = (
+  ctx: Plugin.Context,
+): Tool.Info<typeof RipwireInput, typeof RipwireOutput> => ({
   name: "ripwire",
   description: CONTRACT.ripwire,
   input: RipwireInput,
