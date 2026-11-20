@@ -9,6 +9,7 @@ import { canvases } from "../../tools/definitions/canvas";
 import { comments } from "../../tools/definitions/comments";
 import { goal } from "../../tools/definitions/goal";
 import { historyTool } from "../../tools/definitions/history";
+import { nocturnaTool } from "../../tools/definitions/nocturna";
 import { pr } from "../../tools/definitions/pr";
 import { prose } from "../../tools/definitions/prose";
 import { routing } from "../../tools/definitions/routing";
@@ -51,6 +52,7 @@ const SPECTRE_TOOLS: ReadonlyArray<RegisteredTool> = [
   comments(directory),
   goal(ctx),
   historyTool(directory),
+  nocturnaTool(ctx),
   pr(ctx),
   prose(directory),
   ripwire(ctx),
@@ -287,12 +289,14 @@ const TASK_QUERIES: ReadonlyArray<readonly [query: string, expectedPath: string]
   ["cleanup git worktrees hold-wip safe", "tools.spectre.worktrees"],
   ["search list inspect spectre skill catalog", "tools.spectre.skills"],
   ["preview skill headings pull workflows", "tools.spectre.skills"],
+  ["audit past opencode sessions rolling window", "tools.spectre.nocturna"],
+  ["nocturna session watermark storage", "tools.spectre.nocturna"],
 ];
 
 describe("Code Mode catalog routing surface", () => {
-  test("mounts a 41-tool catalog (13 spectre tools + 28 MCP distractors)", () => {
-    expect(SPECTRE_TOOLS).toHaveLength(13);
-    expect(runtime.catalog).toHaveLength(41);
+  test("mounts a 42-tool catalog (14 spectre tools + 28 MCP distractors)", () => {
+    expect(SPECTRE_TOOLS).toHaveLength(14);
+    expect(runtime.catalog).toHaveLength(42);
   });
 
   test("zero tools.spectre.* tools set pinned: true", () => {
@@ -322,7 +326,7 @@ describe("Code Mode catalog routing surface", () => {
     expect(NAMESPACE_DESCRIPTION).toContain("spectre_search");
   });
 
-  test("exact-path search({ query: 'tools.spectre.<name>' }) returns [exact] for all 12 tools", async () => {
+  test("exact-path search({ query: 'tools.spectre.<name>' }) returns [exact] for all 14 tools", async () => {
     for (const tool of SPECTRE_TOOLS) {
       const path = `tools.spectre.${tool.name}`;
       const res = await runSearch(path);

@@ -42,8 +42,9 @@ add a section only for a rule that is genuinely new.
 
 ## Phase B: Mine
 
-The transcripts are not available here, so mine what is:
+Mine recent sessions and project artifacts:
 
+- `tools.spectre.nocturna({ includeAnalyzed: true })` and `action: "inspect"` for recent session prompts, loaded skills, and tool habits.
 - `git log -format='%s%n%b' -n 200` for the subjects and bodies, which is where
   their idea of a good commit message lives.
 - The shape of the history itself: rebase or merge, one branch or worktrees, a

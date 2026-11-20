@@ -41,8 +41,10 @@ The host checks the ref against the models the session can see. It rejects an un
 | Agent | Mode | What it is for |
 | --- | --- | --- |
 | `spectre` | all | The default. Selectable in a chat and spawnable as a subagent. |
+| `operator` | subagent | Focused execution for `mechanical`, `search`, and `worker` profiles without hub bootstrap overhead. |
 | `sicko` | subagent | A narrow persona for comment work. The wrong agent for anything else. |
 | `mnemonic` | subagent | A brain sweep. The only agent that may write `.spectre/brain`. |
+| `nocturna` | subagent | Read-only auditor over past OpenCode sessions and Spectre skills, principles, playbooks, and tools. |
 
 The routing config refuses any other agent name, so a routed run cannot drop out of spectre mode by being some other agent. The agents differ in persona, in chat visibility, and in one permission: only `mnemonic` may write the brain.
 

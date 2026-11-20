@@ -5,6 +5,7 @@ import { canvases } from "./definitions/canvas";
 import { comments } from "./definitions/comments";
 import { goal } from "./definitions/goal";
 import { historyTool } from "./definitions/history";
+import { nocturnaTool } from "./definitions/nocturna";
 import { pr } from "./definitions/pr";
 import { prose } from "./definitions/prose";
 import { routing } from "./definitions/routing";
@@ -16,7 +17,7 @@ import { stack } from "./definitions/stack";
 import { sessionReturn, worktrees } from "./definitions/worktrees";
 
 export const NAMESPACE_DESCRIPTION =
-  "Direct code search: spectre_search. Tools: worktrees (branch isolation, cleanup), pr (compose, open pull requests), stack (stacked PR merge order, blockers), routing (subagent model selection), brain (project memory: decisions, gotchas, lessons, constraints), history (file git blame, pickaxe rationale), goal (/goal loop contract, ledger), canvas (HTML, diagram, report, PR review artifacts), prose (ASD-STE100 grammar, dictionary check), comments (comment, lint/type suppression inventory), solidjs (Solid 1/2 detection, reactivity audit), ripwire (pre-landing quality-delta and affected-test check, session usage audit), skills (skill catalog search, list, preview).";
+  "Direct code search: spectre_search. Tools: worktrees (branch isolation, cleanup), pr (compose, open pull requests), stack (stacked PR merge order, blockers), routing (subagent model selection), brain (project memory: decisions, gotchas, lessons, constraints), history (file git blame, pickaxe rationale), goal (/goal loop contract, ledger), canvas (HTML, diagram, report, PR review artifacts), prose (ASD-STE100 grammar, dictionary check), comments (comment, lint/type suppression inventory), solidjs (Solid 1/2 detection, reactivity audit), ripwire (pre-landing quality-delta and affected-test check, session usage audit), skills (skill catalog search, list, preview), nocturna (rolling session audit digests, storage watermarks).";
 
 export const update = (ctx: Plugin.Context) =>
   Effect.gen(function* () {
@@ -38,6 +39,7 @@ export const update = (ctx: Plugin.Context) =>
     const found = search(ctx);
     const checked = ripwire(ctx);
     const catalog = skillsTool();
+    const audits = nocturnaTool(ctx);
 
     // Not looped: `add` is generic, so a union of the two schemas instantiates to
     // neither and the call will not typecheck.
@@ -56,6 +58,7 @@ export const update = (ctx: Plugin.Context) =>
       editor.add(found);
       editor.add(checked);
       editor.add(catalog);
+      editor.add(audits);
       editor.namespace({
         name: "spectre",
         description: NAMESPACE_DESCRIPTION,
@@ -64,7 +67,7 @@ export const update = (ctx: Plugin.Context) =>
 
     yield* Effect.logInfo("Registered tools", {
       tools: [
-        listed, said, route, trees, prs, opening, why, pages, memory, loop, solid, found, checked, catalog,
+        listed, said, route, trees, prs, opening, why, pages, memory, loop, solid, found, checked, catalog, audits,
       ].map((tool) => `${tool.options?.namespace}_${tool.name}`),
     });
 

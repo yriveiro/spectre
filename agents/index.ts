@@ -1,11 +1,12 @@
 import type { Plugin } from "@opencode/plugin/effect";
 import { Effect } from "effect";
 import { mnemonic } from "./definitions/mnemonic";
+import { nocturna } from "./definitions/nocturna";
 import { operator } from "./definitions/operator";
 import { sicko } from "./definitions/sicko";
 import { spectre } from "./definitions/spectre";
 
-const definitions = [spectre, operator, sicko, mnemonic];
+const definitions = [spectre, operator, sicko, mnemonic, nocturna];
 
 /** The only agents model routing may name. Read from the same list that registers them. */
 export const agentIds = definitions.map((one) => one.id);
