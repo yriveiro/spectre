@@ -785,9 +785,25 @@ export default Plugin.define({
       store: makeClientArtifactStore({
         client: context.client,
         sessionTitle: (sessionID) => context.data.session.get(sessionID)?.title,
+        projects: () =>
+          context.data.project.list().map((project) => ({
+            id: project.id,
+            canonical: project.canonical,
+            name: project.name,
+            vcs: project.vcs,
+            activeAt: project.time.active,
+          })),
+        sessions: () =>
+          context.data.session.list().map((session) => ({
+            id: session.id,
+            directory: session.location.directory,
+            projectID: session.projectID,
+            title: session.title,
+          })),
       }),
       dialog: context.ui.dialog,
       toast: context.ui.toast,
+      formatPath: (value) => context.ui.format.path(value),
       resolveContext: () => {
         const sessionID = routeSession();
         return {
