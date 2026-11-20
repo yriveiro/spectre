@@ -82,8 +82,10 @@ export const parse = (text: string, note: AbsolutePath): Effect.Effect<Claim, Er
   });
 };
 
-export const render = (claim: Claim): string =>
-  [
+export const render = (claim: Claim, body?: string): string => {
+  const trimmed = body?.trim().replace(/[ \t]+$/gm, "");
+  const prose = trimmed !== undefined && trimmed.length > 0 ? trimmed : claim.claim;
+  return [
     "---",
     Bun.YAML.stringify(
       {
@@ -99,6 +101,7 @@ export const render = (claim: Claim): string =>
     ).replace(/[ \t]+$/gm, ""),
     "---",
     "",
-    claim.claim,
+    prose,
     "",
   ].join("\n");
+};

@@ -256,4 +256,50 @@ describe("the PR arm reads the evidence cache and publishes the page", () => {
     expect(html).toContain("const x = 1");
     expect(html).toContain("Adds the constant.");
   });
+
+  test("publishes and updates the dedicated brain canvas with d3 attached", async () => {
+    const calls: Array<Recorded> = [];
+    const ctx = ctxFor(PROJECT, [
+      fakeTool("artifact_create", calls),
+      fakeTool("artifact_update", calls),
+    ]);
+    await Bun.write(
+      join(PROJECT, ".spectre", "brain", "neurons", "0199b600-0000-7000-8000-000000000001.md"),
+      [
+        "---",
+        "id: 0199b600-0000-7000-8000-000000000001",
+        "schema_version: 1",
+        "kind: decision",
+        'claim: "Brain canvas uses one fixed layout."',
+        "subject: []",
+        "at: 2026-11-20T00:00:00.000Z",
+        "---",
+        "",
+        "- Connectome view",
+        "- Prompt Cortex view",
+        "",
+      ].join("\n"),
+    );
+
+    const created = published(
+      await run(ctx, { action: "publish", content: { kind: "brain" } }),
+    );
+    expect(created.title).toContain("Brain");
+    expect(Object.keys(calls[0]?.input.files ?? {}).toSorted()).toEqual([
+      "index.html",
+      "vendor/d3.min.js",
+    ]);
+    expect(calls[0]?.input.files?.["index.html"]).toContain("Brain canvas uses one fixed layout.");
+    expect(calls[0]?.input.files?.["index.html"]).toContain("Connectome view");
+
+    const updated = published(
+      await run(ctx, {
+        action: "update",
+        id: created.id,
+        content: { kind: "brain", focus: "0199b600" },
+      }),
+    );
+    expect(updated.id).toBe(created.id);
+    expect(calls[1]?.tool).toBe("artifact_update");
+  });
 });

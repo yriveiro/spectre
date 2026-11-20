@@ -96,7 +96,7 @@ inferred.
 
 ### The content union
 
-`content` is one of four kinds in `content.ts`, and each kind carries only what
+`content` is one of five kinds in `content.ts`, and each kind carries only what
 its author must supply:
 
 | Kind | Carries | Why |
@@ -105,6 +105,7 @@ its author must supply:
 | `report` | `title`, Markdown; Mermaid fences become static SVG with Pele | Code owns the page, the escaping, the headings, and the table of contents |
 | `diagram` | `title`, a takeaway, one Mermaid source, an optional caption | One figure; several figures belong in a `report` |
 | `pr` | an evidence `token`, a typed `review` (`summary`, `groups`, `points`, `unknowns`) | Code owns the diff and validates every cited path and line; the title comes from the pull request, not the model |
+| `brain` | optional `focus` neuron id or prefix | Code reads `.spectre/brain/` and composes one fixed Connectome, Prompt Cortex, Lineage, and Codebase Map document |
 
 ### Usage
 

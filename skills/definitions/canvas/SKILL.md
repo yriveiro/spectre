@@ -22,6 +22,7 @@ is a drawing rather than a report or a designed UI.
 - A designed UI, a concept, a mock, an interface the reader clicks through in
   their head — anything where the layout itself is the point — is a `page`.
 - One figure and the sentence it carries is a `diagram`.
+- Project memory under `.spectre/brain/` uses `brain`, never custom HTML.
 - A pull request is `pr-canvas`, not any of the above.
 
 ## Report
@@ -52,6 +53,15 @@ it. Several figures belong in a `report`, not here.
 Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
 "diagram", title, takeaway, mermaid, caption? } }`. Report the artifact id and
 the relative URL.
+
+## Brain
+
+Code composes the entire Brain inspector from `.spectre/brain/`, including the
+D3 Connectome, Prompt Cortex, Lineage queue, and Codebase Map. Never write a
+custom `page` for project memory.
+
+Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
+"brain", focus? } }`. Report the artifact id and the relative URL.
 
 ## Iterate and reopen
 

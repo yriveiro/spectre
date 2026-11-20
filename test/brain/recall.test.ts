@@ -14,6 +14,21 @@ const run = (input: {
 const ids = (claims: ReadonlyArray<Claim>): ReadonlyArray<string> =>
   claims.map((claim) => claim.id);
 
+const edgeBetween = (
+  kind: Edge["kind"],
+  from: string,
+  to: string | null,
+  why = "same write path",
+  at = "2026-09-04T00:00:00.000Z",
+): Edge => ({
+  kind,
+  from,
+  to,
+  why,
+  at,
+  until: null,
+});
+
 const canvas: Claim = {
   id: "0199b600000000000000000001",
   kind: "gotcha",
@@ -96,17 +111,9 @@ describe("recall", () => {
       subject: [],
       path: "/brain/neurons/0199b60000000000000000000c.md",
     };
-    const link = (from: string, to: string): Edge => ({
-      kind: "relates",
-      from,
-      to,
-      why: "same write path",
-      at: "2026-09-04T00:00:00.000Z",
-      until: null,
-    });
     const answer = await run({
       claims: [a, b, c],
-      edges: [link(a.id, b.id), link(b.id, c.id)],
+      edges: [edgeBetween("relates", a.id, b.id), edgeBetween("relates", b.id, c.id)],
       query: "canvas save allocates",
       budget: 1000,
     });
@@ -128,17 +135,13 @@ describe("recall", () => {
     const b: Claim = { ...mk("0199b6000000000000000000b1", "beta"), claim: "zebra panel" };
     const c: Claim = { ...b, id: "0199b6000000000000000000c1", claim: "yodel shelf" };
     const d: Claim = { ...b, id: "0199b6000000000000000000d1", claim: "xerox bench" };
-    const link = (from: string, to: string): Edge => ({
-      kind: "relates",
-      from,
-      to,
-      why: "same write path",
-      at: "2026-09-04T00:00:00.000Z",
-      until: null,
-    });
     const answer = await run({
       claims: [a, b, c, d],
-      edges: [link(a.id, b.id), link(b.id, c.id), link(c.id, d.id)],
+      edges: [
+        edgeBetween("relates", a.id, b.id),
+        edgeBetween("relates", b.id, c.id),
+        edgeBetween("relates", c.id, d.id),
+      ],
       query: "canvas save allocates",
       budget: 1000,
     });
@@ -164,6 +167,192 @@ describe("recall", () => {
     expect(ids(answer.claims)).toEqual([canvas.id]);
     expect(answer.edges).toEqual([]);
     expect(answer.problems).toEqual([]);
+  });
+
+  test("a demoted claim is excluded whether matched directly or reached through relates", async () => {
+    const direct = await run({
+      claims: [canvas, routing],
+      edges: [
+        {
+          kind: "demoted",
+          from: canvas.id,
+          to: null,
+          why: "disproven in live run",
+          at: "2026-09-05T00:00:00.000Z",
+          until: null,
+        },
+      ],
+      query: "canvas save allocates",
+      budget: 1000,
+    });
+    expect(ids(direct.claims)).toEqual([]);
+
+    const neighbour = await run({
+      claims: [routing, canvas],
+      edges: [
+        {
+          kind: "relates",
+          from: routing.id,
+          to: canvas.id,
+          why: "shared config",
+          at: "2026-09-04T00:00:00.000Z",
+          until: null,
+        },
+        {
+          kind: "demoted",
+          from: canvas.id,
+          to: null,
+          why: "disproven in live run",
+          at: "2026-09-05T00:00:00.000Z",
+          until: null,
+        },
+      ],
+      query: "routing reads profiles",
+      budget: 1000,
+    });
+    expect(ids(neighbour.claims)).toEqual([routing.id]);
+    expect(neighbour.edges).toEqual([]);
+  });
+
+  test("a supersedes chain longer than two hops resolves to the live terminal claim", async () => {
+    const mk = (id: string, text: string, at: string): Claim => ({
+      id,
+      kind: "constraint",
+      claim: text,
+      subject: [],
+      at,
+      path: `/brain/neurons/${id}.md`,
+    });
+    const v1 = mk("0199b6000000000000000000s1", "ripwire worktree rule v1", "2026-10-01T00:00:00.000Z");
+    const v2 = mk("0199b6000000000000000000s2", "spectre mode rule v2", "2026-10-02T00:00:00.000Z");
+    const v3 = mk("0199b6000000000000000000s3", "fenced block check v3", "2026-10-03T00:00:00.000Z");
+    const v4 = mk("0199b6000000000000000000s4", "branch pickup decision v4", "2026-10-04T00:00:00.000Z");
+
+    const answer = await run({
+      claims: [v1, v2, v3, v4],
+      edges: [
+        edgeBetween("supersedes", v1.id, v2.id, "updated contract", "2026-10-02T00:00:00.000Z"),
+        edgeBetween("supersedes", v2.id, v3.id, "updated contract", "2026-10-03T00:00:00.000Z"),
+        edgeBetween("supersedes", v3.id, v4.id, "updated contract", "2026-10-04T00:00:00.000Z"),
+      ],
+      query: "ripwire",
+      budget: 1000,
+    });
+    expect(ids(answer.claims)).toEqual([v4.id]);
+  });
+
+  test("a superseded claim whose replacement is demoted returns neither claim", async () => {
+    const old: Claim = {
+      ...canvas,
+      id: "0199b6000000000000000000d1",
+      claim: "legacy canvas cache directory",
+    };
+    const replacement: Claim = {
+      ...canvas,
+      id: "0199b6000000000000000000d2",
+      claim: "artifact store replaces legacy cache",
+    };
+    const answer = await run({
+      claims: [old, replacement],
+      edges: [
+        {
+          kind: "supersedes",
+          from: old.id,
+          to: replacement.id,
+          why: "moved to artifacts",
+          at: "2026-10-01T00:00:00.000Z",
+          until: null,
+        },
+        {
+          kind: "demoted",
+          from: replacement.id,
+          to: null,
+          why: "reverted",
+          at: "2026-10-02T00:00:00.000Z",
+          until: null,
+        },
+      ],
+      query: "legacy cache",
+      budget: 1000,
+    });
+    expect(ids(answer.claims)).toEqual([]);
+  });
+
+  test("a supersedes cycle terminates cleanly and reports the cycle in problems", async () => {
+    const a: Claim = { ...canvas, id: "0199b6000000000000000000c8", claim: "cycle alpha claim" };
+    const b: Claim = { ...routing, id: "0199b6000000000000000000c9", claim: "cycle beta claim" };
+    const answer = await run({
+      claims: [a, b],
+      edges: [
+        {
+          kind: "supersedes",
+          from: a.id,
+          to: b.id,
+          why: "replaced by b",
+          at: "2026-10-01T00:00:00.000Z",
+          until: null,
+        },
+        {
+          kind: "supersedes",
+          from: b.id,
+          to: a.id,
+          why: "replaced by a",
+          at: "2026-10-02T00:00:00.000Z",
+          until: null,
+        },
+      ],
+      query: "cycle alpha",
+      budget: 1000,
+    });
+    expect(ids(answer.claims)).toEqual([]);
+    expect(answer.problems.some((problem) => problem.includes("cycle"))).toBe(true);
+  });
+
+  test("a relates edge pointing at a superseded claim carries forward to its replacement", async () => {
+    const old: Claim = {
+      ...routing,
+      id: "0199b6000000000000000000r1",
+      claim: "old routing profile table",
+    };
+    const fresh: Claim = {
+      ...routing,
+      id: "0199b6000000000000000000r2",
+      claim: "new routing allowlist priority",
+    };
+    const answer = await run({
+      claims: [canvas, old, fresh],
+      edges: [
+        {
+          kind: "relates",
+          from: canvas.id,
+          to: old.id,
+          why: "shared plugin context",
+          at: "2026-10-01T00:00:00.000Z",
+          until: null,
+        },
+        {
+          kind: "supersedes",
+          from: old.id,
+          to: fresh.id,
+          why: "allowlist replaced static profile table",
+          at: "2026-10-05T00:00:00.000Z",
+          until: null,
+        },
+      ],
+      query: "canvas save allocates",
+      budget: 1000,
+    });
+    expect(ids(answer.claims)).toEqual([canvas.id, fresh.id]);
+    expect(answer.edges).toEqual([
+      {
+        kind: "relates",
+        from: canvas.id,
+        to: fresh.id,
+        why: "shared plugin context",
+        at: "2026-10-01T00:00:00.000Z",
+        until: null,
+      },
+    ]);
   });
 
   test("a supersedes edge keeps the newer claim and drops the older", async () => {
