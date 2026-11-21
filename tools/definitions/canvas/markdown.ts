@@ -58,7 +58,8 @@ const figureHtml = (svg: string, caption: string | undefined): string => {
     caption === undefined || caption.trim() === ""
       ? ""
       : `<figcaption>${Bun.escapeHTML(caption.trim())}</figcaption>`;
-  return `<figure class="diagram">${svg}${cap}</figure>`;
+  const toggle = `<button type="button" class="diagram-fullscreen" aria-label="Enter fullscreen" title="Enter fullscreen" aria-pressed="false"><svg class="icon-expand" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg><svg class="icon-collapse" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg></button>`;
+  return `<figure class="diagram"><div class="diagram-frame">${toggle}${svg}</div>${cap}</figure>`;
 };
 
 const peleProblem = (cause: unknown): { readonly problem: string; readonly line?: number } => {

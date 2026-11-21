@@ -9,10 +9,12 @@ const htmlOf = (result: ReturnType<typeof render>): string => {
 };
 
 describe("a Mermaid fence", () => {
-  test("becomes a static svg inside a figure, and the page carries no script", () => {
+  test("becomes a static svg inside a figure with a fullscreen toggle, and the fragment carries no script", () => {
     const html = htmlOf(render(`## Path\n\n${fence("flowchart LR\n  A --> B")}`));
     expect(html).toContain("<svg");
     expect(html).toContain('<figure class="diagram">');
+    expect(html).toContain('class="diagram-fullscreen"');
+    expect(html).toContain('aria-label="Enter fullscreen"');
     expect(html).not.toContain("<script");
     expect(html).not.toContain("SPECTRE_MERMAID_");
   });

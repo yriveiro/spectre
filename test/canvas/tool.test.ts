@@ -163,7 +163,8 @@ describe("publish and update through the host artifact tools", () => {
     const html = calls[0]?.input.files?.["index.html"];
     expect(html).toContain("<svg");
     expect(html).toContain("Checkout report");
-    expect(html).not.toContain("<script");
+    expect(html).toContain('class="diagram-fullscreen"');
+    expect(html).toContain("<script>");
   });
 
   test("update keeps the id and sends no provider", async () => {

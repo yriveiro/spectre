@@ -26,9 +26,10 @@ is a drawing rather than a report or a designed UI.
 
 ## Report
 
-Write Markdown. A figure is a ` ```mermaid ` fence inside the prose; Pele
-renders it to static SVG at publish time, and code owns the page, the escaping,
-the headings, and the table of contents. The model never writes HTML here.
+Write Markdown. A figure is a ` ```mermaid ` fence inside the prose. Pele
+renders it to static SVG at publish time with a fullscreen toggle, and code
+owns the page, the escaping, the headings, and the table of contents. The model
+never writes HTML here.
 
 Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
 "report", title, markdown } }`. Report the artifact id and the relative URL the
@@ -37,9 +38,11 @@ tool returned.
 ## Page
 
 Write one complete HTML document with inline CSS and JavaScript. A chart the
-page draws loads d3 by referencing `vendor/d3.min.js`; the tool attaches the
+page draws loads d3 by referencing `vendor/d3.min.js`. The tool attaches the
 installed bundle, so the page never vendors one itself and never loads one from
-the network.
+the network. Every Pele diagram on the page must include a fullscreen toggle
+that expands the diagram across the viewport and closes on button click or
+`Escape`.
 
 Call `tools.spectre.canvas` with `{ action: "publish", content: { kind: "page",
 title, html } }`. Report the artifact id and the relative URL.
@@ -47,7 +50,8 @@ title, html } }`. Report the artifact id and the relative URL.
 ## Diagram
 
 Write one Mermaid source and the one-sentence takeaway the reader takes from
-it. Several figures belong in a `report`, not here.
+it. Pele renders the diagram with a fullscreen toggle. Several figures belong
+in a `report`, not here.
 
 Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
 "diagram", title, takeaway, mermaid, caption? } }`. Report the artifact id and
@@ -76,8 +80,9 @@ store, and this skill owns no store.
 ## The sandbox
 
 - No `localStorage`, no cookies, no forms, no popups, no same-origin fetch.
-- Generated pages ship no JavaScript. A `report`, a `diagram`, and a PR
-  walkthrough are static documents.
+- Generated pages load no external script. A `report`, a `diagram`, and a PR
+  walkthrough include only the inline script that toggles a Pele diagram to
+  fullscreen when the page contains a diagram.
 - A `page` is one document with inline CSS and JavaScript. `data:` images are
   fine. A remote load is a warning the reader sees, so a page that needs the
   network says so on the page.
