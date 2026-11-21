@@ -19,20 +19,40 @@ is a drawing rather than a report or a designed UI.
 
 - A run report, an audit, a findings page, an analysis — anything that is prose
   with figures in it — is a `report`.
-- A designed UI, a concept, a mock, an interface the reader clicks through in
-  their head — anything where the layout itself is the point — is a `page`.
+- A structured engineering workspace with KPI cards, bar/line charts, sortable
+  tables, verified code/ADR citations, or live `.spectre/brain` and `ripwire`
+  evidence is a `board`. Prefer `board` over `page` whenever structured data
+  and diagrams fit the layout, because host code renders the SVG charts,
+  tables, and syntax highlighting at zero layout-token cost.
+- A custom UI, a concept, or a freeform mock where the custom HTML/CSS/JS
+  itself is the point is a `page`.
 - One figure and the sentence it carries is a `diagram`.
 - A pull request is `pr-canvas`, not any of the above.
 
 ## Report
 
-Write Markdown. A figure is a ` ```mermaid ` fence inside the prose; Pele
-renders it to static SVG at publish time, and code owns the page, the escaping,
-the headings, and the table of contents. The model never writes HTML here.
+Write Markdown. Code blocks are syntax-highlighted on the host automatically. A
+figure is a ` ```mermaid ` fence inside the prose; Pele renders it to SVG with
+interactive zoom, pan, fullscreen, copy-source, and SVG download controls, and
+code owns the page, the escaping, the headings, and the table of contents. The
+model never writes HTML here.
 
 Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
 "report", title, markdown } }`. Report the artifact id and the relative URL the
 tool returned.
+
+## Board
+
+Build a structured engineering workspace from typed sections (`kpi`, `chart`,
+`table`, `diagram`, `code`, `callout`, `evidence`). Host code verifies any
+`at: { path, line?, symbol? }` citation against the worktree, collects local
+`brain`, `goal`, or `ripwire` (`ripwire-hotspots`, `ripwire-impact`,
+`ripwire-delta`) evidence on demand, and renders the SVG charts, sortable
+tables, highlighted code, and interactive Pele diagrams.
+
+Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
+"board", title, summary?, sections } }`. Report the artifact id and the
+relative URL.
 
 ## Page
 
@@ -55,7 +75,9 @@ the relative URL.
 
 ## Iterate and reopen
 
-- When the reader asks to change a canvas, publish the full new content with
+- When the reader asks to change a single section, point, group, title, or
+  summary of an existing canvas, prefer `{ action: "patch", id, ops }` so you
+  do not regenerate the entire document. For a full replacement, use
   `{ action: "update", id, content }`. The id and the URL stay; a second
   `publish` is a second artifact, never an edit.
 - If the id is lost, ask for it or publish a new artifact. Do not invent a
@@ -76,8 +98,9 @@ store, and this skill owns no store.
 ## The sandbox
 
 - No `localStorage`, no cookies, no forms, no popups, no same-origin fetch.
-- Generated pages ship no JavaScript. A `report`, a `diagram`, and a PR
-  walkthrough are static documents.
+- Generated pages ship a self-contained inline controller for Pele diagram
+  zoom/pan/fullscreen, code copy, and table sorting, and load no external
+  assets.
 - A `page` is one document with inline CSS and JavaScript. `data:` images are
   fine. A remote load is a warning the reader sees, so a page that needs the
   network says so on the page.

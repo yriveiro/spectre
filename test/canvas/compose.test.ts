@@ -33,7 +33,7 @@ describe("report", () => {
     const html = htmlOf(result.files);
     expect(result.title).toBe("Checkout latency");
     expect(html).toContain("<svg");
-    expect(html).toContain('<figure class="diagram">');
+    expect(html).toContain('<figure class="diagram" data-pele-diagram');
     expect(html).toContain('<a href="#what-changed">What changed</a>');
     expect(html).toContain('<a href="#limits">Limits</a>');
     expect(result.warnings).toEqual([]);

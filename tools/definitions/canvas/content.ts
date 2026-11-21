@@ -155,7 +155,122 @@ export const PrContent = Schema.Struct({
 });
 export type PrContent = Schema.Schema.Type<typeof PrContent>;
 
-export const Content = Schema.Union([PageContent, ReportContent, DiagramContent, PrContent]);
+export const Citation = Schema.Struct({
+  path: Schema.String,
+  line: Schema.optional(Schema.Number),
+  symbol: Schema.optional(Schema.String),
+});
+export type Citation = Schema.Schema.Type<typeof Citation>;
+
+export const KpiCard = Schema.Struct({
+  label: Schema.String,
+  value: Schema.String,
+  delta: Schema.optional(Schema.String),
+  tone: Schema.optional(Schema.Literals(["neutral", "good", "warn", "bad"])),
+});
+export type KpiCard = Schema.Schema.Type<typeof KpiCard>;
+
+export const ChartDatum = Schema.Struct({
+  label: Schema.String,
+  value: Schema.Number,
+});
+export type ChartDatum = Schema.Schema.Type<typeof ChartDatum>;
+
+export const KpiSection = Schema.Struct({
+  id: Schema.optional(Schema.String),
+  kind: Schema.Literals(["kpi"]),
+  heading: Schema.String,
+  items: Schema.Array(KpiCard),
+});
+export type KpiSection = Schema.Schema.Type<typeof KpiSection>;
+
+export const ChartSection = Schema.Struct({
+  id: Schema.optional(Schema.String),
+  kind: Schema.Literals(["chart"]),
+  heading: Schema.String,
+  chart: Schema.Literals(["bar", "horizontal-bar", "line"]),
+  unit: Schema.optional(Schema.String),
+  note: Schema.optional(Schema.String),
+  data: Schema.Array(ChartDatum),
+});
+export type ChartSection = Schema.Schema.Type<typeof ChartSection>;
+
+export const TableSection = Schema.Struct({
+  id: Schema.optional(Schema.String),
+  kind: Schema.Literals(["table"]),
+  heading: Schema.String,
+  note: Schema.optional(Schema.String),
+  columns: Schema.Array(Schema.String),
+  rows: Schema.Array(Schema.Array(Schema.String)),
+});
+export type TableSection = Schema.Schema.Type<typeof TableSection>;
+
+export const DiagramSection = Schema.Struct({
+  id: Schema.optional(Schema.String),
+  kind: Schema.Literals(["diagram"]),
+  heading: Schema.String,
+  mermaid: Schema.String,
+  caption: Schema.optional(Schema.String),
+});
+export type DiagramSection = Schema.Schema.Type<typeof DiagramSection>;
+
+export const CodeSection = Schema.Struct({
+  id: Schema.optional(Schema.String),
+  kind: Schema.Literals(["code"]),
+  heading: Schema.String,
+  language: Schema.optional(Schema.String),
+  code: Schema.String,
+  at: Schema.optional(Citation),
+});
+export type CodeSection = Schema.Schema.Type<typeof CodeSection>;
+
+export const CalloutSection = Schema.Struct({
+  id: Schema.optional(Schema.String),
+  kind: Schema.Literals(["callout"]),
+  heading: Schema.String,
+  tone: Schema.optional(Schema.Literals(["info", "decision", "risk", "question"])),
+  markdown: Schema.String,
+  at: Schema.optional(Citation),
+});
+export type CalloutSection = Schema.Schema.Type<typeof CalloutSection>;
+
+export const EvidenceSection = Schema.Struct({
+  id: Schema.optional(Schema.String),
+  kind: Schema.Literals(["evidence"]),
+  heading: Schema.String,
+  source: Schema.Literals(["brain", "goal", "ripwire-hotspots", "ripwire-impact", "ripwire-delta"]),
+  target: Schema.optional(Schema.String),
+  limit: Schema.optional(Schema.Number),
+  note: Schema.optional(Schema.String),
+});
+export type EvidenceSection = Schema.Schema.Type<typeof EvidenceSection>;
+
+export const BoardSection = Schema.Union([
+  KpiSection,
+  ChartSection,
+  TableSection,
+  DiagramSection,
+  CodeSection,
+  CalloutSection,
+  EvidenceSection,
+]);
+export type BoardSection = Schema.Schema.Type<typeof BoardSection>;
+
+export const BoardContent = Schema.Struct({
+  kind: Schema.Literals(["board"]),
+  title: Schema.String,
+  summary: Schema.optional(Schema.String),
+  sections: Schema.Array(BoardSection),
+});
+export type BoardContent = Schema.Schema.Type<typeof BoardContent>;
+
+export const Content = Schema.Union([
+  PageContent,
+  ReportContent,
+  DiagramContent,
+  PrContent,
+  BoardContent,
+]);
 export type Content = Schema.Schema.Type<typeof Content>;
 
 export const DiffInput = Schema.Struct({
@@ -180,7 +295,62 @@ export const UpdateInput = Schema.Struct({
 });
 export type UpdateInput = Schema.Schema.Type<typeof UpdateInput>;
 
-export const Input = Schema.Union([DiffInput, PublishInput, UpdateInput]);
+export const PatchOp = Schema.Union([
+  Schema.Struct({
+    op: Schema.Literals(["set-title"]),
+    title: Schema.String,
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["set-summary"]),
+    summary: Schema.String,
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["replace-section"]),
+    heading: Schema.String,
+    markdown: Schema.String,
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["append-markdown"]),
+    markdown: Schema.String,
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["set-diagram"]),
+    mermaid: Schema.String,
+    takeaway: Schema.optional(Schema.String),
+    caption: Schema.optional(Schema.String),
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["upsert-point"]),
+    index: Schema.optional(Schema.Number),
+    point: Point,
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["remove-point"]),
+    index: Schema.Number,
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["upsert-group"]),
+    group: Group,
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["upsert-board-section"]),
+    section: BoardSection,
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["remove-board-section"]),
+    target: Schema.String,
+  }),
+]);
+export type PatchOp = Schema.Schema.Type<typeof PatchOp>;
+
+export const PatchInput = Schema.Struct({
+  action: Schema.Literals(["patch"]),
+  id: Schema.String,
+  ops: Schema.Array(PatchOp),
+});
+export type PatchInput = Schema.Schema.Type<typeof PatchInput>;
+
+export const Input = Schema.Union([DiffInput, PublishInput, UpdateInput, PatchInput]);
 export type Input = Schema.Schema.Type<typeof Input>;
 
 export const Published = Schema.Struct({

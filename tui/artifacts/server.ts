@@ -333,19 +333,20 @@ input[type="search"]:focus, button:focus-visible, a:focus-visible { outline: 2px
         <button type="button" class="mono-badge" id="copyIdBtn" hidden title="Copy artifact ID"></button>
       </div>
       <div class="toolbar-right">
+        <span class="mono-badge" id="kindBadge" hidden></span>
         <button type="button" class="btn" id="reloadFrameBtn" hidden title="Reload active artifact">Reload</button>
         <a class="btn" id="standaloneLink" href="#" target="_blank" rel="noopener" hidden>Standalone</a>
       </div>
     </header>
     <div class="empty" id="emptyState"><h2 id="emptyHeading">Loading artifacts...</h2><p id="emptyBody"></p></div>
-    <iframe class="viewer" id="viewer" sandbox="allow-scripts" title="Artifact preview" hidden></iframe>
+    <iframe class="viewer" id="viewer" sandbox="allow-scripts allow-downloads" title="Artifact preview" hidden></iframe>
   </section>
 </div>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
   const shell = $("shell"), countEl = $("count"), searchInput = $("searchInput"), scopeRow = $("scopeRow");
-  const listEl = $("list"), activeTitle = $("activeTitle"), copyIdBtn = $("copyIdBtn");
+  const listEl = $("list"), activeTitle = $("activeTitle"), copyIdBtn = $("copyIdBtn"), kindBadge = $("kindBadge");
   const reloadFrameBtn = $("reloadFrameBtn"), standaloneLink = $("standaloneLink");
   const emptyState = $("emptyState"), emptyHeading = $("emptyHeading"), emptyBody = $("emptyBody"), viewer = $("viewer");
 
@@ -378,7 +379,7 @@ input[type="search"]:focus, button:focus-visible, a:focus-visible { outline: 2px
   const showMessage = (heading, body) => {
     viewer.hidden = true; emptyState.hidden = false;
     emptyHeading.textContent = heading; emptyBody.textContent = body;
-    copyIdBtn.hidden = reloadFrameBtn.hidden = standaloneLink.hidden = true;
+    copyIdBtn.hidden = kindBadge.hidden = reloadFrameBtn.hidden = standaloneLink.hidden = true;
   };
 
   const renderList = () => {
@@ -411,7 +412,19 @@ input[type="search"]:focus, button:focus-visible, a:focus-visible { outline: 2px
     copyIdBtn.textContent = chosen.id; copyIdBtn.hidden = reloadFrameBtn.hidden = standaloneLink.hidden = false;
     const baseHref = "/" + encodeURIComponent(chosen.id) + "/";
     standaloneLink.href = baseHref; emptyState.hidden = true; viewer.hidden = false;
-    if (changed || forceReload || !viewer.getAttribute("src")) viewer.src = baseHref + "?v=" + (++frameNonce);
+    if (changed || forceReload || !viewer.getAttribute("src")) {
+      viewer.src = baseHref + "?v=" + (++frameNonce);
+      kindBadge.hidden = true;
+      fetch(baseHref + ".spectre-canvas.json", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((meta) => {
+          if (meta && typeof meta.kind === "string" && selectedId === chosen.id) {
+            kindBadge.textContent = meta.kind.toUpperCase();
+            kindBadge.hidden = false;
+          }
+        })
+        .catch(() => {});
+    }
     renderList();
   };
 

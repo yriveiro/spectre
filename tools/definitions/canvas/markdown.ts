@@ -1,4 +1,5 @@
 import { PeleError, render as renderPele } from "pele";
+import { highlightBlock } from "./highlight";
 
 /**
  * Markdown in, escaped prose plus static SVG out. The one path a model-authored
@@ -53,12 +54,20 @@ const infoOf = (rest: string): { readonly name: string; readonly caption?: strin
   return caption === "" ? { name } : { name, caption };
 };
 
-const figureHtml = (svg: string, caption: string | undefined): string => {
+const figureHtml = (svg: string, source: string, caption: string | undefined): string => {
   const cap =
     caption === undefined || caption.trim() === ""
       ? ""
       : `<figcaption>${Bun.escapeHTML(caption.trim())}</figcaption>`;
-  return `<figure class="diagram">${svg}${cap}</figure>`;
+  const toolbar = `<div class="pele-controls" role="toolbar" aria-label="Diagram controls">
+<button type="button" class="pele-btn" data-pele-action="zoom-in" title="Zoom in (+)" aria-label="Zoom in">+</button>
+<button type="button" class="pele-btn" data-pele-action="zoom-out" title="Zoom out (-)" aria-label="Zoom out">&minus;</button>
+<button type="button" class="pele-btn" data-pele-action="reset" title="Reset zoom (0)" aria-label="Reset zoom">Reset</button>
+<button type="button" class="pele-btn" data-pele-action="fullscreen" title="Fullscreen stage (f)" aria-label="Fullscreen stage">Fullscreen</button>
+<button type="button" class="pele-btn" data-pele-action="copy-source" title="Copy Mermaid source" aria-label="Copy Mermaid source">Mermaid</button>
+<button type="button" class="pele-btn" data-pele-action="download-svg" title="Download SVG" aria-label="Download SVG">SVG</button>
+</div>`;
+  return `<figure class="diagram" data-pele-diagram data-mermaid-source="${Bun.escapeHTML(source)}">${toolbar}<div class="pele-stage" tabindex="0">${svg}</div>${cap}</figure>`;
 };
 
 const peleProblem = (cause: unknown): { readonly problem: string; readonly line?: number } => {
@@ -79,7 +88,7 @@ const peleProblem = (cause: unknown): { readonly problem: string; readonly line?
 export const figure = (source: string, caption?: string): FigureResult => {
   try {
     const rendered = renderPele(source);
-    return { ok: true, value: figureHtml(rendered.svg, caption) };
+    return { ok: true, value: figureHtml(rendered.svg, source, caption) };
   } catch (cause) {
     return { ok: false, ...peleProblem(cause) };
   }
@@ -205,8 +214,22 @@ export const render = (source: string): RenderResult => {
 
   const placed = placeFigures(html, figures);
   if (!placed.ok) return placed;
-  return { ok: true, value: { html: placed.value, warnings: [] } };
+  return { ok: true, value: { html: highlightCodeBlocks(placed.value), warnings: [] } };
 };
+
+const CODE_BLOCK =
+  /<pre><code(?:\s+class="language-([^"]*)")?>([\s\S]*?)<\/code><\/pre>/gi;
+
+const highlightCodeBlocks = (html: string): string =>
+  html.replace(CODE_BLOCK, (_match, rawLang: string | undefined, encodedBody: string) => {
+    const rawCode = decodeEntities(encodedBody);
+    const langAttr =
+      rawLang !== undefined && rawLang !== ""
+        ? ` class="language-${Bun.escapeHTML(rawLang)}" data-language="${Bun.escapeHTML(rawLang)}"`
+        : "";
+    const copyBtn = `<button type="button" class="code-copy" data-code-copy aria-label="Copy code">Copy</button>`;
+    return `<pre>${copyBtn}<code${langAttr}>${highlightBlock(rawCode, rawLang)}</code></pre>`;
+  });
 
 const decodeEntities = (text: string): string =>
   text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z][a-z0-9]*);/gi, (match, body: string) => {

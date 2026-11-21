@@ -47,6 +47,15 @@ describe("the document shell", () => {
     expect(html).not.toContain("<link");
   });
 
+  test("attaches the inline Pele diagram controller only when a diagram is present", () => {
+    const withDiagram = render("```mermaid\nflowchart LR\n  A --> B\n```");
+    if (!withDiagram.ok) throw new Error(withDiagram.problem);
+    const html = document({ title: "Diagram", body: withDiagram.value.html });
+    expect(html).toContain('data-pele-action="fullscreen"');
+    expect(html).toContain("<script>");
+    expect(externalLoads(html, { "index.html": html })).toEqual([]);
+  });
+
   test("is one complete document", () => {
     const html = document({ title: "T", body: "" });
     expect(html.startsWith("<!doctype html>")).toBe(true);
