@@ -153,7 +153,7 @@ td.removed { background: var(--del-bg); color: var(--del-fg); }
 td.added { background: var(--add-bg); color: var(--add-fg); }
 tr.hunk td { background: var(--surface-alt); color: var(--muted); padding: calc(var(--space) * 0.5) var(--space); }
 tr.annotation td { background: var(--surface); border-left: 3px solid var(--accent); padding: var(--space) calc(var(--space) * 2); font-family: var(--font); font-size: var(--text-base); color: var(--fg); }
-figure.diagram { margin: calc(var(--space) * 3) 0; }
+figure.diagram { margin: calc(var(--space) * 3) 0; position: relative; }
 figure.diagram svg { max-width: 100%; height: auto; }
 figcaption { color: var(--muted); font-size: var(--text-sm); margin-top: var(--space); }
 @media (max-width: 720px) {
@@ -177,7 +177,7 @@ figcaption { color: var(--muted); font-size: var(--text-sm); margin-top: var(--s
     --del-bg: #fbf0ef;
     --del-fg: #5e1717;
   }
-  .toc, .file-nav, .skip-link, .page-footer { display: none; }
+  .toc, .file-nav, .skip-link, .page-footer, .diagram-fullscreen { display: none; }
   main { max-width: none; padding: 0; }
   a { color: inherit; text-decoration: underline; }
   .diff-scroll { overflow: visible; border-color: var(--border); }
@@ -186,13 +186,32 @@ figcaption { color: var(--muted); font-size: var(--text-sm); margin-top: var(--s
 }
 `;
 
-export const document = ({ title, body, toc = [] }: DocumentInput): string => `<!doctype html>
+const DIAGRAM_STYLE = `
+figure.diagram .diagram-frame { position: relative; }
+figure.diagram .diagram-frame > svg { display: block; }
+figure.diagram .diagram-fullscreen { appearance: none; position: absolute; top: var(--space); right: var(--space); z-index: 2; display: grid; place-items: center; width: 28px; height: 28px; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--pele-radius, 4px); background: var(--bg); color: var(--fg); cursor: pointer; }
+figure.diagram .diagram-fullscreen:hover { background: var(--surface); border-color: var(--accent); }
+figure.diagram .diagram-fullscreen .icon-collapse { display: none; }
+figure.diagram[data-fullscreen="true"] { position: fixed; inset: 0; z-index: 100; margin: 0; padding: calc(var(--space) * 4); background: var(--bg); display: flex; flex-direction: column; gap: calc(var(--space) * 2); overflow: auto; }
+figure.diagram[data-fullscreen="true"] .diagram-frame { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: auto; }
+figure.diagram[data-fullscreen="true"] .diagram-frame > svg { max-width: 100%; max-height: 100%; width: auto; height: auto; }
+figure.diagram[data-fullscreen="true"] .diagram-fullscreen .icon-expand { display: none; }
+figure.diagram[data-fullscreen="true"] .diagram-fullscreen .icon-collapse { display: block; }
+`;
+
+const DIAGRAM_SCRIPT = `<script>(()=>{const set=(fig,open)=>{const btn=fig.querySelector(".diagram-fullscreen");if(open){fig.setAttribute("data-fullscreen","true");}else{fig.removeAttribute("data-fullscreen");}if(btn){const label=open?"Exit fullscreen":"Enter fullscreen";btn.setAttribute("aria-pressed",open?"true":"false");btn.setAttribute("aria-label",label);btn.setAttribute("title",label);}};document.addEventListener("click",(e)=>{const btn=e.target instanceof Element?e.target.closest(".diagram-fullscreen"):null;if(!btn)return;const fig=btn.closest("figure.diagram");if(!fig)return;const next=fig.getAttribute("data-fullscreen")!=="true";for(const open of document.querySelectorAll('figure.diagram[data-fullscreen="true"]'))if(open!==fig)set(open,false);set(fig,next);});document.addEventListener("keydown",(e)=>{if(e.key!=="Escape")return;for(const open of document.querySelectorAll('figure.diagram[data-fullscreen="true"]'))set(open,false);});})();</script>`;
+
+export const document = ({ title, body, toc = [] }: DocumentInput): string => {
+  const hasDiagram = body.includes('<figure class="diagram">');
+  const style = hasDiagram ? `${STYLE}${DIAGRAM_STYLE}` : STYLE;
+  const script = hasDiagram ? `\n${DIAGRAM_SCRIPT}` : "";
+  return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${Bun.escapeHTML(title)}</title>
-<style>${STYLE}</style>
+<style>${style}</style>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -204,7 +223,8 @@ export const document = ({ title, body, toc = [] }: DocumentInput): string => `<
 ${tocHtml(toc)}
 ${body}
 </main>
-<footer class="page-footer"><p>Built by Spectre. This page loads no external asset.</p></footer>
+<footer class="page-footer"><p>Built by Spectre. This page loads no external asset.</p></footer>${script}
 </body>
 </html>
 `;
+};

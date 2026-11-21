@@ -47,6 +47,17 @@ describe("the document shell", () => {
     expect(html).not.toContain("<link");
   });
 
+  test("attaches the inline fullscreen toggle script when the body contains a diagram figure", () => {
+    const html = document({
+      title: "T",
+      body: '<figure class="diagram"><div class="diagram-frame"><button type="button" class="diagram-fullscreen"></button><svg></svg></div></figure>',
+    });
+    expect(externalLoads(html, { "index.html": html })).toEqual([]);
+    expect(html).toContain("<script>");
+    expect(html).toContain("data-fullscreen");
+    expect(html).toContain("Escape");
+  });
+
   test("is one complete document", () => {
     const html = document({ title: "T", body: "" });
     expect(html.startsWith("<!doctype html>")).toBe(true);

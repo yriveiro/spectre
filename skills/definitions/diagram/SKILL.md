@@ -42,14 +42,16 @@ data, and that is a diagram of stages rather than a plot.
   pie, quadrant, mindmap — is Mermaid. Publish it as a `report` when the
   reader needs prose around it, or as a `diagram` when one figure and its
   takeaway are the whole answer. Pele renders the Mermaid to static SVG at
-  publish time. No Mermaid and no CDN ever reaches the reader.
+  publish time, and the shell wraps every Pele diagram with a fullscreen
+  toggle. No Mermaid and no CDN ever reaches the reader.
 - A statistical chart — line, bar, scatter, histogram, box, stacked bar — is
   d3 in a `page`. Reference `vendor/d3.min.js`. The tool attaches the
   installed bundle, so the page never vendors one itself and never loads one
   from the network.
 
 A `page` is published as an artifact, with an id and a relative URL, and a
-later change updates that same artifact. Never claim the page opened.
+later change updates that same artifact. Every Pele diagram rendered inside a
+`page` must also provide a fullscreen toggle. Never claim the page opened.
 
 If Pele refuses a Mermaid type, say so and fall back to a `page` with a static
 inline SVG. Do not load Mermaid or a CDN at view time.
