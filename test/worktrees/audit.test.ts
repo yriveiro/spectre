@@ -34,7 +34,11 @@ let seq = 0;
 const context = { progress: () => Effect.void } as unknown as Tool.Context;
 
 const git = async (cwd: string, args: ReadonlyArray<string>) => {
-  const proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn(["git", "-c", "commit.gpgsign=false", ...args], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   await proc.exited;
 };
 
@@ -168,6 +172,26 @@ describe("a worktree with only untracked files", () => {
     const row = only((await call(root)).worktrees);
     expect(row.dirty).toBe("scratch:1");
     expect(row.bucket).toBe("hold-unpushed");
+  });
+
+  test("merged worktree with only .spectre/run.md buckets safe", async () => {
+    const { root, tree } = await repo();
+    await Bun.write(`${tree}/.spectre/run.md`, "# goal\n");
+
+    const row = only((await call(root)).worktrees);
+    expect(row.merged).toBe(true);
+    expect(row.dirty).toBe("scratch:1");
+    expect(row.bucket).toBe("safe");
+  });
+
+  test("merged worktree with non-ledger untracked file buckets review", async () => {
+    const { root, tree } = await repo();
+    await Bun.write(`${tree}/scratch.txt`, "junk\n");
+
+    const row = only((await call(root)).worktrees);
+    expect(row.merged).toBe(true);
+    expect(row.dirty).toBe("scratch:1");
+    expect(row.bucket).toBe("review");
   });
 });
 

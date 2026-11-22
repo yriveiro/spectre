@@ -1,6 +1,8 @@
 import type { Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect } from "effect";
+import { snapshot as snapshotBrain } from "../brain";
 import { board } from "./board";
+import { composeBrain } from "./brain";
 import { diagram, page, report } from "./compose";
 import {
   type Composed,
@@ -19,8 +21,8 @@ import { create, readArtifact, update } from "./publish";
 import type { Read, Input as ReadInput } from "./read";
 import { read as readDiff, totalsOf } from "./read";
 
-const DESCRIPTION = `Publish or update interactive HTML pages, Mermaid diagrams, Markdown reports, and visual PR reviews as artifacts.
-Use action "diff" to parse a pull request or local base and head diff into cached evidence with a token, "publish" to create an OpenCode artifact URL (with bundled d3.min.js for custom UI pages and static SVG Mermaid rendering), and "update" to replace an existing art_ artifact in place.`;
+const DESCRIPTION = `Publish or update HTML pages, Mermaid diagrams, Markdown reports, brain graphs, and visual PR reviews.
+Use action "diff" to parse a pull request or local base and head diff into cached evidence with a token, "publish" to create a visual OpenCode artifact URL (including kind "brain" for the canonical .spectre/brain connectome, bundled d3.min.js for custom UI pages, and static SVG Mermaid rendering), and "update" to replace an existing art_ artifact in place.`;
 
 const subjectOf = (
   input: DiffInput,
@@ -67,7 +69,24 @@ const attempt = <A>(
  * Compose one content arm. The switch is exhaustive: a new content kind fails
  * the build at the `never`, so it cannot fall through to a diagram by accident.
  */
-const buildContent = (project: string, content: Content): Effect.Effect<Composed> =>
+const resolveBrainDirectory = (
+  ctx: Plugin.Context,
+  sessionID: Tool.Context["sessionID"],
+): Effect.Effect<string> =>
+  Effect.gen(function* () {
+    const fallback = ctx.location.directory ?? ctx.location.project.directory;
+    if (typeof ctx.session?.get !== "function") return fallback;
+    const info = yield* Effect.catch(ctx.session.get({ sessionID }), () =>
+      Effect.succeed(undefined),
+    );
+    return info?.location?.directory ?? fallback;
+  });
+
+const buildContent = (
+  project: string,
+  brainDirectory: string,
+  content: Content,
+): Effect.Effect<Composed> =>
   Effect.gen(function* () {
     switch (content.kind) {
       case "pr": {
@@ -89,6 +108,15 @@ const buildContent = (project: string, content: Content): Effect.Effect<Composed
         return diagram(content);
       case "board": {
         const built = yield* attempt(() => board(project, content));
+        return built.ok ? built.value : { ok: false as const, problem: built.problem };
+      }
+      case "brain": {
+        const snap = yield* snapshotBrain(brainDirectory).pipe(
+          Effect.map((value) => ({ ok: true as const, value })),
+          Effect.catch((error) => Effect.succeed({ ok: false as const, problem: causeMessage(error) })),
+        );
+        if (!snap.ok) return { ok: false as const, problem: snap.problem };
+        const built = yield* attempt(() => composeBrain(snap.value, content, bundle));
         return built.ok ? built.value : { ok: false as const, problem: built.problem };
       }
       default: {
@@ -154,13 +182,21 @@ export const canvases = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Ou
     const resolved = yield* resolveTargetContent(ctx, context, input);
     if (!resolved.ok) return { output: refused(resolved.problem) };
 
-    const built: Composed = yield* buildContent(ctx.location.project.directory, resolved.content);
+    const brainDirectory = yield* resolveBrainDirectory(ctx, context.sessionID);
+    const built: Composed = yield* buildContent(
+      ctx.location.project.directory,
+      brainDirectory,
+      resolved.content,
+    );
     if (!built.ok) return { output: refused(built.problem) };
 
-    const filesWithState: Readonly<Record<string, string>> = {
-      ...built.files,
-      [CANVAS_STATE_FILE]: encodeCanvasState(resolved.content),
-    };
+    const filesWithState: Readonly<Record<string, string>> =
+      resolved.content.kind === "brain"
+        ? built.files
+        : {
+            ...built.files,
+            [CANVAS_STATE_FILE]: encodeCanvasState(resolved.content),
+          };
 
     const publication =
       input.action === "publish"

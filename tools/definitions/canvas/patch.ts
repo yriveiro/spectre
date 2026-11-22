@@ -82,8 +82,11 @@ const replaceMarkdownSection = (
 
 const applyTitleOp = (current: ContentType, title: string): PatchResult => {
   if (title.trim() === "") return { ok: false, problem: "set-title requires a non-empty title" };
-  if (current.kind === "pr") {
-    return { ok: false, problem: "a PR canvas takes its title from the pull request or diff subject" };
+  if (current.kind === "pr" || current.kind === "brain") {
+    return {
+      ok: false,
+      problem: `a "${current.kind}" canvas derives its title automatically and cannot be renamed with set-title`,
+    };
   }
   return { ok: true, content: { ...current, title } };
 };

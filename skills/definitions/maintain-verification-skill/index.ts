@@ -7,5 +7,10 @@ export const maintainVerificationSkill: Definition = {
   description:
     "Correct a verification skill and its feature map that have drifted from the app, settling every claim with a live drive rather than a re-read. Reach for it on a periodic pass, or when a feature file describes a behaviour the app no longer has, or a harness step now fails for a reason nobody wrote down. One read-only reader per feature file, one live pass that drives every feature, and at most one change of proven corrections, ending in one of three named words: clean, changed, or blocked. You call it. Nothing in this set calls it for you.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "verification",
+    summary: "Re-align a drifted app verification skill and feature map against a live run",
+  },
   path: anchor(import.meta.dir),
 };

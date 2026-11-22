@@ -5,8 +5,8 @@ import {
   contextRule,
   decide,
   type Env,
-  judge,
   type Health,
+  judge,
   type Memory,
   shellParse,
 } from "../../tools/definitions/search/policy";
@@ -82,9 +82,7 @@ describe("judge", () => {
   });
 
   test("a newline pattern stays on the text tool", () => {
-    expect(
-      judge({ ask: { pattern: "line one\nline two" }, seen: empty, health: ready }),
-    ).toEqual({
+    expect(judge({ ask: { pattern: "line one\nline two" }, seen: empty, health: ready })).toEqual({
       kind: "allow",
       why: "plain-text",
     });
@@ -100,10 +98,18 @@ describe("judge", () => {
   });
 
   test("a phrase with a code token routes as a task", () => {
-    expect(judge({ ask: { pattern: "function rescue" }, seen: empty, health: ready })).toEqual({
-      kind: "route",
-      route: { kind: "task", task: "function rescue" },
-    });
+    for (const pattern of [
+      "function rescue",
+      "const x = 1",
+      "(x) => x",
+      "std::vector int",
+      "fn run -> bool",
+    ]) {
+      expect(judge({ ask: { pattern }, seen: empty, health: ready })).toEqual({
+        kind: "route",
+        route: { kind: "task", task: pattern },
+      });
+    }
   });
 
   test("a phrase with no code token stays on the text tool", () => {
@@ -115,13 +121,17 @@ describe("judge", () => {
     });
   });
 
-  test("a regex that holds a space routes as a regex, not as prose", () => {
-    expect(
-      judge({ ask: { pattern: "CallID|namespace Session|ID =" }, seen: empty, health: ready }),
-    ).toEqual({
-      kind: "route",
-      route: { kind: "regex", pattern: "CallID|namespace Session|ID =" },
-    });
+  test("a regex that holds a space or grouped alternation routes as a regex, not as a task or prose", () => {
+    for (const pattern of [
+      "CallID|namespace Session|ID =",
+      "//|do not remove|@ts-(?:ignore|expect-error)",
+      "(foo|bar) baz",
+    ]) {
+      expect(judge({ ask: { pattern }, seen: empty, health: ready })).toEqual({
+        kind: "route",
+        route: { kind: "regex", pattern },
+      });
+    }
   });
 
   test("a bare symbol routes as a literal", () => {
@@ -143,7 +153,13 @@ describe("argv", () => {
   test("a task carries the signatures flag, the budget, and compact legend", () => {
     expect(
       argv({ route: { kind: "task", task: "function rescue" }, root: "/root", budget: 4000 }),
-    ).toEqual(["/root", "--for=function rescue", "--signatures-only", "--token-budget=4000", "--legend=compact"]);
+    ).toEqual([
+      "/root",
+      "--for=function rescue",
+      "--signatures-only",
+      "--token-budget=4000",
+      "--legend=compact",
+    ]);
   });
 
   test("an expand carries the expand flag and compact legend", () => {
@@ -153,29 +169,21 @@ describe("argv", () => {
   });
 
   test("a literal carries the grep flag and a 50-hit limit", () => {
-    expect(argv({ route: { kind: "literal", text: "resolveTool" }, root: "/root", budget: 4000 })).toEqual([
-      "/root",
-      "--grep=resolveTool",
-      "--limit=50",
-    ]);
+    expect(
+      argv({ route: { kind: "literal", text: "resolveTool" }, root: "/root", budget: 4000 }),
+    ).toEqual(["/root", "--grep=resolveTool", "--limit=50"]);
   });
 
   test("a regex carries the regex flag and a 50-hit limit", () => {
-    expect(argv({ route: { kind: "regex", pattern: "re.*" }, root: "/root", budget: 4000 })).toEqual([
-      "/root",
-      "--regex=re.*",
-      "--limit=50",
-    ]);
+    expect(
+      argv({ route: { kind: "regex", pattern: "re.*" }, root: "/root", budget: 4000 }),
+    ).toEqual(["/root", "--regex=re.*", "--limit=50"]);
   });
 });
 
 describe("decide, the text surface", () => {
   const text = (pattern: string, overrides?: Partial<Memory>) =>
-    decide(
-      { surface: "text", id: "ripgrep", ask: { pattern } },
-      held(overrides),
-      env(),
-    );
+    decide({ surface: "text", id: "ripgrep", ask: { pattern } }, held(overrides), env());
 
   test("a bare symbol reroutes as a literal and carries the pattern", () => {
     expect(text("resolveTool").verdict).toEqual({
@@ -189,18 +197,22 @@ describe("decide, the text surface", () => {
     const decision = text("function rescue");
     expect(decision.verdict.kind).toBe("reroute");
     if (decision.verdict.kind !== "reroute") throw new Error("expected a reroute");
-    expect(decision.verdict.input["query"]).toBe("function rescue");
+    expect(decision.verdict.input.query).toBe("function rescue");
   });
 
   test("a regex reroutes as a regex", () => {
     const decision = text("re.*");
     if (decision.verdict.kind !== "reroute") throw new Error("expected a reroute");
-    expect(decision.verdict.input["kind"]).toBe("regex");
+    expect(decision.verdict.input.kind).toBe("regex");
   });
 
   test("the reroute records the pattern as pending and leaves the input memory alone", () => {
     const before = held();
-    const decision = decide({ surface: "text", id: "ripgrep", ask: { pattern: "resolveTool" } }, before, env());
+    const decision = decide(
+      { surface: "text", id: "ripgrep", ask: { pattern: "resolveTool" } },
+      before,
+      env(),
+    );
     expect(decision.next.asked.get("resolveTool")).toEqual({ kind: "pending" });
     expect(before.asked.size).toBe(0);
   });
@@ -219,14 +231,22 @@ describe("decide, the text surface", () => {
   });
 
   test("a missing instrument passes every gate", () => {
-    expect(decide({ surface: "text", id: "ripgrep", ask: { pattern: "resolveTool" } }, held(), env({ health: absent })).verdict).toEqual(
-      { kind: "pass", why: "no-instrument" },
-    );
+    expect(
+      decide(
+        { surface: "text", id: "ripgrep", ask: { pattern: "resolveTool" } },
+        held(),
+        env({ health: absent }),
+      ).verdict,
+    ).toEqual({ kind: "pass", why: "no-instrument" });
   });
 
   test("a literal call and a short pattern keep the judge's rows", () => {
     expect(
-      decide({ surface: "text", id: "grep", ask: { pattern: "function rescue", literal: true } }, held(), env()).verdict,
+      decide(
+        { surface: "text", id: "grep", ask: { pattern: "function rescue", literal: true } },
+        held(),
+        env(),
+      ).verdict,
     ).toEqual({ kind: "pass", why: "plain-text" });
     expect(text("ab").verdict).toEqual({ kind: "pass", why: "too-broad" });
   });
@@ -234,7 +254,9 @@ describe("decide, the text surface", () => {
 
 describe("decide, the context surface", () => {
   test("it records whether the request holds the search tool", () => {
-    expect(decide({ surface: "context", tools: ["spectre_search"] }, held(), env()).next.search).toBe(true);
+    expect(
+      decide({ surface: "context", tools: ["spectre_search"] }, held(), env()).next.search,
+    ).toBe(true);
     expect(decide({ surface: "context", tools: ["grep"] }, held(), env()).next.search).toBe(false);
   });
 
@@ -265,7 +287,9 @@ describe("decide, the context surface", () => {
       expect(rule).not.toContain("--stray-content");
       expect(rule).not.toContain("tools.spectre.ripwire");
     }
-    expect(decide({ surface: "context", tools: [] }, held(), env({ health: absent })).verdict).toEqual({
+    expect(
+      decide({ surface: "context", tools: [] }, held(), env({ health: absent })).verdict,
+    ).toEqual({
       kind: "prose",
       key: "rule",
       text: contextRule(absent),
@@ -353,21 +377,30 @@ describe("decide, the shell surface", () => {
 
 describe("decide, the read surface", () => {
   const read = (overrides?: Partial<Memory>) =>
-    decide({ surface: "read", path: "src/retry.ts", code: true, insideRoot: true }, held(overrides), env());
+    decide(
+      { surface: "read", path: "src/retry.ts", code: true, insideRoot: true },
+      held(overrides),
+      env(),
+    );
 
   test("a doc and a path outside the root pass without counting", () => {
     expect(
-      decide({ surface: "read", path: "readme.md", code: false, insideRoot: true }, held(), env()).verdict,
+      decide({ surface: "read", path: "readme.md", code: false, insideRoot: true }, held(), env())
+        .verdict,
     ).toEqual({ kind: "pass", why: "not-code" });
     expect(
-      decide({ surface: "read", path: "../x.ts", code: true, insideRoot: false }, held(), env()).verdict,
+      decide({ surface: "read", path: "../x.ts", code: true, insideRoot: false }, held(), env())
+        .verdict,
     ).toEqual({ kind: "pass", why: "outside-root" });
   });
 
   test("a session that used ripwire, read once, or edited the file passes", () => {
     expect(read({ touched: 1 }).verdict).toEqual({ kind: "pass", why: "already-used" });
     expect(read({ reads: 1 }).verdict).toEqual({ kind: "pass", why: "already-read" });
-    expect(read({ edited: new Set(["src/retry.ts"]) }).verdict).toEqual({ kind: "pass", why: "already-edit" });
+    expect(read({ edited: new Set(["src/retry.ts"]) }).verdict).toEqual({
+      kind: "pass",
+      why: "already-edit",
+    });
     expect(read({ spent: new Set(["read"]) }).verdict).toEqual({ kind: "pass", why: "gate-spent" });
   });
 

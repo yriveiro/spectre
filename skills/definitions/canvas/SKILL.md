@@ -27,15 +27,16 @@ is a drawing rather than a report or a designed UI.
 - A custom UI, a concept, or a freeform mock where the custom HTML/CSS/JS
   itself is the point is a `page`.
 - One figure and the sentence it carries is a `diagram`.
+- Project memory under `.spectre/brain/` uses `brain`, never custom HTML.
 - A pull request is `pr-canvas`, not any of the above.
 
 ## Report
 
 Write Markdown. Code blocks are syntax-highlighted on the host automatically. A
-figure is a ` ```mermaid ` fence inside the prose; Pele renders it to SVG with
-interactive zoom, pan, fullscreen, copy-source, and SVG download controls, and
-code owns the page, the escaping, the headings, and the table of contents. The
-model never writes HTML here.
+figure is a ` ```mermaid ` fence inside the prose. Pele renders it to SVG at
+publish time with a fullscreen toggle and interactive zoom, pan, copy-source,
+and SVG download controls, and code owns the page, the escaping, the headings,
+and the table of contents. The model never writes HTML here.
 
 Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
 "report", title, markdown } }`. Report the artifact id and the relative URL the
@@ -57,9 +58,11 @@ relative URL.
 ## Page
 
 Write one complete HTML document with inline CSS and JavaScript. A chart the
-page draws loads d3 by referencing `vendor/d3.min.js`; the tool attaches the
+page draws loads d3 by referencing `vendor/d3.min.js`. The tool attaches the
 installed bundle, so the page never vendors one itself and never loads one from
-the network.
+the network. Every Pele diagram on the page must include a fullscreen toggle
+that expands the diagram across the viewport and closes on button click or
+`Escape`.
 
 Call `tools.spectre.canvas` with `{ action: "publish", content: { kind: "page",
 title, html } }`. Report the artifact id and the relative URL.
@@ -67,11 +70,21 @@ title, html } }`. Report the artifact id and the relative URL.
 ## Diagram
 
 Write one Mermaid source and the one-sentence takeaway the reader takes from
-it. Several figures belong in a `report`, not here.
+it. Pele renders the diagram with a fullscreen toggle. Several figures belong
+in a `report`, not here.
 
 Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
 "diagram", title, takeaway, mermaid, caption? } }`. Report the artifact id and
 the relative URL.
+
+## Brain
+
+Code composes the entire Brain inspector from `.spectre/brain/`, including the
+D3 Connectome, Prompt Cortex, Lineage queue, and Codebase Map. Never write a
+custom `page` for project memory.
+
+Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
+"brain", focus? } }`. Report the artifact id and the relative URL.
 
 ## Iterate and reopen
 
@@ -98,9 +111,9 @@ store, and this skill owns no store.
 ## The sandbox
 
 - No `localStorage`, no cookies, no forms, no popups, no same-origin fetch.
-- Generated pages ship a self-contained inline controller for Pele diagram
-  zoom/pan/fullscreen, code copy, and table sorting, and load no external
-  assets.
+- Generated pages load no external script. A `report`, a `diagram`, a `board`,
+  and a PR walkthrough include only the self-contained inline script for Pele
+  diagram fullscreen/zoom/pan, code copy, and table sorting.
 - A `page` is one document with inline CSS and JavaScript. `data:` images are
   fine. A remote load is a warning the reader sees, so a page that needs the
   network says so on the page.

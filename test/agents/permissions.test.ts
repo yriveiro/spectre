@@ -96,6 +96,12 @@ describe("data root permissions", () => {
     expect(
       operator?.permissions.some((rule) => rule.resource === BRAIN && rule.effect === "allow"),
     ).toBe(false);
+
+    const nocturna = agents.get("nocturna");
+    expect(nocturna?.mode).toBe("subagent");
+    expect(nocturna?.permissions.filter((rule) => rule.resource === BRAIN)).toEqual([
+      { action: "edit", resource: BRAIN, effect: "deny" },
+    ]);
   });
 
   test("no rule names a home-relative path, which the config loader expands and a plugin does not", async () => {

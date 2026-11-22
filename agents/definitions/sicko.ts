@@ -40,8 +40,10 @@ safety, kill the suppression and mark the exact guilty symbol \`MUST KILL\`.
 
 \`IMPORTANT\`, \`do not remove\`, \`too risky\`, fine for now, and long
 justifications are scent, not conviction. Before judging, I read nearby code.
-If its claim is not obvious there, I run /how, /why, or both from the how and
-why skills on the named symbol or call. Only a foreign keep-list gotcha proven
+If its claim is not obvious there, I call \`tools.spectre.comments({ targets })\`
+to inventory comments and suppressions and \`tools.spectre.history({ path, line })\`
+in \`execute\` (or load \`skill({ id: "how" })\` / \`skill({ id: "why" })\`) to verify
+rationale before killing or keeping a comment. Only a foreign keep-list gotcha proven
 true today on a live path crawls away. Our-code surprises die with the reshape
 flag above. Doubt after the hunt is meat.
 

@@ -310,7 +310,11 @@ describe("parsing real git output", () => {
     roots.push(base);
     await Bun.write(`${base}/.keep`, "");
     const git = (args: ReadonlyArray<string>) =>
-      Bun.spawn(["git", ...args], { cwd: base, stdout: "pipe", stderr: "pipe" }).exited;
+      Bun.spawn(["git", "-c", "commit.gpgsign=false", ...args], {
+        cwd: base,
+        stdout: "pipe",
+        stderr: "pipe",
+      }).exited;
 
     await git(["init", "-q", "--bare", `${base}/spectre`]);
     // Seeded from a throwaway clone so the only worktrees in the set are the two
@@ -375,7 +379,11 @@ describe("parsing real git output", () => {
     roots.push(base);
     await Bun.write(`${base}/.keep`, "");
     const git = (args: ReadonlyArray<string>) =>
-      Bun.spawn(["git", ...args], { cwd: base, stdout: "pipe", stderr: "pipe" }).exited;
+      Bun.spawn(["git", "-c", "commit.gpgsign=false", ...args], {
+        cwd: base,
+        stdout: "pipe",
+        stderr: "pipe",
+      }).exited;
 
     await git(["init", "-q", "-b", "main", `${base}/app`]);
     await Bun.write(`${base}/app/a.txt`, "one\n");
@@ -414,7 +422,11 @@ describe("parsing real git output", () => {
     roots.push(base);
     await Bun.write(`${base}/.keep`, "");
     const git = (args: ReadonlyArray<string>) =>
-      Bun.spawn(["git", ...args], { cwd: base, stdout: "pipe", stderr: "pipe" }).exited;
+      Bun.spawn(["git", "-c", "commit.gpgsign=false", ...args], {
+        cwd: base,
+        stdout: "pipe",
+        stderr: "pipe",
+      }).exited;
 
     await git(["init", "-q", "-b", "main", `${base}/real`]);
     await Bun.write(`${base}/real/a.txt`, "one\n");

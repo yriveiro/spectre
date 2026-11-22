@@ -45,12 +45,27 @@ export const startProblem = (name: string, branch: string): string | undefined =
  * `session-return` renders it into a sentence, but what counts as a tracked edit is
  * decided here exactly once.
  */
-export const trackedChanges = (porcelain: string): { tracked: number; scratch: number } => {
-  if (porcelain === "") return { tracked: 0, scratch: 0 };
-  const lines = porcelain.split("\n");
+export const LEDGER_PATH = ".spectre/run.md";
+
+export const isLedgerOnlyPorcelain = (porcelain: string): boolean => {
+  if (porcelain === "") return false;
+  const lines = porcelain.split("\n").filter((line) => line !== "");
+  return lines.length === 1 && lines[0] === `?? ${LEDGER_PATH}`;
+};
+
+export const trackedChanges = (
+  porcelain: string,
+): { tracked: number; scratch: number; ledgerOnly: boolean } => {
+  if (porcelain === "") return { tracked: 0, scratch: 0, ledgerOnly: false };
+  const lines = porcelain.split("\n").filter((line) => line !== "");
+  const tracked = lines.filter((line) => !line.startsWith("??")).length;
+  const scratchLines = lines.filter((line) => line.startsWith("??"));
+  const ledgerOnly =
+    tracked === 0 && scratchLines.length === 1 && scratchLines[0] === `?? ${LEDGER_PATH}`;
   return {
-    tracked: lines.filter((line) => !line.startsWith("??")).length,
-    scratch: lines.filter((line) => line.startsWith("??")).length,
+    tracked,
+    scratch: scratchLines.length,
+    ledgerOnly,
   };
 };
 
@@ -68,12 +83,21 @@ export const dirtyLabel = (changes: { tracked: number; scratch: number }): strin
 export type Tracked =
   | { readonly kind: "clean" }
   | { readonly kind: "wip"; readonly count: number }
-  | { readonly kind: "scratch"; readonly count: number }
+  | { readonly kind: "scratch"; readonly count: number; readonly ledgerOnly?: boolean }
   | { readonly kind: "unknown" };
 
-export const trackedOf = (changes: { tracked: number; scratch: number }): Tracked => {
+export const trackedOf = (changes: {
+  tracked: number;
+  scratch: number;
+  ledgerOnly?: boolean;
+}): Tracked => {
   if (changes.tracked > 0) return { kind: "wip", count: changes.tracked };
-  if (changes.scratch > 0) return { kind: "scratch", count: changes.scratch };
+  if (changes.scratch > 0)
+    return {
+      kind: "scratch",
+      count: changes.scratch,
+      ...(changes.ledgerOnly === true ? { ledgerOnly: true } : {}),
+    };
   return { kind: "clean" };
 };
 
@@ -108,7 +132,10 @@ export type Evidence = {
  */
 export const bucket = (evidence: Evidence): Bucket => {
   if (evidence.dirty.kind === "wip") return "hold-wip";
-  if (evidence.merged === true || evidence.patches === "landed") return "safe";
+  if (evidence.merged === true || evidence.patches === "landed") {
+    if (evidence.dirty.kind === "scratch" && evidence.dirty.ledgerOnly !== true) return "review";
+    return "safe";
+  }
   if (evidence.pushed === false) return "hold-unpushed";
   return "review";
 };

@@ -118,13 +118,13 @@ tr.hunk td { background: var(--surface-alt); color: var(--muted); padding: calc(
 tr.annotation td { background: var(--surface); border-left: 3px solid var(--accent); padding: var(--space) calc(var(--space) * 2); font-family: var(--font); font-size: var(--text-base); color: var(--fg); }`;
 
 const STYLE_INTERACTIVE = `figure.diagram { position: relative; margin: calc(var(--space) * 3) 0; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: calc(var(--space) * 2); }
-figure.diagram .pele-stage { position: relative; overflow: hidden; border-radius: 4px; background: var(--bg); min-height: 6rem; display: flex; align-items: center; justify-content: center; }
+figure.diagram .pele-stage, figure.diagram .diagram-frame { position: relative; overflow: hidden; border-radius: 4px; background: var(--bg); min-height: 6rem; display: flex; align-items: center; justify-content: center; }
 figure.diagram svg { max-width: 100%; height: auto; display: block; }
 .pele-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.25rem; margin-bottom: var(--space); }
 .pele-btn { appearance: none; border: 1px solid var(--border); background: var(--bg); color: var(--fg); border-radius: 4px; padding: 0.15rem 0.5rem; font: 500 var(--text-sm)/1.3 var(--font); cursor: pointer; }
 .pele-btn:hover { border-color: var(--accent); color: var(--accent); }
 figure.diagram[data-fullscreen="true"] { position: fixed; inset: 0; z-index: 9999; margin: 0; border-radius: 0; border: 0; display: flex; flex-direction: column; padding: calc(var(--space) * 2.5); background: var(--bg); }
-figure.diagram[data-fullscreen="true"] .pele-stage { flex: 1; min-height: 0; border: 1px solid var(--border); }
+figure.diagram[data-fullscreen="true"] .pele-stage, figure.diagram[data-fullscreen="true"] .diagram-frame { flex: 1; min-height: 0; border: 1px solid var(--border); }
 figure.diagram[data-fullscreen="true"] svg { max-height: 100%; }
 figcaption { color: var(--muted); font-size: var(--text-sm); margin-top: var(--space); }
 .board-section { margin: calc(var(--space) * 4) 0; }
@@ -160,7 +160,7 @@ table.data-table tbody tr:hover td { background: var(--surface); }
     --muted: #3a3a36; --border: #9a9a94; --accent: #5a3700; --add-bg: #f0f8f2; --add-fg: #0f3d21; --del-bg: #fbf0ef; --del-fg: #5e1717;
     --hl-k: #5a3700; --hl-s: #0f3d21; --hl-c: #55554f; --hl-n: #0a355c; --hl-t: #4c1778; --hl-f: #083b6a; --hl-p: #5a3700;
   }
-  .toc, .file-nav, .skip-link, .page-footer, .pele-controls, .code-copy { display: none; }
+  .toc, .file-nav, .skip-link, .page-footer, .pele-controls, .diagram-fullscreen, .code-copy { display: none; }
   main { max-width: none; padding: 0; }
   a { color: inherit; text-decoration: underline; }
   .diff-scroll { overflow: visible; border-color: var(--border); }
@@ -171,8 +171,8 @@ table.data-table tbody tr:hover td { background: var(--surface); }
 const STYLE = `\n${STYLE_PALETTE}\n${STYLE_BASE}\n${STYLE_COMPONENTS}\n${STYLE_INTERACTIVE}\n`;
 
 const PELE_STAGE_INIT = `const clamp=(v,lo,hi)=>Math.min(Math.max(v,lo),hi);
-for(const fig of document.querySelectorAll("figure.diagram[data-pele-diagram]")){
-  const stage=fig.querySelector(".pele-stage"),svg=stage&&stage.querySelector("svg");
+for(const fig of document.querySelectorAll("figure.diagram")){
+  const stage=fig.querySelector(".pele-stage,.diagram-frame"),svg=stage&&stage.querySelector("svg");
   if(!stage||!svg)continue;
   const vb=(svg.getAttribute("viewBox")||"").trim().split(/[\\s,]+/).map(Number);
   const natW=vb[2]||Number(svg.getAttribute("width"))||800,natH=vb[3]||Number(svg.getAttribute("height"))||600;
@@ -193,13 +193,19 @@ for(const fig of document.querySelectorAll("figure.diagram[data-pele-diagram]"))
   const toggleFs=()=>{
     const next=fig.getAttribute("data-fullscreen")!=="true";
     if(next)fig.setAttribute("data-fullscreen","true");else fig.removeAttribute("data-fullscreen");
-    const btn=fig.querySelector('[data-pele-action="fullscreen"]');
-    if(btn)btn.textContent=next?"Exit fullscreen":"Fullscreen";
+    const btn=fig.querySelector('[data-pele-action="fullscreen"],.diagram-fullscreen');
+    if(btn){
+      const label=next?"Exit fullscreen":"Enter fullscreen";
+      btn.setAttribute("aria-pressed",next?"true":"false");
+      btn.setAttribute("aria-label",label);
+      btn.setAttribute("title",label);
+      if(btn.hasAttribute("data-pele-action"))btn.textContent=next?"Exit fullscreen":"Fullscreen";
+    }
   };`;
 
 const PELE_STAGE_EVENTS = `  fig.addEventListener("click",(e)=>{
-    const btn=e.target.closest("[data-pele-action]");if(!btn)return;
-    const act=btn.getAttribute("data-pele-action");
+    const btn=e.target.closest("[data-pele-action],.diagram-fullscreen");if(!btn)return;
+    const act=btn.getAttribute("data-pele-action")||(btn.classList.contains("diagram-fullscreen")?"fullscreen":"");
     if(act==="zoom-in")zoomTo(scale*1.25);
     else if(act==="zoom-out")zoomTo(scale/1.25);
     else if(act==="reset")zoomTo(1);
@@ -260,7 +266,7 @@ const PAGE_GLOBAL_EVENTS = `document.addEventListener("click",(e)=>{
 document.addEventListener("keydown",(e)=>{
   if(e.key!=="Escape")return;
   const open=document.querySelector('figure.diagram[data-fullscreen="true"]');
-  if(open){open.removeAttribute("data-fullscreen");const btn=open.querySelector('[data-pele-action="fullscreen"]');if(btn)btn.textContent="Fullscreen";}
+  if(open){open.removeAttribute("data-fullscreen");const btn=open.querySelector('[data-pele-action="fullscreen"],.diagram-fullscreen');if(btn&&btn.hasAttribute("data-pele-action"))btn.textContent="Fullscreen";}
 });`;
 
 const PELE_RUNTIME = `<script>(() => {\n${PELE_STAGE_INIT}\n${PELE_STAGE_EVENTS}\n${PAGE_GLOBAL_EVENTS}\n})();</script>`;
@@ -268,6 +274,7 @@ const PELE_RUNTIME = `<script>(() => {\n${PELE_STAGE_INIT}\n${PELE_STAGE_EVENTS}
 export const document = ({ title, body, toc = [] }: DocumentInput): string => {
   const needsRuntime =
     body.includes("data-pele-diagram") ||
+    body.includes('class="diagram"') ||
     body.includes("data-code-copy") ||
     body.includes("data-table");
   const runtime = needsRuntime ? `\n${PELE_RUNTIME}` : "";

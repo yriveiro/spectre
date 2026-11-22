@@ -144,4 +144,23 @@ describe("observe", () => {
     const reasoning = assistant([{ type: "reasoning", text: "code-hygiene seems right" }]);
     expect(observe(turn([reasoning]), catalogue).via).toBe("silent");
   });
+
+  test("final assistant reply beats earlier intermediate discovery narration", () => {
+    const step1 = assistant([
+      { type: "text", text: "Checking whether code-hygiene fits." },
+      {
+        type: "tool",
+        id: "call_exec",
+        name: "execute",
+        time: { created: 0 },
+        state: {
+          status: "completed",
+          input: { code: 'return await tools.spectre.skills({ query: "comments" })' },
+          content: [{ type: "text", text: "{}" }],
+        },
+      },
+    ]);
+    const step2 = text("none");
+    expect(observe(turn([step1, step2]), catalogue)).toEqual({ got: NONE, via: "text" });
+  });
 });

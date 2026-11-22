@@ -7,5 +7,10 @@ export const technicalWriting: Definition = {
   description:
     "Take a document to a tired engineer on the first read: pick the mode it belongs to, address the reader, load one idea per sentence, and leave nothing open to two readings. Reach for it when the words are the deliverable rather than the code, which is a README, an RFC, a design note, a PR description, a commit message, or a document that is correct and still unclear. It owns the structure of a document and the layer its reader is in, while `grammar` owns the tells inside a sentence and `communication` owns the shape of a message. You call it. Nothing in this set calls it for you.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "writing",
+    summary: "Structure engineering docs by mode with one idea per sentence for fast first-pass reading",
+  },
   path: anchor(import.meta.dir),
 };

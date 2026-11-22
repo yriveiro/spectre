@@ -63,11 +63,11 @@ const figureHtml = (svg: string, source: string, caption: string | undefined): s
 <button type="button" class="pele-btn" data-pele-action="zoom-in" title="Zoom in (+)" aria-label="Zoom in">+</button>
 <button type="button" class="pele-btn" data-pele-action="zoom-out" title="Zoom out (-)" aria-label="Zoom out">&minus;</button>
 <button type="button" class="pele-btn" data-pele-action="reset" title="Reset zoom (0)" aria-label="Reset zoom">Reset</button>
-<button type="button" class="pele-btn" data-pele-action="fullscreen" title="Fullscreen stage (f)" aria-label="Fullscreen stage">Fullscreen</button>
 <button type="button" class="pele-btn" data-pele-action="copy-source" title="Copy Mermaid source" aria-label="Copy Mermaid source">Mermaid</button>
 <button type="button" class="pele-btn" data-pele-action="download-svg" title="Download SVG" aria-label="Download SVG">SVG</button>
+<button type="button" class="pele-btn diagram-fullscreen" data-pele-action="fullscreen" aria-label="Enter fullscreen" title="Enter fullscreen" aria-pressed="false">Fullscreen</button>
 </div>`;
-  return `<figure class="diagram" data-pele-diagram data-mermaid-source="${Bun.escapeHTML(source)}">${toolbar}<div class="pele-stage" tabindex="0">${svg}</div>${cap}</figure>`;
+  return `<figure class="diagram" data-pele-diagram data-mermaid-source="${Bun.escapeHTML(source)}">${toolbar}<div class="diagram-frame pele-stage" tabindex="0">${svg}</div>${cap}</figure>`;
 };
 
 const peleProblem = (cause: unknown): { readonly problem: string; readonly line?: number } => {

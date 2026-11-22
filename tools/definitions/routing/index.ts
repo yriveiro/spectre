@@ -784,6 +784,7 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
 
 export { candidates, isFree, known, ladder } from "./catalogue";
 export { clampEffort, effortOf, fit, KNOWN_ORDER, ladderOf, rungs } from "./effort";
+export { attachRoutingGuard, SUBAGENT_MODEL_DESCRIPTION } from "./guard";
 export { hostCatalogue, sessionState } from "./host";
 export type { Decide, JevSettings } from "./jev";
 export { DEFAULT_TIMEOUT_MS, JEV_MODEL, jevJudge, judgeRef } from "./jev";

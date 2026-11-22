@@ -27,7 +27,7 @@ type Guarded =
   | { readonly ok: true; readonly warnings: ReadonlyArray<string> }
   | { readonly ok: false; readonly problem: string };
 
-const generated = (html: string, files: Readonly<Record<string, string>>): Guarded => {
+export const generated = (html: string, files: Readonly<Record<string, string>>): Guarded => {
   const external = externalLoads(html, files);
   if (external.length > 0)
     return {

@@ -4,7 +4,14 @@ import { Effect, Exit } from "effect";
 import { DESCRIPTION } from "../../tools/definitions/brain";
 import { attach, COLD } from "../../tools/definitions/brain/inject";
 
-const ACTIONS: ReadonlyArray<string> = ["recall", "assert", "relate", "supersede", "demote"];
+const ACTIONS: ReadonlyArray<string> = [
+  "recall",
+  "assert",
+  "relate",
+  "supersede",
+  "demote",
+  "status",
+];
 
 const TMP = Bun.env.TMPDIR ?? "/tmp";
 const roots: Array<string> = [];
@@ -74,7 +81,10 @@ const setup = async (tag: string, info: SessionInfoStub = {}, withInstructions: 
   return { dir, sessionID: `ses_${tag}_${seq}`, hookName, handler, puts, stored };
 };
 
-const promptEvent = (sessionID: string, agents?: Array<{ readonly name: string }>): PromptEvent => ({
+const promptEvent = (
+  sessionID: string,
+  agents?: Array<{ readonly name: string }>,
+): PromptEvent => ({
   sessionID,
   messageID: "msg_prompt",
   prompt: { text: "help", ...(agents === undefined ? {} : { agents }) },
@@ -100,7 +110,9 @@ const seed = async (dir: string, count: number, start: number = 0): Promise<void
 
 describe("brain injection", () => {
   test("a primary root session puts one durable spectre.brain entry on prompt that persists across steps", async () => {
-    const { dir, sessionID, hookName, handler, puts, stored } = await setup("one", { agent: "spectre" });
+    const { dir, sessionID, hookName, handler, puts, stored } = await setup("one", {
+      agent: "spectre",
+    });
     expect(hookName).toBe("prompt");
     await seed(dir, 3);
     await Effect.runPromise(handler(promptEvent(sessionID)));
@@ -209,11 +221,117 @@ describe("brain injection", () => {
     expect(text).toContain("600 tokens");
   });
 
+  test("superseded and demoted claims stay out of the injected index and newer active claims rank first", async () => {
+    const { dir, sessionID, handler, puts } = await setup("filtered", { agent: "spectre" });
+    await seed(dir, 40);
+    const idOf = (i: number) => `01K${String(i).padStart(24, "0")}`;
+    const ledgerLines = [
+      JSON.stringify({
+        kind: "supersedes",
+        from: idOf(39),
+        to: idOf(38),
+        why: "updated",
+        at: "2026-10-10T00:00:00.000Z",
+        until: null,
+      }),
+      JSON.stringify({
+        kind: "demoted",
+        from: idOf(37),
+        to: null,
+        why: "disproven",
+        at: "2026-10-10T00:00:00.000Z",
+        until: null,
+      }),
+    ].join("\n");
+    await Bun.write(join(dir, ".spectre", "brain", "synapses.ndjson"), `${ledgerLines}\n`);
+
+    await Effect.runPromise(handler(promptEvent(sessionID)));
+    const text = String(puts[0]?.value ?? "");
+    expect(text).not.toContain(idOf(39));
+    expect(text).not.toContain(idOf(37));
+    expect(text).toContain(idOf(38));
+    expect(text).toContain(idOf(36));
+    expect(text).not.toContain(idOf(0));
+  });
+
+  test("demoting the sole active claim updates spectre.brain without claiming the brain is unseeded", async () => {
+    const { dir, sessionID, handler, puts, stored } = await setup("all_retired", {
+      agent: "spectre",
+    });
+    await seed(dir, 1);
+    const sole = `01K${String(0).padStart(24, "0")}`;
+    await Effect.runPromise(handler(promptEvent(sessionID)));
+    expect(String(stored.get(sessionID)?.get("spectre.brain") ?? "")).toContain(sole);
+
+    await Bun.sleep(15);
+    await Bun.write(
+      join(dir, ".spectre", "brain", "synapses.ndjson"),
+      `${JSON.stringify({
+        kind: "demoted",
+        from: sole,
+        to: null,
+        why: "wrong",
+        at: "2026-10-10T00:00:00.000Z",
+        until: null,
+      })}\n`,
+    );
+    await Effect.runPromise(handler(promptEvent(sessionID)));
+    expect(puts.length).toBe(2);
+    const updated = String(stored.get(sessionID)?.get("spectre.brain") ?? "");
+    expect(updated).not.toContain(sole);
+    expect(updated).not.toContain(COLD);
+  });
+
+  test("re-puts spectre.brain when a timed demotion expires without any file mtime change", async () => {
+    const { dir, sessionID, handler, puts, stored } = await setup("clock_expiry", {
+      agent: "spectre",
+    });
+    await seed(dir, 1);
+    const sole = `01K${String(0).padStart(24, "0")}`;
+    const until = new Date(Date.now() + 80).toISOString();
+    await Bun.write(
+      join(dir, ".spectre", "brain", "synapses.ndjson"),
+      `${JSON.stringify({
+        kind: "demoted",
+        from: sole,
+        to: null,
+        why: "briefly muted",
+        at: "2026-10-10T00:00:00.000Z",
+        until,
+      })}\n`,
+    );
+
+    await Effect.runPromise(handler(promptEvent(sessionID)));
+    expect(puts.length).toBe(1);
+    expect(String(stored.get(sessionID)?.get("spectre.brain") ?? "")).not.toContain(sole);
+
+    await Bun.sleep(110);
+    await Effect.runPromise(handler(promptEvent(sessionID)));
+    expect(puts.length).toBe(2);
+    expect(String(stored.get(sessionID)?.get("spectre.brain") ?? "")).toContain(sole);
+  });
+
   test("a host mock without session.instructions degrades gracefully", async () => {
     const { dir, sessionID, handler } = await setup("no_instructions", { agent: "spectre" }, false);
     await seed(dir, 2);
     const exit = await Effect.runPromiseExit(handler(promptEvent(sessionID)));
     expect(Exit.isSuccess(exit)).toBe(true);
+  });
+
+  test("seen map evicts the oldest session key FIFO once it reaches 256 entries", async () => {
+    const { dir, handler, puts } = await setup("fifo_cap", { agent: "spectre" });
+    await seed(dir, 1);
+
+    for (let i = 0; i < 257; i++) {
+      await Effect.runPromise(handler(promptEvent(`ses_fifo_${process.pid}_${i}`)));
+    }
+    expect(puts.length).toBe(257);
+
+    await Effect.runPromise(handler(promptEvent(`ses_fifo_${process.pid}_1`)));
+    expect(puts.length).toBe(257);
+
+    await Effect.runPromise(handler(promptEvent(`ses_fifo_${process.pid}_0`)));
+    expect(puts.length).toBe(258);
   });
 });
 

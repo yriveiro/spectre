@@ -264,12 +264,19 @@ export const BoardContent = Schema.Struct({
 });
 export type BoardContent = Schema.Schema.Type<typeof BoardContent>;
 
+export const BrainContent = Schema.Struct({
+  kind: Schema.Literals(["brain"]),
+  focus: Schema.optional(Schema.String),
+});
+export type BrainContent = Schema.Schema.Type<typeof BrainContent>;
+
 export const Content = Schema.Union([
   PageContent,
   ReportContent,
   DiagramContent,
   PrContent,
   BoardContent,
+  BrainContent,
 ]);
 export type Content = Schema.Schema.Type<typeof Content>;
 

@@ -38,6 +38,13 @@ describe("sentence splitting", () => {
   test("a filename is not two sentences", () => {
     expect(sentences("Open index.ts and edit it.")).toHaveLength(1);
   });
+
+  test("splits a second sentence that starts with an inline code span", () => {
+    const first = Array.from({ length: 14 }, (_, i) => `alpha${i}`).join(" ");
+    const second = Array.from({ length: 14 }, (_, i) => `beta${i}`).join(" ");
+    expect(hard(`${first}. \`code\` ${second}.`)).not.toContain("long-sentence");
+    expect(sentences(`${first}. \`second\` ${second}.`)).toHaveLength(2);
+  });
 });
 
 describe("word counting under STE 8.4 to 8.7", () => {
@@ -87,7 +94,11 @@ describe("hard rules", () => {
 
   test("the 25-word descriptive cap is hard", () => {
     const long = Array.from({ length: 26 }, (_, i) => `word${i}`).join(" ");
-    expect(hard(`${long}.`)).toContain("long-sentence");
+    const findings = lint(`${long}.`);
+    expect(findings.map((f) => f.rule)).toContain("long-sentence");
+    const longFinding = findings.find((f) => f.rule === "long-sentence");
+    expect(longFinding?.text).toStartWith("26 words (word0 word1");
+    expect(longFinding?.text).toMatch(/\.\.\.|…\)$/);
   });
 
   test("25 words exactly passes", () => {

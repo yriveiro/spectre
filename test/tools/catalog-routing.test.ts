@@ -9,10 +9,12 @@ import { canvases } from "../../tools/definitions/canvas";
 import { comments } from "../../tools/definitions/comments";
 import { goal } from "../../tools/definitions/goal";
 import { historyTool } from "../../tools/definitions/history";
+import { nocturnaTool } from "../../tools/definitions/nocturna";
 import { pr } from "../../tools/definitions/pr";
 import { prose } from "../../tools/definitions/prose";
 import { routing } from "../../tools/definitions/routing";
 import { ripwire } from "../../tools/definitions/search";
+import { skillsTool } from "../../tools/definitions/skills";
 import { solidjs } from "../../tools/definitions/solidjs";
 import { stack } from "../../tools/definitions/stack";
 import { worktrees } from "../../tools/definitions/worktrees";
@@ -50,10 +52,12 @@ const SPECTRE_TOOLS: ReadonlyArray<RegisteredTool> = [
   comments(directory),
   goal(ctx),
   historyTool(directory),
+  nocturnaTool(ctx),
   pr(ctx),
   prose(directory),
   ripwire(ctx),
   routing(ctx),
+  skillsTool(),
   solidjs(directory),
   stack(directory),
   worktrees(ctx),
@@ -263,6 +267,7 @@ const TASK_QUERIES: ReadonlyArray<readonly [query: string, expectedPath: string]
   ["record lesson constraint", "tools.spectre.brain"],
   ["publish html page mermaid diagram", "tools.spectre.canvas"],
   ["visual pull request review artifact", "tools.spectre.canvas"],
+  ["publish brain graph canvas artifact", "tools.spectre.canvas"],
   ["inventory code comments lint suppressions", "tools.spectre.comments"],
   ["find ts-ignore eslint-disable comments", "tools.spectre.comments"],
   ["arm autonomous goal loop ledger", "tools.spectre.goal"],
@@ -283,12 +288,16 @@ const TASK_QUERIES: ReadonlyArray<readonly [query: string, expectedPath: string]
   ["pr stack blocker merge conflicts", "tools.spectre.stack"],
   ["open branch worktree move session", "tools.spectre.worktrees"],
   ["cleanup git worktrees hold-wip safe", "tools.spectre.worktrees"],
+  ["search list inspect spectre skill catalog", "tools.spectre.skills"],
+  ["preview skill headings pull workflows", "tools.spectre.skills"],
+  ["audit past opencode sessions rolling window", "tools.spectre.nocturna"],
+  ["nocturna session watermark storage", "tools.spectre.nocturna"],
 ];
 
 describe("Code Mode catalog routing surface", () => {
-  test("mounts a 40-tool catalog (12 spectre tools + 28 MCP distractors)", () => {
-    expect(SPECTRE_TOOLS).toHaveLength(12);
-    expect(runtime.catalog).toHaveLength(40);
+  test("mounts a 42-tool catalog (14 spectre tools + 28 MCP distractors)", () => {
+    expect(SPECTRE_TOOLS).toHaveLength(14);
+    expect(runtime.catalog).toHaveLength(42);
   });
 
   test("zero tools.spectre.* tools set pinned: true", () => {
@@ -318,7 +327,7 @@ describe("Code Mode catalog routing surface", () => {
     expect(NAMESPACE_DESCRIPTION).toContain("spectre_search");
   });
 
-  test("exact-path search({ query: 'tools.spectre.<name>' }) returns [exact] for all 12 tools", async () => {
+  test("exact-path search({ query: 'tools.spectre.<name>' }) returns [exact] for all 14 tools", async () => {
     for (const tool of SPECTRE_TOOLS) {
       const path = `tools.spectre.${tool.name}`;
       const res = await runSearch(path);

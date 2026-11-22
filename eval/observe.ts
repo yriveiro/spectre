@@ -6,10 +6,14 @@ export type Observed = { readonly got: string; readonly via: Via };
 
 const SKILL_TOOLS = new Set(["skill", "skills"]);
 
-const fromTool = (message: SessionMessageAssistant): string | undefined => {
+const fromTool = (
+  message: SessionMessageAssistant,
+  completedOnly: boolean,
+): string | undefined => {
   for (const part of message.content) {
     if (part.type !== "tool" || !SKILL_TOOLS.has(part.name)) continue;
     if (part.state.status === "streaming") continue;
+    if (completedOnly && part.state.status !== "completed") continue;
     for (const key of ["id", "skill", "name"]) {
       const value = part.state.input[key];
       if (typeof value === "string" && value !== "") return value;
@@ -34,11 +38,17 @@ export const fromText = (raw: string, catalogue: ReadonlyArray<string>): string 
 export const observe = (transcript: Transcript, catalogue: ReadonlyArray<string>): Observed => {
   const activated = transcript.activated[0];
   if (activated !== undefined) return { got: activated, via: "skill" };
-  for (const message of transcript.messages) {
-    const called = fromTool(message);
-    if (called !== undefined) return { got: called, via: "tool" };
+  for (const completedOnly of [true, false]) {
+    for (const message of transcript.messages) {
+      const called = fromTool(message, completedOnly);
+      if (called !== undefined) return { got: called, via: "tool" };
+    }
   }
-  const text = transcript.messages.map(textOf).join("\n");
-  if (text.trim() === "") return { got: "", via: "silent" };
-  return { got: fromText(text, catalogue), via: "text" };
+  const lastText =
+    [...transcript.messages]
+      .reverse()
+      .map(textOf)
+      .find((entry) => entry.trim() !== "") ?? "";
+  if (lastText.trim() === "") return { got: "", via: "silent" };
+  return { got: fromText(lastText, catalogue), via: "text" };
 };

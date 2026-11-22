@@ -7,5 +7,10 @@ export const how: Definition = {
   description:
     "Explain a subsystem end to end and hand back something a senior engineer could work from: what triggers it, what the flow is, where the files are, and the things a newcomer would get wrong. Reach for it when you are about to change code you have only skimmed, or when somebody asks how a part of the system works and the answer has to hold up in review. It is not the evidence skill, which gets the proof; this one explains the thing to a person. You call it. Nothing in this set calls it for you.",
   autoinvoke: false,
+  catalog: {
+    tier: "pull",
+    category: "writing",
+    summary: "Walk through how a subsystem works end to end: entrypoints, data flow, files, and gotchas",
+  },
   path: anchor(import.meta.dir),
 };

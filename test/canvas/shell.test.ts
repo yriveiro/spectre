@@ -47,13 +47,15 @@ describe("the document shell", () => {
     expect(html).not.toContain("<link");
   });
 
-  test("attaches the inline Pele diagram controller only when a diagram is present", () => {
-    const withDiagram = render("```mermaid\nflowchart LR\n  A --> B\n```");
-    if (!withDiagram.ok) throw new Error(withDiagram.problem);
-    const html = document({ title: "Diagram", body: withDiagram.value.html });
-    expect(html).toContain('data-pele-action="fullscreen"');
-    expect(html).toContain("<script>");
+  test("attaches the inline fullscreen and Pele diagram controller when the body contains a diagram figure", () => {
+    const html = document({
+      title: "T",
+      body: '<figure class="diagram"><div class="diagram-frame"><button type="button" class="diagram-fullscreen"></button><svg></svg></div></figure>',
+    });
     expect(externalLoads(html, { "index.html": html })).toEqual([]);
+    expect(html).toContain("<script>");
+    expect(html).toContain("data-fullscreen");
+    expect(html).toContain("Escape");
   });
 
   test("is one complete document", () => {
