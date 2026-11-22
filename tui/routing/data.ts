@@ -24,7 +24,7 @@ import {
   serialise,
   writeConfig,
   writePath,
-} from "../tools/definitions/routing/index.ts";
+} from "../../tools/definitions/routing/index.ts";
 
 export { DEFAULT_PROFILES, isDefaultProfile };
 

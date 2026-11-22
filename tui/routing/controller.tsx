@@ -1,0 +1,863 @@
+import type { Plugin } from "@opencode/plugin/tui";
+import { TextAttributes } from "@opentui/core";
+import type { JSX } from "@opentui/solid";
+import { createSignal } from "solid-js";
+import { FILE_NAME } from "../../tools/definitions/routing/index.ts";
+import { h, show } from "../render.ts";
+import {
+  applied,
+  isJevAvailable,
+  isProviderAvailable,
+  providerPicker,
+  usableDraft,
+} from "./controls.tsx";
+import {
+  catalogue,
+  configuredProfiles,
+  type Draft,
+  defaultProfiles,
+  directoryOf,
+  effortDots,
+  type FallbackReason,
+  type Model,
+  normalizeCost,
+  type Resolution,
+  read,
+  resolve,
+  resolveEffectiveDraft,
+  type SelectionMethod,
+  save,
+  selectionMethodOf,
+} from "./data.ts";
+import { page, type TabId } from "./page.tsx";
+
+type Editable<Value> =
+  Value extends ReadonlyArray<infer Item>
+    ? Array<Editable<Item>>
+    : Value extends object
+      ? { -readonly [Key in keyof Value]: Editable<Value[Key]> }
+      : Value;
+
+type MutableDraft = Editable<Draft>;
+
+const PAGE = "Routing";
+
+const VIEW = "view";
+
+const message = (problem: unknown): string =>
+  problem instanceof Error ? problem.message : String(problem);
+
+/** The state of a directory with no config yet, or one that is still loading. */
+const empty = (directory: string): Draft => ({
+  directory,
+  source: undefined,
+  problems: [],
+  provider: undefined,
+  models: [],
+  crosscheck: [],
+  profiles: defaultProfiles(true),
+});
+
+const copy = (draft: Draft): MutableDraft => ({
+  directory: draft.directory,
+  source: draft.source,
+  problems: [...draft.problems],
+  provider: draft.provider,
+  judge: draft.judge === undefined ? undefined : { ...draft.judge },
+  models: (Array.isArray(draft.models) ? draft.models : []).map((one) => ({
+    alias: one.alias,
+    ref: one.ref,
+    priority: one.priority,
+  })),
+  crosscheck: [...(Array.isArray(draft.crosscheck) ? draft.crosscheck : [])],
+  profiles: (Array.isArray(draft.profiles) && draft.profiles.length > 0
+    ? draft.profiles
+    : defaultProfiles(true)
+  ).map((one) => ({
+    name: one.name,
+    effort: one.effort,
+    match: one.match,
+    why: one.why,
+    crosscheck:
+      one.crosscheck === undefined
+        ? undefined
+        : { effort: one.crosscheck.effort, pinned: one.crosscheck.pinned },
+    agent: one.agent,
+    pinned: one.pinned,
+    enabled: one.enabled,
+  })),
+});
+
+const assignDraft = (target: MutableDraft, source: MutableDraft): void => {
+  target.directory = source.directory;
+  target.source = source.source;
+  target.problems = [...source.problems];
+  target.provider = source.provider;
+  target.judge = source.judge;
+  target.models = source.models;
+  target.crosscheck = source.crosscheck;
+  target.profiles = source.profiles;
+};
+
+const absent = (name: string): Resolution => ({
+  profile: name,
+  alias: undefined,
+  ref: undefined,
+  rung: undefined,
+  cost: undefined,
+  crosscheck: undefined,
+  crosscheckCost: undefined,
+  crosscheckProblem: undefined,
+  problem: "The resolver returned no row",
+});
+
+const collapsedSummary = (
+  theme: Plugin.Context["theme"],
+  rows: ReadonlyArray<Resolution>,
+  usingDefaults: boolean,
+  method: SelectionMethod["badge"],
+): JSX.Element => {
+  const active = rows.filter((one) => one.problem === undefined && one.ref !== undefined).length;
+  const bad = rows.filter((one) => one.problem !== undefined).length;
+  if (usingDefaults && bad === 0) {
+    return h(
+      "text",
+      { fg: theme.text.muted, wrapMode: "none", truncate: true, flexShrink: 1, minWidth: 0 },
+      " (",
+      h("span", { style: { fg: theme.text.feedback.warning.base } }, "⚠"),
+      ` defaults · ${method})`,
+    );
+  }
+  const errors = bad > 0 ? `, ${bad} error${bad > 1 ? "s" : ""}` : "";
+  return h(
+    "text",
+    { fg: theme.text.muted, wrapMode: "none", truncate: true, flexShrink: 1, minWidth: 0 },
+    ` (${active} active${errors} · ${method})`,
+  );
+};
+
+const sidebarRow = (
+  theme: Plugin.Context["theme"],
+  row: Resolution,
+  usingDefaults: boolean,
+  onOpen: () => void,
+): JSX.Element => {
+  const failed = row.problem !== undefined;
+  const errorColor = theme.text.feedback.error?.base ?? theme.text.feedback.warning.base;
+  const dotColor = failed
+    ? errorColor
+    : usingDefaults
+      ? theme.text.feedback.warning.base
+      : (theme.text.feedback.success?.base ?? theme.text.base);
+  const statusColor = failed ? errorColor : theme.text.muted;
+  const aliasText = failed ? "Error" : (row.alias ?? row.ref ?? "-");
+  const dots = failed ? "" : effortDots(row.rung);
+
+  return h(
+    "box",
+    {
+      flexDirection: "row",
+      gap: 1,
+      minWidth: 0,
+      onMouseUp: onOpen,
+    },
+    h("text", { flexShrink: 0, fg: dotColor }, "•"),
+    h(
+      "text",
+      {
+        fg: theme.text.base,
+        attributes: TextAttributes.BOLD,
+        wrapMode: "none",
+        truncate: true,
+        flexGrow: 1,
+        flexShrink: 1,
+        minWidth: 0,
+      },
+      row.profile,
+    ),
+    h(
+      "text",
+      {
+        fg: statusColor,
+        wrapMode: "none",
+        flexShrink: 0,
+      },
+      aliasText,
+    ),
+    h(
+      "text",
+      {
+        fg: statusColor,
+        wrapMode: "none",
+        flexShrink: 0,
+      },
+      dots,
+    ),
+  );
+};
+
+const sidebarHeader = (input: {
+  readonly theme: Plugin.Context["theme"];
+  readonly open: () => boolean;
+  readonly onToggle: () => void;
+  readonly rows: () => ReadonlyArray<Resolution>;
+  readonly usingDefaults: () => boolean;
+  readonly method: () => SelectionMethod["badge"];
+}): JSX.Element =>
+  h(
+    "box",
+    {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      width: "100%",
+      onMouseDown: input.onToggle,
+    },
+    h(
+      "box",
+      { flexDirection: "row", gap: 1, minWidth: 0, flexShrink: 1 },
+      h("text", { fg: input.theme.text.base, flexShrink: 0 }, () => (input.open() ? "▼" : "▶")),
+      h(
+        "box",
+        { flexDirection: "row", minWidth: 0, flexShrink: 1 },
+        h(
+          "text",
+          {
+            fg: input.theme.text.base,
+            attributes: TextAttributes.BOLD,
+            wrapMode: "none",
+            flexShrink: 0,
+          },
+          "Routing",
+        ),
+        () =>
+          input.open()
+            ? null
+            : collapsedSummary(input.theme, input.rows(), input.usingDefaults(), input.method()),
+      ),
+    ),
+    show(
+      () => input.open(),
+      () =>
+        h("text", { fg: input.theme.text.muted, wrapMode: "none", flexShrink: 0 }, input.method),
+    ),
+  );
+
+export const sidebarFallbackLabel = (reason: FallbackReason | undefined): string => {
+  if (reason === "empty-models") return "No models — using defaults";
+  if (reason === "unavailable-models") return "Models unavailable — defaults";
+  return `No ${FILE_NAME} — using defaults`;
+};
+
+const sidebarDefaultsWarning = (
+  theme: Plugin.Context["theme"],
+  label: string,
+  onOpen: () => void,
+): ReadonlyArray<JSX.Element> => [
+  h("box", { height: 1 }),
+  h(
+    "box",
+    { flexDirection: "row", gap: 1, minWidth: 0, onMouseUp: onOpen },
+    h("text", { flexShrink: 0, fg: theme.text.feedback.warning.base }, "⚠"),
+    h(
+      "text",
+      {
+        fg: theme.text.muted,
+        wrapMode: "none",
+        truncate: true,
+        flexGrow: 1,
+        flexShrink: 1,
+        minWidth: 0,
+      },
+      label,
+    ),
+  ),
+];
+
+export const sidebarSection = (input: {
+  readonly theme: Plugin.Context["theme"];
+  readonly open: () => boolean;
+  readonly onToggle: () => void;
+  readonly onOpenModal: () => void;
+  readonly rows: () => ReadonlyArray<Resolution>;
+  readonly usingDefaults?: () => boolean;
+  readonly warningText?: () => string;
+  readonly method?: () => SelectionMethod["badge"];
+}): JSX.Element => {
+  const usingDefaults = () => input.usingDefaults?.() ?? false;
+  const warningText = () => input.warningText?.() ?? `No ${FILE_NAME} — using defaults`;
+  const method = () => input.method?.() ?? "Session";
+  return show(
+    () => input.rows().length > 0,
+    () =>
+      h(
+        "box",
+        { flexDirection: "column", width: "100%" },
+        sidebarHeader({
+          theme: input.theme,
+          open: input.open,
+          onToggle: input.onToggle,
+          rows: input.rows,
+          usingDefaults,
+          method,
+        }),
+        h(
+          "box",
+          { flexDirection: "column", width: "100%" },
+          show(
+            () => input.open(),
+            () =>
+              h("box", { flexDirection: "column", width: "100%" }, () => {
+                const defaults = usingDefaults();
+                const items = input
+                  .rows()
+                  .map((row) => sidebarRow(input.theme, row, defaults, input.onOpenModal));
+                return defaults
+                  ? [
+                      ...items,
+                      ...sidebarDefaultsWarning(input.theme, warningText(), input.onOpenModal),
+                    ]
+                  : items;
+              }),
+          ),
+        ),
+      ),
+  );
+};
+
+const sessionModelRef = (
+  model:
+    | { readonly providerID: string; readonly id: string; readonly variant?: string }
+    | undefined,
+): string | undefined => {
+  if (model === undefined) return undefined;
+  return model.variant === undefined
+    ? `${model.providerID}/${model.id}`
+    : `${model.providerID}/${model.id}#${model.variant}`;
+};
+
+const subagentProfileIndex = (
+  profiles: ReadonlyArray<{ readonly name: string; readonly agent: string }>,
+  resolutions: ReadonlyArray<Resolution>,
+  sessionRef: string | undefined,
+  agent: string | undefined,
+): number => {
+  if (sessionRef !== undefined) {
+    const exact = resolutions.findIndex(
+      (one, at) => one.ref === sessionRef && profiles[at]?.agent === agent,
+    );
+    if (exact !== -1) return exact;
+    const byRef = resolutions.findIndex((one) => one.ref === sessionRef);
+    if (byRef !== -1) return byRef;
+  }
+  const byAgent = profiles.findIndex((one) => one.agent === agent);
+  return byAgent === -1 ? 0 : byAgent;
+};
+
+export const subagentLine = (input: {
+  readonly session:
+    | {
+        readonly parentID?: string | null;
+        readonly agent?: string;
+        readonly model?: {
+          readonly providerID: string;
+          readonly id: string;
+          readonly variant?: string;
+        };
+      }
+    | undefined;
+  readonly profiles: ReadonlyArray<{ readonly name: string; readonly agent: string }>;
+  readonly resolutions: ReadonlyArray<Resolution>;
+}): string | undefined => {
+  if (!input.session?.parentID) return undefined;
+  const sessionRef = sessionModelRef(input.session.model);
+  const index = subagentProfileIndex(
+    input.profiles,
+    input.resolutions,
+    sessionRef,
+    input.session.agent,
+  );
+  const row = input.resolutions[index];
+  // A profile that did not resolve has no model to show. Reporting the model
+  // the child inherited would name the parent's choice as this profile's.
+  if (row?.problem !== undefined) return "Error";
+  const ref = sessionRef ?? row?.ref;
+  if (ref === undefined) return undefined;
+
+  const name = input.profiles[index]?.name ?? input.session.agent ?? "subagent";
+  const matched = row?.ref === ref;
+  const aliasText = matched ? (row?.alias ?? ref) : ref;
+  const dots = matched ? effortDots(row?.rung) : effortDots(input.session.model?.variant);
+  const normalizedCost = normalizeCost(row?.cost);
+  const cost = normalizedCost !== undefined && matched ? `, ${normalizedCost}` : "";
+  return `${name} ${aliasText} ${dots}${cost}`;
+};
+
+export const subagentFooter = (input: {
+  readonly theme: Plugin.Context["theme"];
+  readonly line: () => string | undefined;
+}): JSX.Element =>
+  show(
+    () => input.line() !== undefined,
+    () =>
+      h(
+        "box",
+        { flexDirection: "row", gap: 1, paddingLeft: 3, paddingRight: 3 },
+        h("text", { fg: input.theme.text.faint }, "Routing"),
+        h("text", { fg: input.theme.text.base }, () => input.line() ?? ""),
+      ),
+  );
+
+/**
+ * Owns every routing surface in the TUI: the sidebar section, the subagent
+ * footer, the modal page, and the route that reopens it.
+ */
+export const registerRouting = (
+  context: Plugin.Context,
+): {
+  /** Opens the routing modal over the current session. */
+  readonly open: () => void;
+  /** Disposes the registrations this controller made. */
+  readonly stop: () => void;
+} => {
+  const defaultDirectory = context.data.location.default().directory;
+  const initial = context.location?.directory ?? defaultDirectory;
+
+  const [view, setView] = context.storage.store(VIEW, {
+    initial: { open: true },
+  });
+  const [open, setOpen] = createSignal(view.open ?? true);
+
+  // Drafts read in this generation, keyed by directory. A TUI that renders
+  // two sessions in two worktrees must not re-read a file on every render,
+  // and must never answer with the other directory's models.
+  const cache = new Map<string, Draft>();
+  let current: string | undefined;
+  let draft: MutableDraft = copy(empty(initial));
+  let loading: string | undefined;
+  let inflight: Promise<void> | undefined;
+  let modalOpen = false;
+
+  const [revision, setRevision] = createSignal(0);
+
+  /** Make one directory's draft the active one, keeping the edits of the last. */
+  const adopt = (next: Draft, notify = true): void => {
+    if (current !== undefined && current === draft.directory) cache.set(current, copy(draft));
+    draft = copy(next);
+    current = next.directory;
+    if (notify) setRevision((value) => value + 1);
+  };
+
+  /** The session the modal was opened over, when the route is one. */
+  const routeSession = (): string | undefined => {
+    const route = context.ui.router.current();
+    return route.type === "session" ? route.sessionID : undefined;
+  };
+
+  /** The session's directory, or the TUI's own default location when no session is open. */
+  const directoryFor = (sessionID?: string): string =>
+    directoryOf({
+      sessionID,
+      session: (id) => context.data.session.get(id),
+      route: context.ui.router.current(),
+      location: context.location,
+      fallback: defaultDirectory,
+    });
+
+  /** Read one directory into the cache, once. A second caller joins the read. */
+  const ensure = async (target: string): Promise<void> => {
+    if (current === target) return;
+    const cached = cache.get(target);
+    if (cached !== undefined) {
+      adopt(cached);
+      return;
+    }
+    if (loading === target && inflight !== undefined) return inflight;
+    loading = target;
+    inflight = read(target)
+      .then((found) => {
+        // Cache it even when a later read has taken over: the directory was
+        // read, and the next render for it must not read it again.
+        cache.set(target, found);
+        if (loading !== target) return;
+        loading = undefined;
+        adopt(found);
+        if (modalOpen) showModal();
+      })
+      .catch((problem: unknown) => {
+        // The previous directory's models are not this directory's answer.
+        const blank = empty(target);
+        cache.set(target, blank);
+        if (loading !== target) return;
+        loading = undefined;
+        adopt(blank);
+        context.ui.toast.show({
+          title: "Routing",
+          message: `The config could not be read: ${message(problem)}`,
+          variant: "error",
+        });
+      });
+    return inflight;
+  };
+
+  /**
+   * The draft for this session's directory. A directory the page has not read
+   * is loaded now, and the render after the load shows it. Until then this
+   * returns an empty draft, never another directory's models.
+   */
+  const hold = (sessionID?: string): Draft => {
+    const target = directoryFor(sessionID);
+    if (current === target) return draft;
+    const cached = cache.get(target);
+    if (cached !== undefined) {
+      adopt(cached, false);
+      return draft;
+    }
+    void ensure(target);
+    return empty(target);
+  };
+
+  // The decision models the host lists as available, by directory. The host
+  // lists a model only when its provider is connected or enabled
+  // (`packages/core/src/provider.ts` at v2.3.0), so a listed judge can be asked.
+  const decisions = new Map<string, ReadonlySet<string>>();
+  const decisionsFor = (directory: string): ReadonlySet<string> => {
+    const listed = decisions.get(directory);
+    if (listed !== undefined) return listed;
+    const none: ReadonlySet<string> = new Set();
+    decisions.set(directory, none);
+    void context.client.model
+      .list({ location: { directory }, types: ["decision"] })
+      .then((found) => {
+        decisions.set(directory, new Set(found.data.map((one) => `${one.providerID}/${one.id}`)));
+        setRevision((value) => value + 1);
+        if (modalOpen) showModal();
+      })
+      .catch(() => decisions.delete(directory));
+    return none;
+  };
+
+  let activeTab: TabId = "configured";
+  let selectedRow = 0;
+  let editingProvider: string | undefined;
+
+  const modelListFor = (sessionID?: string): ReadonlyArray<unknown> | undefined => {
+    const location =
+      (sessionID === undefined ? undefined : context.data.session.get(sessionID)?.location) ??
+      context.location;
+    const atSession = context.data.location.model.list(location);
+    if (atSession !== undefined) return atSession;
+    void context.data.location.model.sync?.(location)?.catch(() => undefined);
+    if (location !== context.location) {
+      const atDefault = context.data.location.model.list(context.location);
+      if (atDefault !== undefined) return atDefault;
+    }
+    return undefined;
+  };
+
+  const listed = (sessionID?: string): ReadonlyArray<unknown> => modelListFor(sessionID) ?? [];
+
+  const mainSessionID = (sessionID?: string): string | undefined => {
+    const target = sessionID ?? routeSession();
+    if (target === undefined) return undefined;
+    if (typeof context.data.session.root === "function") {
+      const root = context.data.session.root(target);
+      if (context.data.session.get(root) !== undefined) return root;
+    }
+    let cursor = target;
+    const seen = new Set<string>();
+    while (!seen.has(cursor)) {
+      seen.add(cursor);
+      const parentID: string | undefined = context.data.session.get(cursor)?.parentID;
+      if (parentID === undefined) return cursor;
+      if (context.data.session.get(parentID) === undefined) return cursor;
+      cursor = parentID;
+    }
+    return target;
+  };
+
+  const activeModelRef = (sessionID?: string): string | undefined => {
+    const target = sessionID ?? routeSession();
+    const rootID = mainSessionID(sessionID);
+    const fromMain = rootID === undefined ? undefined : context.data.session.get(rootID)?.model;
+    if (fromMain !== undefined) return `${fromMain.providerID}/${fromMain.id}`;
+    const fromTarget = target === undefined ? undefined : context.data.session.get(target)?.model;
+    if (fromTarget !== undefined) return `${fromTarget.providerID}/${fromTarget.id}`;
+    const fromPrompt = context.ui.model?.current?.();
+    if (fromPrompt !== undefined) return `${fromPrompt.providerID}/${fromPrompt.modelID}`;
+    return undefined;
+  };
+
+  const activeCatalogModel = (
+    models: ReadonlyArray<Model>,
+    sessionID?: string,
+  ): Model | undefined => {
+    const ref = activeModelRef(sessionID);
+    if (ref === undefined) return undefined;
+    return models.find((one) => `${one.providerID}/${one.id}` === ref);
+  };
+
+  const effectiveDraft = (
+    sessionID?: string,
+    respectProviderEdit = false,
+  ): {
+    readonly models: ReadonlyArray<Model>;
+    readonly clean: Draft;
+    readonly fallback: FallbackReason | undefined;
+  } => {
+    const models = catalogue(listed(sessionID));
+    const held = hold(sessionID);
+    const activeModel = activeCatalogModel(models, sessionID);
+    if (
+      respectProviderEdit &&
+      editingProvider !== undefined &&
+      editingProvider !== activeModel?.providerID
+    ) {
+      return { models, clean: usableDraft(held, models), fallback: undefined };
+    }
+    const resolved = resolveEffectiveDraft(held, models, activeModel);
+    return { models, clean: resolved.clean, fallback: resolved.fallback };
+  };
+
+  const isDirectoryReady = (target: string): boolean => current === target || cache.has(target);
+
+  const persist = async (): Promise<void> => {
+    const sessionID = routeSession();
+    const models = catalogue(listed(sessionID));
+    const activeModel = activeCatalogModel(models, sessionID);
+    const sanitized =
+      editingProvider !== undefined && editingProvider !== activeModel?.providerID
+        ? usableDraft(draft, models)
+        : resolveEffectiveDraft(draft, models, activeModel).clean;
+    editingProvider = undefined;
+    try {
+      const writtenPath = await save(sanitized);
+      const committed = copy({ ...sanitized, source: writtenPath, problems: [] });
+      assignDraft(draft, committed);
+      cache.clear();
+      cache.set(committed.directory, copy(committed));
+      setRevision((value) => value + 1);
+      context.ui.toast.show({
+        title: "Routing",
+        message: "The config was written",
+        variant: "success",
+      });
+    } catch (problem) {
+      assignDraft(draft, copy(sanitized));
+      setRevision((value) => value + 1);
+      context.ui.toast.show({
+        title: "Routing",
+        message: message(problem),
+        variant: "error",
+      });
+    }
+  };
+
+  const onSave = (): void => {
+    void persist();
+  };
+
+  const onChange = (next: Draft): void => {
+    assignDraft(draft, copy(next));
+    setRevision((value) => value + 1);
+  };
+
+  const renderModal = () => {
+    const sessionID = routeSession();
+    const target = directoryFor(sessionID);
+    const { models, clean, fallback } = effectiveDraft(sessionID, true);
+    const active = configuredProfiles(clean);
+    const found = resolve(clean, models);
+
+    const rows = active.map((profile, atIndex) => ({
+      profile,
+      resolution: found[atIndex] ?? absent(profile.name),
+    }));
+
+    const allow = clean.models.map((one) => {
+      const model = models.find((two) => {
+        const head = `${two.providerID}/${two.id}`;
+        return one.ref === head || one.ref.startsWith(`${head}#`);
+      });
+      return { alias: one.alias, ref: one.ref, priority: one.priority, model };
+    });
+
+    return page({
+      rows,
+      models: allow,
+      catalogue: models,
+      draft: clean,
+      fallback,
+      sessionModel: activeModelRef(sessionID),
+      jevAvailable: isJevAvailable(clean, decisionsFor(target)),
+      tab: activeTab,
+      selectedRow,
+      loading: loading === target,
+      onRowChange: (next) => {
+        selectedRow = next;
+      },
+      onTabChange: (next) => {
+        activeTab = next;
+        showModal();
+      },
+      onChange: (next) => {
+        onChange(next);
+        showModal();
+      },
+      onProviderChange: (next) => {
+        editingProvider = next.provider;
+        onChange(next);
+        showModal();
+      },
+      onSave: () => {
+        onSave();
+        context.ui.dialog.clear();
+      },
+      onClose: () => {
+        if (editingProvider !== undefined) {
+          editingProvider = undefined;
+          cache.delete(target);
+          if (current === target) current = undefined;
+          setRevision((value) => value + 1);
+        }
+        context.ui.dialog.clear();
+      },
+      source: clean.source,
+    });
+  };
+
+  let modalGeneration = 0;
+
+  const showModal = (): void => {
+    modalOpen = true;
+    // Replacing a shown dialog calls the previous close callback. The
+    // generation keeps the new dialog from being marked closed by it.
+    const generation = ++modalGeneration;
+    context.ui.dialog.show(
+      () => renderModal(),
+      () => {
+        if (generation === modalGeneration) modalOpen = false;
+      },
+    );
+    context.ui.dialog.set({ size: "xlarge", centered: true });
+  };
+
+  const openModal = async (): Promise<void> => {
+    editingProvider = undefined;
+    const sessionID = routeSession();
+    await ensure(directoryFor(sessionID));
+    decisions.clear();
+    const { models, clean } = effectiveDraft(sessionID);
+    if (!isProviderAvailable(clean.provider, models)) {
+      void providerPicker({
+        dialog: context.ui.dialog,
+        draft: clean,
+        models,
+      }).then((edit) => {
+        if (edit !== undefined) {
+          const next = applied(clean, edit);
+          editingProvider = next.provider;
+          onChange(next);
+        }
+        showModal();
+      });
+      return;
+    }
+    showModal();
+  };
+
+  const stopRouter = context.ui.router.register({
+    name: PAGE,
+    render: renderModal,
+  });
+
+  const resolvedRows = (sessionID: string): ReadonlyArray<Resolution> => {
+    revision();
+    const target = directoryFor(sessionID);
+    if (!isDirectoryReady(target)) {
+      void ensure(target);
+      return [];
+    }
+    if (modelListFor(sessionID) === undefined) {
+      return [];
+    }
+    const { models, clean } = effectiveDraft(sessionID);
+    const active = configuredProfiles(clean);
+    if (active.length === 0) return [];
+    const found = resolve(clean, models);
+    return active.map((profile, atIndex) => found[atIndex] ?? absent(profile.name));
+  };
+
+  const stopSidebar = context.ui.slot({
+    append: "sidebar.content",
+    render: (input) =>
+      sidebarSection({
+        theme: context.theme,
+        open,
+        onToggle: () => {
+          const next = !open();
+          setOpen(next);
+          void setView((held) => {
+            held.open = next;
+          }).catch(() => undefined);
+        },
+        onOpenModal: () => openModal(),
+        rows: () => resolvedRows(input.sessionID),
+        usingDefaults: () => {
+          revision();
+          const target = directoryFor(input.sessionID);
+          if (!isDirectoryReady(target) || modelListFor(input.sessionID) === undefined) {
+            return false;
+          }
+          return effectiveDraft(input.sessionID).fallback !== undefined;
+        },
+        warningText: () => {
+          revision();
+          const target = directoryFor(input.sessionID);
+          if (!isDirectoryReady(target) || modelListFor(input.sessionID) === undefined) {
+            return sidebarFallbackLabel(undefined);
+          }
+          return sidebarFallbackLabel(effectiveDraft(input.sessionID).fallback);
+        },
+        method: () => {
+          revision();
+          const target = directoryFor(input.sessionID);
+          if (!isDirectoryReady(target) || modelListFor(input.sessionID) === undefined) {
+            return "Session";
+          }
+          const { clean } = effectiveDraft(input.sessionID);
+          return selectionMethodOf({
+            draft: clean,
+            jevAvailable: isJevAvailable(clean, decisionsFor(target)),
+            sessionModel: activeModelRef(input.sessionID),
+          }).badge;
+        },
+      }),
+  });
+
+  const stopComposer = context.ui.slot({
+    append: "session.composer.top",
+    render: (input) =>
+      subagentFooter({
+        theme: context.theme,
+        line: () => {
+          revision();
+          return subagentLine({
+            session: context.data.session.get(input.sessionID),
+            profiles: configuredProfiles(effectiveDraft(input.sessionID).clean),
+            resolutions: resolvedRows(input.sessionID),
+          });
+        },
+      }),
+  });
+
+  return {
+    open: () => {
+      void openModal();
+    },
+    stop: () => {
+      stopComposer();
+      stopSidebar();
+      stopRouter();
+    },
+  };
+};

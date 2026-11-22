@@ -3,7 +3,13 @@ import type { ResolvedTheme } from "@opencode/theme/tui";
 import { type KeyEvent, type RGBA, TextAttributes } from "@opentui/core";
 import { type JSX, useRenderer } from "@opentui/solid";
 import { createSignal } from "solid-js";
-import { FILE_NAME, JEV_MODEL, judgeRef, KNOWN_ORDER } from "../tools/definitions/routing/index.ts";
+import {
+  FILE_NAME,
+  JEV_MODEL,
+  judgeRef,
+  KNOWN_ORDER,
+} from "../../tools/definitions/routing/index.ts";
+import { bindKeyboard, field, h, type Palette, palette, show } from "../render.ts";
 import {
   addProfilePrompt,
   applied,
@@ -33,7 +39,6 @@ import {
   type Profile,
   type Resolution,
 } from "./data.ts";
-import { bindKeyboard, field, h, type Palette, palette, show } from "./render.ts";
 
 export type TabId = "configured" | "profiles" | "allowlist" | "crosscheck" | "preview";
 

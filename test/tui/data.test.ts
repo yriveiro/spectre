@@ -12,7 +12,7 @@ import {
   resolveEffectiveDraft,
   save,
   sessionDefaultDraft,
-} from "../../tui/data";
+} from "../../tui/routing/data";
 
 const scratch = () => join(Bun.env.TMPDIR ?? "/tmp", `spectre-tui-data-${crypto.randomUUID()}`);
 
