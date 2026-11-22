@@ -1,6 +1,7 @@
 import type { Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect } from "effect";
 import { snapshot as snapshotBrain } from "../brain";
+import { board } from "./board";
 import { composeBrain } from "./brain";
 import { diagram, page, report } from "./compose";
 import {
@@ -14,8 +15,9 @@ import {
 } from "./content";
 import { bundle } from "./d3";
 import { load, write } from "./evidence";
+import { applyPatchOps, CANVAS_STATE_FILE, decodeCanvasState, encodeCanvasState } from "./patch";
 import { pr as composePr } from "./pr";
-import { create, update } from "./publish";
+import { create, readArtifact, update } from "./publish";
 import type { Read, Input as ReadInput } from "./read";
 import { read as readDiff, totalsOf } from "./read";
 
@@ -104,6 +106,10 @@ const buildContent = (
         return report(content);
       case "diagram":
         return diagram(content);
+      case "board": {
+        const built = yield* attempt(() => board(project, content));
+        return built.ok ? built.value : { ok: false as const, problem: built.problem };
+      }
       case "brain": {
         const snap = yield* snapshotBrain(brainDirectory).pipe(
           Effect.map((value) => ({ ok: true as const, value })),
@@ -120,6 +126,48 @@ const buildContent = (
     }
   });
 
+const executeDiff = (ctx: Plugin.Context, input: DiffInput): Effect.Effect<{ output: Output }> =>
+  Effect.gen(function* () {
+    const project = ctx.location.project.directory;
+    const cwd = ctx.location.directory;
+    const subject = subjectOf(input);
+    if (!subject.ok) return { output: refused(subject.problem) };
+
+    const read: Read = yield* Effect.promise(() => readDiff(cwd, subject.input));
+    if (read.status === "refused") return { output: refused(read.problem) };
+
+    const wrote = yield* attempt(() => write(project, read));
+    if (!wrote.ok) return { output: refused(wrote.problem) };
+
+    return {
+      output: {
+        status: "read" as const,
+        token: wrote.value.token,
+        subject: read.subject,
+        totals: totalsOf(read.files),
+        cross: read.cross,
+        files: wrote.value.rows,
+        warnings: read.problems,
+      },
+    };
+  });
+
+const resolveTargetContent = (
+  ctx: Plugin.Context,
+  context: Tool.Context,
+  input: Exclude<InputType, DiffInput>,
+): Effect.Effect<
+  { readonly ok: true; readonly content: Content } | { readonly ok: false; readonly problem: string }
+> =>
+  Effect.gen(function* () {
+    if (input.action !== "patch") return { ok: true as const, content: input.content };
+    const existing = yield* readArtifact({ ctx, context, id: input.id });
+    if (existing.status !== "read") return { ok: false as const, problem: existing.problem };
+    const decoded = decodeCanvasState(existing.files);
+    if (!decoded.ok) return decoded;
+    return applyPatchOps(decoded.content, input.ops);
+  });
+
 export const canvases = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Output> => ({
   name: "canvas",
   description: DESCRIPTION,
@@ -127,49 +175,33 @@ export const canvases = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Ou
   output: Output,
   options: { namespace: "spectre", codemode: true, permission: "canvas" },
   execute: Effect.fn("Canvas.execute")(function* (input: InputType, context: Tool.Context) {
-    const project = ctx.location.project.directory;
-    const cwd = ctx.location.directory;
+    if (input.action === "diff") return yield* executeDiff(ctx, input);
+    if (input.action !== "publish" && !input.id.startsWith("art_"))
+      return { output: refused(`${input.action} id must be an artifact id that starts with \`art_\``) };
 
-    if (input.action === "diff") {
-      const subject = subjectOf(input);
-      if (!subject.ok) return { output: refused(subject.problem) };
-
-      const read: Read = yield* Effect.promise(() => readDiff(cwd, subject.input));
-      if (read.status === "refused") return { output: refused(read.problem) };
-
-      const wrote = yield* attempt(() => write(project, read));
-      if (!wrote.ok) return { output: refused(wrote.problem) };
-
-      return {
-        output: {
-          status: "read" as const,
-          token: wrote.value.token,
-          subject: read.subject,
-          totals: totalsOf(read.files),
-          cross: read.cross,
-          files: wrote.value.rows,
-          warnings: read.problems,
-        },
-      };
-    }
-
-    if (input.action === "update" && !input.id.startsWith("art_"))
-      return { output: refused("update id must be an artifact id that starts with `art_`") };
+    const resolved = yield* resolveTargetContent(ctx, context, input);
+    if (!resolved.ok) return { output: refused(resolved.problem) };
 
     const brainDirectory = yield* resolveBrainDirectory(ctx, context.sessionID);
-    const built: Composed = yield* buildContent(project, brainDirectory, input.content);
+    const built: Composed = yield* buildContent(
+      ctx.location.project.directory,
+      brainDirectory,
+      resolved.content,
+    );
     if (!built.ok) return { output: refused(built.problem) };
 
+    const filesWithState: Readonly<Record<string, string>> =
+      resolved.content.kind === "brain"
+        ? built.files
+        : {
+            ...built.files,
+            [CANVAS_STATE_FILE]: encodeCanvasState(resolved.content),
+          };
+
     const publication =
-      input.action === "update"
-        ? yield* update({
-            ctx,
-            context,
-            id: input.id,
-            title: built.title,
-            files: built.files,
-          })
-        : yield* create({ ctx, context, title: built.title, files: built.files });
+      input.action === "publish"
+        ? yield* create({ ctx, context, title: built.title, files: filesWithState })
+        : yield* update({ ctx, context, id: input.id, title: built.title, files: filesWithState });
 
     if (publication.status !== "published") return { output: refused(publication.problem) };
 
@@ -180,7 +212,7 @@ export const canvases = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Ou
         url: publication.url,
         provider: publication.provider,
         title: publication.title,
-        bytes: bytesOf(built.files),
+        bytes: bytesOf(filesWithState),
         warnings: [...built.warnings],
       },
     };

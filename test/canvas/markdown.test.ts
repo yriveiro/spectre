@@ -9,12 +9,16 @@ const htmlOf = (result: ReturnType<typeof render>): string => {
 };
 
 describe("a Mermaid fence", () => {
-  test("becomes a static svg inside a figure with a fullscreen toggle, and the fragment carries no script", () => {
+  test("becomes an interactive Pele svg inside a figure with fullscreen and toolbar controls, and the fragment carries no script", () => {
     const html = htmlOf(render(`## Path\n\n${fence("flowchart LR\n  A --> B")}`));
     expect(html).toContain("<svg");
-    expect(html).toContain('<figure class="diagram">');
-    expect(html).toContain('class="diagram-fullscreen"');
+    expect(html).toContain('<figure class="diagram" data-pele-diagram');
+    expect(html).toContain("diagram-fullscreen");
     expect(html).toContain('aria-label="Enter fullscreen"');
+    expect(html).toContain('data-pele-action="fullscreen"');
+    expect(html).toContain('data-pele-action="zoom-in"');
+    expect(html).toContain('data-pele-action="copy-source"');
+    expect(html).toContain('data-pele-action="download-svg"');
     expect(html).not.toContain("<script");
     expect(html).not.toContain("SPECTRE_MERMAID_");
   });

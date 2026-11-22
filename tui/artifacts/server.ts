@@ -233,12 +233,13 @@ const GALLERY_MARKUP = `<div class="shell" id="shell">
         <button type="button" class="mono-badge" id="copyIdBtn" hidden title="Copy artifact ID"></button>
       </div>
       <div class="toolbar-right">
+        <span class="mono-badge" id="kindBadge" hidden></span>
         <button type="button" class="btn" id="reloadFrameBtn" hidden title="Reload active artifact">Reload</button>
         <a class="btn" id="standaloneLink" href="#" target="_blank" rel="noopener" hidden>Standalone</a>
       </div>
     </header>
     <div class="empty" id="emptyState"><h2 id="emptyHeading">Loading artifacts...</h2><p id="emptyBody"></p></div>
-    <iframe class="viewer" id="viewer" sandbox="allow-scripts" title="Artifact preview" hidden></iframe>
+    <iframe class="viewer" id="viewer" sandbox="allow-scripts allow-downloads" title="Artifact preview" hidden></iframe>
   </section>
 </div>`;
 
@@ -249,7 +250,7 @@ const projectPickerBtn = $("projectPickerBtn"), projectPickerLabel = $("projectP
 const locationDrawer = $("locationDrawer"), tabProjects = $("tabProjects"), tabFs = $("tabFs");
 const projectsPane = $("projectsPane"), projectSearchInput = $("projectSearchInput"), projectList = $("projectList");
 const fsPane = $("fsPane"), fsForm = $("fsForm"), fsPathInput = $("fsPathInput"), fsOpenHereBtn = $("fsOpenHereBtn"), fsList = $("fsList");
-const listEl = $("list"), activeTitle = $("activeTitle"), copyIdBtn = $("copyIdBtn");
+const listEl = $("list"), activeTitle = $("activeTitle"), copyIdBtn = $("copyIdBtn"), kindBadge = $("kindBadge");
 const reloadFrameBtn = $("reloadFrameBtn"), standaloneLink = $("standaloneLink");
 const emptyState = $("emptyState"), emptyHeading = $("emptyHeading"), emptyBody = $("emptyBody"), viewer = $("viewer");
 
@@ -297,7 +298,7 @@ const updateTargetHeader = (labelHint, directoryHint) => {
 };
 const showMessage = (heading, body) => {
   viewer.hidden = true; emptyState.hidden = false; emptyHeading.textContent = heading; emptyBody.textContent = body;
-  copyIdBtn.hidden = reloadFrameBtn.hidden = standaloneLink.hidden = true;
+  copyIdBtn.hidden = kindBadge.hidden = reloadFrameBtn.hidden = standaloneLink.hidden = true;
 };
 const renderList = () => {
   const visible = filteredItems();
@@ -334,7 +335,19 @@ const GALLERY_JS_LOAD = `const selectArtifact = (id, forceReload = false) => {
   const dirParam = dir ? "directory=" + encodeURIComponent(dir) : "";
   standaloneLink.href = dirParam ? baseHref + "?" + dirParam : baseHref;
   emptyState.hidden = true; viewer.hidden = false;
-  if (changed || forceReload || !viewer.getAttribute("src")) viewer.src = baseHref + "?v=" + (++frameNonce) + (dirParam ? "&" + dirParam : "");
+  if (changed || forceReload || !viewer.getAttribute("src")) {
+    viewer.src = baseHref + "?v=" + (++frameNonce) + (dirParam ? "&" + dirParam : "");
+    kindBadge.hidden = true;
+    fetch(baseHref + ".spectre-canvas.json" + (dirParam ? "?" + dirParam : ""), { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((meta) => {
+        if (meta && typeof meta.kind === "string" && selectedId === chosen.id) {
+          kindBadge.textContent = meta.kind.toUpperCase();
+          kindBadge.hidden = false;
+        }
+      })
+      .catch(() => {});
+  }
   renderList();
 };
 const loadArtifacts = async (forceReload = false) => {

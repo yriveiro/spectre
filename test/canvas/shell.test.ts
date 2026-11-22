@@ -47,7 +47,7 @@ describe("the document shell", () => {
     expect(html).not.toContain("<link");
   });
 
-  test("attaches the inline fullscreen toggle script when the body contains a diagram figure", () => {
+  test("attaches the inline fullscreen and Pele diagram controller when the body contains a diagram figure", () => {
     const html = document({
       title: "T",
       body: '<figure class="diagram"><div class="diagram-frame"><button type="button" class="diagram-fullscreen"></button><svg></svg></div></figure>',

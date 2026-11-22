@@ -60,6 +60,27 @@ const fakeTool = (
     },
   }) as unknown as Tool.Info & { readonly id: string };
 
+const fakeReadTool = (
+  calls: Array<Recorded>,
+): Tool.Info & { readonly id: string } =>
+  ({
+    id: "opencode_artifact_read",
+    name: "artifact_read",
+    description: "",
+    input: {},
+    options: { namespace: "opencode", codemode: true },
+    execute: (input: unknown) => {
+      const requested = ((input ?? {}) as { id?: string }).id ?? "art_test";
+      const last = [...calls].reverse().find((c) => (c.input.id ?? "art_test") === requested);
+      return Effect.succeed({
+        output: {
+          info: info(last?.input.title ?? "Untitled", requested),
+          files: last?.input.files ?? {},
+        },
+      });
+    },
+  }) as unknown as Tool.Info & { readonly id: string };
+
 const ctxFor = (project: string, tools: ReadonlyArray<Tool.Info & { readonly id: string }>) =>
   ({
     location: { directory: project, project: { id: "p", directory: project, canonical: project } },
@@ -163,8 +184,10 @@ describe("publish and update through the host artifact tools", () => {
     const html = calls[0]?.input.files?.["index.html"];
     expect(html).toContain("<svg");
     expect(html).toContain("Checkout report");
-    expect(html).toContain('class="diagram-fullscreen"');
+    expect(html).toContain("diagram-fullscreen");
+    expect(html).toContain('data-pele-action="fullscreen"');
     expect(html).toContain("<script>");
+    expect(html).not.toContain("<script src=");
   });
 
   test("update keeps the id and sends no provider", async () => {
@@ -193,6 +216,46 @@ describe("publish and update through the host artifact tools", () => {
     expect(calls[0]?.input.id).toBe("art_test");
     expect(calls[0]?.input.provider).toBeUndefined();
     expect(calls[0]?.input.files?.["index.html"]).toContain("<svg");
+  });
+
+  test("patch reads .spectre-canvas.json from artifact_read and updates one section in place", async () => {
+    const calls: Array<Recorded> = [];
+    const ctx = ctxFor(PROJECT, [
+      fakeTool("artifact_create", calls),
+      fakeTool("artifact_update", calls),
+      fakeReadTool(calls),
+    ]);
+
+    published(
+      await run(ctx, {
+        action: "publish",
+        content: {
+          kind: "report",
+          title: "Initial Report",
+          markdown: "## Findings\n\nOld text.\n\n## Limits\n\nNone.\n",
+        },
+      }),
+    );
+
+    const updated = published(
+      await run(ctx, {
+        action: "patch",
+        id: "art_test",
+        ops: [
+          { op: "set-title", title: "Patched Report" },
+          { op: "replace-section", heading: "Findings", markdown: "Updated finding with `const x = 1`." },
+        ],
+      }),
+    );
+
+    expect(updated.title).toBe("Patched Report");
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.tool).toBe("artifact_update");
+    const html = calls[1]?.input.files?.["index.html"] ?? "";
+    expect(html).toContain("Patched Report");
+    expect(html).toContain("Updated finding");
+    expect(html).not.toContain("Old text.");
+    expect(html).toContain("None.");
   });
 
   test("a page that references vendor/d3.min.js gets the installed bundle", async () => {
@@ -254,7 +317,7 @@ describe("the PR arm reads the evidence cache and publishes the page", () => {
     const html = calls[0]?.input.files?.["index.html"];
     expect(html).toContain("PR #7");
     expect(html).toContain("src/a.ts");
-    expect(html).toContain("const x = 1");
+    expect(html).toContain('<span class="hl-k">const</span> x = <span class="hl-n">1</span>');
     expect(html).toContain("Adds the constant.");
   });
 

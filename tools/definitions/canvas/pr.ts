@@ -2,6 +2,7 @@ import { basename } from "node:path";
 import { deadAnchors, externalLoads, outboundLinks, unsafeLinks } from "./check";
 import type { Composed, Group, Point, Review } from "./content";
 import type { Evidence } from "./evidence";
+import { highlightLine, languageForPath } from "./highlight";
 import { render as renderMarkdown } from "./markdown";
 import type { DiffRow, ParsedFile, ReadFile, RemovedRow } from "./parse";
 import { document as pageDocument } from "./shell";
@@ -262,10 +263,10 @@ const rowClass = (pair: Pair): string => {
   return pair.base !== undefined ? "left" : "right";
 };
 
-const cellHtml = (value: Cell | undefined): string => {
+const cellHtml = (value: Cell | undefined, language: string): string => {
   if (value === undefined) return '<td class="ln"></td><td class="code"></td>';
   const kind = value.marker === "-" ? "removed" : value.marker === "+" ? "added" : "context";
-  return `<td class="ln">${value.line}</td><td class="code ${kind}"><span class="marker">${value.marker}</span>${esc(value.text)}</td>`;
+  return `<td class="ln">${value.line}</td><td class="code ${kind}"><span class="marker">${value.marker}</span>${highlightLine(value.text, language)}</td>`;
 };
 
 const KIND_LABEL: Record<Point["kind"], string> = {
@@ -314,6 +315,7 @@ const fileSection = (
   file: ReadFile,
   placements: Map<number, Map<string, Array<Placement>>>,
 ): string => {
+  const language = languageForPath(file.path);
   const rows = cellsOf(file.rows).map((line) => {
     if (line.kind === "hunk")
       return `<tr class="hunk"><td colspan="4"><code>${esc(line.header)}</code></td></tr>`;
@@ -322,7 +324,7 @@ const fileSection = (
       ...annotationsAt(placements, file, "head", line.pair.head?.line),
     ];
     return [
-      `<tr class="row ${rowClass(line.pair)}">${cellHtml(line.pair.base)}${cellHtml(line.pair.head)}</tr>`,
+      `<tr class="row ${rowClass(line.pair)}">${cellHtml(line.pair.base, language)}${cellHtml(line.pair.head, language)}</tr>`,
       ...notes.map(annotationHtml),
     ].join("\n");
   });

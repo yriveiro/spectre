@@ -33,8 +33,8 @@ describe("report", () => {
     const html = htmlOf(result.files);
     expect(result.title).toBe("Checkout latency");
     expect(html).toContain("<svg");
-    expect(html).toContain('<figure class="diagram">');
-    expect(html).toContain('class="diagram-fullscreen"');
+    expect(html).toContain('<figure class="diagram" data-pele-diagram');
+    expect(html).toContain("diagram-fullscreen");
     expect(html).toContain("<script>");
     expect(html).toContain('<a href="#what-changed">What changed</a>');
     expect(html).toContain('<a href="#limits">Limits</a>');
@@ -87,7 +87,7 @@ describe("diagram", () => {
     );
     const html = htmlOf(result.files);
     expect(html).toContain("<svg");
-    expect(html).toContain('class="diagram-fullscreen"');
+    expect(html).toContain("diagram-fullscreen");
     expect(html).toContain("<script>");
     expect(html).toContain("Nothing &lt;reaches&gt; the reader until publish returns an id.");
     expect(html).not.toContain("<reaches>");

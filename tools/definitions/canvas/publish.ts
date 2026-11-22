@@ -21,6 +21,16 @@ export type Publication =
   | { readonly status: "unavailable"; readonly problem: string }
   | { readonly status: "failed"; readonly problem: string };
 
+export type ReadArtifact =
+  | {
+      readonly status: "read";
+      readonly id: string;
+      readonly title: string;
+      readonly files: Readonly<Record<string, string>>;
+    }
+  | { readonly status: "unavailable"; readonly problem: string }
+  | { readonly status: "failed"; readonly problem: string };
+
 const unavailableProblem =
   "artifacts are off, so nothing was published. " +
   "The artifact tools are registered only when `experimental.artifacts` is true in opencode.json, " +
@@ -30,7 +40,7 @@ type RegistryTool = Tool.Info & { readonly id: string };
 
 const findArtifactTool = (
   ctx: Plugin.Context,
-  name: "artifact_create" | "artifact_update",
+  name: "artifact_create" | "artifact_update" | "artifact_read",
 ): Effect.Effect<RegistryTool | undefined> =>
   Effect.map(ctx.tool.list(), (tools) =>
     tools.find((tool) => tool.name === name && tool.options?.namespace === "opencode"),
@@ -125,4 +135,41 @@ export const update = Effect.fn("Canvas.artifact.update")(function* (input: Upda
     { id: input.id, title: input.title, files: input.files, entry: "index.html" },
     input.context,
   );
+});
+
+const toReadArtifact = (output: unknown): ReadArtifact => {
+  const decoded = Schema.decodeUnknownOption(Artifact.Content)(output);
+  if (decoded._tag === "None") {
+    return {
+      status: "failed",
+      problem: "the artifact_read tool returned an output that is not an Artifact.Content.",
+    };
+  }
+  return {
+    status: "read",
+    id: decoded.value.info.id,
+    title: decoded.value.info.title,
+    files: decoded.value.files,
+  };
+};
+
+export const readArtifact = Effect.fn("Canvas.artifact.read")(function* (input: {
+  readonly ctx: Plugin.Context;
+  readonly context: Tool.Context;
+  readonly id: string;
+}) {
+  const tool = yield* findArtifactTool(input.ctx, "artifact_read");
+  if (tool === undefined)
+    return { status: "unavailable", problem: unavailableProblem } satisfies ReadArtifact;
+  const outcome = yield* tool.execute({ id: input.id }, input.context).pipe(
+    Effect.map((result): { readonly ok: true; readonly value: ReadArtifact } => ({
+      ok: true,
+      value: toReadArtifact(result.output),
+    })),
+    Effect.catch((error) =>
+      Effect.succeed({ ok: false as const, problem: messageOf(error) }),
+    ),
+  );
+  if (!outcome.ok) return { status: "failed", problem: outcome.problem } satisfies ReadArtifact;
+  return outcome.value;
 });
