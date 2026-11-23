@@ -14,9 +14,9 @@ const VIEW = "subagents.view";
 /**
  * Registers both profile surfaces: the compact sidebar box (one line per
  * routing profile with usage) and the session panel it opens (the parent's
- * per-model usage, per-profile tokens and cost, and the per-run stats behind
- * each profile row). The panel is a host slot, so its layout and input scope
- * belong to the host; this only claims the content.
+ * per-model usage, per-profile tokens and cost, and the selected profile's
+ * runs in a table below the totals). The panel is a host slot, so its
+ * layout and input scope belong to the host; this only claims the content.
  */
 export const registerSubagents = (context: Plugin.Context): (() => void) => {
   const [view, setView] = context.storage.store(VIEW, {

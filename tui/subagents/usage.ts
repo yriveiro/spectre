@@ -238,9 +238,10 @@ type RowBuilder = {
   children: Set<string>;
 };
 
-/** One stable key per row, so the panel's selection survives redraws. The
- * unrouted key carries its own prefix: a configured profile may share a
- * name with an agent, and the two must never claim the same row. */
+/** One stable key per row, so the report folds each run into the row that
+ * already owns its routing signature. The unrouted key carries its own
+ * prefix: a configured profile may share a name with an agent, and the two
+ * must never claim the same row. */
 export const rowKey = (row: {
   readonly kind: UsageRowKind;
   readonly name: string | undefined;
@@ -425,15 +426,6 @@ export const formatCost = (usd: number): string => {
   if (usd <= 0) return "$0.00";
   if (usd < 0.01) return "<$0.01";
   return `$${usd.toFixed(usd < 1 ? 3 : 2)}`;
-};
-
-export const formatDuration = (ms: number): string => {
-  if (ms <= 0) return "—";
-  const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m${String(Math.round(seconds % 60)).padStart(2, "0")}s`;
-  return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}m`;
 };
 
 /** The row label: the profile's name, `main` for the root's agent, or the agent when unrouted. */
