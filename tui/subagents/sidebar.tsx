@@ -3,6 +3,7 @@ import { TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
 import { h, show } from "../render.ts";
 import {
+  formatCost,
   formatTokens,
   profileLabel,
   type SessionUsage,
@@ -16,13 +17,13 @@ const usedRows = (report: SessionUsage) => report.rows.filter((one) => totalToke
 
 /**
  * The sidebar box: one line per spending group — the main agent, the routing
- * profiles, whatever stayed unrouted — with its running state and total
- * tokens, and nothing else. Per-run and per-model numbers do not fit the
- * sidebar's width; the panel carries them. The click surface mirrors the
- * tools box: the header row toggles this box's own collapse, and the
- * `⏱ see statistics` row below an empty row opens the session panel. No
- * handler sits inside another's subtree, and the action row renders in both
- * states so the panel stays reachable while the rows are folded away.
+ * profiles, whatever stayed unrouted — with its running state, total tokens,
+ * and cost. Per-run and per-model numbers do not fit the sidebar's width;
+ * the panel carries them. The click surface mirrors the tools box: the
+ * header row toggles this box's own collapse, and the `⏱ see statistics`
+ * row below an empty row opens the session panel. No handler sits inside
+ * another's subtree, and the action row renders in both states so the panel
+ * stays reachable while the rows are folded away.
  */
 export const subagentsSidebar = (input: {
   readonly theme: Plugin.Context["theme"];
@@ -61,7 +62,9 @@ export const subagentsSidebar = (input: {
                 { fg: input.theme.text.muted, wrapMode: "none", flexShrink: 0 },
                 () => {
                   const now = input.report();
-                  return `(${usedRows(now).length} · ${formatTokens(totalTokens(now.totals.tokens))})`;
+                  return `(${usedRows(now).length} · ${formatTokens(totalTokens(now.totals.tokens))} · ${formatCost(
+                    now.totals.cost,
+                  )})`;
                 },
               ),
           ),
@@ -113,7 +116,7 @@ export const subagentsSidebar = (input: {
                       wrapMode: "none",
                       flexShrink: 0,
                     },
-                    formatTokens(totalTokens(row.tokens)),
+                    `${formatTokens(totalTokens(row.tokens))} ${formatCost(row.cost)}`,
                   ),
                 ),
               );

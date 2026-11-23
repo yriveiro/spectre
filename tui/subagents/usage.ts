@@ -314,12 +314,8 @@ export const sessionUsage = (input: {
     return fresh;
   };
 
-  // Every resolved profile owns a row, usage or not: the table is the
-  // routing vocabulary as much as it is a bill.
-  for (const one of input.profiles) {
-    if (one.ref === undefined) continue;
-    rowOf("profile", one.agent, one.ref, one.name);
-  }
+  // Profile rows exist only where runs landed: a profile with no usage has
+  // no row in the statistics.
 
   // The main agent's own spend: rows per (agent, model ref) the root answered
   // with, so an agent or model switch splits the row.
