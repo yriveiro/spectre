@@ -58,7 +58,10 @@ describe("tools sidebar", () => {
     );
     await setup.renderOnce();
 
-    const marker = at(setup.captureCharFrame(), "▼");
+    const frame0 = setup.captureCharFrame();
+    // The expanded header carries no summary; the rows carry the counts.
+    expect(frame0).not.toContain("(3 calls)");
+    const marker = at(frame0, "▼");
     await setup.mockMouse.click(marker.x, marker.y);
 
     expect(toggled).toBe(1);
@@ -97,7 +100,7 @@ describe("tools sidebar", () => {
     await setup.dispose();
   });
 
-  test("clicking the panel glyph opens the panel and does not toggle the box", async () => {
+  test("clicking the see statistics row opens the panel and does not toggle the box", async () => {
     const [open] = createSignal(true);
     let toggled = 0;
     let opened = 0;
@@ -118,8 +121,8 @@ describe("tools sidebar", () => {
     );
     await setup.renderOnce();
 
-    const glyph = at(setup.captureCharFrame(), "☰");
-    await setup.mockMouse.click(glyph.x, glyph.y);
+    const action = at(setup.captureCharFrame(), "see statistics");
+    await setup.mockMouse.click(action.x, action.y);
 
     expect(opened).toBe(1);
     expect(toggled).toBe(0);
@@ -127,7 +130,7 @@ describe("tools sidebar", () => {
     await setup.dispose();
   });
 
-  test("the panel glyph stays reachable while the box is collapsed", async () => {
+  test("the collapsed header carries the house-style summary and the action row stays reachable", async () => {
     const [open] = createSignal(false);
     let toggled = 0;
     let opened = 0;
@@ -149,10 +152,12 @@ describe("tools sidebar", () => {
     await setup.renderOnce();
 
     const frame = () => setup.captureCharFrame();
-    // The collapsed header still renders the glyph beside the folded marker.
-    expect(frame()).toContain("▶");
-    const glyph = at(frame(), "☰");
-    await setup.mockMouse.click(glyph.x, glyph.y);
+    // The summary follows the title on the left, Todo-section style, and the
+    // folded rows are gone.
+    expect(frame()).toContain("▶ Tools (3 calls)");
+    expect(frame()).not.toContain("read");
+    const action = at(frame(), "see statistics");
+    await setup.mockMouse.click(action.x, action.y);
 
     expect(opened).toBe(1);
     expect(toggled).toBe(0);

@@ -16,9 +16,12 @@ import {
 const BAR_CELLS = 10;
 
 const bar = (tokens: number, peak: number): string => {
-  if (peak <= 0) return "";
+  if (peak <= 0) return " ".repeat(BAR_CELLS);
   const filled = Math.max(1, Math.round((tokens / peak) * BAR_CELLS));
-  return "█".repeat(Math.min(BAR_CELLS, filled));
+  // A constant cell count in every row: the name column is the flexible one,
+  // so a bar that grows and shrinks with the data would drag the calls and
+  // tokens columns around with it. The padding keeps the columns still.
+  return "█".repeat(Math.min(BAR_CELLS, filled)).padEnd(BAR_CELLS);
 };
 
 const breakdown = (one: ToolUsage): string => {
@@ -154,7 +157,7 @@ export const toolsBlade = (input: {
       h(
         "text",
         { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
-        String(one.calls).padStart(4),
+        String(one.calls).padStart(6),
       ),
       h(
         "text",
@@ -191,16 +194,13 @@ export const toolsBlade = (input: {
       ),
     );
 
-  const sortLabel = (): { readonly column: string; readonly hint: string } =>
-    input.sortBy() === "tokens"
-      ? {
-          column: "tokens ▾",
-          hint: `sort calls (${context.keymap.shortcuts("spectre.tools.sort")[0] ?? "t"})`,
-        }
-      : {
-          column: "calls ▾",
-          hint: `sort tokens (${context.keymap.shortcuts("spectre.tools.sort")[0] ?? "t"})`,
-        };
+  const sortMark = (column: "calls" | "tokens"): string =>
+    input.sortBy() === column ? "▾" : " ";
+
+  const sortHint = (): string => {
+    const key = context.keymap.shortcuts("spectre.tools.sort")[0] ?? "t";
+    return input.sortBy() === "tokens" ? `sort calls (${key})` : `sort tokens (${key})`;
+  };
 
   /** A full-width hairline: the panel's own width minus its side padding. */
   const rule = (): JSX.Element =>
@@ -266,7 +266,7 @@ export const toolsBlade = (input: {
               flexShrink: 0,
               onMouseUp: () => input.onSortToggle(),
             },
-            h("text", { fg: theme.text.base, flexShrink: 0 }, " "),
+            h("text", { fg: theme.text.faint, flexShrink: 0 }, " "),
             h(
               "text",
               {
@@ -279,8 +279,29 @@ export const toolsBlade = (input: {
               },
               "tool",
             ),
-            h("text", { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 }, () =>
-              sortLabel().column.padStart(9),
+            // The labels are exactly as wide as the columns they name, mark
+            // included, so the numbers sit under their headers in every row.
+            h(
+              "text",
+              { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
+              () => `calls${sortMark("calls")}`,
+            ),
+            h(
+              "text",
+              { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
+              () => `tokens${sortMark("tokens")}`,
+            ),
+            // The rows end with a share bar of a constant cell count; the
+            // header claims the same cells silently so its labels sit exactly
+            // where the numbers do.
+            show(
+              () => input.panel.width >= 48,
+              () =>
+                h(
+                  "text",
+                  { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
+                  " ".repeat(BAR_CELLS),
+                ),
             ),
           ),
           rule(),
@@ -350,7 +371,7 @@ export const toolsBlade = (input: {
               flexShrink: 1,
               minWidth: 0,
             },
-            () => sortLabel().hint,
+            () => sortHint(),
           ),
           h(
             "text",
