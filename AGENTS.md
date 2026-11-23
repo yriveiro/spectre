@@ -283,6 +283,7 @@ Two consequences worth keeping:
 `tui/index.tsx` is the TUI entrypoint and owns no feature logic. Each feature
 is a folder beside it — `tui/routing/` (model routing: controller, page,
 controls, data), `tui/tools/` (the tool-usage sidebar box and session panel),
+`tui/subagents/` (the session-breakdown sidebar box and session panel),
 `tui/artifacts/` — and registers itself through a `register<Feature>(context)`
 call from the entrypoint, which returns its own dispose. The shared render
 helpers stay at `tui/render.ts`, one level up, so a feature never imports

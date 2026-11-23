@@ -1730,11 +1730,14 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
     };
 
     await mod.default.setup(fullContext);
-    // The entrypoint registers routing's two slots first, then the tools box's
-    // sidebar claim and its session panel.
+    // The entrypoint registers routing's two slots first, then the tools
+    // box's sidebar claim and its session panel, then the session-breakdown
+    // box's sidebar claim and its session panel.
     expect(slotTargets).toEqual([
       "sidebar.content",
       "session.composer.top",
+      "sidebar.content",
+      "session.panel",
       "sidebar.content",
       "session.panel",
     ]);

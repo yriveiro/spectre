@@ -810,5 +810,5 @@ export type {
   Resolution,
   Tables,
 } from "./types";
-export { DEFAULT_AGENT, DEFAULT_PROFILES, formatRef, isDefaultProfile, modelNames } from "./types";
+export { DEFAULT_AGENT, DEFAULT_PROFILES, defaultAgentFor, formatRef, isDefaultProfile, modelNames } from "./types";
 export { proposeAlias, serialise, writeConfig } from "./write";
