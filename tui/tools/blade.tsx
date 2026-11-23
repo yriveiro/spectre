@@ -179,7 +179,9 @@ export const toolsBlade = (input: {
     h(
       "box",
       { flexDirection: "row", width: "100%", minWidth: 0 },
-      h("text", { fg: theme.text.base, flexShrink: 0 }, " "),
+      // Two leading spaces: the selector column plus the row's gap, so the
+      // breakdown nests under the tool name instead of hanging left of it.
+      h("text", { fg: theme.text.base, flexShrink: 0 }, "  "),
       h(
         "text",
         {
