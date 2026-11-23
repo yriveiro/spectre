@@ -6,12 +6,13 @@ import {
 } from "./artifacts/index.ts";
 import { registerRouting } from "./routing/controller.tsx";
 import { directoryOf } from "./routing/data.ts";
+import { registerSubagents } from "./subagents/index.tsx";
 import { registerTools } from "./tools/index.tsx";
 
 /**
  * The TUI entrypoint. It owns no feature logic: every surface lives in its
- * feature folder (`routing/`, `tools/`, `artifacts/`) and this file only wires
- * them to the host context, in registration order.
+ * feature folder (`routing/`, `tools/`, `subagents/`, `artifacts/`) and this
+ * file only wires them to the host context, in registration order.
  */
 
 export const opener = (
@@ -45,6 +46,8 @@ export default Plugin.define({
     const routing = registerRouting(context);
 
     const stopTools = registerTools(context);
+
+    const stopSubagents = registerSubagents(context);
 
     const artifacts = createArtifactsController({
       store: makeClientArtifactStore({
@@ -97,6 +100,7 @@ export default Plugin.define({
     );
 
     return () => {
+      stopSubagents();
       stopTools();
       routing.stop();
       artifacts.dispose();
