@@ -115,9 +115,11 @@ describe("tools blade layout", () => {
     expect(isRule(lines[1])).toBe(true);
     expect(isBlank(lines[2])).toBe(true);
 
-    // Column labels sit in their own band between two hairlines.
+    // Column labels sit in their own band between two hairlines. Both columns
+    // carry one, at the exact width of the cells they name.
     expect(lines[3]).toContain("tool");
-    expect(lines[3]).toContain("calls ▾");
+    expect(lines[3]).toContain("calls▾");
+    expect(lines[3]).toContain("tokens");
     expect(isRule(lines[4])).toBe(true);
     expect(isBlank(lines[5])).toBe(true);
 
@@ -126,6 +128,18 @@ describe("tools blade layout", () => {
     expect(lines[6]).toContain("█");
     expect(lines[7]).toContain("brain_assert");
     expect(lines[8]).toContain("edit");
+
+    // The numbers end exactly where their headers end, in every row.
+    const callsEnd = (lines[3] ?? "").indexOf("calls▾") + "calls▾".length;
+    const tokensEnd = (lines[3] ?? "").indexOf("tokens") + "tokens".length + 1;
+    expect(callsEnd).toBeGreaterThan(0);
+    expect(tokensEnd).toBeGreaterThan("tokens".length);
+    expect((lines[6] ?? "").indexOf("2") + 1).toBe(callsEnd);
+    expect((lines[6] ?? "").indexOf("690") + 3).toBe(tokensEnd);
+    expect((lines[7] ?? "").indexOf("1") + 1).toBe(callsEnd);
+    expect((lines[7] ?? "").indexOf("1.5K") + 4).toBe(tokensEnd);
+    expect((lines[8] ?? "").indexOf("1") + 1).toBe(callsEnd);
+    expect((lines[8] ?? "").indexOf("230") + 3).toBe(tokensEnd);
 
     // Totals sit in their own band, closed off from the rows by air.
     expect(isBlank(lines[9])).toBe(true);
@@ -159,9 +173,9 @@ describe("tools blade layout", () => {
     await setup.renderOnce();
     const lines = setup.captureCharFrame().split("\n");
 
-    const sort = lines.findIndex((line) => line.includes("calls ▾"));
+    const sort = lines.findIndex((line) => line.includes("calls▾"));
     expect(sort).toBeGreaterThanOrEqual(0);
-    await setup.mockMouse.click(lines[sort]?.indexOf("calls ▾") ?? -1, sort);
+    await setup.mockMouse.click(lines[sort]?.indexOf("calls▾") ?? -1, sort);
     expect(toggled).toBe(1);
 
     const close = lines[0]?.indexOf("×") ?? -1;
