@@ -1,7 +1,7 @@
 import type { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
-import { createSignal } from "solid-js";
+import { createMemo, createSignal } from "solid-js";
 import { h, show } from "../render.ts";
 import {
   displayName,
@@ -57,14 +57,18 @@ export const toolsBlade = (input: {
   const context = input.context;
   const theme = context.theme;
 
-  const usage = () => {
+  // One walk of the transcript per change. Every row's share bar, the footer
+  // and the empty-state branch read this memo, so a redraw never re-folds the
+  // message list, and a message landing mid-render cannot give two rows
+  // different totals.
+  const report = createMemo(() => {
     const boundary = context.data.session.get(input.panel.sessionID)?.revert?.messageID;
     return toolUsage(context.data.session.message.list(input.panel.sessionID), boundary);
-  };
+  });
 
   const rows = () => {
     const by = input.sortBy();
-    const tools = [...usage().tools];
+    const tools = [...report().tools];
     if (by === "tokens") {
       tools.sort(
         (a, b) => totalTokens(b.tokens) - totalTokens(a.tokens) || a.name.localeCompare(b.name),
@@ -163,7 +167,7 @@ export const toolsBlade = (input: {
           h(
             "text",
             { fg: theme.text.muted, wrapMode: "none", flexShrink: 0 },
-            bar(totalTokens(one.tokens), maxTokens(usage().tools)),
+            bar(totalTokens(one.tokens), maxTokens(report().tools)),
           ),
       ),
     );
@@ -233,7 +237,7 @@ export const toolsBlade = (input: {
     ),
     h("box", { height: 1 }),
     show(
-      () => usage().tools.length > 0,
+      () => report().tools.length > 0,
       () =>
         h(
           "box",
@@ -281,9 +285,9 @@ export const toolsBlade = (input: {
               "text",
               { fg: theme.text.base, wrapMode: "none", truncate: true, flexShrink: 1, minWidth: 0 },
               () => {
-                const report = usage();
-                return `Σ ${report.tools.length} tools · ${report.totals.calls} calls · ${formatTokens(
-                  totalTokens(report.totals),
+                const now = report();
+                return `Σ ${now.tools.length} tools · ${now.totals.calls} calls · ${formatTokens(
+                  totalTokens(now.totals),
                 )} tokens`;
               },
             ),
@@ -292,18 +296,17 @@ export const toolsBlade = (input: {
             "box",
             { flexDirection: "row", width: "100%", flexShrink: 0 },
             h("text", { fg: theme.text.faint, wrapMode: "none", truncate: true }, () => {
-              const tokens = usage().totals;
-              const prose = usage().prose;
-              const outside = prose > 0 ? ` · ${formatTokens(prose)} in prose turns` : "";
-              return `in ${formatTokens(tokens.input)} · cache↻ ${formatTokens(tokens.cacheRead)}/${formatTokens(
-                tokens.cacheWrite,
-              )} · out ${formatTokens(tokens.output)} · rsn ${formatTokens(tokens.reasoning)}${outside}`;
+              const now = report();
+              const outside = now.prose > 0 ? ` · ${formatTokens(now.prose)} in prose turns` : "";
+              return `in ${formatTokens(now.totals.input)} · cache↻ ${formatTokens(now.totals.cacheRead)}/${formatTokens(
+                now.totals.cacheWrite,
+              )} · out ${formatTokens(now.totals.output)} · rsn ${formatTokens(now.totals.reasoning)}${outside}`;
             }),
           ),
         ),
     ),
     show(
-      () => usage().tools.length === 0,
+      () => report().tools.length === 0,
       () =>
         h(
           "box",
@@ -312,7 +315,7 @@ export const toolsBlade = (input: {
         ),
     ),
     show(
-      () => usage().tools.length > 0,
+      () => report().tools.length > 0,
       () =>
         h(
           "box",

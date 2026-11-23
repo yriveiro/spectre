@@ -11,7 +11,10 @@ const COMPACT_ROWS = 5;
  * The sidebar box: call counts and nothing else. Tokens do not fit in the
  * sidebar's width, and the panel is one click away for the numbers that do.
  * The whole surface opens the panel; the marker is the only part that
- * toggles the box's own collapse.
+ * toggles the box's own collapse. It stops the same `mouseup` the header
+ * listens on: opentui propagates each event instance on its own, so a
+ * stopped `mousedown` guards nothing and the following `mouseup` still
+ * reaches the header's open-panel handler.
  */
 export const toolsSidebar = (input: {
   readonly theme: Plugin.Context["theme"];
@@ -41,7 +44,7 @@ export const toolsSidebar = (input: {
               "box",
               {
                 flexShrink: 0,
-                onMouseDown: (event: unknown) => {
+                onMouseUp: (event: unknown) => {
                   const mouse = event as { stopPropagation?: () => void };
                   mouse.stopPropagation?.();
                   input.onToggle();
