@@ -19,7 +19,8 @@ import {
   proposeAlias,
   resolveProfile,
   rungs,
-} from "../tools/definitions/routing/index.ts";
+} from "../../tools/definitions/routing/index.ts";
+import { bindKeyboard, field, h, type Palette, palette, show } from "../render.ts";
 import {
   type Draft,
   findCatalogModel,
@@ -35,7 +36,6 @@ import {
   spendRef,
   usableDraft,
 } from "./data.ts";
-import { bindKeyboard, field, h, type Palette, palette, show } from "./render.ts";
 
 export const DEFAULT_PROVIDER = "opencode-go";
 

@@ -2,18 +2,24 @@ import { describe, expect, test } from "bun:test";
 import type { ResolvedTheme } from "@opencode/theme/tui";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
-import { type preview as previewFn, tokenizeJsonLine } from "../../tui/controls";
-import type { Draft, Model } from "../../tui/data";
 import { palette } from "../../tui/render";
+import { type preview as previewFn, tokenizeJsonLine } from "../../tui/routing/controls";
+import type { Draft, Model } from "../../tui/routing/data";
 
 const loadPreview = async (): Promise<typeof previewFn> => {
   const clearAll: unknown = Reflect.get(Bun.plugin, "clearAll");
   if (typeof clearAll === "function") clearAll();
   const tuiDir = `${import.meta.dir}/../../tui`;
-  for (const file of ["index.tsx", "page.tsx", "render.ts", "controls.tsx", "data.ts"]) {
+  for (const file of [
+    "index.tsx",
+    "render.ts",
+    "routing/page.tsx",
+    "routing/controls.tsx",
+    "routing/data.ts",
+  ]) {
     delete require.cache[Bun.resolveSync(`${tuiDir}/${file}`, import.meta.dir)];
   }
-  const mod = await import("../../tui/controls.tsx");
+  const mod = await import("../../tui/routing/controls.tsx");
   return mod.preview;
 };
 

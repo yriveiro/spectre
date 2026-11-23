@@ -278,6 +278,17 @@ Two consequences worth keeping:
   is updated. That is the intended failure: it catches the move instead of
   silently scanning less than it did.
 
+## TUI feature folders
+
+`tui/index.tsx` is the TUI entrypoint and owns no feature logic. Each feature
+is a folder beside it — `tui/routing/` (model routing: controller, page,
+controls, data), `tui/tools/` (the tool-usage sidebar box and session panel),
+`tui/artifacts/` — and registers itself through a `register<Feature>(context)`
+call from the entrypoint, which returns its own dispose. The shared render
+helpers stay at `tui/render.ts`, one level up, so a feature never imports
+another feature's internals. A feature that grows a second surface adds
+siblings beside its own `index.tsx`, the same rule as the definitions folders.
+
 ## Layout and how OpenCode finds the entrypoint
 
 `index.ts` sits in the **repository root** and is the package's `.` export:

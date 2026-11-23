@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { isJevAvailable } from "../../tui/controls.tsx";
-import { type Draft, selectionMethodOf } from "../../tui/data.ts";
+import { isJevAvailable } from "../../tui/routing/controls.tsx";
+import { type Draft, selectionMethodOf } from "../../tui/routing/data.ts";
 
 const draft = (judge: Draft["judge"]): Draft => ({
   directory: "/repo",

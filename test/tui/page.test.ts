@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { PluginContextProvider } from "@opencode/plugin/tui";
 import { RGBA } from "@opentui/core";
 import { createComponent, testRender } from "@opentui/solid";
+import { sidebarSection, subagentFooter, subagentLine } from "../../tui/routing/controller.tsx";
 import {
   applied,
   compatibleModelsFor,
@@ -17,16 +18,21 @@ import {
   profileInfoModal,
   providerModal,
   usableDraft,
-} from "../../tui/controls";
+} from "../../tui/routing/controls";
 import {
   type Draft,
   type Model,
   type Profile,
   type Resolution,
   resolve as resolveDraft,
-} from "../../tui/data";
-import { sidebarSection, subagentFooter, subagentLine } from "../../tui/index";
-import { type EntryRow, layoutMetrics, type ProfileRow, page, type TabId } from "../../tui/page";
+} from "../../tui/routing/data";
+import {
+  type EntryRow,
+  layoutMetrics,
+  type ProfileRow,
+  page,
+  type TabId,
+} from "../../tui/routing/page";
 
 const GREY = RGBA.fromInts(200, 200, 200, 255);
 const RAISED = RGBA.fromInts(40, 40, 48, 255);
@@ -1619,7 +1625,15 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
     );
 
     const path = `${import.meta.dir}/../../tui`;
-    for (const file of ["index.tsx", "page.tsx", "render.ts", "controls.tsx", "data.ts"]) {
+    for (const file of [
+      "index.tsx",
+      "render.ts",
+      "routing/page.tsx",
+      "routing/controls.tsx",
+      "routing/data.ts",
+      "routing/controller.tsx",
+      "tools/index.tsx",
+    ]) {
       delete require.cache[Bun.resolveSync(`${path}/${file}`, import.meta.dir)];
     }
 
@@ -1674,7 +1688,7 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
             ],
           },
         },
-        session: { get: () => undefined },
+        session: { get: () => undefined, message: { list: () => [] } },
       },
       client: {
         model: {
@@ -1716,7 +1730,14 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
     };
 
     await mod.default.setup(fullContext);
-    expect(slotTargets).toEqual(["sidebar.content", "session.composer.top"]);
+    // The entrypoint registers routing's two slots first, then the tools box's
+    // sidebar claim and its session panel.
+    expect(slotTargets).toEqual([
+      "sidebar.content",
+      "session.composer.top",
+      "sidebar.content",
+      "session.panel",
+    ]);
     if (commandRun === undefined) throw new Error("the entrypoint registered no opener command");
     commandRun();
     await Bun.sleep(20);
@@ -1767,6 +1788,7 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
                   model: { providerID: "acme", id: "muse-spark-1.3" },
                 }
               : undefined,
+          message: { list: () => [] },
         },
       },
       keymap: {
@@ -1842,7 +1864,9 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
       }),
     );
 
-    let sidebarRender: ((input: { sessionID: string }) => unknown) | undefined;
+    // Two claims append to "sidebar.content" (routing, then tools); the
+    // assertions below read the routing section, which registers first.
+    const sidebarClaims: Array<(input: { sessionID: string }) => unknown> = [];
     let emptyModalShown: (() => unknown) | undefined;
     let emptyCommandRun: (() => void) | undefined;
     let modelReady = false;
@@ -1938,17 +1962,17 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
           current: () => ({ type: "session" as const, sessionID: "ses_child" }),
         },
         slot: (claim: { append?: string; render: (input: { sessionID: string }) => unknown }) => {
-          if (claim.append === "sidebar.content") sidebarRender = claim.render;
+          if (claim.append === "sidebar.content") sidebarClaims.push(claim.render);
           return () => {};
         },
       },
     };
 
     await mod.default.setup(emptyContext);
-    if (sidebarRender === undefined || emptyCommandRun === undefined) {
+    const [renderSidebar] = sidebarClaims;
+    if (renderSidebar === undefined || emptyCommandRun === undefined) {
       throw new Error("the entrypoint did not register the sidebar slot and opener");
     }
-    const renderSidebar = sidebarRender;
 
     createdTexts.length = 0;
     createComponent(HostRenderer.Provider, {
