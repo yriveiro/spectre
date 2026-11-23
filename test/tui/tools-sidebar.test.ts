@@ -67,7 +67,7 @@ describe("tools sidebar", () => {
     await setup.dispose();
   });
 
-  test("clicking the title opens the panel and does not toggle the box", async () => {
+  test("clicking the title toggles the box and does not open the panel", async () => {
     const [open] = createSignal(true);
     let toggled = 0;
     let opened = 0;
@@ -91,8 +91,102 @@ describe("tools sidebar", () => {
     const title = at(setup.captureCharFrame(), "Tools");
     await setup.mockMouse.click(title.x, title.y);
 
+    expect(toggled).toBe(1);
+    expect(opened).toBe(0);
+
+    await setup.dispose();
+  });
+
+  test("clicking the panel glyph opens the panel and does not toggle the box", async () => {
+    const [open] = createSignal(true);
+    let toggled = 0;
+    let opened = 0;
+    const setup = await testRender(
+      () =>
+        toolsSidebar({
+          theme,
+          usage: () => usage,
+          open,
+          onToggle: () => {
+            toggled += 1;
+          },
+          onOpenPanel: () => {
+            opened += 1;
+          },
+        }),
+      { width: 60, height: 12 },
+    );
+    await setup.renderOnce();
+
+    const glyph = at(setup.captureCharFrame(), "☰");
+    await setup.mockMouse.click(glyph.x, glyph.y);
+
     expect(opened).toBe(1);
     expect(toggled).toBe(0);
+
+    await setup.dispose();
+  });
+
+  test("the panel glyph stays reachable while the box is collapsed", async () => {
+    const [open] = createSignal(false);
+    let toggled = 0;
+    let opened = 0;
+    const setup = await testRender(
+      () =>
+        toolsSidebar({
+          theme,
+          usage: () => usage,
+          open,
+          onToggle: () => {
+            toggled += 1;
+          },
+          onOpenPanel: () => {
+            opened += 1;
+          },
+        }),
+      { width: 60, height: 12 },
+    );
+    await setup.renderOnce();
+
+    const frame = () => setup.captureCharFrame();
+    // The collapsed header still renders the glyph beside the folded marker.
+    expect(frame()).toContain("▶");
+    const glyph = at(frame(), "☰");
+    await setup.mockMouse.click(glyph.x, glyph.y);
+
+    expect(opened).toBe(1);
+    expect(toggled).toBe(0);
+
+    await setup.dispose();
+  });
+
+  test("clicking a tool row does nothing", async () => {
+    const [open] = createSignal(true);
+    let toggled = 0;
+    let opened = 0;
+    const setup = await testRender(
+      () =>
+        toolsSidebar({
+          theme,
+          usage: () => usage,
+          open,
+          onToggle: () => {
+            toggled += 1;
+          },
+          onOpenPanel: () => {
+            opened += 1;
+          },
+        }),
+      { width: 60, height: 12 },
+    );
+    await setup.renderOnce();
+
+    // `displayName` strips the plugin's own `spectre_` namespace prefix.
+    const row = at(setup.captureCharFrame(), "read");
+    await setup.mockMouse.click(row.x, row.y);
+
+    expect(toggled).toBe(0);
+    expect(opened).toBe(0);
 
     await setup.dispose();
   });
