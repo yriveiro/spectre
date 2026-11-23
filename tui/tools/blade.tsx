@@ -202,6 +202,20 @@ export const toolsBlade = (input: {
           hint: `sort tokens (${context.keymap.shortcuts("spectre.tools.sort")[0] ?? "t"})`,
         };
 
+  /** A full-width hairline: the panel's own width minus its side padding. */
+  const rule = (): JSX.Element =>
+    h(
+      "text",
+      { fg: theme.border?.base ?? theme.text.faint, wrapMode: "none" },
+      "─".repeat(Math.max(0, input.panel.width - 2)),
+    );
+
+  /**
+   * One empty row. The panel has height to spare, and the table reads better
+   * with air between its bands than pressed against itself.
+   */
+  const air = (): JSX.Element => h("box", { height: 1 });
+
   return h(
     "box",
     { flexDirection: "column", width: "100%", height: "100%", paddingLeft: 1, paddingRight: 1 },
@@ -235,7 +249,8 @@ export const toolsBlade = (input: {
         h("text", { fg: theme.text.muted, wrapMode: "none" }, "×"),
       ),
     ),
-    h("box", { height: 1 }),
+    rule(),
+    air(),
     show(
       () => report().tools.length > 0,
       () =>
@@ -268,6 +283,8 @@ export const toolsBlade = (input: {
               sortLabel().column.padStart(9),
             ),
           ),
+          rule(),
+          air(),
           h(
             "box",
             { flexDirection: "column", width: "100%", flexGrow: 1, flexShrink: 1, minHeight: 0 },
@@ -278,6 +295,8 @@ export const toolsBlade = (input: {
               );
             },
           ),
+          air(),
+          rule(),
           h(
             "box",
             { flexDirection: "row", gap: 1, width: "100%", flexShrink: 0 },
@@ -314,17 +333,33 @@ export const toolsBlade = (input: {
           h("text", { fg: theme.text.muted, wrapMode: "none" }, "No tool calls yet."),
         ),
     ),
+    air(),
     show(
       () => report().tools.length > 0,
       () =>
         h(
           "box",
           { flexDirection: "row", gap: 1, width: "100%", flexShrink: 0 },
-          h("text", { fg: theme.text.faint }, () => sortLabel().hint),
-          h("text", { fg: theme.text.faint }, "· ↑↓ select · ↵ expand"),
           h(
             "text",
-            { fg: theme.text.faint },
+            {
+              fg: theme.text.faint,
+              wrapMode: "none",
+              truncate: true,
+              flexGrow: 1,
+              flexShrink: 1,
+              minWidth: 0,
+            },
+            () => sortLabel().hint,
+          ),
+          h(
+            "text",
+            { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
+            "· ↑↓ select · ↵ expand",
+          ),
+          h(
+            "text",
+            { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
             `· esc close (${context.keymap.shortcuts("spectre.tools.close")[0] ?? "escape"})`,
           ),
         ),
