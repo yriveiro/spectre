@@ -162,6 +162,54 @@ export const show = (when: () => unknown, render: () => JSX.Element): JSX.Elemen
   return (() => (cond() ? render() : null)) as unknown as JSX.Element;
 };
 
+/** `value` without `prefix` when it starts with it, unchanged otherwise. */
+export const trimPrefix = (value: string, prefix: string): string =>
+  value.startsWith(prefix) ? value.slice(prefix.length) : value;
+
+/** A selection index clamped to a list that can shrink under it, so the
+ * marker, the bold row and the section below all agree on what is
+ * selected. */
+export const clampIndex = (at: number, count: number): number =>
+  Math.min(at, Math.max(0, count - 1));
+
+/**
+ * `text` word-folded to `width` columns, at most `maxLines`, the last
+ * visible line ending in an ellipsis when the fold cut anything. Exported
+ * for the layout tests, which assert blades' bands as pure data: the
+ * renderer's own word wrap is unbounded, and a band's height must not be.
+ */
+export const wrapLines = (text: string, width: number, maxLines: number): ReadonlyArray<string> => {
+  const cap = Math.max(1, width);
+  const lines: Array<string> = [];
+  const fold = (paragraph: string): void => {
+    let line = "";
+    for (const word of paragraph.split(/\s+/).filter((one) => one.length > 0)) {
+      const candidate = line === "" ? word : `${line} ${word}`;
+      if (candidate.length <= cap) {
+        line = candidate;
+        continue;
+      }
+      if (line !== "") lines.push(line);
+      // A word longer than the fold splits hard across lines.
+      let rest = word;
+      while (rest.length > cap) {
+        lines.push(rest.slice(0, cap));
+        rest = rest.slice(cap);
+      }
+      line = rest;
+    }
+    lines.push(line);
+  };
+  for (const paragraph of text.split("\n")) {
+    fold(paragraph);
+    if (lines.length > maxLines) break;
+  }
+  if (lines.length <= maxLines) return lines;
+  const cut = lines.slice(0, maxLines);
+  const last = cut[maxLines - 1] ?? "";
+  return [...cut.slice(0, -1), `${last.slice(0, Math.max(0, cap - 1))}…`];
+};
+
 /** A label in accent blue and its value in the muted text colour. */
 export const field = (theme: ResolvedTheme, label: string, value: () => string): JSX.Element =>
   h(

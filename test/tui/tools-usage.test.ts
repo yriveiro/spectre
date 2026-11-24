@@ -8,6 +8,7 @@ import {
   toolUsage,
   totalTokens,
 } from "../../tui/tools/usage.ts";
+import { tokenUsage as tokens } from "./fixture.ts";
 
 const toolPart = (name: string) => ({
   type: "tool" as const,
@@ -19,13 +20,6 @@ const toolPart = (name: string) => ({
     content: [{ type: "text", text: "ok" }] as [ToolContent, ...ToolContent[]],
   },
   time: { created: 1 },
-});
-
-const tokens = (input: number, output = 0, reasoning = 0, read = 0, write = 0) => ({
-  input,
-  output,
-  reasoning,
-  cache: { read, write },
 });
 
 let seq = 0;

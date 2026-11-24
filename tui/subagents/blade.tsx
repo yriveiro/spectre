@@ -2,7 +2,7 @@ import type { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
 import { createMemo, createSignal } from "solid-js";
-import { h, show } from "../render.ts";
+import { clampIndex, h, show, wrapLines } from "../render.ts";
 import {
   formatCost,
   formatTokens,
@@ -11,22 +11,208 @@ import {
   type ProfileUsage,
   profileLabel,
   sessionUsage,
+  type SubagentRun,
   totalTokens,
 } from "./usage.ts";
 
 /** Share-bar cells. One cell is the resolution the eye can rank with anyway. */
 const BAR_CELLS = 10;
 
-/** Fixed column widths. The header pads to the same widths, so labels sit
- * exactly where the numbers do, and every row pads the same way. The run
- * table pads to the same token and cost widths, so a run's numbers sit in
- * the columns the summary already uses; the cache column is wider because it
- * carries read/write as one figure. */
-const MODEL_COLUMN = 26;
-const RUNS_COLUMN = 5;
-const TOKENS_COLUMN = 7;
-const CACHE_COLUMN = 9;
-const COST_COLUMN = 8;
+/**
+ * Every column width is derived from the panel's inner width and the rows
+ * the panel actually holds. The host clamps the pane anywhere from half a
+ * wide terminal down to 24 columns (`clampSessionPaneWidth` at v2.3.0), so
+ * a row of fixed columns would overflow a narrow pane and collide with its
+ * neighbour, while a wide pane would strand its spare width in the label
+ * alone. Zero means the column is dropped: the panel stays legible by
+ * losing detail, never by overlapping. Tokens and cost are the statistics,
+ * so they stay at every width; the model, runs and share-bar columns join
+ * as the width admits them, and the model column is sized to the longest
+ * ref the rows carry so a wide panel shows it whole instead of clipping
+ * to a fixed guess.
+ */
+type SummaryColumns = {
+  readonly model: number;
+  readonly runs: number;
+  readonly tokens: number;
+  readonly cost: number;
+  readonly bar: number;
+};
+
+const summaryColumns = (inner: number, maxRef: number): SummaryColumns => {
+  const cost = inner >= 40 ? 8 : 0;
+  const runs = inner >= 52 ? 5 : 0;
+  const bar = inner >= 62 ? BAR_CELLS : 0;
+  // The gaps between the visible cells of a full row: marker, label,
+  // model, runs, tokens, cost, bar.
+  const gaps = 3 + (runs > 0 ? 1 : 0) + (cost > 0 ? 1 : 0) + (bar > 0 ? 1 : 0);
+  // Thirteen is the marker plus the label's floor of twelve: the model
+  // column never squeezes the row's name below that.
+  const budget = inner - 13 - runs - 7 - cost - bar - gaps;
+  return {
+    model: inner >= 46 ? Math.max(12, Math.min(maxRef, budget)) : 0,
+    runs,
+    tokens: 7,
+    cost,
+    bar,
+  };
+};
+
+/** The run table's numbers: in, out and cost stay at every width — a run
+ * without its spend is not a statistic — and the cache read/write and
+ * reasoning columns join as the width admits them. */
+type RunColumns = {
+  readonly input: number;
+  readonly cache: number;
+  readonly output: number;
+  readonly reasoning: number;
+  readonly cost: number;
+};
+
+const runColumns = (inner: number): RunColumns => ({
+  input: 7,
+  cache: inner >= 56 ? 9 : 0,
+  output: 7,
+  reasoning: inner >= 72 ? 7 : 0,
+  cost: inner >= 40 ? 8 : 0,
+});
+
+/** One column head: a label over the fixed cell it names. */
+type HeadColumn = {
+  readonly label: string;
+  readonly width: number;
+  readonly align?: "left" | "right";
+};
+
+/** The summary head's columns, one per column the width admits. The rows
+ * call `summaryCells` with the same budget, so a dropped column vanishes
+ * from the head and the rows in the same draw. */
+const summaryHeadColumns = (cols: SummaryColumns): ReadonlyArray<HeadColumn> =>
+  (
+    [
+      { label: "model", width: cols.model, align: "left" },
+      { label: "runs", width: cols.runs },
+      { label: "tokens", width: cols.tokens },
+      { label: "cost", width: cols.cost },
+    ] as const satisfies ReadonlyArray<HeadColumn>
+  ).filter((one) => one.width > 0);
+
+/** The bar cells the head claims silently when the rows draw a share bar,
+ * so its labels sit exactly where the numbers do. */
+const barHead = (theme: Plugin.Context["theme"], cols: SummaryColumns): JSX.Element | undefined =>
+  cols.bar > 0
+    ? h("text", { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 }, " ".repeat(BAR_CELLS))
+    : undefined;
+
+/** The run table's head columns, one per column the width admits. */
+const runHeadColumns = (cols: RunColumns): ReadonlyArray<HeadColumn> =>
+  (
+    [
+      { label: "in", width: cols.input },
+      { label: "cache↻", width: cols.cache },
+      { label: "out", width: cols.output },
+      { label: "rsn", width: cols.reasoning },
+      { label: "cost", width: cols.cost },
+    ] as const satisfies ReadonlyArray<HeadColumn>
+  ).filter((one) => one.width > 0);
+
+/** The summary row's cells after the label, in `summaryHeadColumns`' order:
+ * one fixed cell per column the width admits, the tokens count always. */
+const summaryCells = (
+  theme: Plugin.Context["theme"],
+  cols: SummaryColumns,
+  row: ProfileUsage,
+  peak: number,
+): ReadonlyArray<JSX.Element> => [
+  ...(cols.model > 0
+    ? [
+        h(
+          "text",
+          { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
+          row.ref === undefined ? " ".repeat(cols.model) : fit(row.ref, cols.model),
+        ),
+      ]
+    : []),
+  ...(cols.runs > 0
+    ? [
+        h(
+          "text",
+          { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
+          String(row.runs.length).padStart(cols.runs),
+        ),
+      ]
+    : []),
+  h(
+    "text",
+    { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
+    formatTokens(totalTokens(row.tokens)).padStart(cols.tokens),
+  ),
+  ...(cols.cost > 0
+    ? [
+        h(
+          "text",
+          { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
+          formatCost(row.cost).padStart(cols.cost),
+        ),
+      ]
+    : []),
+  ...(cols.bar > 0
+    ? [
+        h(
+          "text",
+          { fg: theme.text.muted, wrapMode: "none", flexShrink: 0 },
+          bar(totalTokens(row.tokens), peak),
+        ),
+      ]
+    : []),
+];
+
+/** The run row's cells after the prompt, in `runHeadColumns`' order. */
+const runCells = (
+  theme: Plugin.Context["theme"],
+  cols: RunColumns,
+  run: SubagentRun,
+): ReadonlyArray<JSX.Element> => [
+  h(
+    "text",
+    { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
+    formatTokens(run.tokens.input).padStart(cols.input),
+  ),
+  ...(cols.cache > 0
+    ? [
+        h(
+          "text",
+          { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
+          `${formatTokens(run.tokens.cacheRead)}/${formatTokens(run.tokens.cacheWrite)}`.padStart(
+            cols.cache,
+          ),
+        ),
+      ]
+    : []),
+  h(
+    "text",
+    { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
+    formatTokens(run.tokens.output).padStart(cols.output),
+  ),
+  ...(cols.reasoning > 0
+    ? [
+        h(
+          "text",
+          { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
+          formatTokens(run.tokens.reasoning).padStart(cols.reasoning),
+        ),
+      ]
+    : []),
+  ...(cols.cost > 0
+    ? [
+        h(
+          "text",
+          { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
+          formatCost(run.cost).padStart(cols.cost),
+        ),
+      ]
+    : []),
+];
 
 /** Left-aligned fixed column: clip with an ellipsis, never widen. */
 const fit = (text: string, width: number): string =>
@@ -56,10 +242,16 @@ const outcomeMark = (run: ProfileUsage["runs"][number]["run"]): string => {
   }
 };
 
+/** The prompt band's line cap. A constant, so the band keeps its shape
+ * whatever the prompt's length and the run list above yields the space. */
+const PROMPT_LINES = 4;
+
 /**
  * The session panel: two sections over one partition — the main agent's own
  * spend, then the routing profiles, whatever stayed unrouted, and compaction
- * — and one run table. The rows partition the session, so the tokens column
+ * — then the selected row's run table, and the prompt band below it, reading
+ * the run selected in the table the same way the table reads the row
+ * selected above it. The rows partition the session, so the tokens column
  * sums to the footer total across both sections; the table below the totals
  * shows the selected row's runs, so inspection costs nothing beyond moving
  * the selection. The keymap layer is created inside the component, so the
@@ -83,6 +275,11 @@ export const subagentsBlade = (input: {
   const context = input.context;
   const theme = context.theme;
 
+  // The panel's inner width after its side padding. The host hands the
+  // slot a fresh width on a resize, so the component re-runs and both
+  // tables re-flow.
+  const inner = Math.max(0, input.panel.width - 2);
+
   // One walk of the family per change, rooted at the family root: a panel
   // opened on a child still books the root's spend under the main agent and
   // the children under their profiles. Every row's share bar, the run table
@@ -98,6 +295,14 @@ export const subagentsBlade = (input: {
       profiles: input.profiles(),
     }),
   );
+
+  // The column budgets both tables derive from. The model column is sized
+  // to the longest ref the rows actually carry, so a wide panel shows a
+  // whole ref instead of clipping it to a fixed guess.
+  const maxRef = (): number =>
+    report().rows.reduce((max, one) => Math.max(max, one.ref?.length ?? 0), 0);
+  const cols = summaryColumns(inner, maxRef());
+  const runCols = runColumns(inner);
 
   const rowText = (row: ProfileUsage): string => (row.kind === "main" ? row.agent : profileLabel(row));
 
@@ -125,17 +330,25 @@ export const subagentsBlade = (input: {
 
   const [selected, setSelected] = createSignal(0);
 
+  /** The run the third band reads, as a position in the selected row's runs
+   * — the same two-level selection the agent rows hold over the run table,
+   * one level deeper. Clamped, so moving the summary selection to a row
+   * with fewer runs keeps the band pointing at a real run. */
+  const [selectedRun, setSelectedRun] = createSignal(0);
+
   /** The clamped selection index. A reroute can shorten the row list under a
    * selection, and the marker, the bold row and the runs table must all agree
    * on which row is selected, so every read goes through this clamp. */
-  const selectionAt = (): number => {
-    const count = ordered().length;
-    return Math.min(selected(), Math.max(0, count - 1));
-  };
+  const selectionAt = (): number => clampIndex(selected(), ordered().length);
 
   /** The row the selection points at, so the run table always names a real
    * row even after the list shrank under the selection. */
   const selectedRow = (): ProfileUsage | undefined => ordered()[selectionAt()];
+
+  /** The clamped run position, so the third band always names a real run of
+   * the selected row. */
+  const selectedRunAt = (): number =>
+    clampIndex(selectedRun(), selectedRow()?.runs.length ?? 0);
 
   const move = (delta: number): void => {
     const count = ordered().length;
@@ -171,13 +384,13 @@ export const subagentsBlade = (input: {
     return input.sortBy() === "cost" ? `sort tokens (${key})` : `sort cost (${key})`;
   };
 
-  /** A full-width hairline: the panel's own width minus its side padding.
-   * It never shrinks, so a short panel loses run rows, not rules. */
+  /** A full-width hairline: the panel's inner width, which is what the rows
+   * occupy. It never shrinks, so a short panel loses run rows, not rules. */
   const rule = (): JSX.Element =>
     h(
       "text",
       { fg: theme.border?.base ?? theme.text.faint, wrapMode: "none", flexShrink: 0 },
-      "─".repeat(Math.max(0, input.panel.width - 2)),
+      "─".repeat(inner),
     );
 
   /** One empty row, never a shareable one. The table reads better with air
@@ -189,11 +402,7 @@ export const subagentsBlade = (input: {
    * column's data rows align so a head sits exactly over what it names.
    * Right is the default because both tables right-align their numbers; the
    * summary's model column is the one left-aligned cell. */
-  const headRow = (
-    label: string,
-    columns: ReadonlyArray<{ readonly label: string; readonly width: number; readonly align?: "left" | "right" }>,
-    tail?: JSX.Element,
-  ): JSX.Element =>
+  const headRow = (label: string, columns: ReadonlyArray<HeadColumn>, tail?: JSX.Element): JSX.Element =>
     h(
       "box",
       { flexDirection: "row", gap: 1, width: "100%", flexShrink: 0 },
@@ -214,20 +423,7 @@ export const subagentsBlade = (input: {
     );
 
   const header = (label: string): JSX.Element =>
-    headRow(
-      label,
-      [
-        { label: "model", width: MODEL_COLUMN, align: "left" },
-        { label: "runs", width: RUNS_COLUMN },
-        { label: "tokens", width: TOKENS_COLUMN },
-        { label: "cost", width: COST_COLUMN },
-      ],
-      show(
-        () => input.panel.width >= 64,
-        () =>
-          h("text", { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 }, " ".repeat(BAR_CELLS)),
-      ),
-    );
+    headRow(label, summaryHeadColumns(cols), barHead(theme, cols));
 
   const usageRow = (row: ProfileUsage, at: number): JSX.Element =>
     h(
@@ -256,42 +452,13 @@ export const subagentsBlade = (input: {
         },
         rowText(row),
       ),
-      h(
-        "text",
-        { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
-        row.ref === undefined ? " ".repeat(MODEL_COLUMN) : fit(row.ref, MODEL_COLUMN),
-      ),
-      h(
-        "text",
-        { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
-        String(row.runs.length).padStart(RUNS_COLUMN),
-      ),
-      h(
-        "text",
-        { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
-        formatTokens(totalTokens(row.tokens)).padStart(TOKENS_COLUMN),
-      ),
-      h(
-        "text",
-        { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
-        formatCost(row.cost).padStart(COST_COLUMN),
-      ),
-      show(
-        () => input.panel.width >= 64,
-        () =>
-          h(
-            "text",
-            { fg: theme.text.muted, wrapMode: "none", flexShrink: 0 },
-            bar(totalTokens(row.tokens), peak()),
-          ),
-      ),
+      ...summaryCells(theme, cols, row, peak()),
     );
 
   /** The band title above the run table: the selected row's label and run
    * count, with a hairline filling the width that is left. The label clips,
    * so a long profile name never wraps the line. */
   const runsBand = (row: ProfileUsage): JSX.Element => {
-    const inner = Math.max(0, input.panel.width - 2);
     const label = `▼ ${rowText(row)} · ${row.runs.length} ${row.runs.length === 1 ? "run" : "runs"}${
       row.ref === undefined ? "" : ` · ${row.ref}`
     }`;
@@ -310,29 +477,31 @@ export const subagentsBlade = (input: {
 
   /** The run table's column header. The token types appear in the footer's
    * order, so the two lines read as one vocabulary. */
-  const runsHeader = (): JSX.Element =>
-    headRow("run", [
-      { label: "in", width: TOKENS_COLUMN },
-      { label: "cache↻", width: CACHE_COLUMN },
-      { label: "out", width: TOKENS_COLUMN },
-      { label: "rsn", width: TOKENS_COLUMN },
-      { label: "cost", width: COST_COLUMN },
-    ]);
+  const runsHeader = (): JSX.Element => headRow("run", runHeadColumns(runCols));
 
   /** One run of the selected row: the outcome marker, the prompt, then the
    * token types and cost. The types mirror the footer — input, cache
    * read/write, output, reasoning — so a run reads in the same vocabulary
-   * the session total does. */
-  const runRow = (one: ProfileRun): JSX.Element => {
+   * the session total does. Selecting a run drives the prompt band below. */
+  const runRow = (one: ProfileRun, at: number): JSX.Element => {
     const run = one.run;
+    const chosen = () => selectedRunAt() === at;
     return h(
       "box",
-      { flexDirection: "row", gap: 1, width: "100%", minWidth: 0, flexShrink: 0 },
+      {
+        flexDirection: "row",
+        gap: 1,
+        width: "100%",
+        minWidth: 0,
+        flexShrink: 0,
+        onMouseUp: () => setSelectedRun(at),
+      },
       h("text", { fg: run.running ? theme.text.base : theme.text.faint, flexShrink: 0 }, outcomeMark(run)),
       h(
         "text",
         {
-          fg: run.running ? theme.text.base : theme.text.muted,
+          fg: chosen() || run.running ? theme.text.base : theme.text.muted,
+          attributes: chosen() ? TextAttributes.BOLD : undefined,
           wrapMode: "none",
           truncate: true,
           flexGrow: 1,
@@ -341,33 +510,29 @@ export const subagentsBlade = (input: {
         },
         run.prompt || "(no prompt recorded)",
       ),
-      h(
-        "text",
-        { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
-        formatTokens(run.tokens.input).padStart(TOKENS_COLUMN),
-      ),
-      h(
-        "text",
-        { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
-        `${formatTokens(run.tokens.cacheRead)}/${formatTokens(run.tokens.cacheWrite)}`.padStart(CACHE_COLUMN),
-      ),
-      h(
-        "text",
-        { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
-        formatTokens(run.tokens.output).padStart(TOKENS_COLUMN),
-      ),
-      h(
-        "text",
-        { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
-        formatTokens(run.tokens.reasoning).padStart(TOKENS_COLUMN),
-      ),
-      h(
-        "text",
-        { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
-        formatCost(run.cost).padStart(COST_COLUMN),
-      ),
+      ...runCells(theme, runCols, run),
     );
   };
+
+  /** The selected run's prompt, as the third band under the run table: the
+   * whole text the row label clips, folded to the panel's width and capped,
+   * so the band keeps a constant shape whatever the prompt's length and the
+   * run list above yields the space. */
+  const promptBand = (one: ProfileRun): JSX.Element =>
+    h(
+      "box",
+      { flexDirection: "column", width: "100%", minWidth: 0, flexShrink: 0 },
+      air(),
+      rule(),
+      air(),
+      ...wrapLines(
+        one.run.promptText || "(no prompt recorded)",
+        Math.max(1, inner - 2),
+        PROMPT_LINES,
+      ).map((line) =>
+        h("text", { fg: theme.text.muted, wrapMode: "none", flexShrink: 0 }, `  ${line}`),
+      ),
+    );
 
   const hasAny = () => report().rows.length > 0 && totalTokens(report().totals.tokens) > 0;
 
@@ -468,10 +633,14 @@ export const subagentsBlade = (input: {
             }),
           ),
           // The run table: the selected row's runs, below the totals, in the
-          // space the footer leaves. The function child keeps the table
-          // reading the selection as it moves. The region is the one flexible
-          // box in the panel and it clips its overflow, so a row with more
-          // runs than fit loses the tail of the list and nothing else moves.
+          // space the footer leaves, and the prompt band below it — the
+          // third section, reading the run selected in the table the same
+          // way the table reads the row selected above it. The function
+          // children keep both reading their selections as they move. The
+          // region is the one flexible box in the panel and it clips its
+          // overflow; inside it the run list yields to the band, so a row
+          // with more runs than fit loses the tail of the list and nothing
+          // else moves.
           show(
             () => (selectedRow()?.runs.length ?? 0) > 0,
             () =>
@@ -488,7 +657,15 @@ export const subagentsBlade = (input: {
                 air(),
                 h(
                   "box",
-                  { flexDirection: "column", width: "100%", minWidth: 0, flexShrink: 0 },
+                  {
+                    flexDirection: "column",
+                    width: "100%",
+                    minWidth: 0,
+                    flexGrow: 1,
+                    flexShrink: 1,
+                    minHeight: 0,
+                    overflow: "hidden",
+                  },
                   () => {
                     const row = selectedRow();
                     if (row === undefined || row.runs.length === 0) return null;
@@ -498,9 +675,18 @@ export const subagentsBlade = (input: {
                       h(
                         "box",
                         { flexDirection: "column", width: "100%", minWidth: 0, flexShrink: 0 },
-                        row.runs.map((one) => runRow(one)),
+                        () => row.runs.map((one, at) => runRow(one, at)),
                       ),
                     ];
+                  },
+                ),
+                h(
+                  "box",
+                  { flexDirection: "column", width: "100%", minWidth: 0, flexShrink: 0 },
+                  () => {
+                    const run = selectedRow()?.runs[selectedRunAt()];
+                    if (run === undefined) return null;
+                    return promptBand(run);
                   },
                 ),
               ),

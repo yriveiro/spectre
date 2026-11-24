@@ -2,7 +2,7 @@ import type { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
 import { createMemo, createSignal } from "solid-js";
-import { h, show } from "../render.ts";
+import { clampIndex, h, show, wrapLines } from "../render.ts";
 import {
   type DetailBand,
   expandBands,
@@ -19,6 +19,40 @@ const clock = (at: number | undefined): string => {
   return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
+/** The detail band's label column: `crosscheck` is the longest label a call
+ * carries, so every value starts at the same column. */
+const LABEL_COLUMN = 10;
+
+/** The detail band's line cap. A constant, so the band keeps its shape
+ * whatever the call's bands hold, and the rows above yield the space. */
+const DETAIL_LINES = 8;
+
+/**
+ * The selected call's bands, folded to `width` columns with every value
+ * starting at the label column, at most `maxLines` lines, the last visible
+ * line ending in an ellipsis when the fold cut anything. Exported for the
+ * layout test, which asserts the band as pure data the same way the
+ * subagents blade's fold is asserted.
+ */
+export const foldBands = (
+  bands: ReadonlyArray<DetailBand>,
+  width: number,
+  maxLines: number,
+): ReadonlyArray<string> => {
+  const label = (one: DetailBand): string => one.label.padEnd(LABEL_COLUMN);
+  const flat = bands.flatMap((one) => {
+    const folded = wrapLines(one.value, Math.max(1, width - LABEL_COLUMN), maxLines);
+    return [
+      `${label(one)}${folded[0] ?? ""}`,
+      ...folded.slice(1).map((line) => `${" ".repeat(LABEL_COLUMN)}${line}`),
+    ];
+  });
+  if (flat.length <= maxLines) return flat;
+  const cut = flat.slice(0, maxLines);
+  const last = cut[maxLines - 1] ?? "";
+  return [...cut.slice(0, -1), `${last.slice(0, Math.max(0, width - 1))}…`];
+};
+
 /**
  * The judge column: the profile the judge spent, the caller's own named
  * profile, the status word of an answer that is not a decision, or the reason
@@ -33,10 +67,11 @@ const judgeCell = (one: RoutingCall): string => {
 };
 
 /**
- * The routing session panel: one row per `spectre_routing` call, expanded into
- * the question the judge was asked and the model the resolver spent. The
- * question is reconstructed from the config the session runs on now, and the
- * expanded band says so.
+ * The routing session panel: one row per `spectre_routing` call, with a
+ * detail band below the totals that reads the selected row — the question
+ * the judge was asked and the model the resolver spent. The
+ * question is reconstructed from the config the session runs on now, and
+ * the band says so.
  *
  * The keymap layer is created inside the component, so the panel's keys stop
  * existing the moment the host closes it, and `enabled` keeps them from firing
@@ -66,26 +101,21 @@ export const routingBlade = (input: {
 
   const [newestFirst, setNewestFirst] = createSignal(true);
   const [selected, setSelected] = createSignal(0);
-  const [expanded, setExpanded] = createSignal<ReadonlySet<string>>(new Set());
 
   const rows = (): ReadonlyArray<RoutingCall> => {
     const calls = report();
     return newestFirst() ? [...calls].reverse() : calls;
   };
 
-  const toggleExpanded = (id: string): void => {
-    setExpanded((held) => {
-      const next = new Set(held);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  /** The clamped selection index. A revert can shorten the list under a
+   * selection, and the marker, the bold row and the detail band must all
+   * agree on which row is selected, so every read goes through this clamp. */
+  const selectedAt = (): number => clampIndex(selected(), rows().length);
 
   const move = (delta: number): void => {
     const count = rows().length;
     if (count === 0) return;
-    setSelected((at) => Math.min(count - 1, Math.max(0, at + delta)));
+    setSelected((at) => clampIndex(at + delta, count));
   };
 
   context.keymap.layer(() => ({
@@ -103,15 +133,6 @@ export const routingBlade = (input: {
         bind: "t",
         run: () => setNewestFirst((held) => !held),
       },
-      {
-        id: "spectre.routing.history.expand",
-        title: "Expand selected routing call",
-        bind: "enter",
-        run: () => {
-          const row = rows()[selected()];
-          if (row !== undefined) toggleExpanded(row.id);
-        },
-      },
       { bind: "up", run: () => move(-1) },
       { bind: "down", run: () => move(1) },
     ],
@@ -125,18 +146,15 @@ export const routingBlade = (input: {
         gap: 1,
         width: "100%",
         minWidth: 0,
-        onMouseUp: () => {
-          setSelected(at);
-          toggleExpanded(one.id);
-        },
+        onMouseUp: () => setSelected(at),
       },
-      h("text", { fg: theme.text.base, flexShrink: 0 }, () => (selected() === at ? "▌" : " ")),
+      h("text", { fg: theme.text.base, flexShrink: 0 }, () => (selectedAt() === at ? "▌" : " ")),
       h("text", { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 }, () => clock(one.at)),
       h(
         "text",
         {
-          fg: selected() === at ? theme.text.base : theme.text.muted,
-          attributes: selected() === at ? TextAttributes.BOLD : undefined,
+          fg: selectedAt() === at ? theme.text.base : theme.text.muted,
+          attributes: selectedAt() === at ? TextAttributes.BOLD : undefined,
           wrapMode: "none",
           truncate: true,
           flexGrow: 1,
@@ -161,33 +179,19 @@ export const routingBlade = (input: {
       ),
     );
 
-  /** One indented label-value line under a row. The value wraps; the label does not. */
-  const detailLine = (band: DetailBand): JSX.Element =>
+  /** The selected call's detail band, below the totals: the bands `history`
+   * assembles, folded to the width and capped, so the band keeps a constant
+   * shape whatever the call holds and the rows above yield the space. */
+  const detailBand = (one: RoutingCall): JSX.Element =>
     h(
       "box",
-      { flexDirection: "row", width: "100%", minWidth: 0 },
-      h("text", { fg: theme.text.base, flexShrink: 0 }, "  "),
-      h("text", { fg: theme.text.faint, flexShrink: 0, wrapMode: "none" }, band.label),
-      h(
-        "text",
-        {
-          fg: theme.text.muted,
-          wrapMode: "word",
-          truncate: true,
-          flexGrow: 1,
-          flexShrink: 1,
-          minWidth: 0,
-        },
-        band.value,
+      { flexDirection: "column", width: "100%", minWidth: 0, flexShrink: 0 },
+      air(),
+      rule(),
+      air(),
+      ...foldBands(expandBands(one, input.judgeView()), Math.max(1, input.panel.width - 4), DETAIL_LINES).map(
+        (line) => h("text", { fg: theme.text.muted, wrapMode: "none", flexShrink: 0 }, `  ${line}`),
       ),
-    );
-
-  /** The expanded view of one call, rendered from the bands `history` assembles. */
-  const expandLine = (one: RoutingCall): JSX.Element =>
-    h(
-      "box",
-      { flexDirection: "column", width: "100%", minWidth: 0 },
-      ...expandBands(one, input.judgeView()).map(detailLine),
     );
 
   const sortHint = (): string => {
@@ -274,15 +278,20 @@ export const routingBlade = (input: {
           ),
           rule(),
           air(),
+          // The rows are the flexible region: they yield to the detail band
+          // below and clip their own overflow, so a list longer than fits
+          // loses its tail and nothing else moves.
           h(
             "box",
-            { flexDirection: "column", width: "100%", flexGrow: 1, flexShrink: 1, minHeight: 0 },
-            () => {
-              const list = rows();
-              return list.flatMap((one, at) =>
-                expanded().has(one.id) ? [rowLine(one, at), expandLine(one)] : [rowLine(one, at)],
-              );
+            {
+              flexDirection: "column",
+              width: "100%",
+              flexGrow: 1,
+              flexShrink: 1,
+              minHeight: 0,
+              overflow: "hidden",
             },
+            () => rows().map((one, at) => rowLine(one, at)),
           ),
           air(),
           rule(),
@@ -297,6 +306,18 @@ export const routingBlade = (input: {
                 return `Σ ${totals.calls} calls · ${totals.judged} judged · ${totals.agentChosen} agent-chosen`;
               },
             ),
+          ),
+          // The detail band: the selected call's question and spend, the same
+          // selection-driven section the subagents blade holds under its run
+          // table. The function child keeps it reading the selection as it
+          // moves.
+          h(
+            "box",
+            { flexDirection: "column", width: "100%", minWidth: 0, flexShrink: 0 },
+            () => {
+              const one = rows()[selectedAt()];
+              return one === undefined ? null : detailBand(one);
+            },
           ),
         ),
     ),
@@ -331,7 +352,7 @@ export const routingBlade = (input: {
           h(
             "text",
             { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
-            "· ↑↓ select · ↵ expand",
+            "· ↑↓ select",
           ),
           h(
             "text",

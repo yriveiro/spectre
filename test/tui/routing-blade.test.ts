@@ -3,7 +3,7 @@ import type { SessionMessageInfo, ToolContent } from "@opencode/client";
 import type { Plugin } from "@opencode/plugin/tui";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
-import { routingBlade } from "../../tui/routing/blade.tsx";
+import { foldBands, routingBlade } from "../../tui/routing/blade.tsx";
 import type { Profile } from "../../tui/routing/data.ts";
 import { expandBands, judgeView, routingCalls } from "../../tui/routing/history.ts";
 
@@ -137,14 +137,19 @@ const context = {
 
 const view = () => judgeView(profiles, { kind: "jev", model: "acme/judge-1" });
 
+const isRule = (line: string | undefined) => line !== undefined && /^─+$/.test(line.trim());
+
 describe("routing history blade layout", () => {
   test("title, column labels, newest-first rows and totals sit in separated bands", async () => {
     const setup = await testRender(() => routingBlade({ context, panel, judgeView: view }), {
       width: 88,
-      height: 20,
+      height: 32,
     });
     await setup.renderOnce();
     const lines = setup.captureCharFrame().split("\n");
+    if (process.env.DEBUG_FRAME) {
+      console.log(lines.map((l, i) => `${String(i).padStart(2)}|${l}`).join("\n"));
+    }
 
     expect(lines[0]).toContain("Routing history");
     expect(lines[0]).toContain("draft session");
@@ -161,13 +166,29 @@ describe("routing history blade layout", () => {
     expect(lines[judged]).toContain("→ designer (0.42)");
     expect(lines[judged]).toContain("acme/falcon-max#high");
 
-    const totals = lines.find((one) => one.includes("Σ"));
-    expect(totals).toContain("2 calls · 1 judged · 1 agent-chosen");
+    const totalsAt = lines.findIndex((one) => one.includes("Σ"));
+    expect(lines[totalsAt]).toContain("2 calls · 1 judged · 1 agent-chosen");
     expect(lines.some((one) => one.includes("sort oldest first (t)"))).toBe(true);
+
+    // The detail band below the totals reads the selected row, which is
+    // selected by default: every value starts at the label column.
+    const bandRule = lines.findIndex((line, at) => at > totalsAt && isRule(line));
+    expect(bandRule).toBeGreaterThan(totalsAt);
+    const bandLines = lines.slice(bandRule + 2, bandRule + 6);
+    expect(bandLines[0]).toContain("judge     JEV (acme/judge-1) (reconstructed)");
+    expect(bandLines[1]).toContain("skipped   The call names a profile");
+    expect(bandLines[2]).toContain("spent     acme/falcon-mini#high");
+    expect(bandLines[3]).toContain("profile   explorer (named by the caller)");
+    const valueColumn = (bandLines[0] ?? "").indexOf("JEV");
+    expect((bandLines[1] ?? "").indexOf("The call")).toBe(valueColumn);
+    expect((bandLines[3] ?? "").indexOf("explorer (named")).toBe(valueColumn);
+
+    // The expansion keys are gone: selection alone drives the band.
+    expect(lines.some((one) => one.includes("↵ expand"))).toBe(false);
     await setup.dispose();
   });
 
-  test("the expanded bands show the reconstructed question, the answer, the alternatives and the spent model", () => {
+  test("the detail band's bands show the reconstructed question, the answer, the alternatives and the spent model", () => {
     const calls = routingCalls(messages);
     const judged = calls.find((one) => one.task === "decide how the settings are laid out");
     if (judged === undefined) throw new Error("the fold lost the judged call");
@@ -275,21 +296,49 @@ describe("routing history blade layout", () => {
     } as unknown as Plugin.Context;
     const setup = await testRender(
       () => routingBlade({ context: codeModeContext, panel, judgeView: view }),
-      { width: 88, height: 20 },
+      { width: 88, height: 32 },
     );
     await setup.renderOnce();
     const frame = setup.captureCharFrame();
     expect(frame).toContain("decide how the settings are laid out");
     expect(frame).toContain("→ designer (0.42)");
     expect(frame).toContain("Σ 1 calls · 1 judged · 0 agent-chosen");
+    // The judged call is the only row, so the band holds its answer too.
+    expect(frame).toContain("answer    designer (0.42)");
     await setup.dispose();
   });
 
-  // A click-then-expand assertion cannot live here: bun resolves bare
+  test("the detail band folds values to the label column and caps at a constant shape", () => {
+    // Every value starts at the label column; a folded value's continuation
+    // lines line up under it.
+    expect(foldBands([{ label: "judge", value: "a b" }, { label: "", value: "c" }], 20, 5)).toEqual([
+      "judge     a b",
+      "          c",
+    ]);
+    expect(foldBands([{ label: "spent", value: "aa bb cc dd" }], 13, 3)).toEqual([
+      "spent     aa",
+      "          bb",
+      "          cc…",
+    ]);
+    // The cap cuts at a band boundary too, and says so on the last line.
+    expect(
+      foldBands(
+        [
+          { label: "answer", value: "designer" },
+          { label: "also", value: "explorer" },
+        ],
+        20,
+        1,
+      ),
+    ).toEqual(["answer    designer…"]);
+  });
+
+  // A click-then-select assertion cannot live here: bun resolves bare
   // `solid-js` through the `node` condition to the SSR no-op build, so
-  // signal-driven re-renders do not subscribe under `bun test`. Measured here:
-  // `bun test --conditions solid` did not subscribe either, so the expanded
-  // bands are asserted as pure data (`expandBands` above) instead, and the
-  // click wiring is the same `onMouseUp` → `toggleExpanded` the tools blade
-  // uses.
+  // signal-driven re-renders do not subscribe under `bun test`. Measured
+  // here: `bun test --conditions solid` did not subscribe either. The click
+  // wiring is the same `onMouseUp` → select the other blades use; the
+  // detail band reads the selection and row zero is selected by default,
+  // so the frames above assert it, and the fold and the band's content are
+  // asserted as pure data.
 });
