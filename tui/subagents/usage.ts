@@ -1,5 +1,5 @@
 import type { ModelRef, SessionInfo, SessionMessageInfo, TokenUsageInfo } from "@opencode/client";
-import { trimPrefix } from "../render.ts";
+import { activeMessages, trimPrefix } from "../render.ts";
 
 /**
  * Session usage grouped by routing profile, main agent, and whatever else
@@ -122,20 +122,6 @@ export const modelRef = (ref: ModelRef): string =>
   `${ref.providerID}/${ref.id}${ref.variant === undefined ? "" : `#${ref.variant}`}`;
 
 const baseRef = (ref: string): string => ref.split("#")[0] ?? ref;
-
-/**
- * The messages a session actually stands on, cut at its revert boundary. The
- * same rule the tools panel applies: a tally is not a bill, and the cut only
- * bites when the host can name the message.
- */
-const activeMessages = (
-  messages: ReadonlyArray<SessionMessageInfo>,
-  boundary: string | undefined,
-): ReadonlyArray<SessionMessageInfo> => {
-  if (boundary === undefined) return messages;
-  const at = messages.findIndex((message) => message.id === boundary);
-  return at === -1 ? messages : messages.slice(0, at);
-};
 
 /** The prompt message's whole body, with the subagent preamble stripped.
  * The run's row label is its first line clipped; the expanded section

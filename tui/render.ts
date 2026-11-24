@@ -1,3 +1,4 @@
+import type { SessionMessageInfo } from "@opencode/client";
 import type { ResolvedTheme } from "@opencode/theme/tui";
 import { type KeyEvent, RGBA } from "@opentui/core";
 import {
@@ -165,6 +166,21 @@ export const show = (when: () => unknown, render: () => JSX.Element): JSX.Elemen
 /** `value` without `prefix` when it starts with it, unchanged otherwise. */
 export const trimPrefix = (value: string, prefix: string): string =>
   value.startsWith(prefix) ? value.slice(prefix.length) : value;
+
+/**
+ * The messages a session actually stands on, cut at its revert boundary:
+ * everything from the boundary message on never happened, and a boundary
+ * the list cannot name cuts nothing. One rule, shared by every table that
+ * tallies a transcript — a tally is not a bill.
+ */
+export const activeMessages = (
+  messages: ReadonlyArray<SessionMessageInfo>,
+  boundary: string | undefined,
+): ReadonlyArray<SessionMessageInfo> => {
+  if (boundary === undefined) return messages;
+  const at = messages.findIndex((message) => message.id === boundary);
+  return at === -1 ? messages : messages.slice(0, at);
+};
 
 /** A selection index clamped to a list that can shrink under it, so the
  * marker, the bold row and the section below all agree on what is

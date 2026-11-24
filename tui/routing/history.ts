@@ -6,6 +6,7 @@ import {
   NONE_LABEL,
   QUESTION_INSTRUCTIONS,
 } from "../../tools/definitions/routing/index.ts";
+import { activeMessages } from "../render.ts";
 import type { Profile } from "./data.ts";
 
 /**
@@ -70,20 +71,6 @@ export type RoutingCall = {
 
 type AssistantMessage = Extract<SessionMessageInfo, { readonly type: "assistant" }>;
 type ToolPart = Extract<AssistantMessage["content"][number], { readonly type: "tool" }>;
-
-/**
- * The messages a session actually stands on. A revert boundary marks the
- * message the session was rewound to, and everything from it on never
- * happened. A boundary the list cannot name cuts nothing.
- */
-const activeMessages = (
-  messages: ReadonlyArray<SessionMessageInfo>,
-  boundary: string | undefined,
-): ReadonlyArray<SessionMessageInfo> => {
-  if (boundary === undefined) return messages;
-  const at = messages.findIndex((message) => message.id === boundary);
-  return at === -1 ? messages : messages.slice(0, at);
-};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;

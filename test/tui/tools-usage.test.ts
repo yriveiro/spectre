@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionMessageInfo, ToolContent } from "@opencode/client";
+import { activeMessages } from "../../tui/render.ts";
 import {
-  activeMessages,
   displayName,
   formatTokens,
   maxTokens,
