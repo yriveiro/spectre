@@ -23,8 +23,8 @@ export type Tone = "base" | "muted" | "faint";
  * leave and never less than twelve columns.
  */
 export type Column<Row> = {
-  /** The head text, or a function of it when the head carries a sort mark. */
-  readonly header: string | (() => string);
+  /** The head text, aligned like the column's cells. */
+  readonly header: string;
   readonly cell: (row: Row) => string;
   /** Absent = the flexible column. A number = fixed. A range = measured from the cells. */
   readonly width?: number | { readonly min: number; readonly max?: number };
@@ -48,16 +48,13 @@ export type Band = {
 
 /** A column with its width resolved: zero means dropped from this draw. */
 export type ResolvedColumn<Row> = {
-  readonly header: () => string;
+  readonly header: string;
   readonly cell: (row: Row) => string;
   readonly width: number;
   readonly flex: boolean;
   readonly align: "left" | "right";
   readonly tone: (row: Row) => Tone | undefined;
 };
-
-const headerText = (header: string | (() => string)): string =>
-  typeof header === "function" ? header() : header;
 
 const toneOf = <Row>(tone: Column<Row>["tone"]): ((row: Row) => Tone | undefined) => {
   if (tone === undefined) return () => undefined;
@@ -73,8 +70,9 @@ export const flatten = <Row>(sections: ReadonlyArray<Section<Row>>): ReadonlyArr
  * The columns a blade draws at one inner width. Fixed columns drop below
  * their `hideBelow`; a measured column takes the widest of its head and
  * cells, clamped to its range, and never squeezes the flexible column
- * below twelve columns — the same budget the subagents blade's hand-rolled
- * `summaryColumns` held, as data.
+ * below twelve columns. A column the budget shrinks below its widest
+ * cell stays, and the cells clip to the shrunk width, so no row can
+ * overflow into its neighbour.
  */
 export const resolveColumns = <Row>(
   columns: ReadonlyArray<Column<Row>>,
@@ -108,7 +106,7 @@ export const resolveColumns = <Row>(
     const range = typeof one.width === "object" ? one.width : undefined;
     if (range === undefined || (one.hideBelow ?? 0) > inner) continue;
     const measured = Math.max(
-      headerText(one.header).length,
+      one.header.length,
       rows.reduce((max, row) => Math.max(max, one.cell(row).length), 0),
     );
     const wanted = Math.max(range.min, Math.min(measured, range.max ?? Number.POSITIVE_INFINITY));
@@ -124,7 +122,7 @@ export const resolveColumns = <Row>(
   const spent = widths.reduce((sum, one) => sum + Math.max(0, one), 0);
   const flexWidth = Math.max(12, inner - 1 - gaps - spent);
   return columns.map((one, at) => ({
-    header: () => headerText(one.header),
+    header: one.header,
     cell: one.cell,
     width: one.width === undefined ? flexWidth : (widths[at] ?? 0),
     flex: one.width === undefined,
@@ -133,9 +131,18 @@ export const resolveColumns = <Row>(
   }));
 };
 
+/** Clip with an ellipsis at the width, never widen. */
+const clip = (text: string, width: number): string =>
+  text.length > width ? `${text.slice(0, Math.max(0, width - 1))}…` : text;
+
 /** Left-aligned fixed column: clip with an ellipsis, never widen. */
-export const fit = (text: string, width: number): string =>
-  text.length > width ? `${text.slice(0, width - 1)}…` : text.padEnd(width);
+export const fit = (text: string, width: number): string => clip(text, width).padEnd(width);
+
+/** Right-aligned fixed column: clip with an ellipsis, never widen. A cell
+ * wider than its resolved column must not push the row into its
+ * neighbour — the budget shrinks a measured column below its widest cell
+ * on purpose, and the cell honours the shrink. */
+export const clipRight = (text: string, width: number): string => clip(text, width).padStart(width);
 
 /** The share bar: one cell is the resolution the eye can rank with anyway. */
 export const bar = (tokens: number, peak: number, cells: number): string => {

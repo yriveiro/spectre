@@ -175,10 +175,9 @@ describe("tools blade layout", () => {
     await setup.dispose();
   });
 
-  // A click-then-expand assertion cannot live here: bun resolves bare
-  // `solid-js` through the `node` condition to the SSR no-op build, while
-  // `@opentui/solid` imports `dist/solid.js` directly, so signal-driven
-  // re-renders do not subscribe under `bun test`. The host resolves the
-  // reactive build (the routing feature's controls prove it), and the
-  // expansion path was verified manually under `bun test --conditions solid`.
+  // A click-then-expand assertion cannot live in the default run: bun
+  // resolves bare `solid-js` to the server build, so signal re-renders do
+  // not repaint. Under `--conditions=browser` effects subscribe and a
+  // probe repaints, but that condition is not this suite's, so the frames
+  // here assert the initial state and the layout as pure data.
 });

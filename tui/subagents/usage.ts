@@ -97,7 +97,13 @@ export type SessionUsage = {
 
 const PREAMBLE = "You are a subagent spawned by another session.";
 
-const zero = (): TokenTotals => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 });
+const zero = (): TokenTotals => ({
+  input: 0,
+  output: 0,
+  reasoning: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+});
 
 const addTokens = (into: TokenTotals, from: TokenUsageInfo): TokenTotals => ({
   input: into.input + from.input,
@@ -172,7 +178,8 @@ const runsOf = (
       // prompt: the tokens were spent, and a run that owns them is the
       // honest row. A closed run never absorbs new spend.
       const last = runs.at(-1);
-      const run = last === undefined || last.outcome !== undefined ? open("", message.time.created) : last;
+      const run =
+        last === undefined || last.outcome !== undefined ? open("", message.time.created) : last;
       run.agent = message.agent;
       run.models.push(modelRef(message.model));
       if (message.tokens !== undefined) run.tokens = addTokens(run.tokens, message.tokens);
@@ -330,7 +337,9 @@ export const sessionUsage = (input: {
     row.children.add(input.rootID);
   }
   for (const run of rootRuns) {
-    const row = rows.get(rowKey({ kind: "main", name: undefined, agent: run.agent, ref: run.models.at(-1) }));
+    const row = rows.get(
+      rowKey({ kind: "main", name: undefined, agent: run.agent, ref: run.models.at(-1) }),
+    );
     if (row !== undefined) row.runs.push({ child: "main", run });
   }
   const rootSpend = compactionSpend(rootMessages);

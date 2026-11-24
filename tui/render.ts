@@ -184,9 +184,10 @@ export const activeMessages = (
 
 /** A selection index clamped to a list that can shrink under it, so the
  * marker, the bold row and the section below all agree on what is
- * selected. */
+ * selected. Both bounds: `up` at the first row must stay at zero, not
+ * walk negative. */
 export const clampIndex = (at: number, count: number): number =>
-  Math.min(at, Math.max(0, count - 1));
+  Math.max(0, Math.min(at, count - 1));
 
 /**
  * `text` word-folded to `width` columns, at most `maxLines`, the last

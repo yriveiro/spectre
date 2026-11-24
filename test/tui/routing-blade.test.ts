@@ -147,9 +147,6 @@ describe("routing history blade layout", () => {
     });
     await setup.renderOnce();
     const lines = setup.captureCharFrame().split("\n");
-    if (process.env.DEBUG_FRAME) {
-      console.log(lines.map((l, i) => `${String(i).padStart(2)}|${l}`).join("\n"));
-    }
 
     expect(lines[0]).toContain("Routing history");
     expect(lines[0]).toContain("draft session");
@@ -162,7 +159,9 @@ describe("routing history blade layout", () => {
     expect(named).toBeLessThan(judged);
 
     expect(lines[named]).toContain("agent");
-    expect(lines[named]).toContain("acme/falcon-mini#high");
+    // The spent column caps below the longest ref, so the cell clips and
+    // the detail band below carries the whole ref.
+    expect(lines[named]).toContain("acme/falcon-mini#hi…");
     expect(lines[judged]).toContain("→ designer (0.42)");
     expect(lines[judged]).toContain("acme/falcon-max#high");
 
@@ -313,12 +312,10 @@ describe("routing history blade layout", () => {
   // The fold itself — label column, cap, ellipsis — is asserted as pure
   // data in blade-layout.test.ts, where foldBands lives.
 
-  // A click-then-select assertion cannot live here: bun resolves bare
-  // `solid-js` through the `node` condition to the SSR no-op build, so
-  // signal-driven re-renders do not subscribe under `bun test`. Measured
-  // here: `bun test --conditions solid` did not subscribe either. The click
-  // wiring is the same `onMouseUp` → select the other blades use; the
-  // detail band reads the selection and row zero is selected by default,
-  // so the frames above assert it, and the fold and the band's content are
-  // asserted as pure data.
+  // A click-then-select assertion cannot live in the default run: bun
+  // resolves bare `solid-js` to the server build, so signal re-renders do
+  // not repaint. Under `--conditions=browser` effects subscribe and a
+  // probe repaints, but that condition is not this suite's, so the frames
+  // above assert the initial state and the fold and the bands as pure
+  // data.
 });

@@ -44,7 +44,7 @@ type MutableDraft = Editable<Draft>;
 
 const PAGE = "Routing";
 
-/** The `session.panel` name the history blade answers to, and the slash command that opens it. */
+/** The `session.panel` name the history blade answers to. The sidebar fold opens it by click. */
 const HISTORY_PANEL = "spectre.routing.history";
 
 const VIEW = "view";

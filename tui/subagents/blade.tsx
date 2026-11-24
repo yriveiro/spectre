@@ -1,7 +1,7 @@
 import type { Plugin } from "@opencode/plugin/tui";
 import type { JSX } from "@opentui/solid";
 import { createMemo } from "solid-js";
-import { type BladeSpec, blade } from "../blade.tsx";
+import { blade } from "../blade.tsx";
 import { bar, type Column } from "../blade-layout.ts";
 import {
   formatCost,
@@ -35,7 +35,8 @@ const outcomeMark = (run: ProfileRun["run"]): string => {
 };
 
 /** The row label: the profile's name, `main` for the root's agent, or the agent when unrouted. */
-const rowText = (row: ProfileUsage): string => (row.kind === "main" ? row.agent : profileLabel(row));
+const rowText = (row: ProfileUsage): string =>
+  row.kind === "main" ? row.agent : profileLabel(row);
 
 /**
  * The session panel: two sections over one partition — the main agent's own
@@ -74,12 +75,14 @@ export const subagentsBlade = (input: {
     }),
   );
 
-  const peak = (): number =>
-    Math.max(0, ...report().rows.map((one) => totalTokens(one.tokens)));
+  const peak = (): number => Math.max(0, ...report().rows.map((one) => totalTokens(one.tokens)));
 
   /** The panel's two sections: the main agent's own spend, then the profiles
    * (plus unrouted and compaction), in the report's own order. */
-  const sections = (): ReadonlyArray<{ readonly header: string; readonly rows: ProfileUsage[] }> => {
+  const sections = (): ReadonlyArray<{
+    readonly header: string;
+    readonly rows: ProfileUsage[];
+  }> => {
     const main = report().rows.filter((row) => row.kind === "main");
     const rest = report().rows.filter((row) => row.kind !== "main");
     return [
@@ -101,7 +104,8 @@ export const subagentsBlade = (input: {
       hideBelow: 56,
       align: "right",
       tone: "faint",
-      cell: (one) => `${formatTokens(one.run.tokens.cacheRead)}/${formatTokens(one.run.tokens.cacheWrite)}`,
+      cell: (one) =>
+        `${formatTokens(one.run.tokens.cacheRead)}/${formatTokens(one.run.tokens.cacheWrite)}`,
     },
     { header: "out", width: 7, align: "right", cell: (one) => formatTokens(one.run.tokens.output) },
     {
@@ -138,19 +142,33 @@ export const subagentsBlade = (input: {
         header: "model",
         // Measured from the refs the rows carry, so a wide panel shows the
         // whole ref and a narrow one shrinks it before the label's floor.
+        // Left-aligned: a shrunk column clips the ref with an ellipsis.
         width: { min: 12 },
         hideBelow: 46,
+        align: "left",
         tone: "faint",
         cell: (row) => row.ref ?? "",
       },
-      { header: "runs", width: 5, hideBelow: 52, align: "right", cell: (row) => String(row.runs.length) },
+      {
+        header: "runs",
+        width: 5,
+        hideBelow: 52,
+        align: "right",
+        cell: (row) => String(row.runs.length),
+      },
       {
         header: "tokens",
         width: 7,
         align: "right",
         cell: (row) => formatTokens(totalTokens(row.tokens)),
       },
-      { header: "cost", width: 8, hideBelow: 40, align: "right", cell: (row) => formatCost(row.cost) },
+      {
+        header: "cost",
+        width: 8,
+        hideBelow: 40,
+        align: "right",
+        cell: (row) => formatCost(row.cost),
+      },
       {
         header: "",
         width: 10,
@@ -185,8 +203,10 @@ export const subagentsBlade = (input: {
         }),
         columns: runColumns,
       },
-      bands: (row, picked) =>
-        picked === undefined ? [] : [{ label: "", value: picked.run.promptText || "(no prompt recorded)" }],
+      bands: (_row, picked) =>
+        picked === undefined
+          ? []
+          : [{ label: "", value: picked.run.promptText || "(no prompt recorded)" }],
       cap: PROMPT_LINES,
       labelColumn: 0,
       indent: 2,

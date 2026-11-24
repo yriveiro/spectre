@@ -66,7 +66,10 @@ const descriptor = (): BladeSpec<Row, Item> => ({
         text: one.at === 1 ? "✓" : "·",
       }),
       columns: [
-        { header: "item", cell: (one: { readonly label: string; readonly at: number }) => one.label },
+        {
+          header: "item",
+          cell: (one: { readonly label: string; readonly at: number }) => one.label,
+        },
         {
           header: "at",
           width: 6,
@@ -75,10 +78,7 @@ const descriptor = (): BladeSpec<Row, Item> => ({
         },
       ],
     },
-    bands: (
-      row: Row,
-      picked: { readonly label: string; readonly at: number } | undefined,
-    ) => [
+    bands: (row: Row, picked: { readonly label: string; readonly at: number } | undefined) => [
       { label: "row", value: row.name },
       { label: "picked", value: picked?.label ?? "none" },
     ],

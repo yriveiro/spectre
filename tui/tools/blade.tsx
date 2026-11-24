@@ -1,15 +1,9 @@
 import type { Plugin } from "@opencode/plugin/tui";
 import type { JSX } from "@opentui/solid";
 import { createMemo } from "solid-js";
-import { type BladeSpec, blade } from "../blade.tsx";
+import { blade } from "../blade.tsx";
 import { bar, type Column } from "../blade-layout.ts";
-import {
-  displayName,
-  formatTokens,
-  type ToolUsage,
-  toolUsage,
-  totalTokens,
-} from "./usage.ts";
+import { displayName, formatTokens, type ToolUsage, toolUsage, totalTokens } from "./usage.ts";
 
 /** One tool's by-type spend, the words the expand line shows. */
 const breakdown = (one: ToolUsage): string => {

@@ -5,13 +5,14 @@ import { createMemo, createSignal } from "solid-js";
 import {
   type Band,
   type Column,
-  type ResolvedColumn,
-  type Section,
-  type Tone,
+  clipRight,
   fit,
   flatten,
   foldBands,
+  type ResolvedColumn,
   resolveColumns,
+  type Section,
+  type Tone,
 } from "./blade-layout.ts";
 import { clampIndex, h, show } from "./render.ts";
 
@@ -54,7 +55,9 @@ export type Detail<Row, Picked> = {
 
 /** One blade, as data. The engine owns the skeleton, the selections, the
  * keymap, the column widths and the folds; the blade owns its rows, its
- * cells and its words. */
+ * cells and its words. The panel opens by a click on its sidebar block,
+ * and the keys bind only what prose never types: escape, the arrows and
+ * the expand key. */
 export type BladeSpec<Row, Picked = undefined> = {
   readonly context: Plugin.Context;
   readonly panel: BladePanel;
@@ -84,7 +87,7 @@ const headCell = (theme: Theme, one: ResolvedColumn<never>): JSX.Element =>
   h(
     "text",
     { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
-    one.align === "left" ? fit(one.header(), one.width) : one.header().padStart(one.width),
+    one.align === "left" ? fit(one.header, one.width) : clipRight(one.header, one.width),
   );
 
 /** One row's cells after the marker. The flexible label is bold and
@@ -116,8 +119,14 @@ function rowCells<Row>(
           )
         : h(
             "text",
-            { fg: chosen() ? theme.text.base : toneColor(theme, one.tone(row)), wrapMode: "none", flexShrink: 0 },
-            one.align === "left" ? fit(one.cell(row), one.width) : one.cell(row).padStart(one.width),
+            {
+              fg: chosen() ? theme.text.base : toneColor(theme, one.tone(row)),
+              wrapMode: "none",
+              flexShrink: 0,
+            },
+            one.align === "left"
+              ? fit(one.cell(row), one.width)
+              : clipRight(one.cell(row), one.width),
           );
     });
 }
@@ -155,7 +164,14 @@ function selectRow<Row>(
                 h("text", { fg: theme.text.base, flexShrink: 0 }, "  "),
                 h(
                   "text",
-                  { fg: theme.text.faint, wrapMode: "none", truncate: true, flexGrow: 1, flexShrink: 1, minWidth: 0 },
+                  {
+                    fg: theme.text.faint,
+                    wrapMode: "none",
+                    truncate: true,
+                    flexGrow: 1,
+                    flexShrink: 1,
+                    minWidth: 0,
+                  },
                   expanded() ?? "",
                 ),
               ),
@@ -194,7 +210,6 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
   };
 
   const table = spec.detail?.table;
-  const expandOf = spec.expand;
   const pickedRow = (): Row | undefined => rows()[at()];
   const picked = createMemo(() => {
     const row = pickedRow();
@@ -204,8 +219,8 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
   const pickedAt = (): number => clampIndex(pickedAtRaw(), picked().length);
   const current = (): Picked | undefined => picked()[pickedAt()];
 
-  // The expansion set survives sort flips keyed by the row's own identity,
-  // not its position; the counter is the redraw trigger.
+  // The expansion set keys a row by its own identity, not its position, so
+  // an order change keeps it open; the counter is the redraw trigger.
   const expandedKeys = new Set<string>();
   const [expandedCount, setExpandedCount] = createSignal(0);
   const toggleExpand = (): void => {
@@ -222,10 +237,22 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
     // No letter bindings: a panel open beside the prompt must never eat a
     // letter someone is typing. Arrows and escape cannot collide with prose.
     commands: [
-      { id: `${spec.id}.close`, title: `Close ${spec.title}`, bind: "escape", run: () => spec.panel.close() },
+      {
+        id: `${spec.id}.close`,
+        title: `Close ${spec.title}`,
+        bind: "escape",
+        run: () => spec.panel.close(),
+      },
       ...(spec.expand === undefined
         ? []
-        : [{ id: `${spec.id}.expand`, title: "Expand selected row", bind: "enter", run: toggleExpand }]),
+        : [
+            {
+              id: `${spec.id}.expand`,
+              title: "Expand selected row",
+              bind: "enter",
+              run: toggleExpand,
+            },
+          ]),
       { bind: "up", run: () => move(-1) },
       { bind: "down", run: () => move(1) },
     ],
@@ -242,7 +269,11 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
   /** A full-width hairline: the panel's inner width, which is what the rows
    * occupy. It never shrinks, so a short panel loses rows, not rules. */
   const rule = (): JSX.Element =>
-    h("text", { fg: theme.border?.base ?? theme.text.faint, wrapMode: "none", flexShrink: 0 }, "─".repeat(inner));
+    h(
+      "text",
+      { fg: theme.border?.base ?? theme.text.faint, wrapMode: "none", flexShrink: 0 },
+      "─".repeat(inner),
+    );
 
   /** One empty row, never a shareable one: shrinking air would move the
    * bands it separates. */
@@ -262,7 +293,14 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
           one.flex
             ? h(
                 "text",
-                { fg: theme.text.faint, wrapMode: "none", truncate: true, flexGrow: 1, flexShrink: 1, minWidth: 0 },
+                {
+                  fg: theme.text.faint,
+                  wrapMode: "none",
+                  truncate: true,
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  minWidth: 0,
+                },
                 label,
               )
             : headCell(theme, one),
@@ -343,7 +381,10 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
                           ? undefined
                           : () => {
                               void expandedCount();
-                              const key = spec.rowKey === undefined ? String(base + position) : spec.rowKey(row);
+                              const key =
+                                spec.rowKey === undefined
+                                  ? String(base + position)
+                                  : spec.rowKey(row);
                               return expandedKeys.has(key) ? spec.expand?.(row) : undefined;
                             },
                       ),
@@ -358,7 +399,12 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
             spec.summary().map((one) =>
               h(
                 "text",
-                { fg: toneColor(theme, one.tone), wrapMode: "none", truncate: true, flexShrink: 0 },
+                {
+                  fg: toneColor(theme, one.tone),
+                  wrapMode: "none",
+                  truncate: true,
+                  flexShrink: 0,
+                },
                 one.text,
               ),
             ),
@@ -396,12 +442,22 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
                           { flexDirection: "row", width: "100%", flexShrink: 0 },
                           h(
                             "text",
-                            { fg: theme.text.muted, wrapMode: "none", truncate: true, flexShrink: 1, minWidth: 0 },
+                            {
+                              fg: theme.text.muted,
+                              wrapMode: "none",
+                              truncate: true,
+                              flexShrink: 1,
+                              minWidth: 0,
+                            },
                             label,
                           ),
                           h(
                             "text",
-                            { fg: theme.border?.base ?? theme.text.faint, wrapMode: "none", flexShrink: 0 },
+                            {
+                              fg: theme.border?.base ?? theme.text.faint,
+                              wrapMode: "none",
+                              flexShrink: 0,
+                            },
                             ` ${"─".repeat(Math.max(0, inner - label.length - 1))}`,
                           ),
                         );
@@ -464,7 +520,12 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
                                 },
                                 marker?.text ?? " ",
                               ),
-                              ...rowCells(theme, pickedResolved(), one, () => pickedAt() === position),
+                              ...rowCells(
+                                theme,
+                                pickedResolved(),
+                                one,
+                                () => pickedAt() === position,
+                              ),
                             );
                           }),
                       ),
@@ -517,4 +578,4 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
 
 /** The nested table's flexible head when its column names one. */
 const flexHeaderOf = (resolved: ReadonlyArray<ResolvedColumn<never>>): string =>
-  (resolved.find((one) => one.flex)?.header() ?? "").trim();
+  (resolved.find((one) => one.flex)?.header ?? "").trim();

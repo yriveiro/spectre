@@ -5,7 +5,6 @@ import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { subagentsBlade } from "../../tui/subagents/blade.tsx";
 import { sessionUsage } from "../../tui/subagents/usage.ts";
-import { wrapLines } from "../../tui/render.ts";
 import { tokenUsage as usage } from "./fixture.ts";
 
 const BASE = RGBA.fromInts(220, 224, 232, 255);
@@ -54,7 +53,9 @@ const idle = (): SessionMessageInfo => ({
  * the subagent preamble the usage walk strips. */
 const messages: Record<string, ReadonlyArray<SessionMessageInfo>> = {
   ses_root: [
-    user("summarize the blade and say which columns collide when the panel is narrow, because no row may overlap"),
+    user(
+      "summarize the blade and say which columns collide when the panel is narrow, because no row may overlap",
+    ),
     assistant("build", "glm-5.3", usage(1000, 50, 10, 200, 40), 0.02),
     idle(),
   ],
@@ -66,14 +67,24 @@ const messages: Record<string, ReadonlyArray<SessionMessageInfo>> = {
 };
 
 const sessions = new Map<string, SessionInfo>([
-  ["ses_root", { id: "ses_root", title: "draft session", agent: "build" } as unknown as SessionInfo],
+  [
+    "ses_root",
+    { id: "ses_root", title: "draft session", agent: "build" } as unknown as SessionInfo,
+  ],
   [
     "ses_child",
-    { id: "ses_child", parentID: "ses_root", title: "explore the layout", agent: "explore" } as unknown as SessionInfo,
+    {
+      id: "ses_child",
+      parentID: "ses_root",
+      title: "explore the layout",
+      agent: "explore",
+    } as unknown as SessionInfo,
   ],
 ]);
 
-const profiles = [{ name: "explore", agent: "explore", ref: "opencode-go/muse-spark-1.3-contributor" }];
+const profiles = [
+  { name: "explore", agent: "explore", ref: "opencode-go/muse-spark-1.3-contributor" },
+];
 
 const context = {
   theme,
@@ -145,7 +156,7 @@ describe("subagents blade layout", () => {
     const profileRow = lines.findIndex((line) => line.trimStart().startsWith("explore"));
     expect(profileRow).toBeGreaterThan(mainRow);
     // The model column is sized to the longest ref the rows carry, so at
-    // this width even the 37-character ref shows whole.
+    // this width even the 38-character ref shows whole.
     expect(lines[profileRow]).toContain("opencode-go/muse-spark-1.3-contributor");
     expect((lines[profileRow] ?? "").indexOf("960") + "960".length).toBe(tokensEnd);
 
@@ -165,7 +176,9 @@ describe("subagents blade layout", () => {
     // folded to the width and starting with the words the row label clips.
     const bandRule = lines.findIndex((line, at) => at > runRow && isRule(line));
     expect(bandRule).toBe(runRow + 2);
-    expect(lines[bandRule + 2]).toContain("summarize the blade and say which columns collide when the");
+    expect(lines[bandRule + 2]).toContain(
+      "summarize the blade and say which columns collide when the",
+    );
     expect(lines[bandRule + 3]).toContain("may overlap");
 
     await setup.dispose();
@@ -211,28 +224,36 @@ describe("subagents blade layout", () => {
     await setup.dispose();
   });
 
-  // A click-then-select assertion cannot live here: bun resolves bare
-  // `solid-js` through the `node` condition to the SSR no-op build, so
-  // signal-driven re-renders do not subscribe under `bun test`. Measured
-  // here: `bun test --conditions solid` did not subscribe either — the run
-  // row's `onMouseUp` fired and the frame never repainted. The click wiring
-  // is the same `onMouseUp` → select the tools and routing blades use; the
-  // band itself is in the initial frame (run zero is selected by default),
-  // so the frames above assert it, and the fold below is asserted as pure
-  // data.
-  test("the prompt band folds to the width and caps at a constant shape", () => {
-    expect(wrapLines("aaa b ccc", 5, 2)).toEqual(["aaa b", "ccc"]);
-    // The fold cut a third line away: the last visible line says so.
-    expect(wrapLines("aaa b ccc dd", 5, 2)).toEqual(["aaa b", "ccc…"]);
-    // A word longer than the fold splits hard, and the next word joins the
-    // remainder.
-    expect(wrapLines("aaaaaa bb", 5, 10)).toEqual(["aaaaa", "a bb"]);
-    // Paragraphs stay separate lines.
-    expect(wrapLines("a\nb", 10, 10)).toEqual(["a", "b"]);
-    // A one-column fold still yields one character per line.
-    expect(wrapLines("ab cd", 1, 10)).toEqual(["a", "b", "c", "d"]);
+  test("a mid-width panel clips the measured column and keeps every other in place", async () => {
+    const { setup, lines } = await renderBlade(64, 30);
+
+    // At this width the model column shrinks below the longest ref on
+    // purpose: the cell clips with an ellipsis instead of pushing the row
+    // into its neighbour, and the label keeps its floor.
+    const profileRow = lines.findIndex((line) => line.trimStart().startsWith("explore"));
+    expect(profileRow).toBeGreaterThanOrEqual(0);
+    const row = lines[profileRow] ?? "";
+    expect(row).toContain("opencode-go/…");
+    expect(row).not.toContain("muse-spark");
+    expect(row).toContain("960");
+    expect(row.trimEnd().endsWith("█".repeat(7))).toBe(true);
+    // Nothing is pushed past the panel's inner width.
+    expect(row.trimEnd().length).toBeLessThanOrEqual(63);
+
+    // The numbers still end exactly where their headers end.
+    const agentHead = lines.findIndex((one) => one.includes("tokens") && one.includes("agent"));
+    const tokensEnd = (lines[agentHead] ?? "").indexOf("tokens") + "tokens".length;
+    expect((lines[profileRow] ?? "").indexOf("960") + "960".length).toBe(tokensEnd);
+
+    await setup.dispose();
   });
 
+  // A click-then-select assertion cannot live in the default run: bun
+  // resolves bare `solid-js` to the server build, so signal re-renders do
+  // not repaint. Under `--conditions=browser` effects subscribe and a
+  // probe repaints, but that condition is not this suite's, so the frames
+  // above assert the initial state and the fold and the bands as pure
+  // data.
   test("a run carries the whole prompt its row label clips, for the prompt band", () => {
     const report = sessionUsage({
       rootID: "ses_root",
@@ -252,7 +273,6 @@ describe("subagents blade layout", () => {
 
     // The child's prompt drops the subagent preamble the host prefixes.
     const child = report.rows.find((row) => row.name === "explore")?.runs[0]?.run;
-    expect(child?.promptText.startsWith("spawned by another session")).toBe(false);
-    expect(child?.promptText).toContain("Explore the layout.");
+    expect(child?.promptText).toBe("Explore the layout.");
   });
 });

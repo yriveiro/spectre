@@ -5,7 +5,7 @@ import { toolsBlade } from "./blade.tsx";
 import { toolsSidebar } from "./sidebar.tsx";
 import { toolUsage } from "./usage.ts";
 
-/** The `session.panel` name the blade answers to, and the slash command that opens it. */
+/** The `session.panel` name the blade answers to. The sidebar box opens it by click. */
 export const PANEL = "spectre.tools";
 
 const VIEW = "tools.view";

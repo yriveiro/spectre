@@ -6,7 +6,7 @@ import { profileRouting } from "./routing.ts";
 import { subagentsSidebar } from "./sidebar.tsx";
 import { type ProfileRouting, sessionUsage } from "./usage.ts";
 
-/** The `session.panel` name the blade answers to, and the slash command that opens it. */
+/** The `session.panel` name the blade answers to. The sidebar box opens it by click. */
 export const PANEL = "spectre.subagents";
 
 const VIEW = "subagents.view";

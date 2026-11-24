@@ -113,10 +113,6 @@ export const toolUsage = (
   return { tools, totals, prose };
 };
 
-/** The biggest number in the report; the share bar scales against it. */
-export const maxTokens = (tools: ReadonlyArray<ToolUsage>): number =>
-  tools.reduce((peak, one) => Math.max(peak, totalTokens(one.tokens)), 0);
-
 const compact = new Intl.NumberFormat("en-US", {
   notation: "compact",
   maximumFractionDigits: 1,

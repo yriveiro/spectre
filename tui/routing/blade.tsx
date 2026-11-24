@@ -1,13 +1,13 @@
 import type { Plugin } from "@opencode/plugin/tui";
 import type { JSX } from "@opentui/solid";
 import { createMemo } from "solid-js";
-import { type BladeSpec, blade } from "../blade.tsx";
+import { blade } from "../blade.tsx";
 import type { Column } from "../blade-layout.ts";
 import {
-  type JudgeView,
-  type RoutingCall,
   expandBands,
   formatConfidence,
+  type JudgeView,
+  type RoutingCall,
   routingCalls,
   routingTotals,
 } from "./history.ts";
@@ -79,7 +79,12 @@ export const routingBlade = (input: {
     { header: "judge", width: { min: 4, max: 24 }, cell: judgeCell },
     // Capped below the longest ref: the aligned column may clip one
     // character, because the detail band carries the whole ref anyway.
-    { header: "spent", width: { min: 4, max: 20 }, tone: "muted", cell: (one) => one.spent?.ref ?? "" },
+    {
+      header: "spent",
+      width: { min: 4, max: 20 },
+      tone: "muted",
+      cell: (one) => one.spent?.ref ?? "",
+    },
   ];
 
   return blade<RoutingCall>({
@@ -94,7 +99,9 @@ export const routingBlade = (input: {
     summary: () => {
       const totals = routingTotals(report());
       return [
-        { text: `Σ ${totals.calls} calls · ${totals.judged} judged · ${totals.agentChosen} agent-chosen` },
+        {
+          text: `Σ ${totals.calls} calls · ${totals.judged} judged · ${totals.agentChosen} agent-chosen`,
+        },
       ];
     },
     detail: {
