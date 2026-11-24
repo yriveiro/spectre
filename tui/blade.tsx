@@ -24,13 +24,15 @@ export type BladePanel = {
   readonly close: () => void;
 };
 
-/** The sort toggle: one key, one hint, the title the palette shows. */
+/** The sort toggle: one key, one hint, the title the palette shows, and
+ * whether the head row sorts when clicked. */
 export type Toggle = {
   readonly id: string;
   readonly title: string;
   readonly bind: string;
   readonly hint: () => string;
   readonly run: () => void;
+  readonly onHeader?: true;
 };
 
 /** One footer line under the table. */
@@ -133,7 +135,7 @@ function rowCells<Row>(
 }
 
 /** One selectable row: the marker, then its cells, then its expanded line
- * when it is the expanded row. */
+ * under it when it is the expanded row. */
 function selectRow<Row>(
   theme: Theme,
   resolved: ReadonlyArray<ResolvedColumn<Row>>,
@@ -144,9 +146,13 @@ function selectRow<Row>(
 ): JSX.Element {
   return h(
     "box",
-    { flexDirection: "row", gap: 1, width: "100%", minWidth: 0, flexShrink: 0, onMouseUp: onPick },
-    h("text", { fg: theme.text.base, flexShrink: 0 }, () => (chosen() ? "▌" : " ")),
-    ...rowCells(theme, resolved, row, chosen),
+    { flexDirection: "column", width: "100%", minWidth: 0, flexShrink: 0 },
+    h(
+      "box",
+      { flexDirection: "row", gap: 1, width: "100%", minWidth: 0, onMouseUp: onPick },
+      h("text", { fg: theme.text.base, flexShrink: 0 }, () => (chosen() ? "▌" : " ")),
+      ...rowCells(theme, resolved, row, chosen),
+    ),
     ...(expanded === undefined
       ? []
       : [
@@ -181,7 +187,7 @@ function selectRow<Row>(
  * stop existing the moment the host closes it, and `enabled` keeps them
  * from firing while the panel is up but the prompt owns the keyboard.
  */
-export const blade = <Row, Picked>(spec: BladeSpec<Row, Picked>): JSX.Element => {
+export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JSX.Element => {
   const theme = spec.context.theme;
   const inner = Math.max(0, spec.panel.width - 2);
 
@@ -265,10 +271,10 @@ export const blade = <Row, Picked>(spec: BladeSpec<Row, Picked>): JSX.Element =>
 
   /** The head over one section's rows: the section's own label in the
    * flexible column, every other head aligned like its cells. */
-  const sectionHead = (label: string): JSX.Element =>
+  const sectionHead = (label: string, onPick: (() => void) | undefined): JSX.Element =>
     h(
       "box",
-      { flexDirection: "row", gap: 1, width: "100%", flexShrink: 0 },
+      { flexDirection: "row", gap: 1, width: "100%", flexShrink: 0, onMouseUp: onPick },
       h("text", { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 }, " "),
       h(
         "text",
@@ -333,7 +339,10 @@ export const blade = <Row, Picked>(spec: BladeSpec<Row, Picked>): JSX.Element =>
                 "box",
                 { flexDirection: "column", width: "100%", minWidth: 0, flexShrink: 0 },
                 ...(base > 0 ? [air()] : []),
-                sectionHead(section.header ?? flexHeaderOf(resolved())),
+                sectionHead(
+                  section.header ?? flexHeaderOf(resolved()),
+                  toggle !== undefined && toggle.onHeader === true ? () => toggle.run() : undefined,
+                ),
                 rule(),
                 air(),
                 h(

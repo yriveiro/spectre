@@ -1,29 +1,17 @@
 import type { Plugin } from "@opencode/plugin/tui";
-import { TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
-import { createMemo, createSignal } from "solid-js";
-import { h, show } from "../render.ts";
+import { createMemo } from "solid-js";
+import { type BladeSpec, blade } from "../blade.tsx";
+import { bar, type Column } from "../blade-layout.ts";
 import {
   displayName,
   formatTokens,
-  maxTokens,
   type ToolUsage,
   toolUsage,
   totalTokens,
 } from "./usage.ts";
 
-/** Share-bar cells. One cell is the resolution the eye can rank with anyway. */
-const BAR_CELLS = 10;
-
-const bar = (tokens: number, peak: number): string => {
-  if (peak <= 0) return " ".repeat(BAR_CELLS);
-  const filled = Math.max(1, Math.round((tokens / peak) * BAR_CELLS));
-  // A constant cell count in every row: the name column is the flexible one,
-  // so a bar that grows and shrinks with the data would drag the calls and
-  // tokens columns around with it. The padding keeps the columns still.
-  return "█".repeat(Math.min(BAR_CELLS, filled)).padEnd(BAR_CELLS);
-};
-
+/** One tool's by-type spend, the words the expand line shows. */
 const breakdown = (one: ToolUsage): string => {
   const parts = [
     `in ${formatTokens(one.tokens.input)}`,
@@ -36,14 +24,10 @@ const breakdown = (one: ToolUsage): string => {
 };
 
 /**
- * The session panel: the extended table the sidebar's compact box opens.
- * Rows carry calls and total tokens; the by-type numbers live in the expand
- * line and the session footer, because the panel is narrower than the table
- * that would hold them as columns.
- *
- * The keymap layer is created inside the component, so the panel's keys stop
- * existing the moment the host closes it, and `enabled` keeps them from
- * firing while the panel is up but the prompt owns the keyboard.
+ * The tools session panel: one row per tool the session called, its calls
+ * and tokens, and the by-type numbers on the expand line under a selected
+ * row. The panel is narrower than the table that would hold the types as
+ * columns, so they live on the expand line and in the session footer.
  */
 export const toolsBlade = (input: {
   readonly context: Plugin.Context;
@@ -58,334 +42,87 @@ export const toolsBlade = (input: {
   readonly onSortToggle: () => void;
 }): JSX.Element => {
   const context = input.context;
-  const theme = context.theme;
 
-  // One walk of the transcript per change. Every row's share bar, the footer
-  // and the empty-state branch read this memo, so a redraw never re-folds the
-  // message list, and a message landing mid-render cannot give two rows
-  // different totals.
+  // One walk of the transcript per change: every row's share bar, the
+  // footer and the empty branch read this memo, so a redraw never re-folds
+  // the message list, and a message landing mid-render cannot give two
+  // rows different totals.
   const report = createMemo(() => {
     const boundary = context.data.session.get(input.panel.sessionID)?.revert?.messageID;
     return toolUsage(context.data.session.message.list(input.panel.sessionID), boundary);
   });
 
-  const rows = () => {
-    const by = input.sortBy();
+  const rows = (): ReadonlyArray<ToolUsage> => {
     const tools = [...report().tools];
-    if (by === "tokens") {
+    if (input.sortBy() === "tokens")
       tools.sort(
         (a, b) => totalTokens(b.tokens) - totalTokens(a.tokens) || a.name.localeCompare(b.name),
       );
-    }
     return tools;
   };
 
-  const [selected, setSelected] = createSignal(0);
-  const [expanded, setExpanded] = createSignal<ReadonlySet<string>>(new Set());
+  const peak = (): number =>
+    report().tools.reduce((max, one) => Math.max(max, totalTokens(one.tokens)), 0);
 
-  const toggleExpanded = (name: string): void => {
-    setExpanded((held) => {
-      const next = new Set(held);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
-  };
-
-  const move = (delta: number): void => {
-    const count = rows().length;
-    if (count === 0) return;
-    setSelected((at) => Math.min(count - 1, Math.max(0, at + delta)));
-  };
-
-  context.keymap.layer(() => ({
-    enabled: () => input.panel.focused,
-    commands: [
-      {
-        id: "spectre.tools.close",
-        title: "Close tools panel",
-        bind: "escape",
-        run: () => input.panel.close(),
-      },
-      {
-        id: "spectre.tools.sort",
-        title: "Sort tools by tokens or calls",
-        bind: "t",
-        run: () => input.onSortToggle(),
-      },
-      {
-        id: "spectre.tools.expand",
-        title: "Expand selected tool",
-        bind: "enter",
-        run: () => {
-          const row = rows()[selected()];
-          if (row !== undefined) toggleExpanded(row.name);
-        },
-      },
-      { bind: "up", run: () => move(-1) },
-      { bind: "down", run: () => move(1) },
-    ],
-  }));
-
-  const rowLine = (one: ToolUsage, at: number): JSX.Element =>
-    h(
-      "box",
-      {
-        flexDirection: "row",
-        gap: 1,
-        width: "100%",
-        minWidth: 0,
-        onMouseUp: () => {
-          setSelected(at);
-          toggleExpanded(one.name);
-        },
-      },
-      h("text", { fg: theme.text.base, flexShrink: 0 }, () => (selected() === at ? "▌" : " ")),
-      h(
-        "text",
-        {
-          fg: selected() === at ? theme.text.base : theme.text.muted,
-          attributes: selected() === at ? TextAttributes.BOLD : undefined,
-          wrapMode: "none",
-          truncate: true,
-          flexGrow: 1,
-          flexShrink: 1,
-          minWidth: 0,
-        },
-        displayName(one.name),
-      ),
-      h(
-        "text",
-        { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
-        String(one.calls).padStart(6),
-      ),
-      h(
-        "text",
-        { fg: theme.text.base, wrapMode: "none", flexShrink: 0 },
-        formatTokens(totalTokens(one.tokens)).padStart(7),
-      ),
-      show(
-        () => input.panel.width >= 48,
-        () =>
-          h(
-            "text",
-            { fg: theme.text.muted, wrapMode: "none", flexShrink: 0 },
-            bar(totalTokens(one.tokens), maxTokens(report().tools)),
-          ),
-      ),
-    );
-
-  const expandLine = (one: ToolUsage): JSX.Element =>
-    h(
-      "box",
-      { flexDirection: "row", width: "100%", minWidth: 0 },
-      // Two leading spaces: the selector column plus the row's gap, so the
-      // breakdown nests under the tool name instead of hanging left of it.
-      h("text", { fg: theme.text.base, flexShrink: 0 }, "  "),
-      h(
-        "text",
-        {
-          fg: theme.text.faint,
-          wrapMode: "none",
-          truncate: true,
-          flexGrow: 1,
-          flexShrink: 1,
-          minWidth: 0,
-        },
-        breakdown(one),
-      ),
-    );
-
-  const sortMark = (column: "calls" | "tokens"): string =>
+  const mark = (column: "calls" | "tokens"): string =>
     input.sortBy() === column ? "▾" : " ";
 
-  const sortHint = (): string => {
-    const key = context.keymap.shortcuts("spectre.tools.sort")[0] ?? "t";
-    return input.sortBy() === "tokens" ? `sort calls (${key})` : `sort tokens (${key})`;
-  };
+  const columns: ReadonlyArray<Column<ToolUsage>> = [
+    { header: "tool", cell: (one) => displayName(one.name) },
+    {
+      header: () => `calls${mark("calls")}`,
+      width: 6,
+      align: "right",
+      cell: (one) => String(one.calls),
+    },
+    {
+      header: () => `tokens${mark("tokens")}`,
+      width: 7,
+      align: "right",
+      cell: (one) => formatTokens(totalTokens(one.tokens)),
+    },
+    {
+      header: "",
+      width: 10,
+      hideBelow: 46,
+      tone: "muted",
+      cell: (one) => bar(totalTokens(one.tokens), peak(), 10),
+    },
+  ];
 
-  /** A full-width hairline: the panel's own width minus its side padding. */
-  const rule = (): JSX.Element =>
-    h(
-      "text",
-      { fg: theme.border?.base ?? theme.text.faint, wrapMode: "none" },
-      "─".repeat(Math.max(0, input.panel.width - 2)),
-    );
-
-  /**
-   * One empty row. The panel has height to spare, and the table reads better
-   * with air between its bands than pressed against itself.
-   */
-  const air = (): JSX.Element => h("box", { height: 1 });
-
-  return h(
-    "box",
-    { flexDirection: "column", width: "100%", height: "100%", paddingLeft: 1, paddingRight: 1 },
-    h(
-      "box",
-      { flexDirection: "row", justifyContent: "space-between", width: "100%", flexShrink: 0 },
-      h(
-        "box",
-        { flexDirection: "row", gap: 1, minWidth: 0, flexShrink: 1 },
-        h(
-          "text",
-          {
-            fg: theme.text.base,
-            attributes: TextAttributes.BOLD,
-            wrapMode: "none",
-            truncate: true,
-            flexShrink: 1,
-            minWidth: 0,
-          },
-          "Tools",
-        ),
-        h(
-          "text",
-          { fg: theme.text.muted, wrapMode: "none", truncate: true, flexShrink: 1, minWidth: 0 },
-          () => context.data.session.get(input.panel.sessionID)?.title ?? input.panel.sessionID,
-        ),
-      ),
-      h(
-        "box",
-        { flexShrink: 0, onMouseUp: () => input.panel.close() },
-        h("text", { fg: theme.text.muted, wrapMode: "none" }, "×"),
-      ),
-    ),
-    rule(),
-    air(),
-    show(
-      () => report().tools.length > 0,
-      () =>
-        h(
-          "box",
-          { flexDirection: "column", width: "100%", minWidth: 0 },
-          h(
-            "box",
-            {
-              flexDirection: "row",
-              gap: 1,
-              width: "100%",
-              flexShrink: 0,
-              onMouseUp: () => input.onSortToggle(),
-            },
-            h("text", { fg: theme.text.faint, flexShrink: 0 }, " "),
-            h(
-              "text",
-              {
-                fg: theme.text.faint,
-                wrapMode: "none",
-                truncate: true,
-                flexGrow: 1,
-                flexShrink: 1,
-                minWidth: 0,
-              },
-              "tool",
-            ),
-            // The labels are exactly as wide as the columns they name, mark
-            // included, so the numbers sit under their headers in every row.
-            h(
-              "text",
-              { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
-              () => `calls${sortMark("calls")}`,
-            ),
-            h(
-              "text",
-              { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
-              () => `tokens${sortMark("tokens")}`,
-            ),
-            // The rows end with a share bar of a constant cell count; the
-            // header claims the same cells silently so its labels sit exactly
-            // where the numbers do.
-            show(
-              () => input.panel.width >= 48,
-              () =>
-                h(
-                  "text",
-                  { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
-                  " ".repeat(BAR_CELLS),
-                ),
-            ),
-          ),
-          rule(),
-          air(),
-          h(
-            "box",
-            { flexDirection: "column", width: "100%", flexGrow: 1, flexShrink: 1, minHeight: 0 },
-            () => {
-              const list = rows();
-              return list.flatMap((one, at) =>
-                expanded().has(one.name) ? [rowLine(one, at), expandLine(one)] : [rowLine(one, at)],
-              );
-            },
-          ),
-          air(),
-          rule(),
-          h(
-            "box",
-            { flexDirection: "row", gap: 1, width: "100%", flexShrink: 0 },
-            h(
-              "text",
-              { fg: theme.text.base, wrapMode: "none", truncate: true, flexShrink: 1, minWidth: 0 },
-              () => {
-                const now = report();
-                return `Σ ${now.tools.length} tools · ${now.totals.calls} calls · ${formatTokens(
-                  totalTokens(now.totals),
-                )} tokens`;
-              },
-            ),
-          ),
-          h(
-            "box",
-            { flexDirection: "row", width: "100%", flexShrink: 0 },
-            h("text", { fg: theme.text.faint, wrapMode: "none", truncate: true }, () => {
-              const now = report();
-              const outside = now.prose > 0 ? ` · ${formatTokens(now.prose)} in prose turns` : "";
-              return `in ${formatTokens(now.totals.input)} · cache↻ ${formatTokens(now.totals.cacheRead)}/${formatTokens(
-                now.totals.cacheWrite,
-              )} · out ${formatTokens(now.totals.output)} · rsn ${formatTokens(now.totals.reasoning)}${outside}`;
-            }),
-          ),
-        ),
-    ),
-    show(
-      () => report().tools.length === 0,
-      () =>
-        h(
-          "box",
-          { flexDirection: "row", width: "100%" },
-          h("text", { fg: theme.text.muted, wrapMode: "none" }, "No tool calls yet."),
-        ),
-    ),
-    air(),
-    show(
-      () => report().tools.length > 0,
-      () =>
-        h(
-          "box",
-          { flexDirection: "row", gap: 1, width: "100%", flexShrink: 0 },
-          h(
-            "text",
-            {
-              fg: theme.text.faint,
-              wrapMode: "none",
-              truncate: true,
-              flexGrow: 1,
-              flexShrink: 1,
-              minWidth: 0,
-            },
-            () => sortHint(),
-          ),
-          h(
-            "text",
-            { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
-            "· ↑↓ select · ↵ expand",
-          ),
-          h(
-            "text",
-            { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 },
-            `· esc close (${context.keymap.shortcuts("spectre.tools.close")[0] ?? "escape"})`,
-          ),
-        ),
-    ),
-  );
+  return blade<ToolUsage>({
+    context,
+    panel: input.panel,
+    id: "spectre.tools",
+    title: "Tools",
+    subtitle: () => context.data.session.get(input.panel.sessionID)?.title ?? input.panel.sessionID,
+    empty: () => (report().tools.length === 0 ? "No tool calls yet." : undefined),
+    sections: () => [{ rows: rows() }],
+    columns,
+    toggle: {
+      id: "spectre.tools.sort",
+      title: "Sort tools by tokens or calls",
+      bind: "t",
+      run: () => input.onSortToggle(),
+      hint: () => (input.sortBy() === "tokens" ? "sort calls" : "sort tokens"),
+      onHeader: true,
+    },
+    // The expand line carries the by-type spend; `enter` folds it, and a
+    // tool's name keys the fold so a sort flip keeps it open.
+    expand: (one) => breakdown(one),
+    rowKey: (one) => one.name,
+    summary: () => {
+      const now = report();
+      const outside = now.prose > 0 ? ` · ${formatTokens(now.prose)} in prose turns` : "";
+      return [
+        {
+          text: `Σ ${now.tools.length} tools · ${now.totals.calls} calls · ${formatTokens(totalTokens(now.totals))} tokens`,
+        },
+        {
+          text: `in ${formatTokens(now.totals.input)} · cache↻ ${formatTokens(now.totals.cacheRead)}/${formatTokens(now.totals.cacheWrite)} · out ${formatTokens(now.totals.output)} · rsn ${formatTokens(now.totals.reasoning)}${outside}`,
+          tone: "faint",
+        },
+      ];
+    },
+  });
 };
