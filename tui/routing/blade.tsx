@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode/plugin/tui";
 import type { JSX } from "@opentui/solid";
-import { createMemo, createSignal } from "solid-js";
+import { createMemo } from "solid-js";
 import { type BladeSpec, blade } from "../blade.tsx";
 import type { Column } from "../blade-layout.ts";
 import {
@@ -69,13 +69,9 @@ export const routingBlade = (input: {
     return routingCalls(context.data.session.message.list(input.panel.sessionID), boundary);
   });
 
-  // Sort order survives hot reloads but not a TUI restart: it is a viewing
-  // choice, not a durable preference.
-  const [newestFirst, setNewestFirst] = createSignal(true);
-  const rows = (): ReadonlyArray<RoutingCall> => {
-    const calls = report();
-    return newestFirst() ? [...calls].reverse() : calls;
-  };
+  // Newest first, fixed: the panel's subject is the most recent routing
+  // decisions, so the transcript order reverses and no state reorders it.
+  const rows = (): ReadonlyArray<RoutingCall> => [...report()].reverse();
 
   const columns: ReadonlyArray<Column<RoutingCall>> = [
     { header: "time", width: 8, cell: (one) => clock(one.at) },
@@ -95,13 +91,6 @@ export const routingBlade = (input: {
     empty: () => "No routing calls yet.",
     sections: () => [{ rows: rows() }],
     columns,
-    toggle: {
-      id: "spectre.routing.history.sort",
-      title: "Sort routing calls oldest or newest first",
-      bind: "t",
-      run: () => setNewestFirst((held) => !held),
-      hint: () => (newestFirst() ? "sort oldest first" : "sort newest first"),
-    },
     summary: () => {
       const totals = routingTotals(report());
       return [

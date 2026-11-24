@@ -38,8 +38,6 @@ export const toolsBlade = (input: {
     readonly focused: boolean;
     readonly close: () => void;
   };
-  readonly sortBy: () => "calls" | "tokens";
-  readonly onSortToggle: () => void;
 }): JSX.Element => {
   const context = input.context;
 
@@ -52,31 +50,23 @@ export const toolsBlade = (input: {
     return toolUsage(context.data.session.message.list(input.panel.sessionID), boundary);
   });
 
-  const rows = (): ReadonlyArray<ToolUsage> => {
-    const tools = [...report().tools];
-    if (input.sortBy() === "tokens")
-      tools.sort(
-        (a, b) => totalTokens(b.tokens) - totalTokens(a.tokens) || a.name.localeCompare(b.name),
-      );
-    return tools;
-  };
+  // The tools in the report's own order: usage returns them sorted by
+  // calls, which is the order the panel shows.
+  const rows = (): ReadonlyArray<ToolUsage> => report().tools;
 
   const peak = (): number =>
     report().tools.reduce((max, one) => Math.max(max, totalTokens(one.tokens)), 0);
 
-  const mark = (column: "calls" | "tokens"): string =>
-    input.sortBy() === column ? "▾" : " ";
-
   const columns: ReadonlyArray<Column<ToolUsage>> = [
     { header: "tool", cell: (one) => displayName(one.name) },
     {
-      header: () => `calls${mark("calls")}`,
+      header: "calls",
       width: 6,
       align: "right",
       cell: (one) => String(one.calls),
     },
     {
-      header: () => `tokens${mark("tokens")}`,
+      header: "tokens",
       width: 7,
       align: "right",
       cell: (one) => formatTokens(totalTokens(one.tokens)),
@@ -99,16 +89,8 @@ export const toolsBlade = (input: {
     empty: () => (report().tools.length === 0 ? "No tool calls yet." : undefined),
     sections: () => [{ rows: rows() }],
     columns,
-    toggle: {
-      id: "spectre.tools.sort",
-      title: "Sort tools by tokens or calls",
-      bind: "t",
-      run: () => input.onSortToggle(),
-      hint: () => (input.sortBy() === "tokens" ? "sort calls" : "sort tokens"),
-      onHeader: true,
-    },
     // The expand line carries the by-type spend; `enter` folds it, and a
-    // tool's name keys the fold so a sort flip keeps it open.
+    // tool's name keys the fold so the order keeps it open.
     expand: (one) => breakdown(one),
     rowKey: (one) => one.name,
     summary: () => {

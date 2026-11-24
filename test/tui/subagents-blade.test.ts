@@ -107,8 +107,6 @@ const renderBlade = async (width: number, height: number) => {
         context,
         panel: { ...panel, width },
         profiles: () => profiles,
-        sortBy: () => "tokens",
-        onSortToggle: () => undefined,
       }),
     { width, height },
   );

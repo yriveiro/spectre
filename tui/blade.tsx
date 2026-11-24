@@ -24,17 +24,6 @@ export type BladePanel = {
   readonly close: () => void;
 };
 
-/** The sort toggle: one key, one hint, the title the palette shows, and
- * whether the head row sorts when clicked. */
-export type Toggle = {
-  readonly id: string;
-  readonly title: string;
-  readonly bind: string;
-  readonly hint: () => string;
-  readonly run: () => void;
-  readonly onHeader?: true;
-};
-
 /** One footer line under the table. */
 export type SummaryLine = {
   readonly text: string;
@@ -77,7 +66,6 @@ export type BladeSpec<Row, Picked = undefined> = {
   readonly empty: () => string | undefined;
   readonly sections: () => ReadonlyArray<Section<Row>>;
   readonly columns: ReadonlyArray<Column<Row>>;
-  readonly toggle?: Toggle;
   /** A row's expanded line under it, and the `enter` key that folds it. */
   readonly expand?: (row: Row) => string;
   /** Rows key by identity for the expansion set; defaults to position. */
@@ -206,7 +194,6 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
   };
 
   const table = spec.detail?.table;
-  const toggle = spec.toggle;
   const expandOf = spec.expand;
   const pickedRow = (): Row | undefined => rows()[at()];
   const picked = createMemo(() => {
@@ -232,18 +219,10 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
 
   spec.context.keymap.layer(() => ({
     enabled: () => spec.panel.focused,
+    // No letter bindings: a panel open beside the prompt must never eat a
+    // letter someone is typing. Arrows and escape cannot collide with prose.
     commands: [
       { id: `${spec.id}.close`, title: `Close ${spec.title}`, bind: "escape", run: () => spec.panel.close() },
-      ...(toggle === undefined
-        ? []
-        : [
-            {
-              id: toggle.id,
-              title: toggle.title,
-              bind: toggle.bind,
-              run: () => toggle.run(),
-            },
-          ]),
       ...(spec.expand === undefined
         ? []
         : [{ id: `${spec.id}.expand`, title: "Expand selected row", bind: "enter", run: toggleExpand }]),
@@ -272,10 +251,10 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
   /** The head over one section's rows: every column's head in declaration
    * order — the flexible column's slot carries the section's own label —
    * each aligned like its cells. */
-  const sectionHead = (label: string, onPick: (() => void) | undefined): JSX.Element =>
+  const sectionHead = (label: string): JSX.Element =>
     h(
       "box",
-      { flexDirection: "row", gap: 1, width: "100%", flexShrink: 0, onMouseUp: onPick },
+      { flexDirection: "row", gap: 1, width: "100%", flexShrink: 0 },
       h("text", { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 }, " "),
       ...resolved()
         .filter((one) => one.width > 0)
@@ -343,10 +322,7 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
                 "box",
                 { flexDirection: "column", width: "100%", minWidth: 0, flexShrink: 0 },
                 ...(base > 0 ? [air()] : []),
-                sectionHead(
-                  section.header ?? flexHeaderOf(resolved()),
-                  toggle !== undefined && toggle.onHeader === true ? () => toggle.run() : undefined,
-                ),
+                sectionHead(section.header ?? flexHeaderOf(resolved())),
                 rule(),
                 air(),
                 h(
@@ -525,13 +501,7 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
         h(
           "box",
           { flexDirection: "row", gap: 1, width: "100%", flexShrink: 0 },
-          h(
-            "text",
-            { fg: theme.text.faint, wrapMode: "none", truncate: true, flexGrow: 1, flexShrink: 1, minWidth: 0 },
-            () =>
-              spec.toggle === undefined ? "" : `${spec.toggle.hint()} (${shortcut(spec.toggle.id, spec.toggle.bind)})`,
-          ),
-          h("text", { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 }, "· ↑↓ select"),
+          h("text", { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 }, "↑↓ select"),
           ...(spec.expand === undefined
             ? []
             : [h("text", { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 }, "· ↵ expand")]),

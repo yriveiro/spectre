@@ -57,13 +57,6 @@ const descriptor = (): BladeSpec<Row, Item> => ({
     { header: "row", cell: (row: Row) => row.name },
     { header: "n", width: 6, align: "right", cell: (row: Row) => String(row.n) },
   ],
-  toggle: {
-    id: "spectre.fake.sort",
-    title: "Sort fake rows",
-    bind: "t",
-    run: () => undefined,
-    hint: () => "sort n",
-  },
   summary: () => [{ text: "Σ 2 rows" }, { text: "in 3 · out 1", tone: "faint" as const }],
   detail: {
     table: {
@@ -134,9 +127,9 @@ describe("blade engine", () => {
     expect(lines[picked - 1] ?? "").toContain("build");
     expect(lines[picked] ?? "").toContain("one");
 
-    // The hints row.
-    expect(lines.some((one) => one.includes("sort n (t)"))).toBe(true);
-    expect(lines.some((one) => one.includes("· ↑↓ select"))).toBe(true);
+    // The hints row: no sort, no letters.
+    expect(lines.some((one) => one.includes("sort n"))).toBe(false);
+    expect(lines.some((one) => one.includes("↑↓ select"))).toBe(true);
     expect(lines.some((one) => one.includes("· esc close (t)"))).toBe(true);
 
     await setup.dispose();

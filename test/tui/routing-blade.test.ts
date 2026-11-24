@@ -168,7 +168,9 @@ describe("routing history blade layout", () => {
 
     const totalsAt = lines.findIndex((one) => one.includes("Σ"));
     expect(lines[totalsAt]).toContain("2 calls · 1 judged · 1 agent-chosen");
-    expect(lines.some((one) => one.includes("sort oldest first (t)"))).toBe(true);
+    // No sort hint and no letter keys: only select and close.
+    expect(lines.some((one) => one.includes("sort"))).toBe(false);
+    expect(lines.some((one) => one.includes("↑↓ select"))).toBe(true);
 
     // The detail band below the totals reads the selected row, which is
     // selected by default: every value starts at the label column.

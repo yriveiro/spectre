@@ -22,12 +22,6 @@ export const registerTools = (context: Plugin.Context): (() => void) => {
   });
   const [open, setOpen] = createSignal(view.open ?? true);
 
-  // Sort order survives hot reloads but not a TUI restart: it is a viewing
-  // choice, not a durable preference.
-  const [sort, setSort] = context.storage.memory<{ by: "calls" | "tokens" }>("tools.sort", {
-    initial: { by: "calls" as const },
-  });
-
   const usage = (sessionID: string) => {
     const boundary = context.data.session.get(sessionID)?.revert?.messageID;
     return toolUsage(context.data.session.message.list(sessionID), boundary);
@@ -62,11 +56,6 @@ export const registerTools = (context: Plugin.Context): (() => void) => {
           toolsBlade({
             context,
             panel,
-            sortBy: () => sort.by,
-            onSortToggle: () =>
-              setSort((draft) => {
-                draft.by = draft.by === "calls" ? "tokens" : "calls";
-              }),
           }),
       ),
   });

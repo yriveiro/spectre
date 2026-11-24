@@ -24,12 +24,6 @@ export const registerSubagents = (context: Plugin.Context): (() => void) => {
   });
   const [open, setOpen] = createSignal(view.open ?? true);
 
-  // Sort order survives hot reloads but not a TUI restart: it is a viewing
-  // choice, not a durable preference.
-  const [sort, setSort] = context.storage.memory<{ by: "tokens" | "cost" }>("subagents.sort", {
-    initial: { by: "tokens" as const },
-  });
-
   // The routing table is read from disk per directory and cached; the version
   // signal redraws whichever surface already rendered a cached answer. A
   // failed read is not cached: it retries on the next render. A config edit
@@ -109,11 +103,6 @@ export const registerSubagents = (context: Plugin.Context): (() => void) => {
             context,
             panel,
             profiles: () => profiles(panel.sessionID),
-            sortBy: () => sort.by,
-            onSortToggle: () =>
-              setSort((draft) => {
-                draft.by = draft.by === "tokens" ? "cost" : "tokens";
-              }),
           }),
       ),
   });

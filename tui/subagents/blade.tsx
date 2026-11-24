@@ -55,8 +55,6 @@ export const subagentsBlade = (input: {
     readonly close: () => void;
   };
   readonly profiles: () => ReadonlyArray<ProfileRouting>;
-  readonly sortBy: () => "tokens" | "cost";
-  readonly onSortToggle: () => void;
 }): JSX.Element => {
   const context = input.context;
 
@@ -80,19 +78,10 @@ export const subagentsBlade = (input: {
     Math.max(0, ...report().rows.map((one) => totalTokens(one.tokens)));
 
   /** The panel's two sections: the main agent's own spend, then the profiles
-   * (plus unrouted and compaction), sorted by the mode the toggle holds. */
+   * (plus unrouted and compaction), in the report's own order. */
   const sections = (): ReadonlyArray<{ readonly header: string; readonly rows: ProfileUsage[] }> => {
-    const by = input.sortBy();
-    const order = (list: ProfileUsage[]): ProfileUsage[] => {
-      const sorted = [...list];
-      sorted.sort((a, b) => {
-        if (by === "cost") return b.cost - a.cost || rowText(a).localeCompare(rowText(b));
-        return totalTokens(b.tokens) - totalTokens(a.tokens) || rowText(a).localeCompare(rowText(b));
-      });
-      return sorted;
-    };
-    const main = order(report().rows.filter((row) => row.kind === "main"));
-    const rest = order(report().rows.filter((row) => row.kind !== "main"));
+    const main = report().rows.filter((row) => row.kind === "main");
+    const rest = report().rows.filter((row) => row.kind !== "main");
     return [
       { header: "agent", rows: main },
       ...(rest.length > 0 ? [{ header: "profile", rows: rest }] : []),
@@ -170,13 +159,6 @@ export const subagentsBlade = (input: {
         cell: (row) => bar(totalTokens(row.tokens), peak(), 10),
       },
     ],
-    toggle: {
-      id: "spectre.subagents.sort",
-      title: "Sort rows by tokens or cost",
-      bind: "t",
-      run: () => input.onSortToggle(),
-      hint: () => (input.sortBy() === "cost" ? "sort tokens" : "sort cost"),
-    },
     summary: () => {
       const now = report();
       const tokens = now.totals.tokens;
