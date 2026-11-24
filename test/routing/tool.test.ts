@@ -610,6 +610,37 @@ describe("tools.spectre.routing", () => {
     ]);
   });
 
+  test("a jev answer carries its runner-ups beside the profile it named", async () => {
+    await scratch.writeProject(withJudge({ kind: "jev" }));
+    const out = at(
+      await call(scratch.projectDir(), { task: EXPLORE }, undefined, undefined, () =>
+        Effect.succeed({
+          answers: [
+            {
+              name: "profile",
+              type: "choice",
+              choice: "explorer",
+              probabilities: [
+                { value: "explorer", probability: 0.82 },
+                { value: "designer", probability: 0.11 },
+              ],
+            },
+          ],
+        }),
+      ),
+      "resolved",
+    );
+
+    // Above the play-safe threshold, so the answer names the profile it spent
+    // and the readings it did not take.
+    expect(out.judge).toMatchObject({
+      status: "used",
+      profile: "explorer",
+      confidence: 0.82,
+      alternatives: [{ profile: "designer", probability: 0.11 }],
+    });
+  });
+
   test("a judge that cannot answer is skipped, and the reason is the arm's own", async () => {
     await scratch.writeProject(withJudge({ kind: "jev" }));
     const out = at(await call(scratch.projectDir(), { task: EXPLORE }), "resolved");

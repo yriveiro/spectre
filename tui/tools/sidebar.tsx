@@ -11,7 +11,7 @@ const COMPACT_ROWS = 5;
  * The sidebar box: call counts and nothing else. Tokens do not fit in the
  * sidebar's width, and the panel carries the numbers that do. Two things
  * here take a click and nothing else: the header row toggles the box's own
- * collapse, and the `⏱ see statistics` row below an empty row opens the
+ * collapse, and the `⏱ see tools statistics` row below an empty row opens the
  * session panel. The two rows are siblings, so no handler sits inside
  * another's subtree and no click can race a collapse into a panel open.
  * The action row renders in both the expanded and collapsed states, so
@@ -33,9 +33,7 @@ export const toolsSidebar = (input: {
         h(
           "box",
           { flexDirection: "row", gap: 1, width: "100%", onMouseUp: input.onToggle },
-          h("text", { fg: input.theme.text.base, flexShrink: 0 }, () =>
-            input.open() ? "▼" : "▶",
-          ),
+          h("text", { fg: input.theme.text.base, flexShrink: 0 }, () => (input.open() ? "▼" : "▶")),
           h(
             "text",
             {
@@ -113,7 +111,7 @@ export const toolsSidebar = (input: {
           "box",
           { flexDirection: "row", gap: 1, width: "100%", onMouseUp: input.onOpenPanel },
           h("text", { fg: input.theme.text.muted, flexShrink: 0 }, "⏱"),
-          h("text", { fg: input.theme.text.muted, wrapMode: "none" }, "see statistics"),
+          h("text", { fg: input.theme.text.muted, wrapMode: "none" }, "see tools statistics"),
         ),
       ),
   );

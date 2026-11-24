@@ -4,6 +4,7 @@ import type { JSX } from "@opentui/solid";
 import { createSignal } from "solid-js";
 import { FILE_NAME } from "../../tools/definitions/routing/index.ts";
 import { h, show } from "../render.ts";
+import { routingBlade } from "./blade.tsx";
 import {
   applied,
   isJevAvailable,
@@ -29,6 +30,7 @@ import {
   save,
   selectionMethodOf,
 } from "./data.ts";
+import { judgeView } from "./history.ts";
 import { page, type TabId } from "./page.tsx";
 
 type Editable<Value> =
@@ -41,6 +43,9 @@ type Editable<Value> =
 type MutableDraft = Editable<Draft>;
 
 const PAGE = "Routing";
+
+/** The `session.panel` name the history blade answers to, and the slash command that opens it. */
+const HISTORY_PANEL = "spectre.routing.history";
 
 const VIEW = "view";
 
@@ -200,22 +205,32 @@ const sidebarHeader = (input: {
   readonly theme: Plugin.Context["theme"];
   readonly open: () => boolean;
   readonly onToggle: () => void;
+  readonly onOpenModal: () => void;
   readonly rows: () => ReadonlyArray<Resolution>;
   readonly usingDefaults: () => boolean;
   readonly method: () => SelectionMethod["badge"];
 }): JSX.Element =>
   h(
     "box",
-    {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      width: "100%",
-      onMouseDown: input.onToggle,
-    },
+    { flexDirection: "row", gap: 1, width: "100%", minWidth: 0 },
+    // The wedge is its own box, so a click on it toggles the collapse and
+    // stops there, and a click anywhere else on the header opens the modal.
+    // Two handlers in disjoint subtrees cannot fire for one click.
     h(
       "box",
-      { flexDirection: "row", gap: 1, minWidth: 0, flexShrink: 1 },
+      { flexShrink: 0, onMouseDown: input.onToggle },
       h("text", { fg: input.theme.text.base, flexShrink: 0 }, () => (input.open() ? "▼" : "▶")),
+    ),
+    h(
+      "box",
+      {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        gap: 1,
+        minWidth: 0,
+        flexShrink: 1,
+        onMouseDown: input.onOpenModal,
+      },
       h(
         "box",
         { flexDirection: "row", minWidth: 0, flexShrink: 1 },
@@ -234,11 +249,11 @@ const sidebarHeader = (input: {
             ? null
             : collapsedSummary(input.theme, input.rows(), input.usingDefaults(), input.method()),
       ),
-    ),
-    show(
-      () => input.open(),
-      () =>
-        h("text", { fg: input.theme.text.muted, wrapMode: "none", flexShrink: 0 }, input.method),
+      show(
+        () => input.open(),
+        () =>
+          h("text", { fg: input.theme.text.muted, wrapMode: "none", flexShrink: 0 }, input.method),
+      ),
     ),
   );
 
@@ -278,6 +293,7 @@ export const sidebarSection = (input: {
   readonly open: () => boolean;
   readonly onToggle: () => void;
   readonly onOpenModal: () => void;
+  readonly onOpenHistory: () => void;
   readonly rows: () => ReadonlyArray<Resolution>;
   readonly usingDefaults?: () => boolean;
   readonly warningText?: () => string;
@@ -296,6 +312,7 @@ export const sidebarSection = (input: {
           theme: input.theme,
           open: input.open,
           onToggle: input.onToggle,
+          onOpenModal: input.onOpenModal,
           rows: input.rows,
           usingDefaults,
           method,
@@ -319,6 +336,16 @@ export const sidebarSection = (input: {
                   : items;
               }),
           ),
+        ),
+        h("box", { height: 1 }),
+        // The statistics row is a sibling of the rows box, not inside it, so a
+        // click cannot race a collapse into a panel open, and it renders in
+        // both the expanded and collapsed states so the panel stays reachable.
+        h(
+          "box",
+          { flexDirection: "row", gap: 1, width: "100%", onMouseUp: input.onOpenHistory },
+          h("text", { fg: input.theme.text.muted, flexShrink: 0 }, "⏱"),
+          h("text", { fg: input.theme.text.muted, wrapMode: "none" }, "see routing statistics"),
         ),
       ),
   );
@@ -409,7 +436,8 @@ export const subagentFooter = (input: {
 
 /**
  * Owns every routing surface in the TUI: the sidebar section, the subagent
- * footer, the modal page, and the route that reopens it.
+ * footer, the modal page, the route that reopens it, and the session panel
+ * with the session's routing history.
  */
 export const registerRouting = (
   context: Plugin.Context,
@@ -801,6 +829,7 @@ export const registerRouting = (
           }).catch(() => undefined);
         },
         onOpenModal: () => openModal(),
+        onOpenHistory: () => context.ui.panel.open(HISTORY_PANEL),
         rows: () => resolvedRows(input.sessionID),
         usingDefaults: () => {
           revision();
@@ -850,6 +879,61 @@ export const registerRouting = (
       }),
   });
 
+  const stopHistory = context.ui.slot({
+    append: "session.panel",
+    render: (panel) =>
+      show(
+        () => panel.name === HISTORY_PANEL,
+        () =>
+          routingBlade({
+            context,
+            panel,
+            judgeView: () => {
+              revision();
+              const { clean } = effectiveDraft(panel.sessionID);
+              return judgeView(configuredProfiles(clean), clean.judge);
+            },
+          }),
+      ),
+  });
+
+  // `keymap.layer` registers for the plugin's lifetime and returns nothing,
+  // the same bare call the tools and artifacts features make.
+  context.keymap.layer(() => ({
+    mode: "global",
+    commands: [
+      {
+        id: "spectre.routing.history",
+        title: "Routing statistics",
+        description: "Open the session panel with the routing calls and their judge answers",
+        group: "Spectre",
+        palette: true as const,
+        slash: { name: "routing-history" } as const,
+        run: () => {
+          const route = context.ui.router.current();
+          if (route.type !== "session") {
+            context.ui.toast.show({
+              title: "Routing",
+              message: "Routing history is per session; open a session first.",
+              variant: "info",
+            });
+            return;
+          }
+          const current = context.ui.panel.current();
+          if (
+            current !== undefined &&
+            current.name === HISTORY_PANEL &&
+            current.sessionID === route.sessionID
+          ) {
+            context.ui.panel.close();
+            return;
+          }
+          context.ui.panel.open(HISTORY_PANEL);
+        },
+      },
+    ],
+  }));
+
   return {
     open: () => {
       void openModal();
@@ -858,6 +942,7 @@ export const registerRouting = (
       stopComposer();
       stopSidebar();
       stopRouter();
+      stopHistory();
     },
   };
 };
