@@ -248,11 +248,21 @@ const skipped = (reason: string): typeof Judged.Type => ({ status: "skipped", re
 /** The words a thrown failure is reported in. */
 const text = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
 
-/** The judge's verdict as the output carries it. */
+/**
+ * The verdict's alternatives ride along for the reader. The policy thresholds
+ * on `confidence` alone, so carrying them changes no decision.
+ */
 const judged = (verdict: Verdict): typeof Judged.Type =>
   verdict.kind === "quiet"
     ? skipped(verdict.why)
-    : { status: "used", profile: verdict.profile, confidence: verdict.confidence };
+    : {
+        status: "used",
+        profile: verdict.profile,
+        confidence: verdict.confidence,
+        ...(verdict.alternatives === undefined || verdict.alternatives.length === 0
+          ? {}
+          : { alternatives: [...verdict.alternatives] }),
+      };
 
 /** The profiles an arm can pick, as the criteria a System One question carries. */
 const criteria = (profiles: Tables["profiles"]): Record<string, string> =>
@@ -787,7 +797,15 @@ export { clampEffort, effortOf, fit, KNOWN_ORDER, ladderOf, rungs } from "./effo
 export { attachRoutingGuard, SUBAGENT_MODEL_DESCRIPTION } from "./guard";
 export { hostCatalogue, sessionState } from "./host";
 export type { Decide, JevSettings } from "./jev";
-export { DEFAULT_TIMEOUT_MS, JEV_MODEL, jevJudge, judgeRef } from "./jev";
+export {
+  DEFAULT_TIMEOUT_MS,
+  JEV_MODEL,
+  jevJudge,
+  judgeRef,
+  NONE_CRITERION,
+  NONE_LABEL,
+  QUESTION_INSTRUCTIONS,
+} from "./jev";
 export type { Description, Judge, Verdict } from "./judge";
 export { lexicalJudge, rank, surface } from "./judge";
 export { load, loadProject } from "./load";
@@ -810,5 +828,12 @@ export type {
   Resolution,
   Tables,
 } from "./types";
-export { DEFAULT_AGENT, DEFAULT_PROFILES, defaultAgentFor, formatRef, isDefaultProfile, modelNames } from "./types";
+export {
+  DEFAULT_AGENT,
+  DEFAULT_PROFILES,
+  defaultAgentFor,
+  formatRef,
+  isDefaultProfile,
+  modelNames,
+} from "./types";
 export { proposeAlias, serialise, writeConfig } from "./write";

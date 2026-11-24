@@ -20,7 +20,7 @@ const usedRows = (report: SessionUsage) => report.rows.filter((one) => totalToke
  * profiles, whatever stayed unrouted — with its running state, total tokens,
  * and cost. Per-run and per-model numbers do not fit the sidebar's width;
  * the panel carries them. The click surface mirrors the tools box: the
- * header row toggles this box's own collapse, and the `⏱ see statistics`
+ * header row toggles this box's own collapse, and the `⏱ see session statistics`
  * row below an empty row opens the session panel. No handler sits inside
  * another's subtree, and the action row renders in both states so the panel
  * stays reachable while the rows are folded away.
@@ -141,7 +141,7 @@ export const subagentsSidebar = (input: {
           "box",
           { flexDirection: "row", gap: 1, width: "100%", onMouseUp: input.onOpenPanel },
           h("text", { fg: input.theme.text.muted, flexShrink: 0 }, "⏱"),
-          h("text", { fg: input.theme.text.muted, wrapMode: "none" }, "see statistics"),
+          h("text", { fg: input.theme.text.muted, wrapMode: "none" }, "see session statistics"),
         ),
       ),
   );

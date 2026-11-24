@@ -100,7 +100,7 @@ describe("tools sidebar", () => {
     await setup.dispose();
   });
 
-  test("clicking the see statistics row opens the panel and does not toggle the box", async () => {
+  test("clicking the see tools statistics row opens the panel and does not toggle the box", async () => {
     const [open] = createSignal(true);
     let toggled = 0;
     let opened = 0;
@@ -121,7 +121,7 @@ describe("tools sidebar", () => {
     );
     await setup.renderOnce();
 
-    const action = at(setup.captureCharFrame(), "see statistics");
+    const action = at(setup.captureCharFrame(), "see tools statistics");
     await setup.mockMouse.click(action.x, action.y);
 
     expect(opened).toBe(1);
@@ -156,7 +156,7 @@ describe("tools sidebar", () => {
     // folded rows are gone.
     expect(frame()).toContain("▶ Tools (3 calls)");
     expect(frame()).not.toContain("read");
-    const action = at(frame(), "see statistics");
+    const action = at(frame(), "see tools statistics");
     await setup.mockMouse.click(action.x, action.y);
 
     expect(opened).toBe(1);

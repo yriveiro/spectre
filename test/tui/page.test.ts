@@ -1333,9 +1333,10 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
     },
   ];
 
-  test("the sidebar section lists each profile when open, toggles on header click, and renders the summary when collapsed", async () => {
+  test("the sidebar section lists each profile when open, the header opens the modal, the wedge toggles, and the statistics row opens the panel", async () => {
     let openState = true;
     let modalOpened = 0;
+    let historyOpened = 0;
     const openSetup = await testRender(
       () =>
         sidebarSection({
@@ -1347,9 +1348,12 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
           onOpenModal: () => {
             modalOpened += 1;
           },
+          onOpenHistory: () => {
+            historyOpened += 1;
+          },
           rows: () => sidebarRows,
         }),
-      { width: 42, height: 10 },
+      { width: 42, height: 12 },
     );
     await openSetup.renderOnce();
 
@@ -1364,6 +1368,7 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
     expect(expanded).toContain("pinned");
     expect(expanded).toContain("Error");
     expect(expanded).not.toContain("No spectre.json — using defaults");
+    expect(expanded).toContain("see routing statistics");
 
     const workerLine = expanded.split("\n").findIndex((one) => one.includes("worker"));
     expect(workerLine).toBeGreaterThan(-1);
@@ -1373,9 +1378,24 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
 
     const headerLine = expanded.split("\n").findIndex((one) => one.includes("Routing"));
     expect(headerLine).toBeGreaterThan(-1);
-    await openSetup.mockMouse.click(2, headerLine);
+    // The title opens the modal and does not collapse the box.
+    await openSetup.mockMouse.click(4, headerLine);
+    await openSetup.flush();
+    expect(modalOpened).toBe(2);
+    expect(openState).toBe(true);
+    // The wedge is its own box: it toggles and opens nothing.
+    await openSetup.mockMouse.click(0, headerLine);
     await openSetup.flush();
     expect(openState).toBe(false);
+    expect(modalOpened).toBe(2);
+
+    const statisticsLine = expanded
+      .split("\n")
+      .findIndex((one) => one.includes("see routing statistics"));
+    expect(statisticsLine).toBeGreaterThan(-1);
+    await openSetup.mockMouse.click(2, statisticsLine);
+    await openSetup.flush();
+    expect(historyOpened).toBe(1);
     await openSetup.dispose();
 
     const closedSetup = await testRender(
@@ -1387,6 +1407,7 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
             openState = !openState;
           },
           onOpenModal: () => {},
+          onOpenHistory: () => {},
           rows: () => sidebarRows,
         }),
       { width: 42, height: 10 },
@@ -1395,6 +1416,7 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
 
     const collapsed = closedSetup.captureCharFrame();
     expect(collapsed).toContain("▶ Routing (1 active, 1 error · Session)");
+    expect(collapsed).toContain("see routing statistics");
     expect(collapsed).not.toContain("muse");
     expect(collapsed).not.toContain("●●●○");
     await closedSetup.dispose();
@@ -1441,6 +1463,7 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
           onOpenModal: () => {
             modalOpened += 1;
           },
+          onOpenHistory: () => {},
           rows: () => defaultRows,
           usingDefaults: () => true,
           method: () => "JEV",
@@ -1460,7 +1483,8 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
     expect(lines[refactorIdx + 2]).toContain("⚠ No spectre.json — using defaults");
 
     const nonEmptyIndices = lines.flatMap((line, idx) => (line.trim().length > 0 ? [idx] : []));
-    expect(nonEmptyIndices.at(-1)).toBe(refactorIdx + 2);
+    expect(nonEmptyIndices.at(-1)).toBe(refactorIdx + 4);
+    expect(frameText).toContain("see routing statistics");
 
     const captured = defaultSetup.captureSpans();
     const dotSpans = captured.lines
@@ -1487,6 +1511,7 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
           open: () => true,
           onToggle: () => {},
           onOpenModal: () => {},
+          onOpenHistory: () => {},
           rows: () => defaultRows,
           usingDefaults: () => false,
           method: () => "Session",
@@ -1511,6 +1536,7 @@ describe("the sidebar section shows the routing status and collapses like MCP", 
           open: () => false,
           onToggle: () => {},
           onOpenModal: () => {},
+          onOpenHistory: () => {},
           rows: () => defaultRows,
           usingDefaults: () => true,
           method: () => "Session",
@@ -1730,12 +1756,14 @@ describe("the entrypoint opens the modal under the host's runtime plugin loader"
     };
 
     await mod.default.setup(fullContext);
-    // The entrypoint registers routing's two slots first, then the tools
+    // The entrypoint registers routing's three slots first (the sidebar box,
+    // the subagent footer, and the history session panel), then the tools
     // box's sidebar claim and its session panel, then the session-breakdown
     // box's sidebar claim and its session panel.
     expect(slotTargets).toEqual([
       "sidebar.content",
       "session.composer.top",
+      "session.panel",
       "sidebar.content",
       "session.panel",
       "sidebar.content",
