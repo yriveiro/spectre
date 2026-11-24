@@ -3,7 +3,7 @@ import type { SessionMessageInfo, ToolContent } from "@opencode/client";
 import type { Plugin } from "@opencode/plugin/tui";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
-import { foldBands, routingBlade } from "../../tui/routing/blade.tsx";
+import { routingBlade } from "../../tui/routing/blade.tsx";
 import type { Profile } from "../../tui/routing/data.ts";
 import { expandBands, judgeView, routingCalls } from "../../tui/routing/history.ts";
 
@@ -308,30 +308,8 @@ describe("routing history blade layout", () => {
     await setup.dispose();
   });
 
-  test("the detail band folds values to the label column and caps at a constant shape", () => {
-    // Every value starts at the label column; a folded value's continuation
-    // lines line up under it.
-    expect(foldBands([{ label: "judge", value: "a b" }, { label: "", value: "c" }], 20, 5)).toEqual([
-      "judge     a b",
-      "          c",
-    ]);
-    expect(foldBands([{ label: "spent", value: "aa bb cc dd" }], 13, 3)).toEqual([
-      "spent     aa",
-      "          bb",
-      "          cc…",
-    ]);
-    // The cap cuts at a band boundary too, and says so on the last line.
-    expect(
-      foldBands(
-        [
-          { label: "answer", value: "designer" },
-          { label: "also", value: "explorer" },
-        ],
-        20,
-        1,
-      ),
-    ).toEqual(["answer    designer…"]);
-  });
+  // The fold itself — label column, cap, ellipsis — is asserted as pure
+  // data in blade-layout.test.ts, where foldBands lives.
 
   // A click-then-select assertion cannot live here: bun resolves bare
   // `solid-js` through the `node` condition to the SSR no-op build, so

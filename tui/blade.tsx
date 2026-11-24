@@ -269,21 +269,25 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
    * bands it separates. */
   const air = (): JSX.Element => h("box", { height: 1, flexShrink: 0 });
 
-  /** The head over one section's rows: the section's own label in the
-   * flexible column, every other head aligned like its cells. */
+  /** The head over one section's rows: every column's head in declaration
+   * order — the flexible column's slot carries the section's own label —
+   * each aligned like its cells. */
   const sectionHead = (label: string, onPick: (() => void) | undefined): JSX.Element =>
     h(
       "box",
       { flexDirection: "row", gap: 1, width: "100%", flexShrink: 0, onMouseUp: onPick },
       h("text", { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 }, " "),
-      h(
-        "text",
-        { fg: theme.text.faint, wrapMode: "none", truncate: true, flexGrow: 1, flexShrink: 1, minWidth: 0 },
-        label,
-      ),
       ...resolved()
-        .filter((one) => one.width > 0 && !one.flex)
-        .map((one) => headCell(theme, one)),
+        .filter((one) => one.width > 0)
+        .map((one) =>
+          one.flex
+            ? h(
+                "text",
+                { fg: theme.text.faint, wrapMode: "none", truncate: true, flexGrow: 1, flexShrink: 1, minWidth: 0 },
+                label,
+              )
+            : headCell(theme, one),
+        ),
     );
 
   return h(
@@ -431,14 +435,24 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
                           "box",
                           { flexDirection: "row", gap: 1, width: "100%", flexShrink: 0 },
                           h("text", { fg: theme.text.faint, wrapMode: "none", flexShrink: 0 }, " "),
-                          h(
-                            "text",
-                            { fg: theme.text.faint, wrapMode: "none", truncate: true, flexGrow: 1, flexShrink: 1, minWidth: 0 },
-                            flexHeaderOf(pickedResolved()),
-                          ),
                           ...pickedResolved()
-                            .filter((one) => one.width > 0 && !one.flex)
-                            .map((one) => headCell(theme, one)),
+                            .filter((one) => one.width > 0)
+                            .map((one) =>
+                              one.flex
+                                ? h(
+                                    "text",
+                                    {
+                                      fg: theme.text.faint,
+                                      wrapMode: "none",
+                                      truncate: true,
+                                      flexGrow: 1,
+                                      flexShrink: 1,
+                                      minWidth: 0,
+                                    },
+                                    flexHeaderOf(pickedResolved()),
+                                  )
+                                : headCell(theme, one),
+                            ),
                         ),
                       h(
                         "box",
