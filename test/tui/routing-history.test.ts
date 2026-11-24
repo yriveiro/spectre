@@ -10,10 +10,11 @@ import {
 } from "../../tui/routing/history.ts";
 
 /**
- * The routing call the transcript holds: a completed `spectre_routing` part
- * whose single text part is the JSON of the tool's declared output, the same
- * persistence shape `normalizeContent` writes (`packages/core/src/tool/
- * runtime.ts` at v2.3.0).
+ * The direct routing call shape: a completed `spectre_routing` part whose
+ * single text part is the JSON of the tool's declared output, the persistence
+ * shape `normalizeContent` writes (`packages/core/src/tool/runtime.ts` at
+ * v2.3.0) when the host lists the tool itself. The default code-mode shape is
+ * `executePart` below.
  */
 const routingPart = (input: Record<string, JsonValue>, output: unknown) => ({
   type: "tool" as const,
@@ -56,7 +57,8 @@ type RoutingTestPart =
   | ReturnType<typeof routingPart>
   | ReturnType<typeof failedRoutingPart>
   | ReturnType<typeof runningRoutingPart>
-  | ReturnType<typeof otherTool>;
+  | ReturnType<typeof otherTool>
+  | ReturnType<typeof executePart>;
 
 const assistant = (parts: ReadonlyArray<RoutingTestPart>): SessionMessageInfo => ({
   id: `msg_${seq++}`,
@@ -77,6 +79,28 @@ const otherTool = (name: string) => ({
     content: [{ type: "text" as const, text: "ok" }] as [ToolContent, ...ToolContent[]],
   },
   time: { created: 1 },
+});
+
+/**
+ * The default code-mode shape: a completed `execute` part whose metadata
+ * carries the inner calls and whose text content is the program's return,
+ * which is the routing page when the program passed the call's answer
+ * through (`packages/core/src/codemode/tool.ts` at v2.3.0).
+ */
+const executePart = (calls: ReadonlyArray<Record<string, JsonValue>>, output: unknown) => ({
+  type: "tool" as const,
+  id: `call_execute_${Math.random().toString(36).slice(2)}`,
+  name: "execute",
+  state: {
+    status: "completed" as const,
+    input: {},
+    content: [{ type: "text" as const, text: JSON.stringify(output) }] as [
+      ToolContent,
+      ...ToolContent[],
+    ],
+    metadata: { toolCalls: [...calls] },
+  },
+  time: { created: 1, ran: 2, completed: 3 },
 });
 
 const model = (ref: string) => ({
@@ -182,6 +206,80 @@ describe("routing history fold", () => {
     ]);
     expect(calls).toHaveLength(1);
     expect(calls[0]?.task).toBe("t");
+  });
+
+  test("an execute part's inner routing call folds like a direct one", () => {
+    const calls = routingCalls([
+      assistant([
+        executePart(
+          [
+            {
+              tool: "spectre.routing",
+              status: "completed",
+              input: { task: "decide how the settings are laid out" },
+            },
+          ],
+          resolvedPage,
+        ),
+      ]),
+    ]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.status).toBe("resolved");
+    expect(calls[0]?.task).toBe("decide how the settings are laid out");
+    expect(calls[0]?.judge?.status).toBe("used");
+    expect(calls[0]?.spent?.ref).toBe("acme/falcon-max#high");
+    expect(calls[0]?.spent?.crosscheck).toBe("acme/falcon-mini#high");
+  });
+
+  test("an execute part with several routing calls keeps only the program's return", () => {
+    const calls = routingCalls([
+      assistant([
+        executePart(
+          [
+            { tool: "spectre.routing", status: "completed", input: { task: "first" } },
+            { tool: "spectre.routing", status: "completed", input: { task: "second" } },
+          ],
+          resolvedPage,
+        ),
+      ]),
+    ]);
+    expect(calls.map((one) => one.task)).toEqual(["first", "second"]);
+    expect(calls[0]?.status).toBe("unknown");
+    expect(calls[0]?.detail).toContain("only the program's return");
+    expect(calls[1]?.status).toBe("resolved");
+    expect(calls[1]?.task).toBe("second");
+  });
+
+  test("an inner call that failed or never settled is a row with that status", () => {
+    const calls = routingCalls([
+      assistant([
+        executePart(
+          [
+            { tool: "spectre.routing", status: "error", input: { task: "boom" } },
+            { tool: "spectre.routing", status: "running", input: { task: "later" } },
+          ],
+          { answer: "the program returned something unrelated" },
+        ),
+      ]),
+    ]);
+    expect(calls.map((one) => one.status)).toEqual(["error", "running"]);
+    expect(calls[0]?.detail).toBe("the call failed inside the program");
+  });
+
+  test("an execute part that returned something else says so, and one with no routing calls is no row", () => {
+    const calls = routingCalls([
+      assistant([
+        executePart([{ tool: "spectre.routing", status: "completed", input: { task: "one" } }], {
+          not: "a routing page",
+        }),
+        executePart([{ tool: "spectre_brain_assert", status: "completed", input: {} }], {
+          ok: true,
+        }),
+      ]),
+    ]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.status).toBe("unknown");
+    expect(calls[0]?.detail).toContain("did not return this call's answer");
   });
 
   test("a revert boundary cuts the calls from it on, and an unknown one cuts nothing", () => {

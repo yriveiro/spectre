@@ -174,9 +174,10 @@ describe("routing history blade layout", () => {
     const bands = expandBands(judged, view());
     const byLabel = new Map(bands.map((one) => [one.label, one.value]));
 
-    expect(byLabel.get("judge")).toBe("JEV (acme/judge-1)");
+    expect(byLabel.get("judge")).toBe("JEV (acme/judge-1) (reconstructed)");
     expect(byLabel.get("asked")).toContain("One task statement follows");
-    expect(byLabel.get("asked")).toContain("(reconstructed)");
+    // The reconstruction marker sits on the judge band, so the question itself stays plain.
+    expect(byLabel.get("asked")).not.toContain("reconstructed");
     expect(bands.filter((one) => one.label === "").map((one) => one.value)).toContain(
       "designer — a design decision spans several files",
     );
@@ -189,7 +190,7 @@ describe("routing history blade layout", () => {
     if (named === undefined) throw new Error("the fold lost the caller-named call");
     const namedBands = expandBands(named, view());
     const namedByLabel = new Map(namedBands.map((one) => [one.label, one.value]));
-    expect(namedByLabel.get("judge")).toBe("JEV (acme/judge-1)");
+    expect(namedByLabel.get("judge")).toBe("JEV (acme/judge-1) (reconstructed)");
     expect(namedByLabel.get("skipped")).toBe(
       "The call names a profile, so the choice is already made.",
     );
@@ -219,6 +220,68 @@ describe("routing history blade layout", () => {
     const frame = setup.captureCharFrame();
     expect(frame).toContain("No routing calls yet.");
     expect(frame).not.toContain("Σ");
+    await setup.dispose();
+  });
+
+  test("the code-mode shape renders rows too", async () => {
+    // The default path: the session calls `spectre.routing` inside the host's
+    // `execute` tool, so the fold reads the part's metadata and return.
+    const codeModeMessages: ReadonlyArray<SessionMessageInfo> = [
+      {
+        id: "msg_0",
+        time: { created: 1 },
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "opencode-go", id: "glm-5.3" },
+        content: [
+          {
+            type: "tool" as const,
+            id: "call_execute_1",
+            name: "execute",
+            state: {
+              status: "completed" as const,
+              input: {},
+              content: [{ type: "text" as const, text: JSON.stringify(judgedPage) }] as [
+                ToolContent,
+                ...ToolContent[],
+              ],
+              metadata: {
+                toolCalls: [
+                  {
+                    tool: "spectre.routing",
+                    status: "completed",
+                    input: { task: "decide how the settings are laid out" },
+                  },
+                ],
+              },
+            },
+            time: {
+              created: 1_700_000_000_000,
+              ran: 1_700_000_001_000,
+              completed: 1_700_000_002_000,
+            },
+          },
+        ],
+      },
+    ];
+    const codeModeContext = {
+      ...context,
+      data: {
+        session: {
+          get: () => ({ title: "draft session" }),
+          message: { list: () => codeModeMessages },
+        },
+      },
+    } as unknown as Plugin.Context;
+    const setup = await testRender(
+      () => routingBlade({ context: codeModeContext, panel, judgeView: view }),
+      { width: 88, height: 20 },
+    );
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+    expect(frame).toContain("decide how the settings are laid out");
+    expect(frame).toContain("→ designer (0.42)");
+    expect(frame).toContain("Σ 1 calls · 1 judged · 0 agent-chosen");
     await setup.dispose();
   });
 
