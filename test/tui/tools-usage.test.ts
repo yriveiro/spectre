@@ -1,13 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionMessageInfo, ToolContent } from "@opencode/client";
-import {
-  activeMessages,
-  displayName,
-  formatTokens,
-  maxTokens,
-  toolUsage,
-  totalTokens,
-} from "../../tui/tools/usage.ts";
+import { activeMessages } from "../../tui/render.ts";
+import { displayName, formatTokens, toolUsage, totalTokens } from "../../tui/tools/usage.ts";
+import { tokenUsage as tokens } from "./fixture.ts";
 
 const toolPart = (name: string) => ({
   type: "tool" as const,
@@ -19,13 +14,6 @@ const toolPart = (name: string) => ({
     content: [{ type: "text", text: "ok" }] as [ToolContent, ...ToolContent[]],
   },
   time: { created: 1 },
-});
-
-const tokens = (input: number, output = 0, reasoning = 0, read = 0, write = 0) => ({
-  input,
-  output,
-  reasoning,
-  cache: { read, write },
 });
 
 let seq = 0;
@@ -146,10 +134,5 @@ describe("usage presentation", () => {
     expect(displayName("spectre_brain_assert")).toBe("brain_assert");
     expect(displayName("read")).toBe("read");
     expect(displayName("other_read")).toBe("other_read");
-  });
-
-  test("the bar peak is the busiest tool, and zero tools peak at zero", () => {
-    expect(maxTokens(toolUsage([assistant([toolPart("read")], tokens(500))]).tools)).toBe(500);
-    expect(maxTokens(toolUsage([]).tools)).toBe(0);
   });
 });

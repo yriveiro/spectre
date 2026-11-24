@@ -9,7 +9,7 @@ import {
   judgeRef,
   KNOWN_ORDER,
 } from "../../tools/definitions/routing/index.ts";
-import { bindKeyboard, field, h, type Palette, palette, show } from "../render.ts";
+import { bindKeyboard, field, h, type Palette, palette, show, trimPrefix } from "../render.ts";
 import {
   addProfilePrompt,
   applied,
@@ -481,9 +481,6 @@ const providerBar = (input: {
     }),
   );
 };
-
-const trimPrefix = (value: string, prefix: string): string =>
-  value.startsWith(prefix) ? value.slice(prefix.length) : value;
 
 const shortModelId = (value: string | undefined): string | undefined => {
   if (value === undefined) return undefined;

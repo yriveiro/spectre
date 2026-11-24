@@ -288,7 +288,11 @@ session-breakdown sidebar box and session panel),
 `tui/artifacts/` — and registers itself through a `register<Feature>(context)`
 call from the entrypoint, which returns its own dispose. The shared render
 helpers stay at `tui/render.ts`, one level up, so a feature never imports
-another feature's internals. A feature that grows a second surface adds
+another feature's internals. A feature's session panel is a descriptor over
+the shared blade engine (`tui/blade.tsx`) and its geometry
+(`tui/blade-layout.ts`), which sit beside `render.ts` and register nothing.
+The engine owns the skeleton, the selections, the keymap and the folds, and
+the blade owns its rows, its cells and its words. A feature that grows a second surface adds
 siblings beside its own `index.tsx`, the same rule as the definitions folders.
 
 ## Layout and how OpenCode finds the entrypoint

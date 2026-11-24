@@ -6,6 +6,7 @@ import {
   NONE_LABEL,
   QUESTION_INSTRUCTIONS,
 } from "../../tools/definitions/routing/index.ts";
+import { activeMessages } from "../render.ts";
 import type { Profile } from "./data.ts";
 
 /**
@@ -70,20 +71,6 @@ export type RoutingCall = {
 
 type AssistantMessage = Extract<SessionMessageInfo, { readonly type: "assistant" }>;
 type ToolPart = Extract<AssistantMessage["content"][number], { readonly type: "tool" }>;
-
-/**
- * The messages a session actually stands on. A revert boundary marks the
- * message the session was rewound to, and everything from it on never
- * happened. A boundary the list cannot name cuts nothing.
- */
-const activeMessages = (
-  messages: ReadonlyArray<SessionMessageInfo>,
-  boundary: string | undefined,
-): ReadonlyArray<SessionMessageInfo> => {
-  if (boundary === undefined) return messages;
-  const at = messages.findIndex((message) => message.id === boundary);
-  return at === -1 ? messages : messages.slice(0, at);
-};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -409,13 +396,11 @@ export const expandBands = (one: RoutingCall, view: JudgeView): ReadonlyArray<De
     bands.push({ label: "·", value: "the answer carries no readable judge field" });
   } else if (one.judge.status === "used") {
     const judge = one.judge;
-    // The arm, the question and the choices all come from the current
-    // config, not the call's record, so the marker sits on the band that
-    // opens the group.
+    // The transcript's own record leads — the answer, the alternatives, the
+    // spent model — and the reconstruction (the question and its choices)
+    // follows, because a detail band capped to a constant shape must cut
+    // the reconstruction before it cuts the record.
     bands.push({ label: "judge", value: `${arm} (reconstructed)` });
-    if (view.instructions !== undefined) bands.push({ label: "asked", value: view.instructions });
-    for (const choice of view.choices)
-      bands.push({ label: "", value: `${choice.profile} — ${choice.description}` });
     const escalated =
       judge.escalated === true
         ? `, spent one step above at ${judge.effort ?? "its own effort"}`
@@ -431,6 +416,9 @@ export const expandBands = (one: RoutingCall, view: JudgeView): ReadonlyArray<De
           .map((other) => `${other.profile} ${other.probability.toFixed(2)}`)
           .join(" · "),
       });
+    if (view.instructions !== undefined) bands.push({ label: "asked", value: view.instructions });
+    for (const choice of view.choices)
+      bands.push({ label: "", value: `${choice.profile} — ${choice.description}` });
   } else {
     bands.push({ label: "judge", value: `${arm} (reconstructed)` });
     bands.push({ label: "skipped", value: one.judge.reason });

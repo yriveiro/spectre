@@ -100,8 +100,6 @@ describe("tools blade layout", () => {
         toolsBlade({
           context,
           panel,
-          sortBy: () => "calls",
-          onSortToggle: () => undefined,
         }),
       { width: 52, height: 20 },
     );
@@ -115,23 +113,23 @@ describe("tools blade layout", () => {
     expect(isRule(lines[1])).toBe(true);
     expect(isBlank(lines[2])).toBe(true);
 
-    // Column labels sit in their own band between two hairlines. Both columns
-    // carry one, at the exact width of the cells they name.
+    // Column labels sit in their own band between two hairlines, at the
+    // exact width of the cells they name.
     expect(lines[3]).toContain("tool");
-    expect(lines[3]).toContain("calls▾");
+    expect(lines[3]).toContain("calls");
     expect(lines[3]).toContain("tokens");
     expect(isRule(lines[4])).toBe(true);
     expect(isBlank(lines[5])).toBe(true);
 
-    // Rows sorted by calls, with the share bar the width admits.
+    // Rows in the report's own order, with the share bar the width admits.
     expect(lines[6]).toContain("▌ read");
     expect(lines[6]).toContain("█");
     expect(lines[7]).toContain("brain_assert");
     expect(lines[8]).toContain("edit");
 
     // The numbers end exactly where their headers end, in every row.
-    const callsEnd = (lines[3] ?? "").indexOf("calls▾") + "calls▾".length;
-    const tokensEnd = (lines[3] ?? "").indexOf("tokens") + "tokens".length + 1;
+    const callsEnd = (lines[3] ?? "").indexOf("calls") + "calls".length;
+    const tokensEnd = (lines[3] ?? "").indexOf("tokens") + "tokens".length;
     expect(callsEnd).toBeGreaterThan(0);
     expect(tokensEnd).toBeGreaterThan("tokens".length);
     expect((lines[6] ?? "").indexOf("2") + 1).toBe(callsEnd);
@@ -147,36 +145,27 @@ describe("tools blade layout", () => {
     expect(lines[11]).toContain("Σ 3 tools · 4 calls");
     expect(lines[12]).toContain("cache↻");
     expect(isBlank(lines[13])).toBe(true);
-    // The sort hint truncates in the middle to keep its key; the rest stay whole.
-    expect(lines[14]).toContain("sort");
-    expect(lines[14]).toContain("(t)");
-    expect(lines[14]).toContain("· ↑↓ select · ↵ expand");
+    // No sort hint and no letter keys: only select, expand and close.
+    expect(lines[14]).toContain("↑↓ select · ↵ expand");
     expect(lines[14]).toContain("esc close (t)");
+    expect(lines[14]).not.toContain("sort");
     expect(isBlank(lines[15])).toBe(true);
 
     await setup.dispose();
   });
 
-  test("clicks through the banded layout still reach the sort header and the close box", async () => {
-    let toggled = 0;
+  test("a click still reaches the close box", async () => {
     let closed = 0;
     const setup = await testRender(
       () =>
         toolsBlade({
           context,
           panel: { ...panel, close: () => (closed += 1) },
-          sortBy: () => "calls",
-          onSortToggle: () => (toggled += 1),
         }),
       { width: 52, height: 20 },
     );
     await setup.renderOnce();
     const lines = setup.captureCharFrame().split("\n");
-
-    const sort = lines.findIndex((line) => line.includes("calls▾"));
-    expect(sort).toBeGreaterThanOrEqual(0);
-    await setup.mockMouse.click(lines[sort]?.indexOf("calls▾") ?? -1, sort);
-    expect(toggled).toBe(1);
 
     const close = lines[0]?.indexOf("×") ?? -1;
     expect(close).toBeGreaterThanOrEqual(0);
@@ -186,10 +175,9 @@ describe("tools blade layout", () => {
     await setup.dispose();
   });
 
-  // A click-then-expand assertion cannot live here: bun resolves bare
-  // `solid-js` through the `node` condition to the SSR no-op build, while
-  // `@opentui/solid` imports `dist/solid.js` directly, so signal-driven
-  // re-renders do not subscribe under `bun test`. The host resolves the
-  // reactive build (the routing feature's controls prove it), and the
-  // expansion path was verified manually under `bun test --conditions solid`.
+  // A click-then-expand assertion cannot live in the default run: bun
+  // resolves bare `solid-js` to the server build, so signal re-renders do
+  // not repaint. Under `--conditions=browser` effects subscribe and a
+  // probe repaints, but that condition is not this suite's, so the frames
+  // here assert the initial state and the layout as pure data.
 });

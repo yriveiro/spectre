@@ -137,11 +137,13 @@ const context = {
 
 const view = () => judgeView(profiles, { kind: "jev", model: "acme/judge-1" });
 
+const isRule = (line: string | undefined) => line !== undefined && /^─+$/.test(line.trim());
+
 describe("routing history blade layout", () => {
   test("title, column labels, newest-first rows and totals sit in separated bands", async () => {
     const setup = await testRender(() => routingBlade({ context, panel, judgeView: view }), {
       width: 88,
-      height: 20,
+      height: 32,
     });
     await setup.renderOnce();
     const lines = setup.captureCharFrame().split("\n");
@@ -157,17 +159,37 @@ describe("routing history blade layout", () => {
     expect(named).toBeLessThan(judged);
 
     expect(lines[named]).toContain("agent");
-    expect(lines[named]).toContain("acme/falcon-mini#high");
+    // The spent column caps below the longest ref, so the cell clips and
+    // the detail band below carries the whole ref.
+    expect(lines[named]).toContain("acme/falcon-mini#hi…");
     expect(lines[judged]).toContain("→ designer (0.42)");
     expect(lines[judged]).toContain("acme/falcon-max#high");
 
-    const totals = lines.find((one) => one.includes("Σ"));
-    expect(totals).toContain("2 calls · 1 judged · 1 agent-chosen");
-    expect(lines.some((one) => one.includes("sort oldest first (t)"))).toBe(true);
+    const totalsAt = lines.findIndex((one) => one.includes("Σ"));
+    expect(lines[totalsAt]).toContain("2 calls · 1 judged · 1 agent-chosen");
+    // No sort hint and no letter keys: only select and close.
+    expect(lines.some((one) => one.includes("sort"))).toBe(false);
+    expect(lines.some((one) => one.includes("↑↓ select"))).toBe(true);
+
+    // The detail band below the totals reads the selected row, which is
+    // selected by default: every value starts at the label column.
+    const bandRule = lines.findIndex((line, at) => at > totalsAt && isRule(line));
+    expect(bandRule).toBeGreaterThan(totalsAt);
+    const bandLines = lines.slice(bandRule + 2, bandRule + 6);
+    expect(bandLines[0]).toContain("judge     JEV (acme/judge-1) (reconstructed)");
+    expect(bandLines[1]).toContain("skipped   The call names a profile");
+    expect(bandLines[2]).toContain("spent     acme/falcon-mini#high");
+    expect(bandLines[3]).toContain("profile   explorer (named by the caller)");
+    const valueColumn = (bandLines[0] ?? "").indexOf("JEV");
+    expect((bandLines[1] ?? "").indexOf("The call")).toBe(valueColumn);
+    expect((bandLines[3] ?? "").indexOf("explorer (named")).toBe(valueColumn);
+
+    // The expansion keys are gone: selection alone drives the band.
+    expect(lines.some((one) => one.includes("↵ expand"))).toBe(false);
     await setup.dispose();
   });
 
-  test("the expanded bands show the reconstructed question, the answer, the alternatives and the spent model", () => {
+  test("the detail band's bands show the reconstructed question, the answer, the alternatives and the spent model", () => {
     const calls = routingCalls(messages);
     const judged = calls.find((one) => one.task === "decide how the settings are laid out");
     if (judged === undefined) throw new Error("the fold lost the judged call");
@@ -275,21 +297,25 @@ describe("routing history blade layout", () => {
     } as unknown as Plugin.Context;
     const setup = await testRender(
       () => routingBlade({ context: codeModeContext, panel, judgeView: view }),
-      { width: 88, height: 20 },
+      { width: 88, height: 32 },
     );
     await setup.renderOnce();
     const frame = setup.captureCharFrame();
     expect(frame).toContain("decide how the settings are laid out");
     expect(frame).toContain("→ designer (0.42)");
     expect(frame).toContain("Σ 1 calls · 1 judged · 0 agent-chosen");
+    // The judged call is the only row, so the band holds its answer too.
+    expect(frame).toContain("answer    designer (0.42)");
     await setup.dispose();
   });
 
-  // A click-then-expand assertion cannot live here: bun resolves bare
-  // `solid-js` through the `node` condition to the SSR no-op build, so
-  // signal-driven re-renders do not subscribe under `bun test`. Measured here:
-  // `bun test --conditions solid` did not subscribe either, so the expanded
-  // bands are asserted as pure data (`expandBands` above) instead, and the
-  // click wiring is the same `onMouseUp` → `toggleExpanded` the tools blade
-  // uses.
+  // The fold itself — label column, cap, ellipsis — is asserted as pure
+  // data in blade-layout.test.ts, where foldBands lives.
+
+  // A click-then-select assertion cannot live in the default run: bun
+  // resolves bare `solid-js` to the server build, so signal re-renders do
+  // not repaint. Under `--conditions=browser` effects subscribe and a
+  // probe repaints, but that condition is not this suite's, so the frames
+  // above assert the initial state and the fold and the bands as pure
+  // data.
 });

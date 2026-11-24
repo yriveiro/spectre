@@ -44,7 +44,7 @@ type MutableDraft = Editable<Draft>;
 
 const PAGE = "Routing";
 
-/** The `session.panel` name the history blade answers to, and the slash command that opens it. */
+/** The `session.panel` name the history blade answers to. The sidebar fold opens it by click. */
 const HISTORY_PANEL = "spectre.routing.history";
 
 const VIEW = "view";
@@ -897,42 +897,8 @@ export const registerRouting = (
       ),
   });
 
-  // `keymap.layer` registers for the plugin's lifetime and returns nothing,
-  // the same bare call the tools and artifacts features make.
-  context.keymap.layer(() => ({
-    mode: "global",
-    commands: [
-      {
-        id: "spectre.routing.history",
-        title: "Routing statistics",
-        description: "Open the session panel with the routing calls and their judge answers",
-        group: "Spectre",
-        palette: true as const,
-        slash: { name: "routing-history" } as const,
-        run: () => {
-          const route = context.ui.router.current();
-          if (route.type !== "session") {
-            context.ui.toast.show({
-              title: "Routing",
-              message: "Routing history is per session; open a session first.",
-              variant: "info",
-            });
-            return;
-          }
-          const current = context.ui.panel.current();
-          if (
-            current !== undefined &&
-            current.name === HISTORY_PANEL &&
-            current.sessionID === route.sessionID
-          ) {
-            context.ui.panel.close();
-            return;
-          }
-          context.ui.panel.open(HISTORY_PANEL);
-        },
-      },
-    ],
-  }));
+  // The panel opens by clicking the history fold in the sidebar, not by a
+  // command: the blocks are the way in, so no palette entry claims it.
 
   return {
     open: () => {

@@ -1,4 +1,5 @@
 import type { SessionMessageInfo } from "@opencode/client";
+import { activeMessages } from "../render.ts";
 
 /**
  * Tool-call accounting for one session, derived from its messages.
@@ -77,26 +78,6 @@ const addShare = (
 export const totalTokens = (tokens: TokenTotals): number =>
   tokens.input + tokens.output + tokens.reasoning + tokens.cacheRead + tokens.cacheWrite;
 
-/**
- * The messages a session actually stands on. A revert boundary
- * (`Session.revert.messageID`) marks the message the session was rewound to,
- * and everything from it on never happened. An unknown boundary counts for
- * nothing: a tally is not a bill, and the cut only bites when the host can
- * name the message.
- *
- * Compaction does not cut here. The context window forgets messages before a
- * completed compaction, but the calls still happened and this is a tally of
- * the session, not of the window.
- */
-export const activeMessages = (
-  messages: ReadonlyArray<SessionMessageInfo>,
-  boundary: string | undefined,
-): ReadonlyArray<SessionMessageInfo> => {
-  if (boundary === undefined) return messages;
-  const at = messages.findIndex((message) => message.id === boundary);
-  return at === -1 ? messages : messages.slice(0, at);
-};
-
 export const toolUsage = (
   messages: ReadonlyArray<SessionMessageInfo>,
   boundary?: string,
@@ -131,10 +112,6 @@ export const toolUsage = (
 
   return { tools, totals, prose };
 };
-
-/** The biggest number in the report; the share bar scales against it. */
-export const maxTokens = (tools: ReadonlyArray<ToolUsage>): number =>
-  tools.reduce((peak, one) => Math.max(peak, totalTokens(one.tokens)), 0);
 
 const compact = new Intl.NumberFormat("en-US", {
   notation: "compact",

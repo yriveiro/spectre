@@ -5,7 +5,7 @@ import { toolsBlade } from "./blade.tsx";
 import { toolsSidebar } from "./sidebar.tsx";
 import { toolUsage } from "./usage.ts";
 
-/** The `session.panel` name the blade answers to, and the slash command that opens it. */
+/** The `session.panel` name the blade answers to. The sidebar box opens it by click. */
 export const PANEL = "spectre.tools";
 
 const VIEW = "tools.view";
@@ -21,12 +21,6 @@ export const registerTools = (context: Plugin.Context): (() => void) => {
     initial: { open: true },
   });
   const [open, setOpen] = createSignal(view.open ?? true);
-
-  // Sort order survives hot reloads but not a TUI restart: it is a viewing
-  // choice, not a durable preference.
-  const [sort, setSort] = context.storage.memory<{ by: "calls" | "tokens" }>("tools.sort", {
-    initial: { by: "calls" as const },
-  });
 
   const usage = (sessionID: string) => {
     const boundary = context.data.session.get(sessionID)?.revert?.messageID;
@@ -62,49 +56,12 @@ export const registerTools = (context: Plugin.Context): (() => void) => {
           toolsBlade({
             context,
             panel,
-            sortBy: () => sort.by,
-            onSortToggle: () =>
-              setSort((draft) => {
-                draft.by = draft.by === "calls" ? "tokens" : "calls";
-              }),
           }),
       ),
   });
 
-  context.keymap.layer(() => ({
-    mode: "global",
-    commands: [
-      {
-        id: "spectre.tools.open",
-        title: "Tools usage",
-        description: "Open the session panel with tool calls and token usage",
-        group: "Spectre",
-        palette: true as const,
-        slash: { name: "tools" } as const,
-        run: () => {
-          const route = context.ui.router.current();
-          if (route.type !== "session") {
-            context.ui.toast.show({
-              title: "Tools",
-              message: "Tool usage is per session; open a session first.",
-              variant: "info",
-            });
-            return;
-          }
-          const current = context.ui.panel.current();
-          if (
-            current !== undefined &&
-            current.name === PANEL &&
-            current.sessionID === route.sessionID
-          ) {
-            context.ui.panel.close();
-            return;
-          }
-          context.ui.panel.open(PANEL);
-        },
-      },
-    ],
-  }));
+  // The panel opens by clicking the sidebar box, not by a command: the
+  // blocks are the way in, so no palette entry claims it.
 
   return () => {
     stopPanel();

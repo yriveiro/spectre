@@ -1,3 +1,4 @@
+import type { SessionMessageInfo } from "@opencode/client";
 import type { ResolvedTheme } from "@opencode/theme/tui";
 import { type KeyEvent, RGBA } from "@opentui/core";
 import {
@@ -160,6 +161,70 @@ export const h = (
 export const show = (when: () => unknown, render: () => JSX.Element): JSX.Element => {
   const cond = memo(() => Boolean(when()), true);
   return (() => (cond() ? render() : null)) as unknown as JSX.Element;
+};
+
+/** `value` without `prefix` when it starts with it, unchanged otherwise. */
+export const trimPrefix = (value: string, prefix: string): string =>
+  value.startsWith(prefix) ? value.slice(prefix.length) : value;
+
+/**
+ * The messages a session actually stands on, cut at its revert boundary:
+ * everything from the boundary message on never happened, and a boundary
+ * the list cannot name cuts nothing. One rule, shared by every table that
+ * tallies a transcript — a tally is not a bill.
+ */
+export const activeMessages = (
+  messages: ReadonlyArray<SessionMessageInfo>,
+  boundary: string | undefined,
+): ReadonlyArray<SessionMessageInfo> => {
+  if (boundary === undefined) return messages;
+  const at = messages.findIndex((message) => message.id === boundary);
+  return at === -1 ? messages : messages.slice(0, at);
+};
+
+/** A selection index clamped to a list that can shrink under it, so the
+ * marker, the bold row and the section below all agree on what is
+ * selected. Both bounds: `up` at the first row must stay at zero, not
+ * walk negative. */
+export const clampIndex = (at: number, count: number): number =>
+  Math.max(0, Math.min(at, count - 1));
+
+/**
+ * `text` word-folded to `width` columns, at most `maxLines`, the last
+ * visible line ending in an ellipsis when the fold cut anything. Exported
+ * for the layout tests, which assert blades' bands as pure data: the
+ * renderer's own word wrap is unbounded, and a band's height must not be.
+ */
+export const wrapLines = (text: string, width: number, maxLines: number): ReadonlyArray<string> => {
+  const cap = Math.max(1, width);
+  const lines: Array<string> = [];
+  const fold = (paragraph: string): void => {
+    let line = "";
+    for (const word of paragraph.split(/\s+/).filter((one) => one.length > 0)) {
+      const candidate = line === "" ? word : `${line} ${word}`;
+      if (candidate.length <= cap) {
+        line = candidate;
+        continue;
+      }
+      if (line !== "") lines.push(line);
+      // A word longer than the fold splits hard across lines.
+      let rest = word;
+      while (rest.length > cap) {
+        lines.push(rest.slice(0, cap));
+        rest = rest.slice(cap);
+      }
+      line = rest;
+    }
+    lines.push(line);
+  };
+  for (const paragraph of text.split("\n")) {
+    fold(paragraph);
+    if (lines.length > maxLines) break;
+  }
+  if (lines.length <= maxLines) return lines;
+  const cut = lines.slice(0, maxLines);
+  const last = cut[maxLines - 1] ?? "";
+  return [...cut.slice(0, -1), `${last.slice(0, Math.max(0, cap - 1))}…`];
 };
 
 /** A label in accent blue and its value in the muted text colour. */

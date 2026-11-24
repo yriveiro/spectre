@@ -1,4 +1,5 @@
 import type { ModelRef, SessionInfo, SessionMessageInfo, TokenUsageInfo } from "@opencode/client";
+import { activeMessages, trimPrefix } from "../render.ts";
 
 /**
  * Session usage grouped by routing profile, main agent, and whatever else
@@ -38,6 +39,8 @@ export type SubagentRun = {
   readonly index: number;
   /** First line of the prompt that started the run, without the subagent preamble. */
   readonly prompt: string;
+  /** The whole prompt text, preamble stripped; the label is its clipped first line. */
+  readonly promptText: string;
   /** The agent that produced the run's last model call. */
   readonly agent: string;
   readonly models: ReadonlyArray<string>;
@@ -94,7 +97,13 @@ export type SessionUsage = {
 
 const PREAMBLE = "You are a subagent spawned by another session.";
 
-const zero = (): TokenTotals => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 });
+const zero = (): TokenTotals => ({
+  input: 0,
+  output: 0,
+  reasoning: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+});
 
 const addTokens = (into: TokenTotals, from: TokenUsageInfo): TokenTotals => ({
   input: into.input + from.input,
@@ -120,27 +129,19 @@ export const modelRef = (ref: ModelRef): string =>
 
 const baseRef = (ref: string): string => ref.split("#")[0] ?? ref;
 
-/**
- * The messages a session actually stands on, cut at its revert boundary. The
- * same rule the tools panel applies: a tally is not a bill, and the cut only
- * bites when the host can name the message.
- */
-const activeMessages = (
-  messages: ReadonlyArray<SessionMessageInfo>,
-  boundary: string | undefined,
-): ReadonlyArray<SessionMessageInfo> => {
-  if (boundary === undefined) return messages;
-  const at = messages.findIndex((message) => message.id === boundary);
-  return at === -1 ? messages : messages.slice(0, at);
+/** The prompt message's whole body, with the subagent preamble stripped.
+ * The run's row label is its first line clipped; the expanded section
+ * under a clicked row reads the whole text. */
+const runBody = (text: string): string => {
+  const body = trimPrefix(text, PREAMBLE);
+  return body === text ? text : body.trimStart();
 };
 
-const runPrompt = (text: string): string => {
-  const body = text.startsWith(PREAMBLE) ? text.slice(PREAMBLE.length).trimStart() : text;
-  return (body.split("\n")[0] ?? "").trim().slice(0, 60);
-};
+const runLabel = (body: string): string => (body.split("\n")[0] ?? "").trim().slice(0, 60);
 
 type RunBuilder = {
-  prompt: string;
+  /** The prompt's whole body; the run's label is its clipped first line. */
+  body: string;
   agent: string;
   models: string[];
   tokens: TokenTotals;
@@ -159,8 +160,8 @@ const runsOf = (
 ): ReadonlyArray<SubagentRun> => {
   const runs: RunBuilder[] = [];
 
-  const open = (prompt: string, started?: number): RunBuilder => {
-    const run: RunBuilder = { prompt, agent: "", models: [], tokens: zero(), cost: 0, started };
+  const open = (body: string, started?: number): RunBuilder => {
+    const run: RunBuilder = { body, agent: "", models: [], tokens: zero(), cost: 0, started };
     runs.push(run);
     return run;
   };
@@ -168,7 +169,7 @@ const runsOf = (
   for (const message of messages) {
     if (message.type === "user") {
       if (runs.length === 0 || runs.at(-1)?.outcome !== undefined)
-        open(runPrompt(message.text), message.time.created);
+        open(runBody(message.text), message.time.created);
       continue;
     }
     if (message.type === "assistant") {
@@ -177,7 +178,8 @@ const runsOf = (
       // prompt: the tokens were spent, and a run that owns them is the
       // honest row. A closed run never absorbs new spend.
       const last = runs.at(-1);
-      const run = last === undefined || last.outcome !== undefined ? open("", message.time.created) : last;
+      const run =
+        last === undefined || last.outcome !== undefined ? open("", message.time.created) : last;
       run.agent = message.agent;
       run.models.push(modelRef(message.model));
       if (message.tokens !== undefined) run.tokens = addTokens(run.tokens, message.tokens);
@@ -196,7 +198,8 @@ const runsOf = (
 
   return runs.map((run, index) => ({
     index,
-    prompt: run.prompt,
+    prompt: runLabel(run.body),
+    promptText: run.body,
     agent: run.agent === "" ? fallbackAgent : run.agent,
     models: [...new Set(run.models)],
     tokens: run.tokens,
@@ -334,7 +337,9 @@ export const sessionUsage = (input: {
     row.children.add(input.rootID);
   }
   for (const run of rootRuns) {
-    const row = rows.get(rowKey({ kind: "main", name: undefined, agent: run.agent, ref: run.models.at(-1) }));
+    const row = rows.get(
+      rowKey({ kind: "main", name: undefined, agent: run.agent, ref: run.models.at(-1) }),
+    );
     if (row !== undefined) row.runs.push({ child: "main", run });
   }
   const rootSpend = compactionSpend(rootMessages);

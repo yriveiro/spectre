@@ -2,13 +2,7 @@ import type { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes } from "@opentui/core";
 import type { JSX } from "@opentui/solid";
 import { h, show } from "../render.ts";
-import {
-  formatCost,
-  formatTokens,
-  profileLabel,
-  type SessionUsage,
-  totalTokens,
-} from "./usage.ts";
+import { formatCost, formatTokens, profileLabel, type SessionUsage, totalTokens } from "./usage.ts";
 
 /** Rows the compact box shows before folding the rest into `+N more`. */
 const COMPACT_ROWS = 5;
@@ -41,9 +35,7 @@ export const subagentsSidebar = (input: {
         h(
           "box",
           { flexDirection: "row", gap: 1, width: "100%", onMouseUp: input.onToggle },
-          h("text", { fg: input.theme.text.base, flexShrink: 0 }, () =>
-            input.open() ? "▼" : "▶",
-          ),
+          h("text", { fg: input.theme.text.base, flexShrink: 0 }, () => (input.open() ? "▼" : "▶")),
           h(
             "text",
             {
@@ -57,16 +49,12 @@ export const subagentsSidebar = (input: {
           show(
             () => !input.open(),
             () =>
-              h(
-                "text",
-                { fg: input.theme.text.muted, wrapMode: "none", flexShrink: 0 },
-                () => {
-                  const now = input.report();
-                  return `(${usedRows(now).length} · ${formatTokens(totalTokens(now.totals.tokens))} · ${formatCost(
-                    now.totals.cost,
-                  )})`;
-                },
-              ),
+              h("text", { fg: input.theme.text.muted, wrapMode: "none", flexShrink: 0 }, () => {
+                const now = input.report();
+                return `(${usedRows(now).length} · ${formatTokens(totalTokens(now.totals.tokens))} · ${formatCost(
+                  now.totals.cost,
+                )})`;
+              }),
           ),
         ),
         show(

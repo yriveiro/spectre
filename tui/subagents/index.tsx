@@ -6,7 +6,7 @@ import { profileRouting } from "./routing.ts";
 import { subagentsSidebar } from "./sidebar.tsx";
 import { type ProfileRouting, sessionUsage } from "./usage.ts";
 
-/** The `session.panel` name the blade answers to, and the slash command that opens it. */
+/** The `session.panel` name the blade answers to. The sidebar box opens it by click. */
 export const PANEL = "spectre.subagents";
 
 const VIEW = "subagents.view";
@@ -23,12 +23,6 @@ export const registerSubagents = (context: Plugin.Context): (() => void) => {
     initial: { open: true },
   });
   const [open, setOpen] = createSignal(view.open ?? true);
-
-  // Sort order survives hot reloads but not a TUI restart: it is a viewing
-  // choice, not a durable preference.
-  const [sort, setSort] = context.storage.memory<{ by: "tokens" | "cost" }>("subagents.sort", {
-    initial: { by: "tokens" as const },
-  });
 
   // The routing table is read from disk per directory and cached; the version
   // signal redraws whichever surface already rendered a cached answer. A
@@ -109,49 +103,12 @@ export const registerSubagents = (context: Plugin.Context): (() => void) => {
             context,
             panel,
             profiles: () => profiles(panel.sessionID),
-            sortBy: () => sort.by,
-            onSortToggle: () =>
-              setSort((draft) => {
-                draft.by = draft.by === "tokens" ? "cost" : "tokens";
-              }),
           }),
       ),
   });
 
-  context.keymap.layer(() => ({
-    mode: "global",
-    commands: [
-      {
-        id: "spectre.subagents.open",
-        title: "Session breakdown",
-        description: "Open the session panel with per-agent, per-profile tokens, cost, and per-run stats",
-        group: "Spectre",
-        palette: true as const,
-        slash: { name: "breakdown" } as const,
-        run: () => {
-          const route = context.ui.router.current();
-          if (route.type !== "session") {
-            context.ui.toast.show({
-              title: "Session breakdown",
-              message: "Usage is per session; open a session first.",
-              variant: "info",
-            });
-            return;
-          }
-          const current = context.ui.panel.current();
-          if (
-            current !== undefined &&
-            current.name === PANEL &&
-            current.sessionID === route.sessionID
-          ) {
-            context.ui.panel.close();
-            return;
-          }
-          context.ui.panel.open(PANEL);
-        },
-      },
-    ],
-  }));
+  // The panel opens by clicking the sidebar box, not by a command: the
+  // blocks are the way in, so no palette entry claims it.
 
   return () => {
     stopPanel();
