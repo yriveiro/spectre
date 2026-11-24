@@ -375,9 +375,15 @@ export const blade = <Row, Picked>(spec: BladeSpec<Row, Picked>): JSX.Element =>
             ),
           // The detail region: the one flexible box in the panel. It clips
           // its own overflow, so a nested table longer than fits loses its
-          // tail and nothing else moves; the bands under it never yield.
+          // tail and nothing else moves; the bands under it never yield. A
+          // row with no nested rows and no bands hides it whole.
           show(
-            () => spec.detail !== undefined,
+            () => {
+              const detail = spec.detail;
+              const row = pickedRow();
+              if (detail === undefined || row === undefined) return false;
+              return picked().length > 0 || detail.bands(row, current()).length > 0;
+            },
             () =>
               h(
                 "box",

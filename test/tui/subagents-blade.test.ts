@@ -174,7 +174,7 @@ describe("subagents blade layout", () => {
   });
 
   test("a narrow panel drops columns instead of overlapping them", async () => {
-    const { setup, lines } = await renderBlade(44, 26);
+    const { setup, lines } = await renderBlade(44, 30);
 
     const agentHead = lines.findIndex((line) => line.includes("tokens") && line.includes("agent"));
     expect(agentHead).toBeGreaterThanOrEqual(0);
