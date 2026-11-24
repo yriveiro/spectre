@@ -118,40 +118,8 @@ export const registerSubagents = (context: Plugin.Context): (() => void) => {
       ),
   });
 
-  context.keymap.layer(() => ({
-    mode: "global",
-    commands: [
-      {
-        id: "spectre.subagents.open",
-        title: "Session breakdown",
-        description: "Open the session panel with per-agent, per-profile tokens, cost, and per-run stats",
-        group: "Spectre",
-        palette: true as const,
-        slash: { name: "breakdown" } as const,
-        run: () => {
-          const route = context.ui.router.current();
-          if (route.type !== "session") {
-            context.ui.toast.show({
-              title: "Session breakdown",
-              message: "Usage is per session; open a session first.",
-              variant: "info",
-            });
-            return;
-          }
-          const current = context.ui.panel.current();
-          if (
-            current !== undefined &&
-            current.name === PANEL &&
-            current.sessionID === route.sessionID
-          ) {
-            context.ui.panel.close();
-            return;
-          }
-          context.ui.panel.open(PANEL);
-        },
-      },
-    ],
-  }));
+  // The panel opens by clicking the sidebar box, not by a command: the
+  // blocks are the way in, so no palette entry claims it.
 
   return () => {
     stopPanel();
