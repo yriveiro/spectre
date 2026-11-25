@@ -177,35 +177,52 @@ const runCommand = async (workspace: string, command: string): Promise<number> =
   return proc.exited;
 };
 
-const extractChildIds = (transcript: Transcript): Array<string> => {
-  const ids = new Set<string>();
+const extractSubagentTargets = (transcript: Transcript): Array<string> => {
+  const targets: Array<string> = [];
   for (const message of transcript.messages) {
     for (const part of message.content) {
       if (part.type !== "tool" || part.name !== "subagent" || part.state.status === "streaming")
         continue;
-      const metaId = part.state.metadata?.sessionID;
-      if (typeof metaId === "string" && metaId !== "") ids.add(metaId);
+      const inputId =
+        typeof part.state.input?.sessionID === "string" && part.state.input.sessionID !== ""
+          ? part.state.input.sessionID
+          : undefined;
+      const metaId =
+        typeof part.state.metadata?.sessionID === "string" && part.state.metadata.sessionID !== ""
+          ? part.state.metadata.sessionID
+          : undefined;
+      let textId: string | undefined;
       if (part.state.status !== "running") {
         for (const item of part.state.content ?? []) {
           if (item.type !== "text") continue;
           const match = item.text.match(/sessionID[=":\s]+(ses_[A-Za-z0-9]+)/);
-          if (match?.[1] !== undefined) ids.add(match[1]);
+          if (match?.[1] !== undefined) {
+            textId = match[1];
+            break;
+          }
         }
       }
+      const id = metaId ?? textId ?? inputId;
+      if (id !== undefined) targets.push(id);
     }
   }
-  return [...ids];
+  return targets;
 };
 
+const extractChildIds = (transcript: Transcript): Array<string> => [
+  ...new Set(extractSubagentTargets(transcript)),
+];
+
 const waitUntilSettled = async (client: Live["client"], sessionID: string): Promise<Transcript> => {
-  const waited = new Set<string>();
-  for (let round = 0; round < 4; round++) {
+  let seenCalls = 0;
+  for (let round = 0; round < 6; round++) {
     await client.experimental.session.wait({ sessionID });
     const snap = await client.transcript(sessionID);
-    const pending = extractChildIds(snap).filter((id) => !waited.has(id));
+    const targets = extractSubagentTargets(snap);
+    const pending = targets.slice(seenCalls);
     if (pending.length === 0) return snap;
-    for (const childId of pending) {
-      waited.add(childId);
+    seenCalls = targets.length;
+    for (const childId of new Set(pending)) {
       await client.experimental.session.wait({ sessionID: childId });
     }
     await Bun.sleep(500);

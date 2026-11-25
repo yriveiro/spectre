@@ -696,7 +696,10 @@ export const observeTranscript = (input: {
   return {
     scenarioId: input.scenario.id,
     loadedModelRouter: didLoadModelRouter(input.parent),
-    routingCalls: countRoutingCalls(input.parent.messages),
+    routingCalls: Math.max(
+      countRoutingCalls(input.parent.messages),
+      routedProfiles.length > 0 ? 1 : 0,
+    ),
     routedProfiles,
     subagentCalls: calls,
     operatorSpawns: calls.filter((c) => c.agent === "operator" && !c.hasInputSessionID).length,
