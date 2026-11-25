@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { Tool } from "@opencode/plugin/effect";
 import { Effect, Exit } from "effect";
-import { attachRoutingGuard, SUBAGENT_MODEL_DESCRIPTION } from "../../tools/definitions/routing";
+import {
+  attachRoutingGuard,
+  DELEGATION_KEY,
+  ESCALATION_SENTINEL,
+  SUBAGENT_MODEL_DESCRIPTION,
+} from "../../tools/definitions/routing";
 import { useTempDirs } from "../fixture";
 
 const temp = useTempDirs("routing-guard");
@@ -306,5 +311,201 @@ describe("routing guard", () => {
       Effect.scoped(attachRoutingGuard({ location: { directory: dir } } as never)),
     );
     expect(Exit.isSuccess(exit)).toBe(true);
+  });
+
+  test("context hook decorates STATUS: ESCALATE messages for spectre without mutating system", async () => {
+    const dir = temp();
+    const { contextHandler } = await setupGuard(dir);
+    const system = [{ type: "text", text: "Static system prompt" }];
+    const makeMessages = () => [
+      {
+        role: "user",
+        metadata: { source: "subagent" },
+        content: [
+          {
+            type: "text",
+            text: `<subagent sessionID="ses_child" state="completed" description="Work">
+STATUS: ESCALATE
+REASON: AMBIGUITY
+BLOCKER: Two options exist.
+</subagent>`,
+          },
+        ],
+      },
+    ];
+
+    const operatorMessages = makeMessages();
+    await Effect.runPromise(
+      contextHandler({
+        agent: "operator",
+        tools: {},
+        system,
+        messages: operatorMessages,
+      } as never),
+    );
+    expect(operatorMessages[0]?.content[0]?.text).not.toContain(ESCALATION_SENTINEL);
+
+    const spectreMessages = makeMessages();
+    await Effect.runPromise(
+      contextHandler({
+        agent: "spectre",
+        tools: {},
+        system,
+        messages: spectreMessages,
+      } as never),
+    );
+    expect(spectreMessages[0]?.content[0]?.text).toContain(ESCALATION_SENTINEL);
+    expect(system).toEqual([{ type: "text", text: "Static system prompt" }]);
+  });
+
+  test("execute.after and prompt hooks sync DELEGATION_KEY for root spectre sessions only", async () => {
+    const dir = temp();
+    const puts: Array<{ sessionID: string; key: string; value: string }> = [];
+    const removes: Array<{ sessionID: string; key: string }> = [];
+    let promptHandler: ((event: { sessionID: string }) => Effect.Effect<void>) | undefined;
+    let afterHandler:
+      | ((event: {
+          tool: string;
+          sessionID: string;
+          agent: string;
+          messageID: string;
+          id: string;
+          input: unknown;
+          status: "completed" | "error";
+        }) => Effect.Effect<void>)
+      | undefined;
+
+    const ctx = {
+      location: { directory: dir },
+      session: {
+        hook: (name: string, cb: (event: never) => Effect.Effect<void>) => {
+          if (name === "prompt") promptHandler = cb as typeof promptHandler;
+          return Effect.void;
+        },
+        get: ({ sessionID }: { sessionID: string }) =>
+          Effect.succeed({
+            id: sessionID,
+            parentID: sessionID === "ses_child" ? "ses_root" : undefined,
+            location: { directory: dir },
+          }),
+        instructions: {
+          entry: {
+            put: (args: { sessionID: string; key: string; value: string }) => {
+              puts.push(args);
+              return Effect.void;
+            },
+            remove: (args: { sessionID: string; key: string }) => {
+              removes.push(args);
+              return Effect.void;
+            },
+          },
+        },
+      },
+      tool: {
+        hook: (name: string, cb: (event: never) => Effect.Effect<void>) => {
+          if (name === "execute.after") afterHandler = cb as typeof afterHandler;
+          return Effect.void;
+        },
+      },
+    };
+
+    await Effect.runPromise(Effect.scoped(attachRoutingGuard(ctx as never)));
+    if (promptHandler === undefined || afterHandler === undefined) {
+      throw new Error("expected prompt and execute.after hooks");
+    }
+
+    for (let i = 1; i <= 4; i += 1) {
+      await Effect.runPromise(
+        afterHandler({
+          tool: "read",
+          sessionID: "ses_child",
+          agent: "spectre",
+          messageID: "m1",
+          id: `c${i}`,
+          input: { path: `child_${i}.ts` },
+          status: "completed",
+        }),
+      );
+    }
+    expect(puts).toHaveLength(0);
+
+    await Effect.runPromise(
+      afterHandler({
+        tool: "shell",
+        sessionID: "ses_root",
+        agent: "spectre",
+        messageID: "m2",
+        id: "s1",
+        input: { command: "bun test" },
+        status: "completed",
+      }),
+    );
+    expect(puts).toHaveLength(0);
+
+    await Effect.runPromise(
+      afterHandler({
+        tool: "shell",
+        sessionID: "ses_root",
+        agent: "spectre",
+        messageID: "m3",
+        id: "s2",
+        input: { command: "bun run typecheck" },
+        status: "completed",
+      }),
+    );
+    expect(puts).toHaveLength(1);
+    expect(puts[0]?.sessionID).toBe("ses_root");
+    expect(puts[0]?.key).toBe(DELEGATION_KEY);
+
+    await Effect.runPromise(promptHandler({ sessionID: "ses_root" }));
+    expect(removes).toEqual([{ sessionID: "ses_root", key: DELEGATION_KEY }]);
+
+    const declinedDir = temp();
+    await Bun.write(join(declinedDir, "spectre.json"), JSON.stringify({ setup: "declined" }));
+    const declinedPuts: Array<unknown> = [];
+    let declinedAfter: typeof afterHandler | undefined;
+    await Effect.runPromise(
+      Effect.scoped(
+        attachRoutingGuard({
+          location: { directory: declinedDir },
+          session: {
+            hook: () => Effect.void,
+            get: () => Effect.succeed({ id: "ses_dec", location: { directory: declinedDir } }),
+            instructions: {
+              entry: {
+                put: (args: unknown) => {
+                  declinedPuts.push(args);
+                  return Effect.void;
+                },
+                remove: () => Effect.void,
+              },
+            },
+          },
+          tool: {
+            hook: (name: string, cb: (event: never) => Effect.Effect<void>) => {
+              if (name === "execute.after") declinedAfter = cb as NonNullable<typeof afterHandler>;
+              return Effect.void;
+            },
+          },
+        } as never),
+      ),
+    );
+    if (declinedAfter === undefined) {
+      throw new Error("expected execute.after hook");
+    }
+    for (let i = 1; i <= 2; i += 1) {
+      await Effect.runPromise(
+        declinedAfter({
+          tool: "shell",
+          sessionID: "ses_dec",
+          agent: "spectre",
+          messageID: "m4",
+          id: `d${i}`,
+          input: { command: "bun test" },
+          status: "completed",
+        }),
+      );
+    }
+    expect(declinedPuts).toHaveLength(0);
   });
 });

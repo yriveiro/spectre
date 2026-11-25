@@ -1,0 +1,27 @@
+{
+  "id": "bounded-log-triage",
+  "slice": "bounded-delegate",
+  "description": "Log-heavy test runner emitting 450+ lines with exactly 2 failing assertions; delegate to mechanical and report the 2 failures.",
+  "spectreConfig": {
+    "models": {
+      "minimax": "opencode-go/minimax-m3.1-flash-free",
+      "muse": "opencode-go/muse-spark-1.3-contributor",
+      "kimi": "opencode-go/kimi-k3"
+    },
+    "priority": ["minimax", "muse", "kimi"],
+    "crosscheck": ["minimax", "muse", "kimi"]
+  },
+  "setup": {
+    "scripts/run-suite.ts": "for (let i = 1; i <= 450; i++) {\n  if (i === 142) {\n    console.error(\"FAIL test/auth/token-expiry.test.ts > rejects expired JWT (expected 401, got 200)\");\n  } else if (i === 389) {\n    console.error(\"FAIL test/billing/invoice-rounding.test.ts > rounds half-up (expected 10.05, got 10.04)\");\n  } else {\n    console.log(`PASS case-${String(i).padStart(3, \"0\")} ok in 1ms`);\n  }\n}\nconsole.log(\"Summary: 448 passed, 2 failed\");\nprocess.exit(1);\n"
+  },
+  "turns": [
+    {
+      "prompt": "Run `bun run scripts/run-suite.ts` in `/workspace` and report only the failing test names and their expected vs actual values. Do not edit any files."
+    }
+  ],
+  "expect": {
+    "requiredAnswerSubstrings": ["token-expiry.test.ts", "invoice-rounding.test.ts"],
+    "expectOperatorDelegation": true,
+    "allowedProfiles": ["mechanical"]
+  }
+}

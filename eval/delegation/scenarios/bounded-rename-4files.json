@@ -1,0 +1,36 @@
+{
+  "id": "bounded-rename-4files",
+  "slice": "bounded-delegate",
+  "description": "4-file TS module and test: rename option key maxItems to itemLimit across all 4 files and verify bun test passes.",
+  "spectreConfig": {
+    "models": {
+      "minimax": "opencode-go/minimax-m3.1-flash-free",
+      "muse": "opencode-go/muse-spark-1.3-contributor",
+      "kimi": "opencode-go/kimi-k3"
+    },
+    "priority": ["minimax", "muse", "kimi"],
+    "crosscheck": ["minimax", "muse", "kimi"]
+  },
+  "setup": {
+    "src/options.ts": "export interface PaginationOptions {\n  readonly maxItems: number;\n  readonly cursor?: string;\n}\n",
+    "src/paginate.ts": "import type { PaginationOptions } from \"./options\";\n\nexport const paginate = <T>(items: ReadonlyArray<T>, options: PaginationOptions): ReadonlyArray<T> =>\n  items.slice(0, options.maxItems);\n",
+    "src/client.ts": "import { paginate } from \"./paginate\";\n\nexport const fetchPage = (items: ReadonlyArray<string>, maxItems = 10) =>\n  paginate(items, { maxItems });\n",
+    "test/paginate.test.ts": "import { expect, test } from \"bun:test\";\nimport { fetchPage } from \"../src/client\";\nimport { paginate } from \"../src/paginate\";\n\ntest(\"paginate slices to limit\", () => {\n  expect(paginate([1, 2, 3], { maxItems: 2 })).toEqual([1, 2]);\n  expect(fetchPage([\"a\", \"b\", \"c\"], 1)).toEqual([\"a\"]);\n});\n"
+  },
+  "turns": [
+    {
+      "prompt": "Rename the `maxItems` option field in `/workspace` to `itemLimit` across `src/options.ts`, `src/paginate.ts`, `src/client.ts`, and `test/paginate.test.ts`, then run `bun test` to verify."
+    }
+  ],
+  "verifyCommand": "bun test",
+  "expect": {
+    "expectedFiles": {
+      "src/options.ts": "export interface PaginationOptions {\n  readonly itemLimit: number;\n  readonly cursor?: string;\n}",
+      "src/paginate.ts": "import type { PaginationOptions } from \"./options\";\n\nexport const paginate = <T>(items: ReadonlyArray<T>, options: PaginationOptions): ReadonlyArray<T> =>\n  items.slice(0, options.itemLimit);",
+      "src/client.ts": "import { paginate } from \"./paginate\";\n\nexport const fetchPage = (items: ReadonlyArray<string>, itemLimit = 10) =>\n  paginate(items, { itemLimit });",
+      "test/paginate.test.ts": "import { expect, test } from \"bun:test\";\nimport { fetchPage } from \"../src/client\";\nimport { paginate } from \"../src/paginate\";\n\ntest(\"paginate slices to limit\", () => {\n  expect(paginate([1, 2, 3], { itemLimit: 2 })).toEqual([1, 2]);\n  expect(fetchPage([\"a\", \"b\", \"c\"], 1)).toEqual([\"a\"]);\n});"
+    },
+    "expectOperatorDelegation": true,
+    "allowedProfiles": ["search", "worker", "mechanical"]
+  }
+}

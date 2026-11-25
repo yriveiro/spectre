@@ -76,6 +76,11 @@ The router ends at `resolved`. It does not spawn a subagent, run a review, or re
 | The profile finds a crosscheck | Primary → review → judge | Accepts or rejects each challenge, then revises once when it accepts one. |
 | A challenge is unclear | Resume the reviewer once | Asks for the source and line, then rejects it when none arrives. |
 | The profile asks and finds no crosscheck | `crosscheckProblem` | Says the problem and spawns the primary without a review. |
+| Worker emits `STATUS: ESCALATE` | Resume same `sessionID` | Omit `model` on `AMBIGUITY` or `SCOPE`; pass a higher profile's `model.ref` on `FAILURE_CAP`. |
+
+## Escalation handling
+
+An `operator` child reports `STATUS: DONE` when verification passes, or `STATUS: ESCALATE` when it hits `AMBIGUITY`, `SCOPE`, or `FAILURE_CAP`. Resume the child's `sessionID` directly and omit `model` when the parent resolves `AMBIGUITY` or `SCOPE`. Pass a higher profile's `model.ref` on the same `sessionID` when `FAILURE_CAP` shows the model is the defect.
 
 ## The crosscheck review
 

@@ -127,6 +127,33 @@ subagent({ agent: t.profiles[2].agent, prompt: "choose the change",     model: t
 
 The rows above are examples. Take the profiles whose `match` lines fit the two parts, not the ones at those positions. A cheap profile is good at the mechanical parts: grep, read, run, and report. Spending the expensive profile on that is waste. Spending the cheap one on the judgement is the failure above. Split the task when the parts differ, and both parts get the model they need.
 
+## Delegate bounded slices to operator
+
+Keep 1-2 file reads, a single `spectre_search`, 1-2 file edits, framing, tradeoffs, integration, and final acceptance inline without `model-router`.
+
+Delegate bounded work to `operator` profiles:
+
+- `mechanical`: test suites, builds, typechecks, and log-heavy commands.
+- `search`: call-site discovery, blast-radius sweeps, and unfamiliar code across `>=3` files.
+- `worker`: executing an already-decided edit and verification plan across `>=3` files.
+
+Include four fields in every `operator` brief:
+
+1. **Scope:** exact files or globs the child may read or edit.
+2. **Invariants:** contract rules and constraints the edit must keep.
+3. **Verification:** the exact command the child must run before reporting.
+4. **Stop boundary:** when to halt and emit `STATUS: ESCALATE`.
+
+`operator` finishes with `STATUS: DONE` (`TOUCHED:`, `VERIFIED:`, `OUTCOME:`) or `STATUS: ESCALATE`.
+
+## Handling an operator escalation
+
+When `operator` returns `STATUS: ESCALATE`, inspect `REASON`, `BLOCKER`, and `OPTIONS_OR_ATTEMPTS`. Keep the child `sessionID` and resume it rather than starting a fresh child:
+
+- `AMBIGUITY`: decide the contract (or ask the user once), then call `subagent` with that `sessionID` and omit `model` so the child keeps its routed model.
+- `SCOPE`: widen or redirect scope in the follow-up prompt, pass that `sessionID`, and omit `model`.
+- `FAILURE_CAP`: check `OPTIONS_OR_ATTEMPTS`. If one inline read settles the defect, pass that `sessionID` and omit `model`. When the model is the defect, call `tools.spectre.routing` for a higher profile (`judgment`, `thinking`, `refactor`, or `deep`) and pass its `model.ref` on the same `sessionID`.
+
 ## References
 
 Load only what the task needs.

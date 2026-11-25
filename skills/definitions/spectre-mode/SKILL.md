@@ -58,10 +58,12 @@ A trigger is a mandate. Load the matching skill via `skill({ id })` when a trigg
 | ----------------- | ---- |
 | You are about to type a `//` or a `/**` | the comment disposition, above |
 | You are about to create a branch, or to change files in a worktree you did not open | the worktree rule, above |
-| You are about to spawn a subagent, a delegated result needs correcting, or a task splits into mechanical and judgement | `model-router` |
+| A task has bounded >=3-file search/edits or suite runs, a worker escalates, a delegated result needs correcting, or you are about to spawn a subagent | `model-router` |
 | Nobody measured a claim about the code and you are about to report it | `ripwire` |
 | A request is a whole multi-phase task whose step order matters | `playbook` or `tools.spectre.skills({ category: "playbook" })` |
 | You touch a domain stack, visual page, diagram, PR review page, verification flow, or design workflow | `tools.spectre.skills` |
+
+An `operator` child reports `STATUS: DONE` or `STATUS: ESCALATE` (`AMBIGUITY`, `SCOPE`, or `FAILURE_CAP`).
 
 `ripwire` maps each leaf's test to a command, names the nine leaves with no instrument, and lists tool blind spots. Whole tasks whose order matters run under a `playbook-*` procedure via `playbook` or `tools.spectre.skills({ category: "playbook" })`.
 

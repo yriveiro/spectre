@@ -48,6 +48,22 @@ The host checks the ref against the models the session can see. It rejects an un
 
 The routing config refuses any other agent name, so a routed run cannot drop out of spectre mode by being some other agent. The agents differ in persona, in chat visibility, and in one permission: only `mnemonic` may write the brain.
 
+## Writing an operator brief
+
+Write four short lines in `prompt` when spawning `operator` on `mechanical`, `search`, or `worker`:
+
+- **Scope:** exact file paths or globs.
+- **Invariants:** contract rules and constraints.
+- **Verification:** exact command to run before reporting.
+- **Stop boundary:** when to stop and emit `STATUS: ESCALATE`.
+
+## Resolving STATUS: ESCALATE
+
+When an `operator` child returns `STATUS: ESCALATE`, resume the same `sessionID`:
+
+- On `AMBIGUITY` or `SCOPE`, decide the contract or adjust scope, then call `subagent` with `sessionID` and omit `model`.
+- On `FAILURE_CAP`, inspect `OPTIONS_OR_ATTEMPTS`. If the model is the defect, call `tools.spectre.routing` for a higher profile and pass its `model.ref` on the same `sessionID`.
+
 ## The call
 
 ```text
