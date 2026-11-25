@@ -8,12 +8,16 @@ import { observeRun } from "./observe";
 import type { DelegationScenario } from "./scenario";
 import { type ABComparisonReport, compareArms, scoreTrial, type TrialObservation } from "./score";
 
+export type SpectreConfigOverride = DelegationScenario["spectreConfig"];
+
 export interface LiveABOptions {
   readonly baselineRef: string;
   readonly model: string;
   readonly trials: number;
   readonly runsDir: string;
   readonly scenarios: ReadonlyArray<DelegationScenario>;
+  readonly useRepoConfig?: boolean;
+  readonly configPath?: string;
   readonly keep?: boolean;
 }
 
@@ -46,28 +50,75 @@ export const defaultLiveModel = async (): Promise<string> => {
   return "opencode-go/kimi-k3";
 };
 
-const loadRepoSpectreConfig = async (): Promise<
-  | {
-      readonly models: Readonly<Record<string, string>>;
-      readonly priority: ReadonlyArray<string>;
-      readonly crosscheck?: ReadonlyArray<string>;
-    }
-  | undefined
-> => {
-  const file = Bun.file(`${REPO}/spectre.json`);
-  if (!(await file.exists())) return undefined;
+const loadSpectreConfigFile = async (
+  path: string,
+  required: boolean,
+): Promise<SpectreConfigOverride | undefined> => {
+  const file = Bun.file(path);
+  if (!(await file.exists())) {
+    if (required) throw new Error(`config file not found: ${path}`);
+    return undefined;
+  }
   const parsed = (await file.json()) as {
     readonly models?: Readonly<Record<string, string>>;
     readonly priority?: ReadonlyArray<string>;
     readonly crosscheck?: ReadonlyArray<string>;
   };
-  if (parsed.models === undefined || parsed.priority === undefined) return undefined;
+  if (parsed.models === undefined || parsed.priority === undefined) {
+    if (required) throw new Error(`${path}: expected models and priority`);
+    return undefined;
+  }
   return {
     models: parsed.models,
     priority: parsed.priority,
     ...(parsed.crosscheck === undefined ? {} : { crosscheck: parsed.crosscheck }),
   };
 };
+
+export const resolveConfigOverride = async (options: {
+  readonly useRepoConfig?: boolean;
+  readonly configPath?: string;
+}): Promise<SpectreConfigOverride | undefined> => {
+  if (options.configPath !== undefined) {
+    return loadSpectreConfigFile(options.configPath, true);
+  }
+  if (options.useRepoConfig === true) {
+    return loadSpectreConfigFile(`${REPO}/spectre.json`, false);
+  }
+  return undefined;
+};
+
+const readPublishAllowlist = async (): Promise<ReadonlyArray<string>> => {
+  const manifest = (await Bun.file(`${REPO}/package.json`).json()) as {
+    readonly files?: unknown;
+  };
+  if (
+    !Array.isArray(manifest.files) ||
+    !manifest.files.every((entry) => typeof entry === "string")
+  ) {
+    throw new Error(`${REPO}/package.json: "files" must be an array of strings`);
+  }
+  const entries = [...new Set([...manifest.files, "package.json"])];
+  for (const entry of entries) {
+    if (
+      entry === "" ||
+      entry.startsWith("/") ||
+      entry.includes("\\") ||
+      entry.split("/").some((part) => part === "" || part === "." || part === "..")
+    ) {
+      throw new Error(`${REPO}/package.json: invalid files entry "${entry}"`);
+    }
+  }
+  return entries;
+};
+
+const pathExists = async (path: string): Promise<boolean> =>
+  Bun.file(path)
+    .stat()
+    .then(
+      () => true,
+      () => false,
+    );
 
 export const materializeBaselinePlugin = async (
   baselineRef: string,
@@ -78,15 +129,35 @@ export const materializeBaselinePlugin = async (
     throw new Error(`baseline ref "${baselineRef}" not found: ${verify.stderr.toString().trim()}`);
   }
 
+  const allowlist = await readPublishAllowlist();
+  const stagingDir = `${targetDir}/.archive-staging`;
   const pluginDir = `${targetDir}/plugin`;
-  await Bun.$`mkdir -p ${pluginDir}`.quiet();
+  await Bun.$`rm -rf ${stagingDir} ${pluginDir} && mkdir -p ${stagingDir} ${pluginDir}`.quiet();
 
-  const archived = await Bun.$`git -C ${REPO} archive ${baselineRef} | tar -x -C ${pluginDir}`
+  const archived = await Bun.$`git -C ${REPO} archive ${baselineRef} | tar -x -C ${stagingDir}`
     .nothrow()
     .quiet();
   if (archived.exitCode !== 0) {
+    await Bun.$`rm -rf ${stagingDir}`.quiet();
     throw new Error(`git archive ${baselineRef} failed: ${archived.stderr.toString().trim()}`);
   }
+
+  for (const entry of allowlist) {
+    const src = `${stagingDir}/${entry}`;
+    if (!(await pathExists(src))) continue;
+    const dst = `${pluginDir}/${entry}`;
+    const slash = dst.lastIndexOf("/");
+    if (slash > pluginDir.length) {
+      await Bun.$`mkdir -p ${dst.slice(0, slash)}`.quiet();
+    }
+    const moved = await Bun.$`mv ${src} ${dst}`.nothrow().quiet();
+    if (moved.exitCode !== 0) {
+      await Bun.$`rm -rf ${stagingDir}`.quiet();
+      throw new Error(`move ${entry} failed: ${moved.stderr.toString().trim()}`);
+    }
+  }
+
+  await Bun.$`rm -rf ${stagingDir}`.quiet();
 
   const nodeModules = `${REPO}/node_modules`;
   const linked = await Bun.$`ln -sfn ${nodeModules} ${pluginDir}/node_modules`.nothrow().quiet();
@@ -106,6 +177,43 @@ const runCommand = async (workspace: string, command: string): Promise<number> =
   return proc.exited;
 };
 
+const extractChildIds = (transcript: Transcript): Array<string> => {
+  const ids = new Set<string>();
+  for (const message of transcript.messages) {
+    for (const part of message.content) {
+      if (part.type !== "tool" || part.name !== "subagent" || part.state.status === "streaming")
+        continue;
+      const metaId = part.state.metadata?.sessionID;
+      if (typeof metaId === "string" && metaId !== "") ids.add(metaId);
+      if (part.state.status !== "running") {
+        for (const item of part.state.content ?? []) {
+          if (item.type !== "text") continue;
+          const match = item.text.match(/sessionID[=":\s]+(ses_[A-Za-z0-9]+)/);
+          if (match?.[1] !== undefined) ids.add(match[1]);
+        }
+      }
+    }
+  }
+  return [...ids];
+};
+
+const waitUntilSettled = async (client: Live["client"], sessionID: string): Promise<Transcript> => {
+  const waited = new Set<string>();
+  for (let round = 0; round < 4; round++) {
+    await client.experimental.session.wait({ sessionID });
+    const snap = await client.transcript(sessionID);
+    const pending = extractChildIds(snap).filter((id) => !waited.has(id));
+    if (pending.length === 0) return snap;
+    for (const childId of pending) {
+      waited.add(childId);
+      await client.experimental.session.wait({ sessionID: childId });
+    }
+    await Bun.sleep(500);
+  }
+  await client.experimental.session.wait({ sessionID });
+  return client.transcript(sessionID);
+};
+
 const runArmTrial = async (input: {
   readonly arm: "baseline" | "candidate";
   readonly trial: number;
@@ -113,13 +221,7 @@ const runArmTrial = async (input: {
   readonly pluginDir: string;
   readonly model: string;
   readonly runDir: string;
-  readonly repoConfig:
-    | {
-        readonly models: Readonly<Record<string, string>>;
-        readonly priority: ReadonlyArray<string>;
-        readonly crosscheck?: ReadonlyArray<string>;
-      }
-    | undefined;
+  readonly configOverride: SpectreConfigOverride | undefined;
   readonly baselineCostUnits?: number;
   readonly keep?: boolean;
 }): Promise<TrialObservation> => {
@@ -131,7 +233,7 @@ const runArmTrial = async (input: {
     await Bun.write(resolveIn(workspace, path as WorkspacePath), content);
   }
 
-  const spectreConfig = input.repoConfig ?? input.scenario.spectreConfig;
+  const spectreConfig = input.configOverride ?? input.scenario.spectreConfig;
   await Bun.write(`${workspace}/spectre.json`, `${JSON.stringify(spectreConfig, null, 2)}\n`);
 
   let server: Live | undefined;
@@ -150,54 +252,15 @@ const runArmTrial = async (input: {
       location: { directory: workspace },
     });
 
-    const extractChildIds = (transcript: Transcript): Array<string> => {
-      const ids = new Set<string>();
-      for (const message of transcript.messages) {
-        for (const part of message.content) {
-          if (part.type !== "tool" || part.name !== "subagent" || part.state.status === "streaming")
-            continue;
-          const metaId = part.state.metadata?.sessionID;
-          if (typeof metaId === "string" && metaId !== "") ids.add(metaId);
-          if (part.state.status !== "running") {
-            for (const item of part.state.content ?? []) {
-              if (item.type !== "text") continue;
-              const match = item.text.match(/sessionID[=":\s]+(ses_[A-Za-z0-9]+)/);
-              if (match?.[1] !== undefined) ids.add(match[1]);
-            }
-          }
-        }
-      }
-      return [...ids];
-    };
-
-    const waitUntilSettled = async (): Promise<Transcript> => {
-      const waited = new Set<string>();
-      for (let round = 0; round < 4; round++) {
-        await client.experimental.session.wait({ sessionID: session.id });
-        const snap = await client.transcript(session.id);
-        const pending = extractChildIds(snap).filter((id) => !waited.has(id));
-        if (pending.length === 0) return snap;
-        for (const childId of pending) {
-          waited.add(childId);
-          await client.experimental.session.wait({ sessionID: childId });
-        }
-        await Bun.sleep(500);
-      }
-      await client.experimental.session.wait({ sessionID: session.id });
-      return client.transcript(session.id);
-    };
-
     for (const turn of input.scenario.turns) {
       const prompt = turn.prompt.replaceAll("/workspace", workspace);
       await client.session.prompt({ sessionID: session.id, text: prompt });
-      await waitUntilSettled();
+      await waitUntilSettled(client, session.id);
     }
 
     const parent = await client.transcript(session.id);
-    const childIds = new Set<string>(extractChildIds(parent));
-
     const children = new Map<string, Transcript>();
-    for (const childId of childIds) {
+    for (const childId of extractChildIds(parent)) {
       children.set(childId, await client.transcript(childId));
     }
 
@@ -243,7 +306,10 @@ export const runLiveAB = async (options: LiveABOptions): Promise<ABComparisonRep
     `${options.runsDir}/baseline`,
   );
   const candidatePlugin = await preparePlugin(`${options.runsDir}/candidate`, "live");
-  const repoConfig = await loadRepoSpectreConfig();
+  const configOverride = await resolveConfigOverride({
+    useRepoConfig: options.useRepoConfig,
+    configPath: options.configPath,
+  });
 
   const baselineTrials: Array<TrialObservation> = [];
   const candidateTrials: Array<TrialObservation> = [];
@@ -258,7 +324,7 @@ export const runLiveAB = async (options: LiveABOptions): Promise<ABComparisonRep
         pluginDir: baselinePlugin,
         model: options.model,
         runDir: `${options.runsDir}/baseline/${scenario.id}/trial-${trial}`,
-        repoConfig,
+        configOverride,
         keep: options.keep,
       });
       baselineTrials.push(baseObs);
@@ -271,7 +337,7 @@ export const runLiveAB = async (options: LiveABOptions): Promise<ABComparisonRep
         pluginDir: candidatePlugin,
         model: options.model,
         runDir: `${options.runsDir}/candidate/${scenario.id}/trial-${trial}`,
-        repoConfig,
+        configOverride,
         baselineCostUnits: baseObs.catalogueCostUnits,
         keep: options.keep,
       });

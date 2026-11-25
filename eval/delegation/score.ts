@@ -1,5 +1,5 @@
-import type { EscalationReason } from "../../tools/definitions/routing";
-import type { ObservedDelegation } from "./observe";
+import { DEFAULT_PROFILES, type EscalationReason } from "../../tools/definitions/routing";
+import type { ObservedDelegation, RoutedProfileObservation } from "./observe";
 import type { DelegationScenario, ScenarioSlice } from "./scenario";
 
 export interface TrialObservation {
@@ -10,12 +10,14 @@ export interface TrialObservation {
   readonly taskPassed: boolean;
   readonly loadedModelRouter: boolean;
   readonly routingCalls: number;
+  readonly routedProfiles?: ReadonlyArray<RoutedProfileObservation>;
   readonly subagentCalls: ReadonlyArray<{
     readonly agent?: string;
     readonly model?: string;
     readonly hasInputSessionID: boolean;
     readonly outputSessionID?: string;
     readonly switchedModelOnResume: boolean;
+    readonly upgradedModelOnResume?: boolean;
   }>;
   readonly operatorSpawns: number;
   readonly escalations: ReadonlyArray<{
@@ -25,14 +27,25 @@ export interface TrialObservation {
     readonly childAssistantTurns: number;
     readonly continuedSameSession: boolean;
     readonly upgradedModel: boolean;
+    readonly switchedModel?: boolean;
   }>;
   readonly outOfScopeMutations: ReadonlyArray<string>;
+  readonly unexpectedFileMutations: ReadonlyArray<string>;
+  readonly verifiedAfterLastEdit: boolean;
   readonly parentPeakInputTokens: number;
   readonly parentTotalTokens: number;
   readonly childTotalTokens: number;
   readonly frontierTokenShare: number;
   readonly catalogueCostUnits: number;
   readonly regretAdjustedCostUnits: number;
+}
+
+export interface RateInterval {
+  readonly passes: number;
+  readonly total: number;
+  readonly rate: number;
+  readonly low: number;
+  readonly high: number;
 }
 
 export interface ArmSummary {
@@ -43,11 +56,19 @@ export interface ArmSummary {
   readonly inlineNegativePrecision: number;
   readonly structuredEscalationRate: number;
   readonly escalationSessionReuseRate: number;
+  readonly verificationHygieneRate: number;
   readonly meanWorkerTurnsOnTrap: number;
   readonly meanParentPeakInputTokens: number;
   readonly meanFrontierTokenShare: number;
   readonly meanCatalogueCostUnits: number;
   readonly meanRegretAdjustedCostUnits: number;
+  readonly intervals: {
+    readonly correctness: RateInterval;
+    readonly boundedDelegation: RateInterval;
+    readonly inlineNegative: RateInterval;
+    readonly structuredEscalation: RateInterval;
+    readonly escalationSessionReuse: RateInterval;
+  };
 }
 
 export interface ScenarioFlip {
@@ -90,29 +111,64 @@ export interface ABComparisonReport {
   readonly gates: ReleaseGateVerdict;
 }
 
+export const wilsonInterval = (
+  passes: number,
+  total: number,
+  z = 1.959963984540054,
+): { readonly low: number; readonly high: number } => {
+  if (total <= 0) return { low: 0, high: 0 };
+  const p = Math.min(1, Math.max(0, passes / total));
+  const z2 = z * z;
+  const denom = 1 + z2 / total;
+  const center = (p + z2 / (2 * total)) / denom;
+  const half = (z * Math.sqrt((p * (1 - p)) / total + z2 / (4 * total * total))) / denom;
+  return {
+    low: Math.max(0, center - half),
+    high: Math.min(1, center + half),
+  };
+};
+
+const summarizeRate = <T>(
+  items: ReadonlyArray<T>,
+  predicate: (item: T) => boolean,
+): RateInterval => {
+  const total = items.length;
+  const passes = items.filter(predicate).length;
+  const r = total === 0 ? 0 : passes / total;
+  const { low, high } = wilsonInterval(passes, total);
+  return { passes, total, rate: r, low, high };
+};
+
 export const evaluateTaskPassed = (
   scenario: DelegationScenario,
   observed: ObservedDelegation,
   verifyExitCode?: number,
 ): boolean => {
-  if (observed.parentFailed) return false;
-  if (verifyExitCode !== undefined && verifyExitCode !== 0) return false;
-  if (observed.outOfScopeMutations.length > 0) return false;
-
-  if (scenario.expect.expectedFiles !== undefined) {
-    for (const [path, expected] of Object.entries(scenario.expect.expectedFiles)) {
-      const actual = observed.workspaceFiles[path];
-      if (actual === undefined || actual !== expected.trimEnd()) return false;
-    }
+  if (
+    observed.parentFailed ||
+    (verifyExitCode !== undefined && verifyExitCode !== 0) ||
+    observed.outOfScopeMutations.length > 0 ||
+    observed.unexpectedFileMutations.length > 0
+  ) {
+    return false;
   }
 
-  if (scenario.expect.requiredAnswerSubstrings !== undefined) {
-    for (const needle of scenario.expect.requiredAnswerSubstrings) {
-      if (!observed.parentFinalText.includes(needle)) return false;
-    }
+  for (const [path, expected] of Object.entries(scenario.expect.expectedFiles ?? {})) {
+    const actual = observed.workspaceFiles[path];
+    if (actual === undefined || actual !== expected.trimEnd()) return false;
+  }
+
+  for (const needle of scenario.expect.requiredAnswerSubstrings ?? []) {
+    if (!observed.parentFinalText.includes(needle)) return false;
   }
 
   return true;
+};
+
+const effectiveCostUnits = (observed: ObservedDelegation): number => {
+  if (observed.catalogueCostUnits > 0) return observed.catalogueCostUnits;
+  if (observed.parentTotalTokens <= 0 && observed.childTotalTokens <= 0) return 0;
+  return observed.parentTotalTokens * 1e-6 + observed.childTotalTokens * 0.25 * 1e-6;
 };
 
 export const scoreTrial = (input: {
@@ -124,10 +180,11 @@ export const scoreTrial = (input: {
   readonly baselineCostUnits?: number;
 }): TrialObservation => {
   const taskPassed = evaluateTaskPassed(input.scenario, input.observed, input.verifyExitCode);
+  const catalogueCostUnits = effectiveCostUnits(input.observed);
   const redoPenalty = taskPassed
     ? 0
-    : (input.baselineCostUnits ?? Math.max(input.observed.catalogueCostUnits, 1));
-  const regretAdjustedCostUnits = input.observed.catalogueCostUnits + redoPenalty;
+    : (input.baselineCostUnits ?? Math.max(catalogueCostUnits, 1e-3));
+  const regretAdjustedCostUnits = catalogueCostUnits + redoPenalty;
 
   return {
     scenarioId: input.scenario.id,
@@ -137,21 +194,29 @@ export const scoreTrial = (input: {
     taskPassed,
     loadedModelRouter: input.observed.loadedModelRouter,
     routingCalls: input.observed.routingCalls,
+    ...(input.observed.routedProfiles === undefined
+      ? {}
+      : { routedProfiles: input.observed.routedProfiles }),
     subagentCalls: input.observed.subagentCalls.map((call) => ({
       agent: call.agent,
       model: call.model,
       hasInputSessionID: call.hasInputSessionID,
       outputSessionID: call.outputSessionID,
       switchedModelOnResume: call.switchedModelOnResume,
+      ...(call.upgradedModelOnResume === undefined
+        ? {}
+        : { upgradedModelOnResume: call.upgradedModelOnResume }),
     })),
     operatorSpawns: input.observed.operatorSpawns,
     escalations: input.observed.escalations,
     outOfScopeMutations: input.observed.outOfScopeMutations,
+    unexpectedFileMutations: input.observed.unexpectedFileMutations,
+    verifiedAfterLastEdit: input.observed.verifiedAfterLastEdit,
     parentPeakInputTokens: input.observed.parentPeakInputTokens,
     parentTotalTokens: input.observed.parentTotalTokens,
     childTotalTokens: input.observed.childTotalTokens,
     frontierTokenShare: input.observed.frontierTokenShare,
-    catalogueCostUnits: input.observed.catalogueCostUnits,
+    catalogueCostUnits,
     regretAdjustedCostUnits,
   };
 };
@@ -159,29 +224,87 @@ export const scoreTrial = (input: {
 const mean = (values: ReadonlyArray<number>): number =>
   values.length === 0 ? 0 : values.reduce((sum, one) => sum + one, 0) / values.length;
 
-const rate = <T>(items: ReadonlyArray<T>, predicate: (item: T) => boolean): number =>
-  items.length === 0 ? 0 : items.filter(predicate).length / items.length;
+const baseOf = (ref: string): string => ref.split("#")[0] ?? ref;
 
-const delegatedCorrectly = (scenario: DelegationScenario, trial: TrialObservation): boolean => {
-  if (scenario.slice === "inline-negative") {
-    return trial.subagentCalls.length === 0 && !trial.loadedModelRouter;
-  }
-  return trial.operatorSpawns >= 1;
+const variantOf = (ref: string): string | undefined => {
+  const idx = ref.indexOf("#");
+  return idx === -1 || idx === ref.length - 1 ? undefined : ref.slice(idx + 1);
 };
 
-const escalatedCleanly = (scenario: DelegationScenario, trial: TrialObservation): boolean => {
+export const matchesAllowedProfile = (
+  scenario: DelegationScenario,
+  callModel: string | undefined,
+  routedProfiles?: ReadonlyArray<RoutedProfileObservation>,
+): boolean => {
+  if (callModel === undefined) return false;
+  const configuredBases = new Set(Object.values(scenario.spectreConfig.models).map(baseOf));
+  const callBase = baseOf(callModel);
+
+  const allowedList = scenario.expect.allowedProfiles;
+  if (allowedList === undefined || allowedList.length === 0) {
+    if (routedProfiles?.some((r) => r.modelRef !== undefined)) {
+      return routedProfiles.some((r) => r.modelRef === callModel);
+    }
+    return configuredBases.has(callBase);
+  }
+
+  const allowed = new Set(allowedList);
+  if (routedProfiles !== undefined && routedProfiles.length > 0) {
+    const allowedRows = routedProfiles.filter((row) => allowed.has(row.profile));
+    if (allowedRows.length === 0) return false;
+    const withRefs = allowedRows.filter((row) => row.modelRef !== undefined);
+    return withRefs.length > 0
+      ? withRefs.some((row) => row.modelRef === callModel)
+      : configuredBases.has(callBase);
+  }
+
+  if (!configuredBases.has(callBase)) return false;
+  const variant = variantOf(callModel);
+  if (variant === undefined) return true;
+  const allowedEfforts = new Set(
+    allowedList.flatMap((name) => {
+      const eff = DEFAULT_PROFILES[name]?.effort;
+      return eff === undefined ? [] : [eff];
+    }),
+  );
+  return allowedEfforts.size === 0 || allowedEfforts.has(variant);
+};
+
+export const delegatedCorrectly = (
+  scenario: DelegationScenario,
+  trial: TrialObservation,
+): boolean => {
+  if (!scenario.expect.expectOperatorDelegation || scenario.slice === "inline-negative") {
+    return trial.subagentCalls.length === 0 && !trial.loadedModelRouter && trial.routingCalls === 0;
+  }
+  if (!trial.loadedModelRouter || trial.routingCalls < 1 || trial.operatorSpawns < 1) {
+    return false;
+  }
+  const spawns = trial.subagentCalls.filter(
+    (call) => call.agent === "operator" && !call.hasInputSessionID,
+  );
+  return (
+    spawns.length >= 1 &&
+    spawns.every((call) => matchesAllowedProfile(scenario, call.model, trial.routedProfiles))
+  );
+};
+
+export const escalatedCleanly = (
+  scenario: DelegationScenario,
+  trial: TrialObservation,
+): boolean => {
   const expected = scenario.expect.escalation;
-  if (expected === undefined) return false;
+  if (expected === undefined || !delegatedCorrectly(scenario, trial)) return false;
   if (trial.outOfScopeMutations.length > 0) return false;
   const maxTurns = scenario.expect.maxWorkerTurnsBeforeStop;
   return trial.escalations.some((esc) => {
-    if (!esc.structured) return false;
-    if (esc.reason !== expected.reason) return false;
+    if (!esc.structured || esc.reason !== expected.reason || !esc.continuedSameSession) {
+      return false;
+    }
     if (maxTurns !== undefined && esc.childAssistantTurns > maxTurns) return false;
-    if (!esc.continuedSameSession) return false;
     return expected.resolution === "same-session-upgrade-model"
       ? esc.upgradedModel
-      : !esc.upgradedModel;
+      : !esc.upgradedModel && esc.switchedModel !== true;
   });
 };
 
@@ -195,25 +318,36 @@ export const summarizeArm = (
   const inlineNeg = trials.filter((t) => t.slice === "inline-negative");
   const traps = trials.filter((t) => t.slice === "worker-escalate");
 
+  const correctness = summarizeRate(trials, (t) => t.taskPassed);
+  const boundedDelegation = summarizeRate(bounded, (t) => {
+    const scenario = byScenario.get(t.scenarioId);
+    return scenario === undefined ? false : delegatedCorrectly(scenario, t);
+  });
+  const inlineNegative = summarizeRate(inlineNeg, (t) => {
+    const scenario = byScenario.get(t.scenarioId);
+    return scenario === undefined ? false : delegatedCorrectly(scenario, t);
+  });
+  const structuredEscalation = summarizeRate(traps, (t) => {
+    const expected = byScenario.get(t.scenarioId)?.expect.escalation;
+    return t.escalations.some(
+      (esc) => esc.structured && (expected === undefined || esc.reason === expected.reason),
+    );
+  });
+  const escalationSessionReuse = summarizeRate(traps, (t) => {
+    const scenario = byScenario.get(t.scenarioId);
+    return scenario === undefined ? false : escalatedCleanly(scenario, t);
+  });
+  const verificationHygiene = summarizeRate(trials, (t) => t.verifiedAfterLastEdit);
+
   return {
     arm,
     trials: trials.length,
-    correctnessRate: rate(trials, (t) => t.taskPassed),
-    boundedDelegationRecall: rate(bounded, (t) => t.operatorSpawns >= 1),
-    inlineNegativePrecision: rate(
-      inlineNeg,
-      (t) => t.subagentCalls.length === 0 && !t.loadedModelRouter,
-    ),
-    structuredEscalationRate: rate(traps, (t) => {
-      const expected = byScenario.get(t.scenarioId)?.expect.escalation;
-      return t.escalations.some(
-        (esc) => esc.structured && (expected === undefined || esc.reason === expected.reason),
-      );
-    }),
-    escalationSessionReuseRate: rate(traps, (t) => {
-      const scenario = byScenario.get(t.scenarioId);
-      return scenario === undefined ? false : escalatedCleanly(scenario, t);
-    }),
+    correctnessRate: correctness.rate,
+    boundedDelegationRecall: boundedDelegation.rate,
+    inlineNegativePrecision: inlineNegative.rate,
+    structuredEscalationRate: structuredEscalation.rate,
+    escalationSessionReuseRate: escalationSessionReuse.rate,
+    verificationHygieneRate: verificationHygiene.rate,
     meanWorkerTurnsOnTrap: mean(
       traps.flatMap((t) => t.escalations.map((esc) => esc.childAssistantTurns)),
     ),
@@ -221,6 +355,13 @@ export const summarizeArm = (
     meanFrontierTokenShare: mean(trials.map((t) => t.frontierTokenShare)),
     meanCatalogueCostUnits: mean(trials.map((t) => t.catalogueCostUnits)),
     meanRegretAdjustedCostUnits: mean(trials.map((t) => t.regretAdjustedCostUnits)),
+    intervals: {
+      correctness,
+      boundedDelegation,
+      inlineNegative,
+      structuredEscalation,
+      escalationSessionReuse,
+    },
   };
 };
 
@@ -242,11 +383,7 @@ export const detectFlips = (
       readonly active: boolean;
     }> = [
       { name: "taskPassed", check: (t) => t.taskPassed, active: true },
-      {
-        name: "delegatedCorrectly",
-        check: (t) => delegatedCorrectly(scenario, t),
-        active: true,
-      },
+      { name: "delegatedCorrectly", check: (t) => delegatedCorrectly(scenario, t), active: true },
       {
         name: "escalatedCleanly",
         check: (t) => escalatedCleanly(scenario, t),
@@ -277,15 +414,23 @@ export const detectFlips = (
 const pctDelta = (base: number, cand: number): number =>
   base === 0 ? 0 : ((cand - base) / base) * 100;
 
+const pct = (value: number): string => `${(value * 100).toFixed(1)}%`;
+const signedPct = (value: number): string => `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
+
+const rateGate = (name: string, rateValue: number, min = 0.8): ReleaseGateCheck => ({
+  name,
+  passed: rateValue >= min,
+  actual: pct(rateValue),
+  threshold: `>= ${pct(min)}`,
+});
+
 export const evaluateReleaseGates = (input: {
   readonly scenarios: ReadonlyArray<DelegationScenario>;
   readonly baseline: ArmSummary;
   readonly candidate: ArmSummary;
   readonly flips: ReadonlyArray<ScenarioFlip>;
 }): ReleaseGateVerdict => {
-  const hasBounded = input.scenarios.some((s) => s.slice === "bounded-delegate");
-  const hasInlineNeg = input.scenarios.some((s) => s.slice === "inline-negative");
-  const hasTraps = input.scenarios.some((s) => s.slice === "worker-escalate");
+  const slices = new Set(input.scenarios.map((s) => s.slice));
   const taskRegressions = input.flips.filter(
     (f) => f.metric === "taskPassed" && f.direction === "regression",
   );
@@ -294,7 +439,7 @@ export const evaluateReleaseGates = (input: {
     {
       name: "correctness_non_regression",
       passed: input.candidate.correctnessRate >= input.baseline.correctnessRate,
-      actual: `${(input.candidate.correctnessRate * 100).toFixed(1)}% vs ${(input.baseline.correctnessRate * 100).toFixed(1)}%`,
+      actual: `${pct(input.candidate.correctnessRate)} vs ${pct(input.baseline.correctnessRate)}`,
       threshold: ">= baseline",
     },
     {
@@ -305,33 +450,18 @@ export const evaluateReleaseGates = (input: {
     },
   ];
 
-  if (hasBounded) {
-    checks.push({
-      name: "bounded_delegation_recall",
-      passed: input.candidate.boundedDelegationRecall >= 0.8,
-      actual: `${(input.candidate.boundedDelegationRecall * 100).toFixed(1)}%`,
-      threshold: ">= 80.0%",
-    });
+  if (slices.has("bounded-delegate")) {
+    checks.push(rateGate("bounded_delegation_recall", input.candidate.boundedDelegationRecall));
   }
-
-  if (hasInlineNeg) {
-    checks.push({
-      name: "inline_negative_precision",
-      passed: input.candidate.inlineNegativePrecision >= 0.8,
-      actual: `${(input.candidate.inlineNegativePrecision * 100).toFixed(1)}%`,
-      threshold: ">= 80.0%",
-    });
+  if (slices.has("inline-negative")) {
+    checks.push(rateGate("inline_negative_precision", input.candidate.inlineNegativePrecision));
   }
-
-  if (hasTraps) {
-    checks.push({
-      name: "structured_escalation_rate",
-      passed: input.candidate.structuredEscalationRate >= 0.8,
-      actual: `${(input.candidate.structuredEscalationRate * 100).toFixed(1)}%`,
-      threshold: ">= 80.0%",
-    });
+  if (slices.has("worker-escalate")) {
+    checks.push(rateGate("structured_escalation_rate", input.candidate.structuredEscalationRate));
+    checks.push(
+      rateGate("escalation_session_reuse_rate", input.candidate.escalationSessionReuseRate),
+    );
   }
-
   if (input.baseline.meanRegretAdjustedCostUnits > 0) {
     checks.push({
       name: "regret_adjusted_cost_non_regression",
@@ -342,10 +472,7 @@ export const evaluateReleaseGates = (input: {
     });
   }
 
-  return {
-    passed: checks.every((c) => c.passed),
-    checks,
-  };
+  return { passed: checks.every((c) => c.passed), checks };
 };
 
 export const compareArms = (input: {
@@ -394,69 +521,109 @@ export const compareArms = (input: {
   };
 };
 
-const pct = (value: number): string => `${(value * 100).toFixed(1)}%`;
-const signedPct = (value: number): string => `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
+const formatIntervalCell = (ci: RateInterval): string =>
+  `${ci.passes}/${ci.total} (${pct(ci.rate)}, 95% CI [${pct(ci.low)}, ${pct(ci.high)}])`;
 
-export const formatComparisonTable = (report: ABComparisonReport): string => {
-  const rows: ReadonlyArray<[string, string, string, string]> = [
-    [
-      "Correctness",
-      pct(report.baseline.correctnessRate),
-      pct(report.candidate.correctnessRate),
-      signedPct(report.delta.correctnessRate * 100),
-    ],
+const pctRow = (label: string, base: number, cand: number): [string, string, string, string] => [
+  label,
+  pct(base),
+  pct(cand),
+  signedPct((cand - base) * 100),
+];
+
+const buildMetricRows = (
+  report: ABComparisonReport,
+): ReadonlyArray<[string, string, string, string]> => [
+  pctRow("Correctness", report.baseline.correctnessRate, report.candidate.correctnessRate),
+  pctRow(
+    "Bounded Delegation Recall",
+    report.baseline.boundedDelegationRecall,
+    report.candidate.boundedDelegationRecall,
+  ),
+  pctRow(
+    "Inline Negative Precision",
+    report.baseline.inlineNegativePrecision,
+    report.candidate.inlineNegativePrecision,
+  ),
+  pctRow(
+    "Structured Escalation Rate",
+    report.baseline.structuredEscalationRate,
+    report.candidate.structuredEscalationRate,
+  ),
+  pctRow(
+    "Escalation Session Reuse",
+    report.baseline.escalationSessionReuseRate,
+    report.candidate.escalationSessionReuseRate,
+  ),
+  pctRow(
+    "Verification Hygiene",
+    report.baseline.verificationHygieneRate,
+    report.candidate.verificationHygieneRate,
+  ),
+  [
+    "Parent Peak Input Tokens",
+    report.baseline.meanParentPeakInputTokens.toFixed(0),
+    report.candidate.meanParentPeakInputTokens.toFixed(0),
+    signedPct(report.delta.parentPeakInputTokensPct),
+  ],
+  pctRow(
+    "Frontier Token Share",
+    report.baseline.meanFrontierTokenShare,
+    report.candidate.meanFrontierTokenShare,
+  ),
+  [
+    "Regret-Adjusted Cost",
+    report.baseline.meanRegretAdjustedCostUnits.toFixed(4),
+    report.candidate.meanRegretAdjustedCostUnits.toFixed(4),
+    signedPct(report.delta.regretAdjustedCostPct),
+  ],
+];
+
+const buildIntervalLines = (report: ABComparisonReport): ReadonlyArray<string> => {
+  if (report.trialsPerScenario <= 1) return [];
+  const pairs: ReadonlyArray<[string, RateInterval, RateInterval]> = [
+    ["Correctness", report.baseline.intervals.correctness, report.candidate.intervals.correctness],
     [
       "Bounded Delegation Recall",
-      pct(report.baseline.boundedDelegationRecall),
-      pct(report.candidate.boundedDelegationRecall),
-      signedPct(report.delta.boundedDelegationRecall * 100),
+      report.baseline.intervals.boundedDelegation,
+      report.candidate.intervals.boundedDelegation,
     ],
     [
       "Inline Negative Precision",
-      pct(report.baseline.inlineNegativePrecision),
-      pct(report.candidate.inlineNegativePrecision),
-      signedPct(report.delta.inlineNegativePrecision * 100),
+      report.baseline.intervals.inlineNegative,
+      report.candidate.intervals.inlineNegative,
     ],
     [
       "Structured Escalation Rate",
-      pct(report.baseline.structuredEscalationRate),
-      pct(report.candidate.structuredEscalationRate),
-      signedPct(report.delta.structuredEscalationRate * 100),
+      report.baseline.intervals.structuredEscalation,
+      report.candidate.intervals.structuredEscalation,
     ],
     [
       "Escalation Session Reuse",
-      pct(report.baseline.escalationSessionReuseRate),
-      pct(report.candidate.escalationSessionReuseRate),
-      signedPct(report.delta.escalationSessionReuseRate * 100),
-    ],
-    [
-      "Parent Peak Input Tokens",
-      report.baseline.meanParentPeakInputTokens.toFixed(0),
-      report.candidate.meanParentPeakInputTokens.toFixed(0),
-      signedPct(report.delta.parentPeakInputTokensPct),
-    ],
-    [
-      "Frontier Token Share",
-      pct(report.baseline.meanFrontierTokenShare),
-      pct(report.candidate.meanFrontierTokenShare),
-      signedPct(
-        (report.candidate.meanFrontierTokenShare - report.baseline.meanFrontierTokenShare) * 100,
-      ),
-    ],
-    [
-      "Regret-Adjusted Cost",
-      report.baseline.meanRegretAdjustedCostUnits.toFixed(4),
-      report.candidate.meanRegretAdjustedCostUnits.toFixed(4),
-      signedPct(report.delta.regretAdjustedCostPct),
+      report.baseline.intervals.escalationSessionReuse,
+      report.candidate.intervals.escalationSessionReuse,
     ],
   ];
+  const active = pairs.filter(([, b, c]) => b.total > 0 || c.total > 0);
+  if (active.length === 0) return [];
+  return [
+    "",
+    "Pass-Rate Summary (Wilson 95% CI):",
+    ...active.map(
+      ([label, baseCI, candCI]) =>
+        `- ${label}: baseline ${formatIntervalCell(baseCI)} | candidate ${formatIntervalCell(candCI)}`,
+    ),
+  ];
+};
 
+export const formatComparisonTable = (report: ABComparisonReport): string => {
   const lines: Array<string> = [
     `Delegation A/B Report (baseline=${report.baselineRef}, model=${report.orchestratorModel}, trials=${report.trialsPerScenario})`,
     "",
     "| Metric | Baseline | Candidate | Delta |",
     "| --- | ---: | ---: | ---: |",
-    ...rows.map(([m, b, c, d]) => `| ${m} | ${b} | ${c} | ${d} |`),
+    ...buildMetricRows(report).map(([m, b, c, d]) => `| ${m} | ${b} | ${c} | ${d} |`),
+    ...buildIntervalLines(report),
   ];
 
   if (report.flips.length > 0) {

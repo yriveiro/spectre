@@ -1,7 +1,7 @@
 {
   "id": "inline-framing-vague",
   "slice": "inline-negative",
-  "description": "Vague feature request missing file scope and acceptance criteria; orchestrator must frame or ask rather than spawn a worker.",
+  "description": "Vague feature request missing file scope and acceptance criteria; orchestrator must frame or ask rather than spawn a worker or fabricate files.",
   "spectreConfig": {
     "models": {
       "minimax": "opencode-go/minimax-m3.1-flash-free",
@@ -20,6 +20,10 @@
     }
   ],
   "expect": {
+    "expectedFiles": {
+      "README.md": "# Service\nMinimal worker service."
+    },
+    "requiredAnswerSubstrings": ["README"],
     "expectOperatorDelegation": false
   }
 }
