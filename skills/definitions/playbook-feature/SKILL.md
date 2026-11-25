@@ -69,7 +69,8 @@ agent.
 
 Delegate the code to a `subagent` with a specific scope: the file paths, the
 named data shape and the structure holding it, the success criteria. Choose the
-model with `tools.spectre.routing({})` and never write a model id by hand.
+profile with `tools.spectre.routing({})`, pass `agent: profile.agent` and
+`model: profile.model.ref`, and never write a model id by hand.
 
 Make surgical edits, and re-ground against the upstream file for anything derived from it. A file you did not read is a file you cannot edit safely. When a shared primitive improves, apply the improvement to every consumer
 and verify each one. Leaving three consumers on the old behaviour is a
@@ -92,7 +93,7 @@ twenty changes is a branch nobody reads.
 ## Phase F: Ship
 
 Rebase into small ordered commits and let `tools.spectre.stack` settle the pull
-request order, then open it with `gh pr create`. Tables for design
+request order, then open it with `tools.spectre.pr`. Tables for design
 alternatives, so the rejected options and their reasons travel with the code.
 
 ## Outputs

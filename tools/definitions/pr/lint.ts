@@ -14,6 +14,10 @@ const TITLE =
 const SHA = /\b[0-9a-f]{7,40}\b/;
 const NUMBERED = /^\s*\d+\.\s/m;
 const HEADING = /^\s*#{1,6}\s/m;
+const NO_CODE_NOTE =
+  /\b(?:no|zero)\s+(?:source\s+)?code\s+(?:files?|changes?|paths?|edits?)\b|\b(?:docs?|markdown|config|non-code)[-\s]+only\b/i;
+const RIPWIRE_DELTA = /\bripwire\b.*--quality-delta(?:=|\s|$)/i;
+const RIPWIRE_AFFECTED = /\bripwire\b.*--affected(?:=|\s|$)/i;
 
 const CLOSERS: ReadonlyArray<[RegExp, string]> = [
   [/\band\b/i, "an `and`"],
@@ -174,8 +178,27 @@ const commitRule = (commit: Commit | undefined): Array<Finding> => {
   return found;
 };
 
+const validationRule = (validation: Fields["validation"]): Array<Finding> => {
+  if (validation.length === 0) return [];
+  if (validation.some((one) => NO_CODE_NOTE.test(`${one.check} ${one.result}`))) return [];
+  const hasDelta = validation.some((one) => RIPWIRE_DELTA.test(one.check));
+  const hasAffected = validation.some((one) => RIPWIRE_AFFECTED.test(one.check));
+  if (hasDelta && hasAffected) return [];
+  const missing = [
+    ...(hasDelta ? [] : ["`ripwire . --quality-delta`"]),
+    ...(hasAffected ? [] : ["`ripwire . --affected=<paths>`"]),
+  ];
+  return [
+    finding(
+      "validation-ripwire",
+      `\`validation\` must include ${missing.join(" and ")}, or state that the branch changed no code file`,
+    ),
+  ];
+};
+
 export const lint = (fields: Fields, draft: Draft): ReadonlyArray<Finding> => [
   ...titleRule(fields, draft),
   ...bodyRule(fields, draft),
+  ...validationRule(fields.validation),
   ...commitRule(fields.commit),
 ];

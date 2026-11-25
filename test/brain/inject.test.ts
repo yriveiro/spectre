@@ -23,6 +23,7 @@ interface PromptEvent {
   prompt: {
     text: string;
     agents?: Array<{ readonly name: string }>;
+    files?: Array<{ readonly uri: string; readonly name?: string }>;
   };
   delivery: "steer" | "queue";
 }
@@ -84,12 +85,19 @@ const setup = async (tag: string, info: SessionInfoStub = {}, withInstructions: 
 const promptEvent = (
   sessionID: string,
   agents?: Array<{ readonly name: string }>,
-): PromptEvent => ({
-  sessionID,
-  messageID: "msg_prompt",
-  prompt: { text: "help", ...(agents === undefined ? {} : { agents }) },
-  delivery: "steer",
-});
+  text: string = "help",
+  files?: Array<{ readonly uri: string; readonly name?: string }>,
+): PromptEvent => {
+  const prompt: PromptEvent["prompt"] = { text };
+  if (agents !== undefined) prompt.agents = agents;
+  if (files !== undefined) prompt.files = files;
+  return {
+    sessionID,
+    messageID: "msg_prompt",
+    prompt,
+    delivery: "steer",
+  };
+};
 
 const neuron = (id: string, kind: string, claim: string): string =>
   `---\nkind: ${kind}\nclaim: "${claim}"\nsubject: ["tools/definitions/canvas/content.ts"]\n---\n\nBody for ${id}.\n`;
@@ -142,14 +150,59 @@ describe("brain injection", () => {
     expect(byMention.puts).toEqual([]);
   });
 
-  test("a subagent session gets nothing", async () => {
-    const { dir, sessionID, handler, puts } = await setup("subagent", {
-      agent: "spectre",
+  test("child sessions inject a <=250-token gotcha/constraint slice unless excluded or empty", async () => {
+    const nocturnaChild = await setup("subagent_nocturna", {
+      agent: "nocturna",
       parentID: "ses_parent",
     });
-    await seed(dir, 3);
-    await Effect.runPromise(handler(promptEvent(sessionID)));
-    expect(puts).toEqual([]);
+    await seed(nocturnaChild.dir, 3);
+    await Effect.runPromise(nocturnaChild.handler(promptEvent(nocturnaChild.sessionID)));
+    expect(nocturnaChild.puts).toEqual([]);
+
+    const emptyChild = await setup("subagent_no_gotchas", {
+      agent: "operator",
+      parentID: "ses_parent",
+    });
+    await Bun.write(
+      join(emptyChild.dir, ".spectre", "brain", "neurons", "01K000000000000000000000099.md"),
+      neuron("01K000000000000000000000099", "feature", "Only a feature claim exists"),
+    );
+    await Effect.runPromise(emptyChild.handler(promptEvent(emptyChild.sessionID)));
+    expect(emptyChild.puts).toEqual([]);
+
+    const workerChild = await setup("subagent_worker", {
+      agent: "operator",
+      parentID: "ses_parent",
+    });
+    await seed(workerChild.dir, 30);
+    await Effect.runPromise(workerChild.handler(promptEvent(workerChild.sessionID)));
+    expect(workerChild.puts.length).toBe(1);
+    const text = String(workerChild.puts[0]?.value ?? "");
+    expect(text.length / 4).toBeLessThanOrEqual(250);
+    expect(text).toContain("250 tokens");
+    expect(text).toContain("[gotcha]");
+    expect(text).not.toContain("[feature]");
+  });
+
+  test("root sessions rank claims by prompt text and attached file paths ahead of newer unrelated claims", async () => {
+    const { dir, sessionID, handler, puts } = await setup("ranked_root", { agent: "spectre" });
+    await seed(dir, 40);
+    const targetedId = "01K000000000000000000000000";
+    await Bun.write(
+      join(dir, ".spectre", "brain", "neurons", `${targetedId}.md`),
+      `---\nkind: feature\nclaim: "Routing guard enforces model tier"\nsubject: ["tools/definitions/routing/guard.ts"]\n---\n\nTargeted.\n`,
+    );
+
+    await Effect.runPromise(
+      handler(
+        promptEvent(sessionID, undefined, "check routing guard", [
+          { uri: "file:///repo/tools/definitions/routing/guard.ts" },
+        ]),
+      ),
+    );
+    expect(puts.length).toBe(1);
+    const text = String(puts[0]?.value ?? "");
+    expect(text).toContain(targetedId);
   });
 
   test("a brain with no claims puts cold once and carries no index", async () => {
@@ -174,7 +227,8 @@ describe("brain injection", () => {
   test("every action this tool names in its own text is an action it has", async () => {
     const named = new Set<string>();
     for (const source of [COLD, DESCRIPTION])
-      for (const found of source.matchAll(/action=([a-z-]+)/g)) named.add(found[1]!);
+      for (const found of source.matchAll(/action=([a-z-]+)/g))
+        if (found[1] !== undefined) named.add(found[1]);
 
     expect(named.size).toBeGreaterThan(0);
     for (const action of named) expect(ACTIONS).toContain(action);
@@ -223,7 +277,7 @@ describe("brain injection", () => {
 
   test("superseded and demoted claims stay out of the injected index and newer active claims rank first", async () => {
     const { dir, sessionID, handler, puts } = await setup("filtered", { agent: "spectre" });
-    await seed(dir, 40);
+    await seed(dir, 60);
     const idOf = (i: number) => `01K${String(i).padStart(24, "0")}`;
     const ledgerLines = [
       JSON.stringify({

@@ -241,7 +241,11 @@ describe("convergent commit staging and session directory resolution", () => {
           summary: "Boot location stayed on main after session_move ran.",
           review: "Does the error name the moved session directory?",
           scopeItems: ["tools/definitions/pr/index.ts"],
-          validation: [{ check: "bun test test/pr", result: "pass" }],
+          validation: [
+            { check: "bun test test/pr", result: "pass" },
+            { check: "ripwire . --quality-delta", result: "regressions=0 gating=0" },
+            { check: "ripwire . --affected=tools/definitions/pr/index.ts", result: "tests=2" },
+          ],
           risk: "Reads session directory first. Revert restores boot directory.",
         },
         {

@@ -15,6 +15,7 @@ import {
   type Health,
   type Memory,
   type ShellAsk,
+  SPECTRE_DELETE_REFUSAL,
   type TextAsk,
   type Verdict,
 } from "./policy";
@@ -114,6 +115,31 @@ const applyReroute = (
     event.tool = "spectre_search";
   });
 
+const FILE_PATH_TOOLS: ReadonlySet<string> = new Set(["read", "edit", "write"]);
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
+
+const repairToolInput = (event: ToolBefore): void => {
+  if (!FILE_PATH_TOOLS.has(event.tool) || !isPlainObject(event.input)) return;
+  if (typeof event.input.file === "string" && event.input.path === undefined) {
+    event.input.path = event.input.file;
+    delete event.input.file;
+  }
+};
+
+const prLandingAsk = (input: unknown): Ask | undefined => {
+  if (!isPlainObject(input) || input.action === "compose") return undefined;
+  return {
+    surface: "shell",
+    command: "spectre_pr",
+    parsed: { kind: "landing", command: "spectre_pr" },
+  };
+};
+
 /** One reader per call: the shipped `askOf`, or a test that proves the gate depends on it. */
 export type AskReader = (event: ToolBefore) => Ask | undefined;
 
@@ -129,6 +155,8 @@ const askOf = (root: string, event: ToolBefore): Ask | undefined => {
     case "edit":
     case "write":
       return mutateAsk(event.input, event.tool, root);
+    case "spectre_pr":
+      return prLandingAsk(event.input);
     default:
       return undefined;
   }
@@ -271,10 +299,14 @@ const guardBefore = (
   read?: AskReader,
 ): Effect.Effect<void, Tool.Error> =>
   Effect.gen(function* () {
+    repairToolInput(event);
     if (!isSpectre(event.agent)) return;
     const sessionScope = yield* sessionScopeOf(ctx, event.sessionID);
     const ask = resolveAsk(sessionScope.directory, event, read);
     if (ask === undefined) return;
+    if (ask.surface === "shell" && ask.parsed.kind === "destructive") {
+      return yield* Effect.fail(new Tool.Error({ message: SPECTRE_DELETE_REFUSAL }));
+    }
     const health = yield* healthOf();
     if (health === undefined) return;
     const prev = memoryOf(event.sessionID);

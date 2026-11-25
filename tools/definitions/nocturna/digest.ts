@@ -78,35 +78,58 @@ const recordNestedToolCalls = (toolMap: Map<string, MutableToolStat>, toolCalls:
   }
 };
 
-const recordToolPart = (
-  toolMap: Map<string, MutableToolStat>,
-  skills: Set<string>,
-  part: SessionMessage.AssistantTool,
-): number => {
-  const stat = toolMap.get(part.name) ?? { calls: 0, errors: 0 };
+const SHELL_EXIT_FAILURE = /\bExit code:\s*[1-9]\d*\b/i;
+
+const hasShellFailureOutput = (content: ReadonlyArray<Tool.Content>): boolean => {
+  for (const item of content) {
+    if (item.type === "text" && SHELL_EXIT_FAILURE.test(item.text)) return true;
+  }
+  return false;
+};
+
+const isSubagentResume = (part: SessionMessage.AssistantTool): boolean => {
+  if (part.state.status === "streaming") return false;
+  if (typeof part.state.input !== "object" || part.state.input === null) return false;
+  const sessionID = (part.state.input as { sessionID?: unknown }).sessionID;
+  return typeof sessionID === "string" && sessionID.trim().length > 0;
+};
+
+const recordCompletedToolPart = (
+  tally: MessageTally,
+  stat: MutableToolStat,
+  name: string,
+  state: Extract<SessionMessage.AssistantTool["state"], { readonly status: "completed" }>,
+): void => {
+  if (name === "skill" && typeof state.input === "object" && state.input !== null) {
+    const skillId = (state.input as { id?: unknown }).id;
+    if (typeof skillId === "string") tally.skills.add(skillId);
+  }
+  if (name === "shell" && hasShellFailureOutput(state.content)) {
+    tally.shellFailed += 1;
+  }
+  const metadata = state.metadata as { error?: unknown; toolCalls?: unknown } | undefined;
+  if (name === "execute" && metadata?.error === true) {
+    stat.errors += 1;
+  }
+  recordNestedToolCalls(tally.toolMap, metadata?.toolCalls);
+};
+
+const recordToolPart = (tally: MessageTally, part: SessionMessage.AssistantTool): void => {
+  const stat = tally.toolMap.get(part.name) ?? { calls: 0, errors: 0 };
   stat.calls += 1;
   if (part.state.status === "error") {
     stat.errors += 1;
     if (stat.sampleError === undefined) {
       stat.sampleError = clipText(`${part.state.error.type}: ${part.state.error.message}`, 160);
     }
+    if (part.name === "shell") tally.shellFailed += 1;
   } else if (part.state.status === "completed") {
-    if (
-      part.name === "skill" &&
-      typeof part.state.input === "object" &&
-      part.state.input !== null
-    ) {
-      const skillId = (part.state.input as { id?: unknown }).id;
-      if (typeof skillId === "string") skills.add(skillId);
-    }
-    const metadata = part.state.metadata as { error?: unknown; toolCalls?: unknown } | undefined;
-    if (part.name === "execute" && metadata?.error === true) {
-      stat.errors += 1;
-    }
-    recordNestedToolCalls(toolMap, metadata?.toolCalls);
+    recordCompletedToolPart(tally, stat, part.name, part.state);
   }
-  toolMap.set(part.name, stat);
-  return part.name === "subagent" ? 1 : 0;
+  tally.toolMap.set(part.name, stat);
+  if (part.name === "subagent" && !isSubagentResume(part)) {
+    tally.subagentsSpawned += 1;
+  }
 };
 
 const accumulateMessage = (tally: MessageTally, message: SessionMessage.Info): void => {
@@ -131,7 +154,7 @@ const accumulateMessage = (tally: MessageTally, message: SessionMessage.Info): v
     if (message.retry !== undefined) tally.retries += 1;
     for (const part of message.content) {
       if (part.type === "tool") {
-        tally.subagentsSpawned += recordToolPart(tally.toolMap, tally.skills, part);
+        recordToolPart(tally, part);
       }
     }
   }
@@ -165,7 +188,10 @@ const computeAnomalyScore = (
     tally.compactions * 15 +
     tally.shellFailed * 10 +
     outcomePenalty +
-    Math.floor(activeTokens / 50_000)
+    Math.floor(activeTokens / 50_000) +
+    Math.floor(info.cost * 2) +
+    Math.floor(tally.assistantSteps / 10) +
+    Math.floor(info.tokens.cache.read / 1_000_000)
   );
 };
 

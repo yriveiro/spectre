@@ -31,6 +31,9 @@ export const CollectInput = Schema.Struct({
   limit: Schema.optional(Schema.Int).annotate({
     description: "Maximum unanalyzed sessions to digest in this call (1..100). Default 25.",
   }),
+  offset: Schema.optional(Schema.Int).annotate({
+    description: "Number of ranked pending sessions to skip before slicing limit (>= 0). Default 0.",
+  }),
   includeAnalyzed: Schema.optional(Schema.Boolean).annotate({
     description: "Re-scan sessions in the window even when their updatedAt matches ctx.storage.",
   }),
@@ -436,6 +439,7 @@ const runCollect = (
     const project = ctx.location.project.id;
     const windowDays = clampFinite(input.days, DEFAULT_DAYS, 1, 90);
     const limit = clampFinite(input.limit, DEFAULT_LIMIT, 1, PAGE_SIZE);
+    const offset = Math.floor(clampFinite(input.offset, 0, 0, Number.MAX_SAFE_INTEGER));
     const cutoffAt = now - windowDays * DAY_MS;
 
     const caller = yield* resolveCallerFilter(ctx, callerSessionID);
@@ -449,8 +453,10 @@ const runCollect = (
     );
 
     const ordered =
-      scanned.pending.length > limit ? scanned.pending.toSorted(comparePending) : scanned.pending;
-    const batch = ordered.slice(0, limit);
+      scanned.pending.length > limit || offset > 0
+        ? scanned.pending.toSorted(comparePending)
+        : scanned.pending;
+    const batch = ordered.slice(offset, offset + limit);
     const { ranked, unreadable } = yield* digestBatch(ctx, batch);
 
     const output: typeof CollectedOutput.Type = {
@@ -460,7 +466,7 @@ const runCollect = (
       cutoffAt,
       scannedInWindow: scanned.scannedInWindow,
       skippedAnalyzed: scanned.skippedAnalyzed,
-      remainingUnanalyzed: Math.max(0, scanned.pending.length - batch.length),
+      remainingUnanalyzed: Math.max(0, scanned.pending.length - (offset + batch.length)),
       trackedInStorage: ledger.size,
       truncated: scanned.truncated,
       unreadable,

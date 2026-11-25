@@ -14,6 +14,7 @@ import {
 } from "./delegation";
 import { hostCatalogue } from "./host";
 import { load } from "./load";
+import type { Known } from "./types";
 
 export const SUBAGENT_MODEL_DESCRIPTION =
   "Pass the exact model.ref returned by tools.spectre.routing in execute on new spawns. Omit model when resuming an existing sessionID unless switching models deliberately.";
@@ -29,20 +30,99 @@ const matchesAllowedEntry = (rawModel: string, allowedEntry: string): boolean =>
   return rawModel.split("#")[0] === allowedEntry;
 };
 
+const CROSS_FAMILY_REVIEW_RE =
+  /\b(crosscheck|cross-check|second opinion|interrogate|adversarial review)\b/i;
+
+const YUBIKEY_OTP_RE = /^c{2,12}[cbdefghijklnrtuv]{10,60}$/i;
+
+export const YUBIKEY_OTP_NOTE =
+  "[spectre:yubikey-otp-ignored] Accidental YubiKey OTP input detected; reply with 'Ignored accidental YubiKey touch.' and take no action.";
+
+const findSpendableKnown = (
+  catalogue: ReadonlyArray<Known>,
+  modelRef: string,
+): Known | undefined => {
+  const [base, variant] = modelRef.split("#", 2);
+  const hit = catalogue.find((row) => `${row.providerID}/${row.id}` === base);
+  if (hit === undefined || !hit.enabled || hit.status === "deprecated" || !hit.tools) {
+    return undefined;
+  }
+  return variant === undefined || hit.rungs.includes(variant) ? hit : undefined;
+};
+
 const anySpendableInCatalogue = (
   allowedModels: ReadonlyArray<string>,
   models: ReadonlyArray<Model.Info>,
 ): boolean => {
   const catalogue = models.map(known);
-  return allowedModels.some((entry) => {
-    const [base, variant] = entry.split("#", 2);
-    const hit = catalogue.find((row) => `${row.providerID}/${row.id}` === base);
-    if (hit === undefined || !hit.enabled || hit.status === "deprecated" || !hit.tools) {
-      return false;
-    }
-    return variant === undefined || hit.rungs.includes(variant);
-  });
+  return allowedModels.some((entry) => findSpendableKnown(catalogue, entry) !== undefined);
 };
+
+const pickDifferentFamilyModel = (
+  modelsTable: Readonly<Record<string, string>>,
+  crosscheckOrder: ReadonlyArray<string> | undefined,
+  catalogue: ReadonlyArray<Known>,
+  parentFamily: string,
+): { readonly alias: string; readonly entry: string; readonly family: string } | undefined => {
+  const spendable: Array<{ readonly alias: string; readonly entry: string; readonly family: string }> =
+    [];
+  for (const [alias, entry] of Object.entries(modelsTable)) {
+    const found = findSpendableKnown(catalogue, entry);
+    if (found?.family !== undefined) {
+      spendable.push({ alias, entry, family: found.family });
+    }
+  }
+  if (new Set(spendable.map((one) => one.family)).size < 2) return undefined;
+
+  for (const alias of crosscheckOrder ?? []) {
+    const match = spendable.find((one) => one.alias === alias && one.family !== parentFamily);
+    if (match !== undefined) return match;
+  }
+  return spendable.find((one) => one.family !== parentFamily);
+};
+
+const checkCrossFamilyReview = (
+  ctx: Plugin.Context,
+  args: {
+    readonly agent: string;
+    readonly description: unknown;
+    readonly rawModel: string;
+    readonly parentModel: { readonly providerID: string; readonly id: string } | undefined;
+    readonly modelsTable: Readonly<Record<string, string>>;
+    readonly crosscheckOrder: ReadonlyArray<string> | undefined;
+  },
+): Effect.Effect<void, Tool.Error> =>
+  Effect.gen(function* () {
+    if (args.agent !== "spectre" || args.parentModel === undefined) return;
+    if (typeof args.description !== "string" || !CROSS_FAMILY_REVIEW_RE.test(args.description)) {
+      return;
+    }
+    if (typeof ctx.model?.list !== "function") return;
+    const listed = yield* hostCatalogue(ctx);
+    if (listed.problem !== undefined) return;
+
+    const catalogue = listed.models.map(known);
+    const parentRef = `${args.parentModel.providerID}/${args.parentModel.id}`;
+    const parentFamily = findSpendableKnown(catalogue, parentRef)?.family;
+    const childFamily = findSpendableKnown(catalogue, args.rawModel)?.family;
+    if (parentFamily === undefined || childFamily === undefined || childFamily !== parentFamily) {
+      return;
+    }
+
+    const alt = pickDifferentFamilyModel(
+      args.modelsTable,
+      args.crosscheckOrder,
+      catalogue,
+      parentFamily,
+    );
+    if (alt === undefined) return;
+
+    yield* Effect.fail(
+      new Tool.Error({
+        message: `Cross-family review required: "${args.rawModel}" shares family "${childFamily}" with the active session model. Use a different-family crosscheck model from spectre.json such as "${alt.entry}" (alias "${alt.alias}", family "${alt.family}").`,
+      }),
+    );
+  });
 
 const listSpendableCheck = (
   ctx: Plugin.Context,
@@ -71,7 +151,7 @@ const checkSubagentModel = (
     if (typeof event.input !== "object" || event.input === null || Array.isArray(event.input)) {
       return;
     }
-    const input = event.input as { sessionID?: unknown; model?: unknown };
+    const input = event.input as { sessionID?: unknown; model?: unknown; description?: unknown };
     if (isResumeInput(input.sessionID)) return;
     if (typeof input.model !== "string") return;
     const rawModel = input.model.trim();
@@ -94,7 +174,17 @@ const checkSubagentModel = (
       return;
     }
 
-    if (allowedModels.some((entry) => matchesAllowedEntry(rawModel, entry))) return;
+    if (allowedModels.some((entry) => matchesAllowedEntry(rawModel, entry))) {
+      yield* checkCrossFamilyReview(ctx, {
+        agent: event.agent,
+        description: input.description,
+        rawModel,
+        parentModel: session?.model,
+        modelsTable: configured.tables.models,
+        crosscheckOrder: configured.tables.crosscheck,
+      });
+      return;
+    }
 
     const hasSpendable = yield* listSpendableCheck(ctx, allowedModels);
     if (!hasSpendable) return;
@@ -136,6 +226,11 @@ const classifyToolAfter = (tool: string, input: unknown): DriftSignal | undefine
   if (tool === "read") {
     const path = readStringField(input, ["path", "filePath"]);
     return path === undefined ? undefined : { kind: "read-code", path };
+  }
+  if (tool === "ripgrep" || tool === "glob") {
+    const pattern = readStringField(input, ["pattern"]) ?? "";
+    const scope = readStringField(input, ["path", "include"]) ?? ".";
+    return { kind: "read-code", path: `${tool}:${scope}:${pattern}` };
   }
   if (tool === "edit" || tool === "write") {
     const path = readStringField(input, ["path", "filePath"]);
@@ -242,6 +337,36 @@ const syncDriftAfterTool = (
     }
   });
 
+interface PromptFilterEvent {
+  prompt?: { text?: unknown };
+  text?: unknown;
+  delivery?: unknown;
+}
+
+const setQueueDelivery = (event: PromptFilterEvent): void => {
+  const descriptor = Object.getOwnPropertyDescriptor(event, "delivery");
+  if (descriptor === undefined || descriptor.writable) {
+    event.delivery = "queue";
+  }
+};
+
+const filterYubiKeyOtpPrompt = (event: PromptFilterEvent): boolean => {
+  const raw =
+    typeof event.prompt?.text === "string"
+      ? event.prompt.text
+      : typeof event.text === "string"
+        ? event.text
+        : undefined;
+  if (raw === undefined || !YUBIKEY_OTP_RE.test(raw.trim())) return false;
+  if (event.prompt !== undefined && typeof event.prompt.text === "string") {
+    event.prompt.text = YUBIKEY_OTP_NOTE;
+  } else {
+    event.text = YUBIKEY_OTP_NOTE;
+  }
+  setQueueDelivery(event);
+  return true;
+};
+
 export const attachRoutingGuard = (ctx: Plugin.Context) =>
   Effect.gen(function* () {
     const driftStates = new Map<string, TurnDriftState>();
@@ -252,9 +377,10 @@ export const attachRoutingGuard = (ctx: Plugin.Context) =>
         applyContextHook(event as Parameters<typeof applyContextHook>[0]);
         return Effect.void;
       });
-      yield* ctx.session.hook("prompt", (event) =>
-        resetSessionDrift(ctx, driftStates, event.sessionID),
-      );
+      yield* ctx.session.hook("prompt", (event) => {
+        if (filterYubiKeyOtpPrompt(event as unknown as PromptFilterEvent)) return Effect.void;
+        return resetSessionDrift(ctx, driftStates, event.sessionID);
+      });
     }
 
     if (typeof ctx.tool?.hook === "function") {

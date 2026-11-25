@@ -12,7 +12,11 @@ const fields = (over: Partial<Fields> = {}): Fields => ({
   summary: "Agents wrote pull requests by hand, so the shape of one was whatever the run produced.",
   review: "Is the lint fail-closed, or does it only warn?",
   scopeItems: ["tools/definitions/pr/render.ts"],
-  validation: [{ check: "bun test test/pr", result: "38 pass, 0 fail" }],
+  validation: [
+    { check: "bun test test/pr", result: "38 pass, 0 fail" },
+    { check: "ripwire . --quality-delta", result: "regressions=0 gating=0" },
+    { check: "ripwire . --affected=tools/definitions/pr", result: "tests=30 reached=168" },
+  ],
   risk: "Adds a tool. Reverting the folder removes it.",
   ...over,
 });
@@ -196,7 +200,54 @@ describe("the lint is fail-closed and each rule is reachable", () => {
             check: "bun test",
             result: "pass; spin up 26 words a b c d e f g h i j k l m n o p q r s t u v w x y z",
           },
+          { check: "ripwire . --quality-delta", result: "regressions=0 gating=0" },
+          { check: "ripwire . --affected=tools/definitions/pr", result: "tests=2 reached=10" },
         ],
+      }),
+    ).toEqual([]);
+  });
+
+  test("validation requires ripwire quality-delta and affected entries unless a no-code-file note is present", () => {
+    expect(
+      rules({
+        validation: [{ check: "bun test test/pr", result: "38 pass, 0 fail" }],
+      }),
+    ).toContain("validation-ripwire");
+
+    expect(
+      rules({
+        validation: [
+          { check: "bun test test/pr", result: "38 pass, 0 fail" },
+          { check: "ripwire . --quality-delta", result: "regressions=0 gating=0" },
+        ],
+      }),
+    ).toContain("validation-ripwire");
+
+    expect(
+      rules({
+        validation: [
+          { check: "bun test test/pr", result: "38 pass, 0 fail" },
+          { check: "ripwire . --affected=tools/definitions/pr", result: "tests=30 reached=168" },
+        ],
+      }),
+    ).toContain("validation-ripwire");
+
+    expect(
+      rules({
+        scopeItems: ["skills/definitions/playbook-opening-a-pr/SKILL.md"],
+        validation: [
+          {
+            check: "bun test test/skills",
+            result: "12 pass, 0 fail (branch changed no code file)",
+          },
+        ],
+      }),
+    ).toEqual([]);
+
+    expect(
+      rules({
+        scopeItems: ["README.md"],
+        validation: [{ check: "docs-only check", result: "verified links" }],
       }),
     ).toEqual([]);
   });

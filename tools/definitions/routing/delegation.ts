@@ -34,7 +34,6 @@ export interface TurnDriftState {
   readonly readFiles: ReadonlySet<string>;
   readonly mutatedFiles: ReadonlySet<string>;
   readonly mechanicalRuns: number;
-  readonly delegated: boolean;
   readonly nudged: boolean;
 }
 
@@ -60,7 +59,6 @@ export const emptyDriftState = (): TurnDriftState => ({
   readFiles: new Set(),
   mutatedFiles: new Set(),
   mechanicalRuns: 0,
-  delegated: false,
   nudged: false,
 });
 
@@ -78,20 +76,12 @@ export const advanceDrift = (
   prev: TurnDriftState,
   signal: DriftSignal,
 ): { readonly state: TurnDriftState; readonly verdict: DriftVerdict } => {
-  if (signal.kind === "prompt-reset") {
+  if (signal.kind === "prompt-reset" || signal.kind === "subagent-called") {
     return {
       state: emptyDriftState(),
       verdict: prev.nudged ? { action: "clear" } : { action: "none" },
     };
   }
-  if (signal.kind === "subagent-called") {
-    const next: TurnDriftState = { ...prev, delegated: true, nudged: false };
-    return {
-      state: next,
-      verdict: prev.nudged ? { action: "clear" } : { action: "none" },
-    };
-  }
-  if (prev.delegated) return { state: prev, verdict: { action: "none" } };
 
   const readFiles =
     signal.kind === "read-code" ? new Set([...prev.readFiles, signal.path]) : prev.readFiles;
@@ -192,13 +182,23 @@ const splitPaths = (raw: string | undefined): ReadonlyArray<string> => {
     .filter((entry) => entry !== "" && !/^none$/i.test(entry));
 };
 
+const SUBAGENT_OPEN_RE = /<(?:subagent|background-result(?=[^>]*\bkind="subagent"))\b[^>]*>/;
+
+const unwrapSubagentBody = (
+  raw: string,
+): { readonly sessionID?: string | undefined; readonly inner: string } => {
+  const tagMatch = raw.match(SUBAGENT_OPEN_RE);
+  if (tagMatch === null) return { inner: raw.trim() };
+  const tag = tagMatch[0];
+  const sessionID = tag.match(/\bsessionID="([^"]+)"/)?.[1];
+  const closeTag = tag.startsWith("<background-result") ? "</background-result>" : "</subagent>";
+  const afterOpen = raw.slice((tagMatch.index ?? 0) + tag.length).replace(/^\r?\n/, "");
+  const closePattern = new RegExp(`\\r?\\n?${closeTag}\\s*$`);
+  return { sessionID, inner: afterOpen.replace(closePattern, "").trim() };
+};
+
 export const parseWorkerReport = (raw: string): WorkerReport => {
-  const sessionMatch = raw.match(/<subagent\b[^>]*\bsessionID="([^"]+)"/);
-  const sessionID = sessionMatch?.[1];
-  const inner = raw
-    .replace(/^[\s\S]*?<subagent\b[^>]*>\r?\n?/, "")
-    .replace(/\r?\n?<\/subagent>\s*$/, "")
-    .trim();
+  const { sessionID, inner } = unwrapSubagentBody(raw);
 
   const head = inner
     .split(/\r?\n/)
@@ -259,7 +259,7 @@ export const shapeEscalationMessages = (
     const first = message.content[0] as { type?: unknown; text?: unknown } | undefined;
     if (first?.type !== "text" || typeof first.text !== "string") continue;
     if (first.text.includes(ESCALATION_SENTINEL)) continue;
-    const isSubagent = message.metadata?.source === "subagent" || first.text.includes("<subagent ");
+    const isSubagent = message.metadata?.source === "subagent" || SUBAGENT_OPEN_RE.test(first.text);
     if (!isSubagent) continue;
 
     const report = parseWorkerReport(first.text);

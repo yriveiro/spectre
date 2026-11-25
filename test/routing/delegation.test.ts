@@ -154,6 +154,53 @@ Missing fixture.
       sessionID: undefined,
     });
   });
+
+  test("parses OpenCode v2.4.1 <background-result kind=\"subagent\"> reports", () => {
+    const done = `<background-result kind="subagent" sessionID="ses_bg_done" state="completed" description="Update guard">
+STATUS: DONE
+TOUCHED: tools/definitions/routing/guard.ts
+VERIFIED: bun run typecheck
+OUTCOME: Updated guard hooks.
+</background-result>`;
+
+    expect(parseWorkerReport(done)).toEqual({
+      kind: "done",
+      sessionID: "ses_bg_done",
+      touched: ["tools/definitions/routing/guard.ts"],
+      verified: "bun run typecheck",
+      outcome: "Updated guard hooks.",
+    });
+
+    const esc = `<background-result sessionID="ses_bg_esc" kind="subagent" state="completed">
+STATUS: ESCALATE
+REASON: SCOPE
+BLOCKER: Needs edit outside scope.
+TOUCHED: none
+RECOMMENDED_NEXT: orchestrator_decision
+</background-result>`;
+
+    expect(parseWorkerReport(esc)).toEqual({
+      kind: "escalate",
+      sessionID: "ses_bg_esc",
+      reason: "SCOPE",
+      blocker: "Needs edit outside scope.",
+      optionsOrAttempts: "",
+      touched: [],
+      recommendedNext: "orchestrator_decision",
+    });
+
+    const otherKind = `<background-result kind="shell" sessionID="ses_bg_shell">
+STATUS: DONE
+OUTCOME: Ignored tag.
+</background-result>`;
+    expect(parseWorkerReport(otherKind)).toEqual({
+      kind: "done",
+      sessionID: undefined,
+      touched: [],
+      verified: "",
+      outcome: "Ignored tag.\n</background-result>",
+    });
+  });
 });
 
 describe("shapeEscalationMessages", () => {
@@ -222,6 +269,44 @@ OUTCOME: All good.
 
     expect(shapeEscalationMessages(messages)).toBe(0);
   });
+
+  test("decorates OpenCode v2.4.1 <background-result kind=\"subagent\"> escalation without metadata", () => {
+    const messages: Array<MutableContextMessage> = [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `<background-result kind="subagent" sessionID="ses_bg_1" state="completed" description="Check">
+STATUS: ESCALATE
+REASON: AMBIGUITY
+BLOCKER: Need decision.
+</background-result>`,
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `<background-result kind="shell" sessionID="ses_sh_1" state="completed">
+STATUS: ESCALATE
+REASON: FAILURE_CAP
+BLOCKER: Shell failed.
+</background-result>`,
+          },
+        ],
+      },
+    ];
+
+    expect(shapeEscalationMessages(messages)).toBe(1);
+    const firstText = (messages[0]?.content as Array<{ text?: string }> | undefined)?.[0]?.text;
+    const secondText = (messages[1]?.content as Array<{ text?: string }> | undefined)?.[0]?.text;
+    expect(firstText).toContain(ESCALATION_SENTINEL);
+    expect(firstText).toContain('resume sessionID="ses_bg_1" omitting model');
+    expect(secondText).not.toContain(ESCALATION_SENTINEL);
+  });
 });
 
 describe("classifyShellMechanical", () => {
@@ -265,6 +350,15 @@ describe("advanceDrift", () => {
 
     const afterDelegate = advanceDrift(delegated.state, { kind: "mutate-file", path: "x.ts" });
     expect(afterDelegate.verdict.action).toBe("none");
+
+    const mut2 = advanceDrift(afterDelegate.state, { kind: "mutate-file", path: "y.ts" });
+    expect(mut2.verdict.action).toBe("none");
+
+    const mut3 = advanceDrift(mut2.state, { kind: "mutate-file", path: "z.ts" });
+    expect(mut3.verdict.action).toBe("put");
+    if (mut3.verdict.action === "put") {
+      expect(mut3.verdict.drift).toBe("worker");
+    }
   });
 
   test("triggers worker and mechanical drift and resets on prompt-reset", () => {
