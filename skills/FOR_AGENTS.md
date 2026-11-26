@@ -1,232 +1,67 @@
 # Working on `skills/`
 
-Read this before writing a leaf: which of three shapes you are writing, the
-template, the measurements behind it, and what a leaf owes the map and the hub.
+Read this before adding or changing a skill definition.
 
-A **leaf** is a skill this set routes to: 32 of the 85 definitions. 28 are
-`principle-*`, and the other 4 are `code-hygiene`, `grammar`, `model-router`
-and `look-first`.
-The remaining 53 ids are in the `notALeaf` set in `skills/definitions/index.ts` —
-the hub, the map, 25 `playbook-*`, and 26 more procedures — and they are
-registered and read on demand, carrying no row.
+## Skill tiers and counts
 
-## What you are writing
+`skills/definitions/index.ts` exports 85 skill definitions partitioned by `catalog: SkillCatalog` (`skills/definitions/definition.ts`):
 
-Three shapes, and picking wrong is the mistake that costs the most:
+- **Push leaves (32):** 28 `principle-*` skills plus `code-hygiene`, `grammar`, `model-router`, and `look-first`. Each declares `tier: "push"`, `group: "leaf"`, and a single-line `trigger`.
+- **Push communication (1):** `communication` (`tier: "push"`, `group: "communication"`).
+- **Hubs (3):** `spectre-mode`, `playbook`, and `ripwire` (`tier: "hub"`).
+- **Pull skills (49):** 25 `playbook-*`, 6 `design`, 6 `writing`, 5 `stack`, 4 `verification`, and 3 `visual` (`tier: "pull"`).
 
-- **A principle** states a test and a moment you load it on. The template below
-  is theirs.
-- **A procedure** runs steps or phases. `code-hygiene` has one `Steps` section and
-  nothing else. `why` and `blast-radius` run `Start` / `Phase A` … `Outputs`. A
-  moves list that is really a step list is the tell.
-- **A compact port** can have no sections at all, as
-  `principle-guard-the-context-window` shows: one heading and no `##` under it.
+`skills/definitions/index.ts` derives `notALeaf` automatically from `!(tier === "push" && group === "leaf")` (53 ids). `skills/catalog.ts` embeds the 33 push triggers into `agents/definitions/spectre.ts` within a `1,500`-token budget, and `tools.spectre.skills` indexes all 85 skills for BM25 lookup. Do not maintain duplicate skill index tables in Markdown.
 
-**Register it or nothing loads.** `load()` scans `*/SKILL.md` under
-`definitions/` and dies with `Add these to skills/definitions/index.ts: …` for
-any body the array does not list, so one unregistered folder takes the whole set
-down at startup. Add the import, add the value, and add the id to `notALeaf` if
-it is not a leaf — `test/skills/ripwire-map.test.ts` fails on an id in that set
-that names no registered skill.
+`load()` scans `skills/definitions/*/SKILL.md` at startup and throws if any folder is missing from `skills/definitions/index.ts`. Only `ripwire` declares `autoinvoke: true` (`skills/index.ts` switches it to `false` when no `ripwire` binary exists). The other 84 definitions declare `autoinvoke: false`.
 
-## The body template
+## Three body shapes
 
-Two headers, and the second one is now optional.
+Pick the shape that matches the skill's job:
+
+- **Principle leaf:** states a test and a moment to load it. Use the template below.
+- **Procedure or playbook:** runs ordered steps or phases (`Start` / `Phase A` ... `Outputs`, or a single `Steps` section). A `The moves` list that reads like sequential steps belongs in a procedure.
+- **Compact leaf:** one heading with no `##` sections when the body is short (for example, `principle-guard-the-context-window`).
+
+### Principle body template
 
 ```markdown
 # Principle: <Name>
 
-<three to five sentences. What the principle is, why it exists, and what it is
-adjacent to. No header, because it is the paragraph you read first.>
+<Three to five sentences: what the principle is, why it exists, and what it sits beside.>
 
 ## The moves
 
-**A move, stated once.** Concrete enough to act on. A command or a literal
-artefact name goes here, not above.
+**A move, stated once.** Concrete enough to act on. Place commands and literal file names here.
 
 ## What this principle is not
 
-- **Not <the over-application>.** <why it is wrong.>
+- **Not <the over-application>.** <Why it is wrong.>
 ```
 
-**The bar for the second section.** A line qualifies only if it names an action
-the reader would otherwise take *and* the leaf's own positive text would not
-prevent it. If every candidate is a handoff to another leaf, a restatement, or an
-admission that nothing enforces this, write no section.
-`principle-guard-the-context-window` ships with none and loses nothing.
+- Keep `## The moves` flat. Do not split one claim across altitude headings (`Core values`, `Strategies`, `Tactics`).
+- Omit `## What this principle is not` unless a bullet blocks a real mistake that the positive text does not prevent.
+- Name the owner in one clause when another leaf owns a claim instead of restating it.
 
-The moves section is one flat list. There is no altitude split, because a
-principle stated as a value and again as a strategy and again as a tactic is one
-claim written three times, and the third copy is the one a reader pays for.
+## Description and routing rules
 
-A claim another leaf owns does not get restated: name the owner in one clause and
-move on. `principle-subtract-before-you-add` opens by handing
-deletion-first-as-reader-load to `principle-laziness-protocol`.
+`description` in `index.ts` is the routing surface. Follow three rules:
 
-**The template now covers every principle.** Twenty-seven `principle-*` bodies
-carry `## The moves`, and `principle-guard-the-context-window` uses the compact
-no-section shape. The four legacy five-section bodies
-(`principle-boundary-discipline`, `principle-evidence`, `principle-hygiene`, and
-`principle-make-operations-idempotent`) folded `Core values`, `Strategies`, and
-`Tactics` into `## The moves`. Do not reintroduce altitude splits.
+1. **Name the moment, not the doctrine.** Open with what the prompt looks like ("a boolean and a flag that must stay in sync", "one caller", "flatten it"), not abstract principle vocabulary.
+2. **Keep literal nouns and artefacts.** Prompts name concrete files and objects (`README`, `package.json`, `tsconfig.json`). Replacing them with generic phrases drops recall.
+3. **Never borrow a neighbour's vocabulary.** A handoff clause using another leaf's keywords steals its prompts. Keep each leaf sharp because near-synonymous leaves degrade routing across the whole set.
 
-## The three rules the measurements put here
+## Checklist for a new or edited leaf
 
-Measured with `ripwire --eval-skills` over a mirror of the bodies — the call
-`eval/mirror.ts` makes, which holds our bodies and ripwire's own skills, the
-rivals a live session sees. **Figures from a single session are not quotes.**
-Re-run `eval/` before you cite one, and say which corpus and which slice it came
-from.
+- **Register it** in `skills/definitions/index.ts` with a valid `catalog` entry (`test/skills/catalog.test.ts` checks the partition, trigger lengths, token cap, and blind-slice four-word bar).
+- **Add its row in `skills/definitions/ripwire/SKILL.md`** naming the ripwire verb or `none.` plus the floor. Update the spelled-out `none` word count in `skills/definitions/spectre-mode/SKILL.md` (`names the ... leaves with no instrument`) when the `none.` count changes. `test/skills/ripwire-map.test.ts` checks both and validates every `--flag` against `ripwire --help` (lines containing `deprecat` are exempt).
+- **Check `description` and eval rows.** `test/skills/routing.test.ts` rejects blank descriptions and checks BM25 AUC floors. Add judged and `neg` rows in `eval/fixture.ts` (`eval/tests/fixture.test.ts` rejects blind rows that quote the leaf's own description).
 
-The corpus has grown since that experiment: 83 bodies and 206 rows in three
-slices. At ripwire 0.6.8, with ripwire's 17 skills in the mirror, the
-description arm reads 0.946 separation and 97.4% at rank one over the 174 rows
-of the `tuned` and `heldOut` slices, the 31-row `heldOut` slice reads 1.000
-and 96.4% with four judged rows now sitting inside a description, and the
-32-row `blind` slice reads 0.681 and 18.5% — written by a model that never saw
-the descriptions, where the author-written batch at the same bar read 0.962
-and 72.7%. The description arm still reads above the full-text arm on both
-reads (18.5% to 14.8% blind, 97.4% to 64.7% in-sample), and the blind slice
-carries the honest number, because the other two have now been read against.
-What the honest number measures, when a blind batch reads 18.5%: the
-descriptions route moments that share their frame and fall silent where the
-row only knows the work.
+## Porting a skill from elsewhere
 
-**The description is the routing surface, so it names the moment and not the
-subject.** This costs the most and is the hardest to see, because the body is
-usually already right. Three of the four routing regressions in one session were
-a description written about its own principle, and all three were fixed by the
-same move:
+1. **Claim only unowned ground.** Keep only what existing leaves do not cover, and cite owners for the rest.
+2. **Meet the leaf checklist** if you add a leaf (`ripwire/SKILL.md` row, `catalog` entry, `eval/fixture.ts`).
+3. **Do not import a mode or workflow as a principle leaf.** Register procedures under `tier: "pull"` instead so they do not bloat the push trigger surface. `features/arena.md` reserves the `arena` name for an unbuilt feature. If that feature ships, the `arena` skill gives way.
+4. **Measure on the blind slice and per-skill table.** Run `eval/` (see `eval/README.md`). Never quote single-session numbers without naming the corpus and slice, and watch per-skill regressions rather than the whole-set average.
 
-| leaf | what the description said | what the prompt said | delta |
-| --- | --- | --- | --- |
-| `principle-laziness-protocol` | "reader load, hops to trace, state to hold" | "impossible to follow", "one caller", "just forwards", "flatten it" | 48.8% to 60.5% desc, 0 of 6 rows won to 5 of 6 |
-| `principle-make-states-unrepresentable` | "a shape that cannot hold a wrong value" | "a boolean and a flag that must stay in sync", "a cast", "any" | 3 false fires to 1 |
-
-The failure is the same every time: a description written about the principle
-competes with every leaf on that vocabulary, and a prompt carries the prompt's.
-Open with the moment, not the doctrine, put the literal nouns in, and check the
-description by asking whether a real prompt's words appear in it. Never borrow a
-neighbour's vocabulary in a hand-off clause: dropping borrowed migration words from
-`principle-hygiene`'s description fixed a held-out migration row without naming it.
-
-**Do not cut a claim to save bytes.** Deleting the `Strategies` and `Tactics`
-sections outright cost 7.0 points of `bm25-full` hit@1, 46.5% to 39.5%. Folding
-those sections into one moves list, claim by claim, cost nothing: 58.1% desc
-hit@1, 0.704 mrr, 0.871 auc, identical to the five-section version, for 21% off
-one leaf and 12% off another. The redundancy was the problem, not the sections.
-
-**Name the artefact, because the prompt names it.** The single row lost in the
-first fold was "update the README to say version 2.0.20": the five-section
-version spelled out "a supported-version floor, a dependency pin, a documented
-requirement, an inventory in a readme", the fold compressed it to "every place it
-is written", and the row stopped routing. Put the literal nouns back.
-
-## What a leaf owes the map and the hub
-
-- **A row in `ripwire/SKILL.md`**, keyed on the id: the instrument, or `none.`
-  plus the floor there is. An id that cannot have a row belongs in `notALeaf`.
-- **A `none` count the hub agrees with.** `test/skills/ripwire-map.test.ts` fails
-  on a leaf with no row, on a row naming a leaf that no longer exists, on a
-  `notALeaf` id naming no skill at all, and on a hub whose spelled-out number
-  differs from the rows whose answer starts `none.` That number is a **word** in
-  the sentence `names the … leaves with no instrument`, not a digit, and the test
-  reads it with a regex that spans a line break. Count the rows, not the leaves
-  with nothing: most of those rows still name a partial instrument in the prose,
-  which is why the row is what the hub quotes. If you add a leaf, add its row and
-  update the hub count in the same change.
-- **Flags the binary still has.** The same test reads `ripwire --help` and fails on
-  any `--flag` the map names that the installed ripwire does not list, so a row
-  cannot outlive the verb it points at. A line that says `deprecat` is exempt:
-  naming a deprecated alias is how the file records that it is going away, and an
-  alias can leave the help and still answer, which is exactly how `--readability`
-  survived. The test skips when `ripwire` is missing, for the reason the routing
-  arm does. It also reads the closing sentence's three counts and fails when they
-  differ from the rows, so the test checks that claim rather than trusting it.
-- **A description.** `test/skills/routing.test.ts` fails on a blank one, and on
-  `bm25-desc` or `bm25-full` stopping beating chance. The routing arm is skipped
-  when `ripwire` is missing. The blank check always runs.
-- **A `catalog` entry on `Definition`.** `skills/definitions/definition.ts`
-  requires `catalog: SkillCatalog` (`push` with `group: "leaf" | "communication"`
-  and a single-line `trigger`, `hub` with `summary`, or `pull` with `category` and `summary`).
-  `skills/definitions/index.ts` derives `notALeaf` directly from `!(tier === "push" && group === "leaf")`,
-  `skills/catalog.ts` renders the static catalog embedded into `agents/definitions/spectre.ts`
-  within `1,500` tokens and updates the `skill` tool contract for `agent === "spectre"` in
-  `session.context`, and `tools.spectre.skills` indexes all 85 skills for BM25 lookup.
-  `test/skills/catalog.test.ts` checks the partition, line lengths, token cap, and blind-slice four-word bar.
-- **Registration**, as above.
-
-The Spectre skill catalog carries the 33 push triggers (`32` leaves and
-`communication`) plus the pull-tier guide (`25` playbooks, `24` domain/workflow
-skills, and `3` hubs), while `spectre-mode/SKILL.md` holds only the disposition
-rules and core non-negotiable rows. Never maintain duplicate skill index lists
-in Markdown.
-
-## Porting a principle from elsewhere
-
-The source is `pstack` on the cursor/plugins repository, which carries no
-template: each file is Why / Pattern / The test, shaped to its content. Porting
-one means four things, and skipping any of them is how a port rots.
-
-1. **Claim only unowned ground.** Read the port against the leaves already here,
-   keep only what none of them says, and name the owner of the rest in a clause
-   rather than re-arguing it.
-2. **Name the map row, or say there is no instrument.** The obligations above
-   apply to a port like any other leaf. A port with no row fails
-   `test/skills/ripwire-map.test.ts`.
-3. **Do not import a mode or a workflow as a principle.** `architect`, `teach`,
-   `swarm`, `why`, `how`, `automate-me` and their neighbours are procedures for a
-   different harness: a leaf states a test and a moment you load it on, and a
-   procedure has neither. Fifty-three ids are registered and never indexed, which
-   is the shape to reach for when a port is worth having and is not a principle,
-   and it costs the set nothing: the map and the index are what the leaf count
-   and the routing surface are made of.
-
-   Two facts they need, kept here so nobody copies them into the definition
-   files. They register only because `load()` dies on a body it does not list.
-   `ripwire` is the one definition declaring `autoinvoke: true` (`skills/index.ts`
-   switches it to `false` when neither `SPECTRE_RIPWIRE` nor `PATH` holds a
-   `ripwire` binary), and the other 84 carry `autoinvoke: false`. The hub's
-   trigger table routes those 84, while a reader asks for unindexed skills by
-   name. Their ids sit in `notALeaf`, which the map test checks.
-
-   `arena` carries one more, and it is why the name needs watching:
-   `features/arena.md` reserves `arena` for an unbuilt feature, and which of the
-   two gives way is recorded in this file, rule 3. **If that feature is built, the
-   skill is what gives way.**
-4. **Then measure.** Add judged rows to `eval/fixture.ts` and read the blind
-   slice and the per-skill table rather than the whole-set average: a leaf that
-   wins its own rows and costs somebody else's is a net loss the average hides.
-   The rows for a command the reader calls are `neg` rows, not judged ones —
-   the claim under test is that the model does not reach for it, so a fire is a
-   false-fire. A blind row may not quote the description of the leaf it names,
-   or it proves nothing, and `eval/tests/fixture.test.ts` holds that line.
-
-## The cost of a leaf, measured
-
-Going from 10 leaves to 13 cost 9.3 points of `bm25-full` hit@1 on held-out rows,
-55.8% to 46.5%, and no description rewrite recovered it. The new leaves took
-prompts that belonged to their neighbours: "that function is unused now, remove
-it" now routes to `principle-boundary-discipline`, and "you said nothing calls
-that, prove it" lost `ripwire`. That is about 3 points per leaf at that set size:
-the ceiling on how many near-synonymous principles this set can hold, and the
-argument for fewer, sharper leaves.
-
-## Measuring the routing
-
-`ripwire --eval-skills` reads YAML frontmatter from `SKILL.md`, while OpenCode
-reads `description` from `index.ts`. `eval/mirror.ts` writes a temp tree with
-frontmatter built from the live definitions so descriptions never drift.
-`test/skills/routing.test.ts` gates on AUC floors rather than per-skill win
-rates, because any description edit moves per-skill ranks.
-
-BM25 is a lexical proxy. The thing that routes is a model reading the same
-descriptions, so `eval/` asks both and prints them in one table.
-`eval/README.md` holds the commands, the evidence columns, and why the catalogue
-checks OpenCode's `Registered skills` log line rather than `GET /api/skill`.
-
-**The eval is blocked on a person today.** Delete the
-`"plugins": ["github:yriveiro/spectre"]` line from
-`~/.config/opencode/opencode.jsonc` first, or the run grades the installed copy
-instead of this checkout and reports the 16 unmounted principles as missing.
-`TODO.md` has it.
+`ripwire --eval-skills` reads YAML frontmatter from `SKILL.md`, while OpenCode reads `description` from `index.ts`. `eval/mirror.ts` generates a temporary mirror from the live definitions so both stay in sync.

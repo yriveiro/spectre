@@ -1,338 +1,68 @@
 # Working on `tools/`
 
-Read this before declaring or changing a tool's `input` or `output` schema. The
-sandbox boundary walks those schemas, and it walks a **small subset** of the
-Schema AST. Everything outside that subset fails — mostly at call time, after
-registration succeeded, and on the input and the output side alike. A schema
-Effect cannot turn into JSON Schema at all fails earlier: the host builds both
-JSON Schemas while it registers the tool, so that one never registers.
+Read this before changing a tool's `input` schema, `output` schema, or `options`.
 
-## The rule
+## Schema rules
 
-1. **A declared schema describes the JSON shape. It does not enforce anything.**
-   The host will not run a check even when it accepts the schema carrying it, so
-   a check that matters runs inside `execute`, or in the caller, which is the
-   only place that can trust the result anyway.
-2. **Prefer the primitive.** A count or a line number is `Schema.Number`. A
-   member of a fixed set is `Schema.Literals`. An absent field is
-   `Schema.optional`. None of those carry a filter, and none of them break.
+OpenCode 2.4.2 runs two separate steps on every tool schema (`packages/core/src/tool/runtime.ts`):
 
-## What the boundary accepts
+1. `Schema.toJsonSchemaDocument` emits the JSON Schema shown to the model (`runtime.ts:187`). For `Schema.Int`, the host strips Effect's safe-integer `minimum` and `maximum` bounds (`runtime.ts:196-208`).
+2. `Schema.decodeUnknownEffect` validates the incoming JSON payload at call time (`runtime.ts:79`).
 
-Measured at 2.1.1: one tool per construct, each called once with a value valid
-for it.
+Because JSON Schema only describes the tool while Effect's decoder enforces the runtime type, **never use a schema whose TypeScript type is a class instance**. A JSON payload cannot carry an instance, even when JSON Schema advertises `{"type":"string"}`.
 
-| Declared | Call |
-| --------- | ---- |
-| `Schema.String`, `Number`, `Boolean` | ok |
-| `Schema.Literals([...])` | ok |
-| `Schema.Struct`, `Schema.Array`, `Schema.Union`, `Schema.Json` | ok |
-| `Schema.optional`, `Schema.optionalKey` | ok |
-| `Schema.Int`, `Schema.Finite`, `Schema.Natural` | ok |
-| `Schema.NonEmptyString` | ok |
-| `Schema.String.pipe(Schema.refine(...))` | ok |
-| `Schema.Trim` | ok, and it trims |
-| `Schema.URL` | rejected: `Expected URL` |
+| Schema | JSON Schema shown to model | JSON input at call time |
+| ------ | -------------------------- | ----------------------- |
+| `Schema.String`, `Number`, `Boolean` | primitive | accepted |
+| `Schema.Literals([...])` | enum | accepted |
+| `Schema.Struct`, `Schema.Array`, `Schema.Union`, `Schema.Json` | object / array / union | accepted |
+| `Schema.optional`, `Schema.optionalKey` | optional field | accepted |
+| `Schema.Int`, `Schema.Finite`, `Schema.Natural`, `Schema.NonEmptyString` | integer / number / string | accepted and validated |
+| `Schema.Trim` | `{"type":"string"}` | accepted and trimmed |
+| `Schema.String.pipe(Schema.refine(...))` | `{"type":"string"}` | accepted and validated |
+| `Schema.URL`, `Schema.Date`, `Schema.BigInt`, `Schema.URLSearchParams`, `Schema.Uint8Array`, `Schema.FormData` | string or array | **refused** |
 
-`Int`, `Finite`, `Natural` and `NonEmptyString` were **rejected outright** at
-2.0.18, and the host honours them now (re-verified at v2.1.1 on `effect@4.0.1`
-and again at 2.2.7 on `effect@4.1.0`: `decodeUnknownOption(Schema.Int)(1)` is
-`Some`, `(1.5)` is `None`, `Finite(NaN)` is `None`, `NonEmptyString("")` is
-`None`). A second session
-called each one with a value it must reject — `1.5`, `NaN`, `-3`, `""` — and every
-one refused, so the boundary validates them rather than ignoring them and passing
-the value through.
+Follow three rules when declaring schemas:
 
-## The JSON Schema is not what is enforced
+- **Prefer primitives and literals.** Use `Schema.String`, `Schema.Number`, `Schema.Int`, `Schema.Literals([...])`, and `Schema.optional`.
+- **Keep brands in TypeScript, not in tool schemas.** A runtime brand inherits its wrapped schema (for example, `Worktree.StrategyID` wraps `Schema.Trim`).
+- **Use a `Schema.Union` of `Schema.Struct`s for multi-outcome outputs.** Give each outcome its own struct so impossible fields do not exist on the type.
 
-This is the part that costs an afternoon, so it goes before the table's cause.
+## Host singletons and `Tool.Error`
 
-`packages/core/src/tool/runtime.ts:79` at v2.1.1 validates a call with
-`Schema.decodeUnknownEffect(codec)(value, { errors: "all" })` — Effect's own
-decoder, on the Effect schema the tool declared. A separate function builds the JSON
-Schema at `runtime.ts:156` (`inputJsonSchema`), and it only describes the tool to the model.
+OpenCode redirects only `effect` and `@opencode/plugin` to its own runtime (`@opencode/plugin/dist/runtime-modules.js` at 2.4.2). It does not redirect `@opencode/schema`.
 
-Two schemas, so a declaration can be wrong in a way nothing at the call reports:
+The host checks `error instanceof Tool.Error` (`packages/core/src/tool/runtime.ts:51`). If a tool throws `Tool.Error` imported from `@opencode/schema`, `instanceof` fails and the host drops `metadata` and `error`.
 
-| Declared | Model is shown | `"https://example.com"` |
-| --------- | -------------- | ----------------------- |
-| `Schema.URL` | `{"type":"string"}` | **refused** |
-| `Schema.String` | `{"type":"string"}` | accepted |
-| `Schema.Int` | `{"type":"integer"}` | refused |
-| `Schema.Trim` | `{"type":"string"}` | accepted, as `"https://example.com"` |
+- Import `Tool` and every barrel-re-exported domain from `@opencode/plugin/effect` (see `@opencode/plugin/dist/effect/index.d.ts`).
+- Import `AbsolutePath`, `Session`, `SessionMessage`, `Goal`, and `Money` from `@opencode/schema/*` because the barrel does not re-export them.
 
-`Schema.Int` is the row to read twice. Effect emits the safe-integer bounds
-(`{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`),
-and the host strips exactly those two keys at 2.4.2
-(`packages/core/src/tool/runtime.ts:196-208`), so the model sees
-`{"type":"integer"}`. A raw `Schema.toJsonSchemaDocument` call in this repo prints
-the unstripped document, which is why the one-liner near the bottom of this file
-is not the whole answer.
+## `Tool.Options` and Code Mode paths
 
-`Schema.URL` is that trap. Its Type is a `URL` **object**, not a string: a string
-refuses, a string with `href` or `path` refuses, and a `URL` instance decodes. The
-JSON Schema says `{"type":"string"}`, which is the one thing it cannot accept, so
-the model sees a contract the host refuses it for meeting.
+Tools registered through `ctx.tool.transform` join the same registry as builtins. `Tool.Options` controls how the model reaches a tool:
 
-Do not reach for a schema whose Type is an instance for a JSON tool. Measured on
-`effect@4.0.0-rc.112`, each of these refuses the JSON value its own JSON Schema
-advertises, and accepts only an instance:
+| Options | Call path |
+| ------- | --------- |
+| `codemode: false` | direct tool call by name |
+| `codemode` unset or `true`, no `namespace` | `tools.<name>` in Code Mode |
+| `codemode` unset or `true`, `namespace: "spectre"` | `tools.spectre.<name>` in Code Mode |
 
-| Declared | Model is shown | JSON value | Instance |
-| --------- | -------------- | ---------- | -------- |
-| `Schema.URL` | `{"type":"string"}` | refused | accepted |
-| `Schema.Date` | `{"type":"string"}` | refused | accepted |
-| `Schema.BigInt` | `{"type":"string","pattern":"^-?\\d+$"}` | refused | — |
-| `Schema.URLSearchParams` | `{"type":"string"}` | refused | — |
-| `Schema.Uint8Array` | `{"type":"string","format":"byte","contentEncoding":"base64"}` | refused | refused |
-| `Schema.FormData` | a two-item array schema | refused | — |
+- **Set `namespace: "spectre"` on every Spectre tool.** `test/tools/reachable.test.ts` fails if any registered tool omits it.
+- **Omit `pinned: true` (both top-level and under `options.codemode`).** Keeping `tools.spectre.*` unpinned keeps `CodeModeCatalog` inside `INLINE_BUDGET = 2_000` (`packages/core/src/codemode/catalog.ts:50`).
+- **Keep line one of `description` at 120 characters or fewer** (`DESCRIPTION_LIMIT = 120`). Aim for 40 to 85 words for BM25 ranking, and place field contracts in `.annotate({ description })`.
+- **Treat `options.permission` as a visibility label, not a security boundary.** OpenCode checks `options.permission` when building the catalog (`isActionDenied` in `packages/core/src/permission/policy.ts:166-169`, `packages/core/src/tool.ts:389-418`), not when running `execute`. Keep read and write actions in one tool (like `tools.spectre.worktrees`), enforce refusals in `execute`, and call `ctx.permission.assert` when an action needs user approval.
+- **Subagents inherit the same registry.** No extra grant is needed for subagents beyond their permission ruleset.
 
-`Schema.BigInt` is the worst of them: it emits a pattern that matches the very
-string it refuses. The rule is not a list, it is one question — **can a JSON
-payload carry this Type?** If the Type is an instance, it cannot, whatever the
-JSON Schema says. `Schema.String`, or `Schema.Literals([...])` when the set is
-small, crosses the boundary and does what you meant.
+## Verify schema and reachability
 
-`Schema.Trim` crosses too, and it returns the trimmed string rather than the one
-sent, so `execute` receives `"x"` for a call that arrived as `"  x  "`. That is the
-one transform measured, and it is why a schema is worth reading before you trust
-what arrived.
-
-You can check a declaration in this repository's own process, because that decoder
-runs on the same `effect@4.1.0` the plugin pins:
+`bun run typecheck` does not catch runtime decode refusals. Check Effect's decoder and JSON Schema output locally on the pinned `effect@4.1.0`:
 
 ```js
 import { Schema } from "effect";
-Schema.toJsonSchemaDocument(Schema.URL).schema;              // {"type":"string"}
-Schema.decodeUnknownOption(Schema.URL)("https://x.com")._tag; // "None" — refused
+Schema.toJsonSchemaDocument(MyInput).schema;
+Schema.decodeUnknownOption(MyInput)(samplePayload)._tag; // "Some"
 ```
 
-## Which `Tool.Error` the host sees
+Local decoding proves the schema accepts JSON payloads. To prove live registration and reachability, follow `VERSIONING.md`. Remove `"github:yriveiro/spectre"` from `~/.config/opencode/opencode.jsonc` first so the cached copy does not shadow your checkout.
 
-The host redirects exactly two packages to its own runtime copy —
-`runtimePackages = ["effect", "@opencode/plugin"]` in
-`@opencode/plugin/dist/runtime-modules.js` at 2.4.2. `@opencode/schema` is not
-one of them, so a schema imported from `@opencode/schema/*` is this repo's
-pinned copy, while the same schema imported from `@opencode/plugin/effect` is
-the host's. The host tests `error instanceof Tool.Error`
-(`packages/core/src/tool/runtime.ts:51` at 2.4.2) and, when that is false,
-re-wraps the failure as `new Tool.Error({ message })`: the refusal text
-survives, `metadata` and `error` do not.
-
-The rule: **import every schema the barrel re-exports from
-`@opencode/plugin/effect`**, and ride the redirect. At 2.4.2 that is `Agent`,
-`Artifact`, `Command`, `Connection`, `Credential`, `Integration`, `Location`,
-`Mcp`, `Model`, `PersistentPty`, `Provider`, `Reference`, `Rpc`, `Skill`,
-`Tool`, `Vcs`, `WebSearch` and `Worktree` (`dist/effect/index.d.ts`). The
-barrel exports `Tool` there, so a `Tool.Error` built from the
-barrel is the host's class and its `metadata` reaches the host. `AbsolutePath`,
-`Session`, `SessionMessage`, `Goal` and `Money` have no barrel route, so
-`@opencode/schema` stays the import for them, and the `@opencode/*` pins move
-in lockstep with `engines.opencode` so that copy never drifts more than one bump
-from the host's.
-
-**The cause of this file's history is in `runtime.ts:174` (`toJsonSchema`) at
-v2.1.1, `:175` at 2.2.7, `:187` at 2.4.2**, and it is
-why the table changed. The boundary used to walk the Effect schema AST
-itself, and on `effect@4.0.0-rc.112` that AST carries no `_tag` on the nodes a
-schema is built from, so everything past the primitives failed. It now calls
-`Schema.toJsonSchemaDocument`, which is Effect's own emission. That is why six
-rows turned from rejected to ok across two bumps with no change here.
-
-A branded *type* is fine while it stays a TypeScript type.
-`comments(directory: AbsolutePath)` brands nothing at runtime and never reaches a
-schema. Branding it into the schema is what breaks it. `Worktree.StrategyID` is
-`Schema.brand<Schema.Trim, …>`, so it is unusable here and the brand has to stay
-on the TypeScript side.
-
-A brand does not launder what it wraps. `Schema.brand<Schema.Trim, …>` inherits
-the `Trim` underneath it, so wrapping a rejected construct in a brand does not
-make it legal.
-
-**A `Union` of `Struct`s is inside the subset, and it is the cheapest way to make
-the output honest.** `Tool.Info`'s output has to be a `ValueSchema`, which is a
-`Codec`, a `StandardSchemaV1`, or a `JsonSchema` — and a bare `Struct` is none of
-those on its own, which is why one flat output struct typechecks everywhere and a
-`Union` of them is the construct to reach for once the members differ. One
-struct per outcome means a field an outcome cannot carry is not on the type at
-all, and the `...(x ? { x } : {})` spread that keeps a flat struct honest goes
-away with it.
-
-## How `options` becomes a call path
-
-Read at tag `v2.4.2`, not inferred. A tool added through
-`ctx.tool.transform` lands in the **same** registry as the builtins. There is no
-separate plugin path, and the fields in `Tool.Options` decide where it
-surfaces:
-
-| Declared | Reaches the model as |
-| -------- | -------------------- |
-| `codemode: false` | a direct tool call, by name |
-| `codemode` unset, `true`, or object, no `namespace` | `tools.<name>` in Code Mode |
-| `codemode` unset, `true`, or object, plus a `namespace` | `tools.<namespace>.<name>` in Code Mode |
-
-`namespace` is what makes the dotted path: the host joins it to the name as
-`<namespace>.<name>`. `options.codemode` accepts a boolean or
-`{ pinned?, description?, input?, output? }` (`packages/schema/src/tool.ts:59-74`).
-`options.codemode.pinned: true` forces a tool's full listing into turn one,
-and the schema deprecates top-level `options.pinned`. Every `tools.spectre.*` tool omits
-`pinned` so `CodeModeCatalog` stays within `INLINE_BUDGET = 2_000`
-(`packages/core/src/codemode/catalog.ts:50`). Keep line one of `description` at
-120 characters or fewer (`DESCRIPTION_LIMIT = 120`). Keep `description` at 40 to
-85 words for BM25 ranking, and put field contracts in `.annotate({ description })`.
-
-Two filters, and both are about the **caller**, not the tool:
-
-- A tool is dropped from the catalog when the caller's permission ruleset wholly
-  disables `options.permission`, defaulting to the tool's own name.
-- Code Mode itself is off when that same ruleset wholly disables `execute`.
-
-Wholly disabled means one rule set and no other. `isActionDenied` in
-`packages/core/src/permission/policy.ts:166-169` computes `reachableEffects` for
-the action, and `packages/core/src/tool.ts:389-418` drops the tool only when
-every reachable effect is `"deny"`. Re-read at tag `v2.4.2`, so this paragraph
-and the filter definition above are current. The
-schema table further up is still measured at 2.1.1 and has not been fully re-run
-at 2.2.7 (the `Int`/`Finite`/`NonEmptyString`/`URL`/`Trim` rows were spot
-re-verified at v2.1.1 and again at 2.2.7).
-
-**`options.permission` is a label, not a boundary.** It decides whether the tool
-is *offered*. It is not consulted again when the tool runs — the call path at
-`tool.ts` goes `beforeExecute` straight to `executeTool` with no permission
-argument. Since 2.0.29 a plugin *can* ask: `ctx.permission.assert` evaluates the
-session's rules and prompts the user when a rule demands approval
-(`packages/plugin/src/effect/permission.ts:32`), so a check that matters can
-live in `execute` as well as in the caller. So:
-
-- Do not split one tool into a read half and a write half to give them different
-  permission strings. The string controls visibility, so the split buys two
-  catalog entries and no safety, and the write half is reachable by anyone who
-  can see the read half.
-- A tool that mixes reading and mutating is one tool. `tools.spectre.worktrees`
-  is that: `action: "list" | "start" | "remove"` under one `permission`, and the
-  refusals live in `execute`.
-- What actually refuses is the code in `execute`. An input that cannot express
-  the dangerous case — no `force` field at all, rather than one defaulting to
-  false — is a stronger boundary than any permission string, because it holds
-  however the tool was reached.
-
-There is no branch on subagent versus primary. A subagent's catalog is built from
-the same registry, filtered by that agent's merged permission ruleset, so it sees
-a namespaced tool exactly when a primary does and nothing has to be granted to it.
-
-Every tool in this plugin declares `namespace: "spectre"`, and the dotted path
-depends on it, so it is the first thing to check when a path does not resolve.
-Nothing enforces it: a tool added without a namespace lands at `tools.<name>`,
-typechecks, and registers without complaint. `test/tools/reachable.test.ts`
-asserts every registered tool carries the namespace, which is what stops the next
-one from being added without it.
-
-The practical consequence: a missing `tools.spectre.*` is almost never a
-declaration problem. It is `execute` disabled, the tool's own permission wholly
-disabled, or the one that actually bites: a different copy of this plugin being
-the one loaded. Check which copy before re-reading the declaration.
-
-## Prove it with a call
-
-`bun run typecheck` cannot catch any of this. Every rejected schema above is
-valid TypeScript, and a schema that converts still logs a successful
-registration whether or not a call can reach it. A registration that
-logs is not a tool that runs. The only proof is a real call:
-
-```js
-const result = await tools.spectre.comments({ targets: ["<file>"] })
-```
-
-`AGENTS.md` has the command that starts such a session, and the
-`OPENCODE_CONFIG_DIR` isolation it needs. Re-run the measurement when the
-supported OpenCode version moves. Do not trust this table across a bump.
-
-There is no cheap pre-check for this table, and the reason changed with it. Until
-2.1.1 the host decided the accepted set with a walk of the Schema AST, and on
-Effect `4.0.0-rc.112` that AST carries no `_tag` on the nodes a schema is built
-from — `Schema.Struct({a: Schema.String})` exposes `fields`, `mapFields`,
-`ast`, `rebuild`, and friends, and `ast._tag` is the description `"Objects"`
-rather than a type name. A script that walked for tags found nothing and reported
-success, which is worse than having no check: a check that cannot fail.
-
-That walk is gone. `Schema.toJsonSchemaDocument` is what converts a schema now,
-and it runs in this repository's own process, on the same `effect@4.1.0`.
-So the pre-check that could not be written can be written:
-
-```js
-import { Schema } from "effect";
-console.log(JSON.stringify(Schema.toJsonSchemaDocument(Schema.Int).schema));
-// {"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}
-```
-
-That is Effect's emission, not what the model sees: the host strips those two
-bounds before it sends the schema (`packages/core/src/tool/runtime.ts:196-208` at
-2.4.2), so the model sees `{"type":"integer"}`. For what the host does with a
-value, run the same decoder the host runs, because it is the same `effect@4.1.0`:
-
-```js
-Schema.decodeUnknownOption(Schema.Int)(1)._tag;     // "Some"
-Schema.decodeUnknownOption(Schema.Int)(1.5)._tag;   // "None"
-Schema.decodeUnknownOption(Schema.URL)("https://x.com")._tag; // "None"
-```
-
-Both run in this repository's process and neither needs a session, so the
-expensive proof in the section above is for the thing only a session settles:
-whether the tool is reachable at all.
-
-## The dictionary export
-
-`tools.spectre.prose` reads the lexical half of ASD-STE100 from a JSON export the
-reader produced from their own copy of the specification. `spectre.json` names the path
-under `dictionary` (`spectre.jsonc` still reads), and a relative one resolves against the config file that named it.
-
-The export is **not in this repository**. Issue 9, page 2 restricts reproduction of the
-dictionary to eight categories of organisation, and this project is in none of them. The
-config carries a path, the tool reads the file at the path, and nothing here holds a word
-list. Anyone who wants the lexical half requests the standard from
-[asd-ste100.org](https://www.asd-ste100.org/STE_downloads.html) and exports it.
-
-The shape the tool reads, with the fields it uses marked:
-
-```jsonc
-{
-  "meta": {
-    // Reported back so a caller can say which issue it ruled against.
-    "issue": "9 (2025-01-15)",
-    "source_url": "https://www.asd-ste100.org/assets/files/ASD-STE100_ISSUE9.pdf",
-    "copyright": "© ASD, 2025 – All rights reserved",
-  },
-  "entries": [
-    {
-      // The headword carries the part of speech, the way the dictionary prints it:
-      // `CHECK (n)`. A lookup strips the marker, so `check` finds this entry.
-      "headword": "CHECK (n)",
-      "pos": "n",
-      // UPPERCASE in the source means approved. The export says so as a boolean, and
-      // a missing flag is read as approved, which is the safe default for a word the
-      // dictionary lists at all.
-      "approved": true,
-      "meaning": "an inspection",
-      "page": "2-1-C2",
-      // The approved replacements, for a word that is not approved.
-      "alternatives": [{ "word": "ATTACH", "pos": "v" }],
-      "senses": [
-        { "meaning": "an inspection", "ste": "Do a check.", "non_ste": "" },
-      ],
-    },
-  ],
-}
-```
-
-`senses`, `annotation`, `forms`, `raw` and `replacement_hint` are read as present or absent
-and not otherwise. `senses[].non_ste` is the example of the misuse the standard warns
-about, and the tool does **not** turn it into a rule: a word can be approved and still be
-wrong in context, which is `meaning-fidelity`'s subject rather than a lookup's.
-
-Two readings that are worth stating because both are decisions rather than defaults:
-
-- **A word with no entry is `unknown`, not `not-approved`.** A word missing from the export
-  may be a technical noun the reader declared, and STE rule 1.5 hands those to the project.
-  Reporting it as a violation would be wrong more often than right.
-- **An entry with no part of speech answers any part of speech.** A ruling for the word
-  itself is not a ruling for one use of it.
+For `tools.spectre.prose` dictionary export format, see `tools/definitions/prose/DICTIONARY.md`.
