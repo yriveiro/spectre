@@ -24,27 +24,70 @@ const LISTENING = /server listening on http:\/\/127\.0\.0\.1:(\d+)/;
  * The port is ephemeral unless `SPECTRE_EVAL_LIVE_PORT` names one, and the
  * password is generated per run.
  */
+const buildLiveConfig = (input: {
+  readonly pluginDir?: string;
+  readonly extraConfig?: Readonly<Record<string, unknown>>;
+}): string =>
+  `${JSON.stringify(
+    {
+      ...(input.extraConfig ?? {}),
+      update: "disable",
+      ...(input.pluginDir === undefined ? {} : { plugins: [input.pluginDir] }),
+      experimental: {},
+    },
+    null,
+    2,
+  )}\n`;
+
+const buildLiveEnv = (input: {
+  readonly configDir: string;
+  readonly password: string;
+  readonly env?: Readonly<Record<string, string | undefined>>;
+}): Record<string, string | undefined> => {
+  const childEnv: Record<string, string | undefined> = {
+    ...Bun.env,
+    ...(input.env ?? {}),
+    OPENCODE_CONFIG_DIR: input.configDir,
+    OPENCODE_CONFIG_PROJECT_DISABLE: "1",
+    OPENCODE_SERVER_PASSWORD: input.password,
+  };
+  for (const [key, value] of Object.entries(childEnv)) {
+    if (value === undefined) delete childEnv[key];
+  }
+  return childEnv;
+};
+
+const stopSpawned = async (
+  proc: ReturnType<typeof Bun.spawn>,
+  pumps: Promise<unknown>,
+): Promise<void> => {
+  proc.kill();
+  const exited = await Promise.race([
+    proc.exited.then(() => true),
+    Bun.sleep(2000).then(() => false),
+  ]);
+  if (!exited) {
+    proc.kill("SIGKILL");
+    await Promise.race([proc.exited, Bun.sleep(1000)]);
+  }
+  await Promise.race([pumps, Bun.sleep(500)]);
+};
+
 export const startLive = async (input: {
   readonly directory: string;
   readonly configDir: string;
-  readonly pluginDir: string;
+  readonly pluginDir?: string;
   readonly model: string;
+  readonly extraConfig?: Readonly<Record<string, unknown>>;
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }): Promise<Live> => {
-  await Bun.write(
-    `${input.configDir}/opencode.json`,
-    `${JSON.stringify({ update: "disable", plugins: [input.pluginDir], experimental: {} }, null, 2)}\n`,
-  );
+  await Bun.write(`${input.configDir}/opencode.json`, buildLiveConfig(input));
 
   const password = crypto.randomUUID();
   const port = Bun.env.SPECTRE_EVAL_LIVE_PORT ?? "0";
   const proc = Bun.spawn(["opencode", "serve", "--port", port, "--log-level", "info", "--print-logs"], {
     cwd: input.directory,
-    env: {
-      ...Bun.env,
-      OPENCODE_CONFIG_DIR: input.configDir,
-      OPENCODE_CONFIG_PROJECT_DISABLE: "1",
-      OPENCODE_SERVER_PASSWORD: password,
-    },
+    env: buildLiveEnv({ configDir: input.configDir, password, env: input.env }),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -61,9 +104,11 @@ export const startLive = async (input: {
   };
   const pumps = Promise.all([pump(proc.stdout), pump(proc.stderr)]);
 
+  let stopped = false;
   const stop = async () => {
-    proc.kill();
-    await Promise.race([pumps, Bun.sleep(2000)]);
+    if (stopped) return;
+    stopped = true;
+    await stopSpawned(proc, pumps);
   };
 
   const abort = async (why: string): Promise<never> => {
