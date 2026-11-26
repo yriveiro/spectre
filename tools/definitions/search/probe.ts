@@ -8,7 +8,7 @@
 import { binaryOf } from "./binary";
 import type { Health } from "./policy";
 
-const MIN_VERSION = "0.6.10";
+const MIN_VERSION = "0.7.0";
 
 const cache = new Map<string, Health>();
 

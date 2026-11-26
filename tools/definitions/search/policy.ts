@@ -553,11 +553,12 @@ const NATIVE =
   "ripwire is not on PATH, so this session is native: `spectre_search` answers `absent` with the install line, and the native tools complete the task.";
 
 const MOMENTS = [
-  "- New symbol: `ripwire . --exemplar=<task>` or `--lego=<iface>` (`--legend=compact`).",
+  "- Task / symbol / call-site lookup: `spectre_search({ query })` returns a paged answer-first bundle with `<act read=\"path:l-e,...\"/>` for parallel ranged Reads; backticked symbol questions (`who calls \\`sym\\``, `where is \\`sym\\` used`) auto-route to callers/uses/impact; `name@lang` disambiguates multi-language repos.",
+  "- New symbol: `ripwire . --exemplar=<task>` or `--lego=<iface>`.",
   "- Contract edit: `ripwire . --impact=<sym> --uses=<sym>`, then `--edit-check=<file:sym>`.",
   "- Subagent fan-out: `ripwire . --pack-task=<task> --partition=<n>`.",
   "- Branch cleanup: `ripwire . --stray-content` before `--plan`.",
-  '- Before commit/PR: call `tools.spectre.ripwire({ action: "check" })` in `execute` (or run `ripwire . --quality-delta` and `ripwire . --affected=<paths>`).',
+  '- Before commit/PR: call `tools.spectre.ripwire({ action: "check" })` in `execute` (pass `range: "main..HEAD"` for whole-branch delta, or run `ripwire . --quality-delta` and `ripwire . --affected=<paths>`).',
 ].join("\n");
 
 /** The rule the context part carries. Ready sessions carry the moment cues; native sessions carry the fallback note. */
@@ -756,24 +757,30 @@ export const decide = (ask: Ask, memory: Memory, env: Env): Decision => {
 export type ArgvInput = {
   readonly route: Route;
   readonly root: string;
-  readonly budget: number;
+  readonly budget?: number;
+  readonly page?: number;
+  readonly legendSeen?: string;
 };
 
-export const argv = ({ route, root, budget }: ArgvInput): string[] => {
+const withLegendSeen = (args: string[], legendSeen?: string): string[] =>
+  legendSeen === undefined || legendSeen === "" ? args : [...args, `--legend-seen=${legendSeen}`];
+
+export const argv = ({ route, root, budget, page, legendSeen }: ArgvInput): string[] => {
   switch (route.kind) {
-    case "task":
-      return [
-        root,
-        `--for=${route.task}`,
-        "--signatures-only",
-        `--token-budget=${budget}`,
-        "--legend=compact",
-      ];
+    case "task": {
+      const args = [root, `--for=${route.task}`];
+      if (budget !== undefined) {
+        args.push(`--token-budget=${budget}`);
+      } else if (page !== undefined && page > 1) {
+        args.push(`--page-bytes=12000:${Math.floor(page)}`);
+      }
+      return withLegendSeen(args, legendSeen);
+    }
     case "expand":
-      return [root, `--expand=${route.symbol}`, "--legend=compact"];
+      return withLegendSeen([root, `--expand=${route.symbol}`], legendSeen);
     case "literal":
-      return [root, `--grep=${route.text}`, "--limit=50"];
+      return withLegendSeen([root, `--grep=${route.text}`, "--limit=50"], legendSeen);
     case "regex":
-      return [root, `--regex=${route.pattern}`, "--limit=50"];
+      return withLegendSeen([root, `--regex=${route.pattern}`, "--limit=50"], legendSeen);
   }
 };

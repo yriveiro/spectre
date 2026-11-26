@@ -14,7 +14,7 @@ import { memories } from "../../tools/definitions/search/state";
 
 export const READY_BIN = `#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 exit 1

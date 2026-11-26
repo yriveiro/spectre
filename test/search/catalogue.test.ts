@@ -155,7 +155,7 @@ describe("KV-cache invariant system prefix and durable end-of-work entry", () =>
       await Effect.runPromise(callback(beforeEdit));
       const baseline = JSON.stringify(beforeEdit.system);
       expect(beforeEdit.system.at(-1)?.text).toBe(
-        contextRule({ kind: "ready", binary: bin, version: "0.6.10" }),
+        contextRule({ kind: "ready", binary: bin, version: "0.7.0" }),
       );
       expect(puts).toEqual([]);
       expect(removes).toEqual([]);

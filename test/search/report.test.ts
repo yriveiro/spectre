@@ -361,7 +361,7 @@ describe("the check arm runs quality-delta and affected, parses XML, and clears 
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 case "$*" in
@@ -409,11 +409,11 @@ exit 1
         testsToRun: ["test/a.test.ts", "test/b.test.ts", "test/z.test.ts"],
         paths: ["src/one.ts", "src/two.ts"],
         commands: [
-          `${bin} ${dir} --quality-delta --legend=compact`,
-          `${bin} ${dir} --affected=src/one.ts,src/two.ts --legend=compact`,
+          `${bin} ${dir} --quality-delta`,
+          `${bin} ${dir} --affected=src/one.ts,src/two.ts`,
         ],
         summary:
-          "ripwire check (ok at=deadbeef): gating=0 regressions=1 new-symbol=1; tests to run: test/a.test.ts, test/b.test.ts, test/z.test.ts",
+          "ripwire check (ok at=deadbeef): gating=0 regressions=1 new-symbol=1 (baseline=git-HEAD); tests to run: test/a.test.ts, test/b.test.ts, test/z.test.ts",
       });
 
       const landing = decide(
@@ -423,7 +423,7 @@ exit 1
           parsed: shellParse("git commit -m land"),
         },
         memoryOf(Session.ID.make(name)),
-        { health: { kind: "ready", binary: bin, version: "0.6.10" } },
+        { health: { kind: "ready", binary: bin, version: "0.7.0" } },
       );
       expect(landing.verdict).toEqual({ kind: "pass", why: "measured" });
 
@@ -438,7 +438,7 @@ exit 1
     const dir = tempDir();
     const gatingBin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 case "$*" in
@@ -474,7 +474,7 @@ exit 1
 
     const oomBin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 echo "ripwire: out of memory" >&2
@@ -500,7 +500,7 @@ exit 5
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 case "$*" in
@@ -555,7 +555,7 @@ exit 1
           parsed: shellParse("git commit -m land"),
         },
         memoryOf(Session.ID.make(name)),
-        { health: { kind: "ready", binary: bin, version: "0.6.10" } },
+        { health: { kind: "ready", binary: bin, version: "0.7.0" } },
       );
       expect(stillUnmeasured.verdict.kind).toBe("refuse");
       expect((await readReport(after.values, "prj_check_subset")).output.findings).toEqual([]);
@@ -609,7 +609,7 @@ exit 1
 
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 case "$*" in
@@ -663,7 +663,7 @@ exit 1
     const worktreeDir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 case "$*" in
@@ -697,14 +697,139 @@ exit 1
         sha: worktreeDir,
         paths: ["src/moved.ts"],
         commands: [
-          `${bin} ${worktreeDir} --quality-delta --legend=compact`,
-          `${bin} ${worktreeDir} --affected=src/moved.ts --legend=compact`,
+          `${bin} ${worktreeDir} --quality-delta`,
+          `${bin} ${worktreeDir} --affected=src/moved.ts`,
         ],
         testsToRun: ["test/moved.test.ts"],
       });
       expect(resources).toEqual([[worktreeDir]]);
 
       memories.delete(Session.ID.make("ses_moved_check"));
+    });
+  });
+
+  test("range: main..HEAD runs --quality-delta=main..HEAD alone when no code changed, and invalid ranges refuse before probing", async () => {
+    const dir = tempDir();
+    const bin = await makeBin(`#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.7.0 (Release, built_from=test)"
+  exit 0
+fi
+case "$*" in
+  *"--affected="*)
+    echo "should not run --affected on clean tree" >&2
+    exit 1
+    ;;
+  *"--quality-delta=main..HEAD"*)
+    printf '%s' '<quality-delta baseline="main" regressions="0" gating="0" new-symbol="0" stale="2" target_ref="HEAD"></quality-delta>'
+    exit 0
+    ;;
+esac
+exit 1
+`);
+    await withBinary(bin, async () => {
+      for (const bad of ["main...HEAD", "--bad", "main HEAD", "", ".."]) {
+        const refused = await Effect.runPromise(
+          ripwire(readingContext(PROJECT, new Map(), dir)).execute(
+            { action: "check", range: bad },
+            toolContext("ses_check_bad_range"),
+          ),
+        );
+        expect(refused.output).toMatchObject({
+          action: "check",
+          status: "refused",
+        });
+        expect(refused.output?.summary).toContain("Invalid range");
+      }
+
+      const ranged = await Effect.runPromise(
+        ripwire(readingContext(PROJECT, new Map(), dir)).execute(
+          { action: "check", range: "main..HEAD" },
+          toolContext("ses_check_range"),
+        ),
+      );
+      expect(ranged.output).toEqual({
+        action: "check",
+        status: "ok",
+        sha: "HEAD",
+        gating: 0,
+        regressions: 0,
+        newSymbols: 0,
+        newSymbolRows: [],
+        testsToRun: [],
+        paths: [],
+        commands: [`${bin} ${dir} --quality-delta=main..HEAD`],
+        summary:
+          "ripwire check (ok at=HEAD): gating=0 regressions=0 new-symbol=0 (baseline=main, stale-acks=2); tests to run: none",
+      });
+
+      memories.delete(Session.ID.make("ses_check_bad_range"));
+      memories.delete(Session.ID.make("ses_check_range"));
+    });
+  });
+
+  test("exit 6 returns status partial, surfaces kinds_skipped and kinds_next, and does not clear landing or report gates", async () => {
+    const dir = tempDir();
+    const bin = await makeBin(`#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.7.0 (Release, built_from=test)"
+  exit 0
+fi
+case "$*" in
+  *"--quality-delta"*)
+    printf '%s' '<quality-delta baseline="git-HEAD" regressions="0" gating="0" new-symbol="0" at="66666666" kinds_skipped="clones,hotspots" kinds_next="ripwire . --quality-delta --kinds=clones,hotspots"></quality-delta>'
+    exit 6
+    ;;
+  *"--affected=src/one.ts"*)
+    printf '%s' '<affected><test p="test/one.test.ts" hops="1"/></affected>'
+    exit 0
+    ;;
+esac
+exit 1
+`);
+    await withBinary(bin, async () => {
+      const guard = await captureGuard();
+      const after = await captureAfter("prj_check_partial");
+      const name = "ses_check_partial";
+
+      await Effect.runPromise(guard.callback(toolEvent("edit", { path: "src/one.ts" }, name, "call_p_b")));
+      await Effect.runPromise(after.callback(afterEvent("edit", { path: "src/one.ts" }, name, "call_p_a")));
+
+      const res = await Effect.runPromise(
+        ripwire(readingContext("prj_check_partial", after.values, dir)).execute(
+          { action: "check", paths: ["src/one.ts"] },
+          toolContext(name),
+        ),
+      );
+      expect(res.output).toMatchObject({
+        action: "check",
+        status: "partial",
+        sha: "66666666",
+        gating: 0,
+        regressions: 0,
+        testsToRun: ["test/one.test.ts"],
+      });
+      expect(res.output?.summary).toContain("ripwire check (partial at=66666666):");
+      expect(res.output?.summary).toContain("baseline=git-HEAD");
+      expect(res.output?.summary).toContain("kinds_skipped=clones,hotspots");
+      expect(res.output?.summary).toContain("next=ripwire . --quality-delta --kinds=clones,hotspots");
+
+      expect(memoryOf(Session.ID.make(name)).measured).toEqual({});
+      const landing = decide(
+        {
+          surface: "shell",
+          command: "git commit -m land",
+          parsed: shellParse("git commit -m land"),
+        },
+        memoryOf(Session.ID.make(name)),
+        { health: { kind: "ready", binary: bin, version: "0.7.0" } },
+      );
+      expect(landing.verdict.kind).toBe("refuse");
+      expect((await readReport(after.values, "prj_check_partial")).output.findings).toEqual([
+        { session: name, count: 1, missing: DELTA },
+      ]);
+
+      memories.delete(Session.ID.make(name));
     });
   });
 });

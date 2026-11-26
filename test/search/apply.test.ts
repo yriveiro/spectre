@@ -24,7 +24,7 @@ import {
   withBinary,
 } from "./host";
 
-const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
+const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.7.0" };
 
 afterEach(cleanupDirs);
 

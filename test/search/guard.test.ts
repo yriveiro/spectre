@@ -13,7 +13,7 @@ import { captureGuard, cleanupDirs, forget, makeBin, READY_BIN, tempDir, toolEve
  * mock that drifted.
  */
 
-const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
+const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.7.0" };
 
 const held = (overrides?: Partial<Memory>): Memory => ({
   search: true,

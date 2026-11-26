@@ -3,6 +3,7 @@ import { Session } from "@opencode/schema/session";
 import { Effect, Option, Schema, type Scope, Semaphore } from "effect";
 import { isSpectre } from "./agents";
 import { envOf, needsEndOfWork, syncEndOfWork, syncEndOfWorkFromMemory } from "./apply";
+import { recordLegendSeen } from "./legend";
 import { decide, type Outcome, type SurfaceAsk } from "./policy";
 import { probe } from "./probe";
 import { rootOf, sessionScopeOf } from "./root";
@@ -200,6 +201,30 @@ type ToolAfter = {
 const outputOf = (event: ToolAfter): unknown =>
   event.status === "completed" ? event.result.output : undefined;
 
+const shellTextOf = (event: Extract<ToolAfter, { readonly status: "completed" }>): string => {
+  const out = event.result.output;
+  if (typeof out === "string" && out !== "") return out;
+  if (typeof out === "object" && out !== null) {
+    if ("output" in out && typeof out.output === "string" && out.output !== "") return out.output;
+    if ("stdout" in out && typeof out.stdout === "string" && out.stdout !== "") return out.stdout;
+  }
+  const content = event.result.content;
+  if (typeof content === "string" && content !== "") return content;
+  if (Array.isArray(content)) {
+    return content
+      .flatMap((part) =>
+        typeof part === "object" &&
+        part !== null &&
+        "text" in part &&
+        typeof part.text === "string"
+          ? [part.text]
+          : [],
+      )
+      .join("\n");
+  }
+  return "";
+};
+
 const readSearch = (event: ToolAfter): Observation | undefined => {
   const answer = Option.getOrUndefined(decodeSearchAnswer(outputOf(event)));
   if (answer === undefined) return undefined;
@@ -266,6 +291,13 @@ const observe = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
 
     const health = yield* Effect.promise(() => probe());
     if (health.kind !== "ready") return;
+
+    if (event.status === "completed" && event.tool === "shell" && observation.change.kind === "ripwire") {
+      const text = shellTextOf(event);
+      if (text !== "") {
+        yield* Effect.promise(() => recordLegendSeen(health.binary, event.sessionID, text));
+      }
+    }
 
     if (observation.ask !== undefined) {
       const decision = decide(observation.ask, memoryOf(event.sessionID), envOf(health));

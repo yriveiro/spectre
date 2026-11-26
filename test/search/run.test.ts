@@ -124,10 +124,10 @@ describe("a missing binary is absent, never a spawn crash", () => {
 });
 
 describe("probe reads the version the binary prints", () => {
-  test("0.6.10 is ready with its version", async () => {
+  test("0.7.0 is ready with its version", async () => {
     const { bin } = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, AppleClang 21.0.0.21000101, emit=std::print, built_from=ac869640e)"
+  echo "ripwire 0.7.0 (Release, AppleClang 21.0.0.21000101, emit=std::print, built_from=ac869640e)"
   exit 0
 fi
 echo "unexpected: $@" >&2
@@ -135,33 +135,33 @@ exit 1
 `);
     await withBinary(bin, async () => {
       const health = await probe();
-      expect(health).toEqual({ kind: "ready", binary: bin, version: "0.6.10" });
+      expect(health).toEqual({ kind: "ready", binary: bin, version: "0.7.0" });
     });
   });
 
-  test("0.6.8 is stale with its version and re-probes after an in-place upgrade, while ready stays cached", async () => {
+  test("0.6.10 is stale with its version and re-probes after an in-place upgrade, while ready stays cached", async () => {
     const { bin } = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.8 (Release, AppleClang 21.0.0.21000101, emit=std::print, built_from=stale)"
+  echo "ripwire 0.6.10 (Release, AppleClang 21.0.0.21000101, emit=std::print, built_from=stale)"
   exit 0
 fi
 echo "unexpected: $@" >&2
 exit 1
 `);
     await withBinary(bin, async () => {
-      expect(await probe()).toEqual({ kind: "stale", binary: bin, version: "0.6.8" });
+      expect(await probe()).toEqual({ kind: "stale", binary: bin, version: "0.6.10" });
 
       await Bun.write(
         bin,
         `#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=upgraded)"
+  echo "ripwire 0.7.0 (Release, built_from=upgraded)"
   exit 0
 fi
 exit 1
 `,
       );
-      expect(await probe()).toEqual({ kind: "ready", binary: bin, version: "0.6.10" });
+      expect(await probe()).toEqual({ kind: "ready", binary: bin, version: "0.7.0" });
 
       await Bun.write(
         bin,
@@ -169,7 +169,7 @@ exit 1
 exit 1
 `,
       );
-      expect(await probe()).toEqual({ kind: "ready", binary: bin, version: "0.6.10" });
+      expect(await probe()).toEqual({ kind: "ready", binary: bin, version: "0.7.0" });
     });
   });
 
@@ -183,7 +183,7 @@ exit 1
         bin,
         `#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=installed)"
+  echo "ripwire 0.7.0 (Release, built_from=installed)"
   exit 0
 fi
 exit 1
@@ -191,7 +191,7 @@ exit 1
       );
       await Bun.spawn(["chmod", "+x", bin]).exited;
 
-      expect(await probe()).toEqual({ kind: "ready", binary: bin, version: "0.6.10" });
+      expect(await probe()).toEqual({ kind: "ready", binary: bin, version: "0.7.0" });
     });
   });
 });

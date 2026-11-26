@@ -12,7 +12,7 @@ import { captureGuard, cleanupDirs, makeBin, READY_BIN, toolEvent, withBinary } 
  * mutation. A doc-only tree, a spent gate and a fully measured tree pass.
  */
 
-const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
+const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.7.0" };
 const absent: Health = { kind: "absent", why: "ripwire is not on PATH" };
 
 const held = (overrides?: Partial<Memory>): Memory => ({
