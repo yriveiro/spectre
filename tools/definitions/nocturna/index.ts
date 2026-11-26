@@ -1,15 +1,20 @@
-import type { Plugin } from "@opencode/plugin/effect";
-import { Tool } from "@opencode/plugin/effect";
+import { Agent, type Plugin, Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Effect, Option, Result, Schema } from "effect";
+import { type PapercutRollup, PapercutRollupSchema, summarizeOpenPapercuts } from "../papercuts";
 import {
   digestSession,
   inspectMessages,
   type SessionDigest,
+  type SessionDigestResult,
   type ToolStat,
   toMillis,
 } from "./digest";
 import { type LedgerEntry, markLedger, openLedger } from "./ledger";
+import { attachSkillTelemetry } from "./telemetry";
+import { pruneSkillTelemetry, readSessionTelemetry } from "./telemetry-store";
+
+export { attachSkillTelemetry };
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
 const DEFAULT_DAYS = 7;
@@ -32,7 +37,8 @@ export const CollectInput = Schema.Struct({
     description: "Maximum unanalyzed sessions to digest in this call (1..100). Default 25.",
   }),
   offset: Schema.optional(Schema.Int).annotate({
-    description: "Number of ranked pending sessions to skip before slicing limit (>= 0). Default 0.",
+    description:
+      "Number of ranked pending sessions to skip before slicing limit (>= 0). Default 0.",
   }),
   includeAnalyzed: Schema.optional(Schema.Boolean).annotate({
     description: "Re-scan sessions in the window even when their updatedAt matches ctx.storage.",
@@ -72,9 +78,12 @@ const ToolStatSchema = Schema.Struct({
   sampleError: Schema.optional(Schema.String),
 });
 
-const SkillCountSchema = Schema.Struct({
-  skill: Schema.String,
-  sessions: Schema.Int,
+const TelemetryCoverageSchema = Schema.Literals(["live", "transcript", "hybrid", "none"]);
+
+const SkillTriggersSchema = Schema.Struct({
+  "agent-tool": Schema.Int,
+  "prompt-attachment": Schema.Int,
+  "api-activation": Schema.Int,
 });
 
 const TokensSchema = Schema.Struct({
@@ -83,6 +92,34 @@ const TokensSchema = Schema.Struct({
   reasoning: Schema.Number,
   cacheRead: Schema.Number,
   cacheWrite: Schema.Number,
+});
+
+const SkillStatSchema = Schema.Struct({
+  skill: Schema.String,
+  sessions: Schema.Int,
+  invocations: Schema.Int,
+  triggers: SkillTriggersSchema,
+  loadErrors: Schema.Int,
+  attributedCost: Schema.Number,
+  attributedTokens: TokensSchema,
+  unmeasuredSteps: Schema.Int,
+  postLoadErrors: Schema.Int,
+});
+
+const SkillCoUseSchema = Schema.Struct({
+  left: Schema.String,
+  right: Schema.String,
+  sessions: Schema.Int,
+  sameTurn: Schema.Int,
+  jaccard: Schema.Number,
+});
+
+const SkillCoverageSchema = Schema.Struct({
+  live: Schema.Int,
+  transcript: Schema.Int,
+  hybrid: Schema.Int,
+  none: Schema.Int,
+  partial: Schema.Int,
 });
 
 const SessionDigestSchema = Schema.Struct({
@@ -106,6 +143,8 @@ const SessionDigestSchema = Schema.Struct({
   skillsLoaded: Schema.Array(Schema.String),
   tools: Schema.Array(ToolStatSchema),
   anomalyScore: Schema.Number,
+  telemetryCoverage: TelemetryCoverageSchema,
+  telemetryPartial: Schema.optional(Schema.Boolean),
 });
 
 const CollectedOutput = Schema.Struct({
@@ -128,8 +167,11 @@ const CollectedOutput = Schema.Struct({
     compactions: Schema.Int,
   }),
   topTools: Schema.Array(ToolStatSchema),
-  topSkills: Schema.Array(SkillCountSchema),
+  topSkills: Schema.Array(SkillStatSchema),
+  skillCoUse: Schema.Array(SkillCoUseSchema),
+  skillCoverage: SkillCoverageSchema,
   sessions: Schema.Array(SessionDigestSchema),
+  papercuts: PapercutRollupSchema,
 });
 
 const InspectedCallSchema = Schema.Struct({
@@ -188,7 +230,120 @@ const clampFinite = (
 interface CallerFilter {
   readonly sessionID: string | undefined;
   readonly parentID: string | undefined;
+  readonly info: Session.Info | undefined;
 }
+
+interface PermissionRuleLike {
+  readonly action: string;
+  readonly resource: string;
+  readonly effect: "allow" | "deny" | "ask";
+}
+
+const UNAVAILABLE_PAPERCUTS: PapercutRollup = {
+  status: "unavailable",
+  openGroups: 0,
+  newReportsInWindow: 0,
+  scanTruncated: false,
+  topGroups: [],
+};
+
+const matchesPermissionPattern = (value: string, rawPattern: string): boolean => {
+  const target = value.replaceAll("\\", "/");
+  const normalized = rawPattern.replaceAll("\\", "/");
+  const trailingOptional = normalized.endsWith(" *");
+  const pattern = trailingOptional ? normalized.slice(0, -2) : normalized;
+  let ti = 0;
+  let pi = 0;
+  let starPi = -1;
+  let starTi = 0;
+
+  while (ti < target.length) {
+    const pc = pattern[pi];
+    if (pc === "*") {
+      starPi = pi;
+      starTi = ti;
+      pi += 1;
+    } else if (pc === "?" || pc === target[ti]) {
+      pi += 1;
+      ti += 1;
+    } else if (trailingOptional && pi === pattern.length && target[ti] === " ") {
+      return true;
+    } else if (starPi >= 0) {
+      pi = starPi + 1;
+      starTi += 1;
+      ti = starTi;
+    } else {
+      return false;
+    }
+  }
+  while (pattern[pi] === "*") pi += 1;
+  return pi === pattern.length;
+};
+
+const matchesPapercutsRule = (rule: PermissionRuleLike): boolean =>
+  matchesPermissionPattern("papercuts", rule.action) &&
+  matchesPermissionPattern("*", rule.resource);
+
+const evaluateConfiguredPapercuts = (
+  agentRules: ReadonlyArray<PermissionRuleLike> | undefined,
+  sessionRules: ReadonlyArray<PermissionRuleLike> | undefined,
+): "allow" | "deny" | "ask" | undefined => {
+  if (agentRules === undefined) {
+    if (sessionRules === undefined || sessionRules.length === 0) return undefined;
+    return sessionRules.findLast(matchesPapercutsRule)?.effect;
+  }
+  const combined = [...agentRules, ...(sessionRules ?? [])];
+  return combined.findLast(matchesPapercutsRule)?.effect ?? "ask";
+};
+
+const loadAgentPermissions = (
+  ctx: Plugin.Context,
+  agentID: Agent.ID | undefined,
+): Effect.Effect<ReadonlyArray<PermissionRuleLike> | undefined> => {
+  const getAgent = ctx.agent?.get;
+  if (typeof getAgent !== "function" || agentID === undefined) {
+    return Effect.succeed(undefined);
+  }
+  return Effect.result(getAgent({ agentID })).pipe(
+    Effect.map((res) => (Result.isSuccess(res) ? res.success.data.permissions : undefined)),
+    Effect.catchCause(() => Effect.succeed(undefined)),
+  );
+};
+
+const canReadPapercuts = (
+  ctx: Plugin.Context,
+  callerInfo: Session.Info | undefined,
+  context: Tool.Context | undefined,
+): Effect.Effect<boolean> =>
+  Effect.gen(function* () {
+    const rawAgent = context?.agent ?? callerInfo?.agent;
+    const agentID =
+      typeof rawAgent === "string" && rawAgent.length > 0 ? Agent.ID.make(rawAgent) : undefined;
+    const agentRules = yield* loadAgentPermissions(ctx, agentID);
+    const configured = evaluateConfiguredPapercuts(agentRules, callerInfo?.permissions);
+    if (configured === "deny" || configured === "ask") return false;
+
+    const assertPermission = ctx.permission?.assert;
+    if (typeof assertPermission !== "function") return true;
+
+    const rawSessionID = context?.sessionID ?? callerInfo?.id;
+    const parsedSessionID =
+      rawSessionID === undefined ? undefined : Option.getOrUndefined(decodeSessionID(rawSessionID));
+    if (parsedSessionID === undefined) return false;
+
+    return yield* assertPermission({
+      sessionID: parsedSessionID,
+      ...(agentID === undefined ? {} : { agent: agentID }),
+      action: "papercuts",
+      resources: ["*"],
+      ...(context?.messageID !== undefined && context?.id !== undefined
+        ? { source: { type: "tool" as const, messageID: context.messageID, id: context.id } }
+        : {}),
+    }).pipe(
+      Effect.as(true),
+      Effect.catchCause(() => Effect.succeed(false)),
+    );
+  });
 
 const isExcludedSession = (info: Session.Info, caller: CallerFilter): boolean => {
   if (info.agent === "nocturna") return true;
@@ -322,21 +477,235 @@ const aggregateTools = (digests: ReadonlyArray<SessionDigest>): Array<ToolStat> 
     .slice(0, 20);
 };
 
-const aggregateSkills = (
-  digests: ReadonlyArray<SessionDigest>,
-): Array<{ readonly skill: string; readonly sessions: number }> => {
-  const counts = new Map<string, number>();
-  for (const session of digests) {
-    for (const skill of session.skillsLoaded) {
-      counts.set(skill, (counts.get(skill) ?? 0) + 1);
+const round2 = (value: number): number => Math.round(value * 100) / 100;
+const round4 = (value: number): number => Math.round(value * 10_000) / 10_000;
+const round6 = (value: number): number => Math.round(value * 1_000_000) / 1_000_000;
+
+interface MutableSkillStat {
+  readonly sessions: Set<string>;
+  invocations: number;
+  agentTool: number;
+  promptAttachment: number;
+  apiActivation: number;
+  loadErrors: number;
+  attributedCost: number;
+  input: number;
+  output: number;
+  reasoning: number;
+  cacheRead: number;
+  cacheWrite: number;
+  unmeasuredSteps: number;
+  postLoadErrors: number;
+}
+
+const emptySkillStat = (): MutableSkillStat => ({
+  sessions: new Set<string>(),
+  invocations: 0,
+  agentTool: 0,
+  promptAttachment: 0,
+  apiActivation: 0,
+  loadErrors: 0,
+  attributedCost: 0,
+  input: 0,
+  output: 0,
+  reasoning: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  unmeasuredSteps: 0,
+  postLoadErrors: 0,
+});
+
+const accumulateSkillLoads = (
+  bySkill: Map<string, MutableSkillStat>,
+  sessionID: string,
+  loads: SessionDigestResult["telemetry"]["loads"],
+): void => {
+  for (const load of loads) {
+    let stat = bySkill.get(load.skill);
+    if (stat === undefined) {
+      stat = emptySkillStat();
+      bySkill.set(load.skill, stat);
+    }
+    if (load.status === "error") {
+      stat.loadErrors += 1;
+      continue;
+    }
+    stat.sessions.add(sessionID);
+    stat.invocations += 1;
+    if (load.trigger === "agent-tool") stat.agentTool += 1;
+    else if (load.trigger === "prompt-attachment") stat.promptAttachment += 1;
+    else stat.apiActivation += 1;
+  }
+};
+
+const accumulateSkillSteps = (
+  bySkill: Map<string, MutableSkillStat>,
+  steps: SessionDigestResult["telemetry"]["steps"],
+): void => {
+  for (const step of steps) {
+    if (step.skills.length === 0) continue;
+    const share = 1 / step.skills.length;
+    const stepCost = step.cost;
+    const stepTokens = step.tokens;
+    for (const skill of step.skills) {
+      let stat = bySkill.get(skill);
+      if (stat === undefined) {
+        stat = emptySkillStat();
+        bySkill.set(skill, stat);
+      }
+      if (stepCost !== undefined && stepTokens !== undefined) {
+        stat.attributedCost += stepCost * share;
+        stat.input += stepTokens.input * share;
+        stat.output += stepTokens.output * share;
+        stat.reasoning += stepTokens.reasoning * share;
+        stat.cacheRead += stepTokens.cacheRead * share;
+        stat.cacheWrite += stepTokens.cacheWrite * share;
+      } else {
+        stat.unmeasuredSteps += 1;
+      }
+      stat.postLoadErrors += step.postLoadErrors;
     }
   }
-  return [...counts.entries()]
-    .map(([skill, sessions]) => ({ skill, sessions }))
+};
+
+const aggregateSkills = (
+  items: ReadonlyArray<SessionDigestResult>,
+): Array<typeof SkillStatSchema.Type> => {
+  const bySkill = new Map<string, MutableSkillStat>();
+  for (const item of items) {
+    accumulateSkillLoads(bySkill, item.digest.id, item.telemetry.loads);
+    accumulateSkillSteps(bySkill, item.telemetry.steps);
+  }
+
+  return [...bySkill.entries()]
+    .map(([skill, stat]) => ({
+      skill,
+      sessions: stat.sessions.size,
+      invocations: stat.invocations,
+      triggers: {
+        "agent-tool": stat.agentTool,
+        "prompt-attachment": stat.promptAttachment,
+        "api-activation": stat.apiActivation,
+      },
+      loadErrors: stat.loadErrors,
+      attributedCost: round6(stat.attributedCost),
+      attributedTokens: {
+        input: round2(stat.input),
+        output: round2(stat.output),
+        reasoning: round2(stat.reasoning),
+        cacheRead: round2(stat.cacheRead),
+        cacheWrite: round2(stat.cacheWrite),
+      },
+      unmeasuredSteps: stat.unmeasuredSteps,
+      postLoadErrors: stat.postLoadErrors,
+    }))
     .toSorted(
       (left, right) => right.sessions - left.sessions || left.skill.localeCompare(right.skill),
     )
     .slice(0, 20);
+};
+
+interface MutableCoUse {
+  readonly left: string;
+  readonly right: string;
+  sessions: number;
+  sameTurn: number;
+}
+
+const incrementPairs = (
+  pairs: Map<string, MutableCoUse>,
+  skills: ReadonlyArray<string>,
+  field: "sessions" | "sameTurn",
+): void => {
+  for (let i = 0; i < skills.length; i += 1) {
+    const left = skills[i];
+    if (left === undefined) continue;
+    for (let j = i + 1; j < skills.length; j += 1) {
+      const right = skills[j];
+      if (right === undefined) continue;
+      const key = `${left}\0${right}`;
+      const existing = pairs.get(key) ?? { left, right, sessions: 0, sameTurn: 0 };
+      existing[field] += 1;
+      pairs.set(key, existing);
+    }
+  }
+};
+
+const collectTurnSkillSets = (
+  telemetry: SessionDigestResult["telemetry"],
+): Map<string, Set<string>> => {
+  const byTurn = new Map<string, Set<string>>();
+  for (const load of telemetry.loads) {
+    if (load.status !== "completed") continue;
+    const set = byTurn.get(load.turnID) ?? new Set<string>();
+    set.add(load.skill);
+    byTurn.set(load.turnID, set);
+  }
+  for (const step of telemetry.steps) {
+    const set = byTurn.get(step.turnID) ?? new Set<string>();
+    for (const skill of step.skills) set.add(skill);
+    byTurn.set(step.turnID, set);
+  }
+  return byTurn;
+};
+
+const aggregateSkillCoUse = (
+  items: ReadonlyArray<SessionDigestResult>,
+): Array<typeof SkillCoUseSchema.Type> => {
+  const skillSessions = new Map<string, number>();
+  const pairs = new Map<string, MutableCoUse>();
+
+  for (const item of items) {
+    const sessionSkills = [...new Set(item.digest.skillsLoaded)].toSorted();
+    for (const skill of sessionSkills) {
+      skillSessions.set(skill, (skillSessions.get(skill) ?? 0) + 1);
+    }
+    incrementPairs(pairs, sessionSkills, "sessions");
+    for (const turnSkills of collectTurnSkillSets(item.telemetry).values()) {
+      incrementPairs(pairs, [...turnSkills].toSorted(), "sameTurn");
+    }
+  }
+
+  return [...pairs.values()]
+    .map((pair) => {
+      const union =
+        (skillSessions.get(pair.left) ?? 0) + (skillSessions.get(pair.right) ?? 0) - pair.sessions;
+      return {
+        left: pair.left,
+        right: pair.right,
+        sessions: pair.sessions,
+        sameTurn: pair.sameTurn,
+        jaccard: union > 0 ? round4(pair.sessions / union) : 0,
+      };
+    })
+    .toSorted(
+      (left, right) =>
+        right.sessions - left.sessions ||
+        right.sameTurn - left.sameTurn ||
+        left.left.localeCompare(right.left) ||
+        left.right.localeCompare(right.right),
+    )
+    .slice(0, 20);
+};
+
+const summarizeSkillCoverage = (
+  digests: ReadonlyArray<SessionDigest>,
+): typeof SkillCoverageSchema.Type => {
+  let live = 0;
+  let transcript = 0;
+  let hybrid = 0;
+  let none = 0;
+  let partial = 0;
+
+  for (const item of digests) {
+    if (item.telemetryCoverage === "live") live += 1;
+    else if (item.telemetryCoverage === "transcript") transcript += 1;
+    else if (item.telemetryCoverage === "hybrid") hybrid += 1;
+    else none += 1;
+    if (item.telemetryPartial === true) partial += 1;
+  }
+
+  return { live, transcript, hybrid, none, partial };
 };
 
 const sumTotals = (digests: ReadonlyArray<SessionDigest>) => {
@@ -403,17 +772,22 @@ const resolveCallerFilter = (
   callerSessionID: string | undefined,
 ): Effect.Effect<CallerFilter> =>
   Effect.gen(function* () {
-    if (callerSessionID === undefined) return { sessionID: undefined, parentID: undefined };
+    if (callerSessionID === undefined) {
+      return { sessionID: undefined, parentID: undefined, info: undefined };
+    }
     const info = yield* resolveProjectSession(ctx, callerSessionID);
-    return { sessionID: callerSessionID, parentID: info?.parentID };
+    return { sessionID: callerSessionID, parentID: info?.parentID, info };
   });
 
 const digestBatch = (
   ctx: Plugin.Context,
   batch: ReadonlyArray<Session.Info>,
-): Effect.Effect<{ readonly ranked: Array<SessionDigest>; readonly unreadable: Array<string> }> =>
+): Effect.Effect<{
+  readonly ranked: Array<SessionDigestResult>;
+  readonly unreadable: Array<string>;
+}> =>
   Effect.gen(function* () {
-    const digests: Array<SessionDigest> = [];
+    const digests: Array<SessionDigestResult> = [];
     const unreadable: Array<string> = [];
     for (const session of batch) {
       const history = yield* Effect.result(ctx.session.context({ sessionID: session.id }));
@@ -421,18 +795,33 @@ const digestBatch = (
         unreadable.push(session.id);
         continue;
       }
-      digests.push(digestSession(session, history.success));
+      const live = yield* readSessionTelemetry(ctx.storage, session.id);
+      digests.push(digestSession(session, history.success, live));
     }
     const ranked = digests.toSorted(
-      (left, right) => right.anomalyScore - left.anomalyScore || right.updatedAt - left.updatedAt,
+      (left, right) =>
+        right.digest.anomalyScore - left.digest.anomalyScore ||
+        right.digest.updatedAt - left.digest.updatedAt,
     );
     return { ranked, unreadable };
   });
 
+const collectVisiblePapercuts = (
+  ctx: Plugin.Context,
+  callerInfo: Session.Info | undefined,
+  context: Tool.Context | undefined,
+  cutoffAt: number,
+): Effect.Effect<PapercutRollup> =>
+  canReadPapercuts(ctx, callerInfo, context).pipe(
+    Effect.flatMap((allowed) =>
+      allowed ? summarizeOpenPapercuts(ctx, cutoffAt) : Effect.succeed(UNAVAILABLE_PAPERCUTS),
+    ),
+  );
+
 const runCollect = (
   ctx: Plugin.Context,
   input: typeof CollectInput.Type,
-  callerSessionID: string | undefined,
+  context: Tool.Context | undefined,
   now: number,
 ) =>
   Effect.gen(function* () {
@@ -442,7 +831,9 @@ const runCollect = (
     const offset = Math.floor(clampFinite(input.offset, 0, 0, Number.MAX_SAFE_INTEGER));
     const cutoffAt = now - windowDays * DAY_MS;
 
-    const caller = yield* resolveCallerFilter(ctx, callerSessionID);
+    yield* pruneSkillTelemetry(ctx.storage, project, now);
+
+    const caller = yield* resolveCallerFilter(ctx, context?.sessionID);
     const ledger = yield* openLedger(ctx.storage, project, now);
     const scanned = yield* scanWindowSessions(
       ctx,
@@ -458,6 +849,8 @@ const runCollect = (
         : scanned.pending;
     const batch = ordered.slice(offset, offset + limit);
     const { ranked, unreadable } = yield* digestBatch(ctx, batch);
+    const digests = ranked.map((item) => item.digest);
+    const papercuts = yield* collectVisiblePapercuts(ctx, caller.info, context, cutoffAt);
 
     const output: typeof CollectedOutput.Type = {
       status: "collected",
@@ -470,15 +863,23 @@ const runCollect = (
       trackedInStorage: ledger.size,
       truncated: scanned.truncated,
       unreadable,
-      totals: sumTotals(ranked),
-      topTools: aggregateTools(ranked),
+      totals: sumTotals(digests),
+      topTools: aggregateTools(digests),
       topSkills: aggregateSkills(ranked),
-      sessions: ranked,
+      skillCoUse: aggregateSkillCoUse(ranked),
+      skillCoverage: summarizeSkillCoverage(digests),
+      sessions: digests,
+      papercuts,
     };
+
+    const papercutNote =
+      papercuts.status === "unavailable"
+        ? " Papercuts: unavailable."
+        : ` Papercuts: ${papercuts.openGroups} open (${papercuts.newReportsInWindow} new in window${papercuts.scanTruncated ? ", truncated" : ""}).`;
 
     return {
       output,
-      content: `Collected ${ranked.length} session(s) across ${windowDays}d (${scanned.skippedAnalyzed} skipped, ${output.remainingUnanalyzed} remaining, ${unreadable.length} unreadable).`,
+      content: `Collected ${digests.length} session(s) across ${windowDays}d (${scanned.skippedAnalyzed} skipped, ${output.remainingUnanalyzed} remaining, ${unreadable.length} unreadable).${papercutNote}`,
     };
   });
 
@@ -579,6 +980,6 @@ export const nocturnaTool = (
     const now = clock();
     if (input.action === "inspect") return runInspect(ctx, input);
     if (input.action === "mark") return runMark(ctx, input, now);
-    return runCollect(ctx, input, context?.sessionID, now);
+    return runCollect(ctx, input, context, now);
   },
 });

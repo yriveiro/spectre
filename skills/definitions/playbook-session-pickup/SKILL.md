@@ -114,6 +114,9 @@ the page, execute the thing. A green report from another session is not a green
 report. Start with the claims the resume point depends on, and any claim about
 something visual, which a commit subject cannot carry at all.
 
+If an inherited check fails or a prior claim disagrees with the code, stop and
+report the mismatch before editing.
+
 ## Outputs
 
 - Where the prior session stopped, with the commit shas and the paths.

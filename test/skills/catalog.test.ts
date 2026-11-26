@@ -165,15 +165,31 @@ describe("registered catalog invariants", () => {
     expect(leaked).toEqual([]);
   });
 
-  test("toSkillInfo strips catalog metadata before OpenCode registration", async () => {
-    const [first] = await Effect.runPromise(load());
+  test("toSkillInfo strips catalog and preload metadata before OpenCode registration", async () => {
+    const skills = await Effect.runPromise(load());
+    const [first] = skills;
     if (first === undefined) throw new Error("expected at least one skill");
     const info = toSkillInfo(first);
 
     expect("catalog" in info).toBe(false);
+    expect("preload" in info).toBe(false);
     expect(Object.keys(info).toSorted()).toEqual(
       ["autoinvoke", "content", "description", "id", "name", "path"].toSorted(),
     );
+
+    const preloaded = skills.filter((skill) => skill.preload !== undefined);
+    expect(preloaded.map((skill) => skill.id as string).toSorted()).toEqual([
+      "effect-best-practices",
+      "solidjs-best-practices",
+    ]);
+    for (const skill of preloaded) {
+      const projected = toSkillInfo(skill);
+      expect("catalog" in projected).toBe(false);
+      expect("preload" in projected).toBe(false);
+      expect(Object.keys(projected).toSorted()).toEqual(
+        ["autoinvoke", "content", "description", "id", "name", "path"].toSorted(),
+      );
+    }
   });
 });
 

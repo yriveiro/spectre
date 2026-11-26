@@ -89,6 +89,14 @@ Structural checks, and they are cheap:
   takes the whole set down at startup.
 - The description names a moment, and a reader can tell from it when *not* to
   load the leaf.
+- A playbook (`category: "playbook"`) obeys `test/skills/playbook-hygiene.test.ts`.
+  Cap it at 200 lines and 2,500 body tokens, with ordered `## Start` and
+  contiguous `## Phase` headings. Include a concrete verification check, a
+  failure-recovery clause, and zero unbounded retries such as `try again`.
+
+If any Phase E check fails, fix the file before Phase F. If a check exposes a
+missing path or conflicting contract you cannot settle locally, stop and report
+the blocker.
 
 Write test cases when the skill is structural, and skip them when the claim is
 subjective. A procedure with phases has a first phase you can check is the right

@@ -93,6 +93,7 @@ A trigger is a mandate. Load the matching skill via `skill({ id })` when a trigg
 | Nobody measured a claim about the code and you are about to report it | `ripwire` |
 | A request is a whole multi-phase task whose step order matters | `playbook` or `tools.spectre.skills({ category: "playbook" })` |
 | You touch a domain stack, visual page, diagram, PR review page, verification flow, or design workflow | `tools.spectre.skills` |
+| A Spectre skill, tool, flag, agent, hook, or doc misbehaves or contradicts the host | `tools.spectre.papercuts` (query workarounds first, then log friction) |
 
 `ripwire` maps each leaf's test to a command, names the nine leaves with no instrument, and lists tool blind spots. Whole tasks whose order matters run under a `playbook-*` procedure via `playbook` or `tools.spectre.skills({ category: "playbook" })`.
 

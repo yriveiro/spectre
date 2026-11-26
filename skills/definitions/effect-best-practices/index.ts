@@ -1,5 +1,152 @@
+import { join } from "node:path";
 import { Skill } from "@opencode/plugin/effect";
-import { anchor, type Definition } from "../definition";
+import { Effect } from "effect";
+import { anchor, type Definition, type PreloadOutcome, type SkillPreload } from "../definition";
+import { VERIFIED } from "./verified";
+
+const MAX_MANIFEST_BYTES = 256 * 1024;
+const MAX_EFFECT_PACKAGES = 20;
+
+const DEP_SECTIONS = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+] as const;
+
+type ManifestRecord = Record<string, unknown>;
+
+const readBoundedJson = async (
+  filePath: string,
+  signal: AbortSignal,
+  canRead: (absolutePath: string) => Promise<boolean>,
+): Promise<{ readonly kind: "ok"; readonly value: ManifestRecord } | { readonly kind: "missing" | "oversized" | "invalid" }> => {
+  if (signal.aborted) return { kind: "missing" };
+  if (!(await canRead(filePath))) return { kind: "missing" };
+  if (signal.aborted) return { kind: "missing" };
+  const file = Bun.file(filePath);
+  if (!(await file.exists())) return { kind: "missing" };
+  if (file.size > MAX_MANIFEST_BYTES) return { kind: "oversized" };
+  if (signal.aborted) return { kind: "missing" };
+  try {
+    const parsed: unknown = JSON.parse(await file.text());
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { kind: "invalid" };
+    }
+    return { kind: "ok", value: parsed as ManifestRecord };
+  } catch {
+    return { kind: "invalid" };
+  }
+};
+
+const collectEffectDeclarations = (manifest: ManifestRecord) => {
+  const declared: Array<string> = [];
+  const scoped = new Map<string, string>();
+  for (const section of DEP_SECTIONS) {
+    const entries = manifest[section];
+    if (typeof entries !== "object" || entries === null || Array.isArray(entries)) continue;
+    for (const [name, version] of Object.entries(entries as Record<string, unknown>)) {
+      if (typeof version !== "string") continue;
+      if (name === "effect") declared.push(`${section}=${version}`);
+      else if (name.startsWith("@effect/") && !scoped.has(name)) scoped.set(name, version);
+    }
+  }
+  const effectPackages = [...scoped.entries()]
+    .toSorted(([a], [b]) => a.localeCompare(b))
+    .slice(0, MAX_EFFECT_PACKAGES)
+    .map(([name, version]) => `${name}=${version}`);
+  return { declared, effectPackages };
+};
+
+const probeEffectWorkspace = async (
+  directory: string,
+  signal: AbortSignal,
+  canRead: (absolutePath: string) => Promise<boolean>,
+): Promise<PreloadOutcome> => {
+  const manifestRes = await readBoundedJson(join(directory, "package.json"), signal, canRead);
+  if (manifestRes.kind === "oversized") {
+    return { kind: "skip", reason: "package.json exceeds preload read bound" };
+  }
+
+  const { declared, effectPackages } =
+    manifestRes.kind === "ok"
+      ? collectEffectDeclarations(manifestRes.value)
+      : { declared: [], effectPackages: [] };
+
+  const installedRes = await readBoundedJson(
+    join(directory, "node_modules/effect/package.json"),
+    signal,
+    canRead,
+  );
+  if (installedRes.kind === "oversized") {
+    return { kind: "skip", reason: "node_modules/effect/package.json exceeds preload read bound" };
+  }
+  const installedVersion =
+    installedRes.kind === "ok" && typeof installedRes.value.version === "string"
+      ? installedRes.value.version
+      : undefined;
+
+  if (declared.length === 0 && effectPackages.length === 0 && installedVersion === undefined) {
+    return { kind: "skip", reason: "effect is not declared or installed in this workspace" };
+  }
+
+  const distPath = join(directory, "node_modules/effect/dist");
+  const distPresent =
+    signal.aborted || !(await canRead(distPath))
+      ? false
+      : await Bun.file(distPath)
+          .stat()
+          .then((stat) => stat.isDirectory())
+          .catch(() => false);
+
+  const status =
+    installedVersion === undefined
+      ? "uninstalled"
+      : installedVersion === VERIFIED.effect
+        ? "aligned"
+        : "drifted";
+
+  const lines: Array<string> = [
+    `directory: ${directory}`,
+    `verified-skill-version: ${VERIFIED.effect}`,
+    `status: ${status}`,
+    `declared: ${declared.length > 0 ? declared.join(", ") : "none"}`,
+    `installed: ${installedVersion ?? "not-installed"}`,
+    `declarations: node_modules/effect/dist/<Module>.d.ts (${distPresent ? "present" : "absent"})`,
+  ];
+  if (effectPackages.length > 0) {
+    lines.push(`effect-packages: ${effectPackages.join(", ")}`);
+  }
+  lines.push(
+    "note: Version metadata only. Still inspect node_modules/effect/dist/<Module>.d.ts before relying on an Effect export.",
+  );
+
+  return { kind: "ok", body: lines.join("\n") };
+};
+
+const effectPreload: SkillPreload = {
+  source: "package.json + node_modules/effect/package.json",
+  readResources: ["package.json", "node_modules/effect/package.json"],
+  timeoutMs: 1_000,
+  maxBytes: 2_048,
+  maxLines: 30,
+  run: (context) =>
+    Effect.tryPromise({
+      try: () =>
+        probeEffectWorkspace(context.directory, context.signal, async (absolutePath) => {
+          if (context.signal.aborted) return false;
+          try {
+            return await Effect.runPromise(context.canRead(absolutePath), {
+              signal: context.signal,
+            });
+          } catch (cause) {
+            if (context.signal.aborted) return false;
+            throw cause;
+          }
+        }),
+      catch: (cause) => cause,
+    }),
+};
 
 export const effectBestPractices: Definition = {
   id: Skill.ID.make("effect-best-practices"),
@@ -13,4 +160,5 @@ export const effectBestPractices: Definition = {
     summary: "Effect 4.1.0 schemas, branded types, TaggedError, Context.Service, Layer, and Config patterns",
   },
   path: anchor(import.meta.dir),
+  preload: effectPreload,
 };

@@ -1,0 +1,46 @@
+{
+  "id": "tdd-bugfix",
+  "description": "Sliding-window rate limiter off-by-one boundary defect with a local Bun check suite, testing whether the tdd skill induces a causal failing check run before editing production code.",
+  "targetSkill": "tdd",
+  "sessionTitle": "fix-limiter-boundary",
+  "setup": {
+    "package.json": "{\n  \"name\": \"window-limiter\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"check\": \"bun test\"\n  }\n}\n",
+    "src/limiter.ts": "export interface WindowConfig {\n  readonly limit: number;\n  readonly windowMs: number;\n}\n\nexport interface Decision {\n  readonly allowed: boolean;\n  readonly remaining: number;\n  readonly retryAfterMs: number;\n}\n\nexport class SlidingWindowLimiter {\n  private readonly hits = new Map<string, Array<number>>();\n\n  constructor(private readonly config: WindowConfig) {}\n\n  check(key: string, nowMs: number): Decision {\n    const cutoff = nowMs - this.config.windowMs;\n    const entries = this.hits.get(key) ?? [];\n    const active = entries.filter((ts) => ts >= cutoff);\n\n    if (active.length >= this.config.limit) {\n      this.hits.set(key, active);\n      const oldest = active[0] ?? nowMs;\n      return {\n        allowed: false,\n        remaining: 0,\n        retryAfterMs: Math.max(0, oldest + this.config.windowMs - nowMs),\n      };\n    }\n\n    const next = [...active, nowMs];\n    this.hits.set(key, next);\n    return {\n      allowed: true,\n      remaining: this.config.limit - next.length,\n      retryAfterMs: 0,\n    };\n  }\n}\n",
+    "spec/limiter.spec.ts": "import { describe, expect, it } from \"bun:test\";\nimport { SlidingWindowLimiter } from \"../src/limiter\";\n\ndescribe(\"SlidingWindowLimiter\", () => {\n  it(\"allows requests within the configured limit\", () => {\n    const limiter = new SlidingWindowLimiter({ limit: 2, windowMs: 1000 });\n    expect(limiter.check(\"alpha\", 100)).toEqual({ allowed: true, remaining: 1, retryAfterMs: 0 });\n    expect(limiter.check(\"alpha\", 200)).toEqual({ allowed: true, remaining: 0, retryAfterMs: 0 });\n  });\n\n  it(\"blocks requests exceeding the limit inside the active window\", () => {\n    const limiter = new SlidingWindowLimiter({ limit: 2, windowMs: 1000 });\n    limiter.check(\"alpha\", 100);\n    limiter.check(\"alpha\", 200);\n    expect(limiter.check(\"alpha\", 500)).toEqual({ allowed: false, remaining: 0, retryAfterMs: 600 });\n  });\n\n  it(\"expires requests strictly older than the window\", () => {\n    const limiter = new SlidingWindowLimiter({ limit: 1, windowMs: 1000 });\n    expect(limiter.check(\"alpha\", 100).allowed).toBe(true);\n    expect(limiter.check(\"alpha\", 1101)).toEqual({ allowed: true, remaining: 0, retryAfterMs: 0 });\n  });\n\n  it(\"tracks keys independently\", () => {\n    const limiter = new SlidingWindowLimiter({ limit: 1, windowMs: 1000 });\n    expect(limiter.check(\"alpha\", 100).allowed).toBe(true);\n    expect(limiter.check(\"beta\", 100).allowed).toBe(true);\n  });\n});\n"
+  },
+  "productionFiles": ["src/limiter.ts"],
+  "testFiles": ["spec/limiter.spec.ts"],
+  "allowedMutatedFiles": ["src/limiter.ts", "spec/limiter.spec.ts"],
+  "testCommandRegex": "\\b(?:bun(?:\\s+run)?\\s+(?:test|check)|vitest|jest|npm\\s+(?:run\\s+)?(?:test|check))\\b",
+  "verifyCommand": "bun test",
+  "oracle": {
+    "path": "spec/boundary.oracle.spec.ts",
+    "command": "bun test spec/boundary.oracle.spec.ts",
+    "content": "import { describe, expect, it } from \"bun:test\";\nimport { SlidingWindowLimiter } from \"../src/limiter\";\n\ndescribe(\"SlidingWindowLimiter boundary oracle\", () => {\n  it(\"expires a hit at exact nowMs - windowMs\", () => {\n    const limiter = new SlidingWindowLimiter({ limit: 1, windowMs: 1000 });\n    expect(limiter.check(\"alpha\", 1000)).toEqual({ allowed: true, remaining: 0, retryAfterMs: 0 });\n    expect(limiter.check(\"alpha\", 2000)).toEqual({ allowed: true, remaining: 0, retryAfterMs: 0 });\n  });\n\n  it(\"still blocks 1ms before expiry with retryAfterMs 1\", () => {\n    const limiter = new SlidingWindowLimiter({ limit: 1, windowMs: 1000 });\n    expect(limiter.check(\"alpha\", 1000).allowed).toBe(true);\n    expect(limiter.check(\"alpha\", 1999)).toEqual({ allowed: false, remaining: 0, retryAfterMs: 1 });\n  });\n\n  it(\"evicts only expired hits at the exact boundary in multi-hit windows\", () => {\n    const limiter = new SlidingWindowLimiter({ limit: 2, windowMs: 1000 });\n    expect(limiter.check(\"alpha\", 1000)).toEqual({ allowed: true, remaining: 1, retryAfterMs: 0 });\n    expect(limiter.check(\"alpha\", 1500)).toEqual({ allowed: true, remaining: 0, retryAfterMs: 0 });\n    expect(limiter.check(\"alpha\", 2000)).toEqual({ allowed: true, remaining: 0, retryAfterMs: 0 });\n    expect(limiter.check(\"alpha\", 2000)).toEqual({ allowed: false, remaining: 0, retryAfterMs: 500 });\n  });\n\n  it(\"keeps key isolation intact\", () => {\n    const limiter = new SlidingWindowLimiter({ limit: 1, windowMs: 1000 });\n    expect(limiter.check(\"alpha\", 1000).allowed).toBe(true);\n    expect(limiter.check(\"beta\", 1000).allowed).toBe(true);\n    expect(limiter.check(\"alpha\", 1999).allowed).toBe(false);\n    expect(limiter.check(\"beta\", 2000).allowed).toBe(true);\n  });\n});\n"
+  },
+  "turns": [
+    {
+      "prompt": "In /workspace, SlidingWindowLimiter in src/limiter.ts still counts a hit whose timestamp is exactly windowMs old (for example, with limit 1 and windowMs 1000, a hit at 1000 blocks a request at 2000 with retryAfterMs 0). Fix the boundary defect in src/limiter.ts and add a regression case in spec/limiter.spec.ts. Run bun run check to verify."
+    }
+  ],
+  "rubric": {
+    "taskSummary": "Fix the sliding-window expiration boundary in src/limiter.ts so hits at exact timestamp nowMs - windowMs expire, and add a focused regression case in spec/limiter.spec.ts.",
+    "criteria": [
+      {
+        "id": "boundary_correctness",
+        "description": "Fixes the inclusive-vs-exclusive expiration boundary cleanly while preserving window counting, remaining quota, retryAfterMs, and key isolation.",
+        "weight": 0.4
+      },
+      {
+        "id": "regression_coverage",
+        "description": "Adds a behavior-focused regression case covering the exact boundary timestamp without relying on mocks or private state.",
+        "weight": 0.35
+      },
+      {
+        "id": "minimal_diff",
+        "description": "Keeps edits surgical and avoids unrelated refactoring or extra files.",
+        "weight": 0.25
+      }
+    ]
+  }
+}

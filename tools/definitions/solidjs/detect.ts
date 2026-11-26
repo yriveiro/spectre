@@ -50,6 +50,40 @@ export interface Report {
   readonly incompatible: ReadonlyArray<string>;
 }
 
+export interface DetectOptions {
+  readonly signal?: AbortSignal;
+  readonly canRead?: (absolutePath: string) => Promise<boolean>;
+  readonly maxSourceFiles?: number;
+  readonly maxFileBytes?: number;
+  readonly maxTotalBytes?: number;
+  readonly maxLockBytes?: number;
+}
+
+export class DetectAbortedError extends Error {
+  constructor() {
+    super("SolidJS detection aborted");
+    this.name = "DetectAbortedError";
+  }
+}
+
+export class DetectBoundedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DetectBoundedError";
+  }
+}
+
+interface ReadBudget {
+  readonly signal?: AbortSignal;
+  readonly canRead?: (absolutePath: string) => Promise<boolean>;
+  readonly maxFileBytes?: number;
+  remainingBytes?: number;
+}
+
+const assertNotAborted = (signal: AbortSignal | undefined): void => {
+  if (signal?.aborted) throw new DetectAbortedError();
+};
+
 const SKIP = new Set([
   "node_modules",
   ".git",
@@ -70,13 +104,29 @@ const lineAt = (text: string, index: number): number => {
   return line;
 };
 
-const text = async (path: string): Promise<string | undefined> => {
+const text = async (path: string, budget?: ReadBudget): Promise<string | undefined> => {
+  assertNotAborted(budget?.signal);
+  if (budget?.canRead !== undefined && !(await budget.canRead(path))) return undefined;
+  assertNotAborted(budget?.signal);
   const file = Bun.file(path);
-  return (await file.exists()) ? file.text() : undefined;
+  if (!(await file.exists())) return undefined;
+  assertNotAborted(budget?.signal);
+  if (budget?.maxFileBytes !== undefined && file.size > budget.maxFileBytes) {
+    throw new DetectBoundedError(`File exceeds preload size bound: ${path}`);
+  }
+  if (budget?.remainingBytes !== undefined) {
+    if (file.size > budget.remainingBytes) {
+      throw new DetectBoundedError(`Total scanned bytes exceed preload bound at ${path}`);
+    }
+    budget.remainingBytes -= file.size;
+  }
+  const body = await file.text();
+  assertNotAborted(budget?.signal);
+  return body;
 };
 
-const json = async <T>(path: string): Promise<T | undefined> => {
-  const body = await text(path);
+const json = async <T>(path: string, budget?: ReadBudget): Promise<T | undefined> => {
+  const body = await text(path, budget);
   if (body === undefined) return undefined;
   try {
     return JSON.parse(body) as T;
@@ -110,12 +160,22 @@ const isOurs = (name: string): boolean =>
   name === "@solidjs/web" ||
   name === "@solidjs/signals";
 
-const sourceFiles = async (directory: string): Promise<ReadonlyArray<string>> => {
+const sourceFiles = async (
+  directory: string,
+  options?: DetectOptions,
+  canRead?: (absolutePath: string) => Promise<boolean>,
+): Promise<ReadonlyArray<string>> => {
   const found: Array<string> = [];
   const glob = new Bun.Glob(SOURCE);
   for await (const entry of glob.scan({ cwd: directory, onlyFiles: true })) {
+    assertNotAborted(options?.signal);
     const first = entry.split("/")[0];
     if (first === undefined || SKIP.has(first)) continue;
+    if (canRead !== undefined && !(await canRead(join(directory, entry)))) continue;
+    assertNotAborted(options?.signal);
+    if (options?.maxSourceFiles !== undefined && found.length >= options.maxSourceFiles) {
+      throw new DetectBoundedError(`Source files exceed preload bound (${options.maxSourceFiles})`);
+    }
     found.push(entry);
   }
   return found.toSorted();
@@ -130,12 +190,15 @@ const dependencyVersion = (
   manifest.peerDependencies?.[name] ??
   manifest.optionalDependencies?.[name];
 
-const lockVersions = async (directory: string): Promise<Map<string, string>> => {
+const lockVersions = async (
+  directory: string,
+  budget?: ReadBudget,
+): Promise<Map<string, string>> => {
   const found = new Map<string, string>();
 
   const packageLock = await json<{
     packages?: Record<string, { version?: string }>;
-  }>(join(directory, "package-lock.json"));
+  }>(join(directory, "package-lock.json"), budget);
   for (const [path, value] of Object.entries(packageLock?.packages ?? {})) {
     const match = /node_modules\/((?:@[^/]+\/)?[^/]+)$/.exec(path);
     if (match?.[1] !== undefined && isOurs(match[1]) && value.version !== undefined) {
@@ -144,7 +207,7 @@ const lockVersions = async (directory: string): Promise<Map<string, string>> => 
   }
 
   for (const name of ["bun.lock", "pnpm-lock.yaml", "yarn.lock"]) {
-    const body = await text(join(directory, name));
+    const body = await text(join(directory, name), budget);
     if (body === undefined) continue;
     for (const dependency of ["solid-js", "@solidjs/start", "@solidjs/router", "@solidjs/meta", "@solidjs/web"]) {
       const escaped = dependency.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -208,7 +271,11 @@ const V1_NAMES = new Set([
   "indexArray",
 ]);
 
-const scanSources = async (directory: string): Promise<Scan> => {
+const scanSources = async (
+  directory: string,
+  options?: DetectOptions,
+  budget?: ReadBudget,
+): Promise<Scan> => {
   const v1Imports: Array<Evidence> = [];
   const v2Imports: Array<Evidence> = [];
   const v1Names: Array<Evidence> = [];
@@ -217,8 +284,8 @@ const scanSources = async (directory: string): Promise<Scan> => {
   const v2Tags: Array<Evidence> = [];
   let files = 0;
 
-  for (const entry of await sourceFiles(directory)) {
-    const body = await text(join(directory, entry));
+  for (const entry of await sourceFiles(directory, options, budget?.canRead)) {
+    const body = await text(join(directory, entry), budget);
     if (body === undefined) continue;
     files += 1;
 
@@ -260,9 +327,9 @@ const scanSources = async (directory: string): Promise<Scan> => {
   return { files, v1Imports, v2Imports, v1Names, v2Names, v1Tags, v2Tags };
 };
 
-const jsxSource = async (directory: string): Promise<string | undefined> => {
+const jsxSource = async (directory: string, budget?: ReadBudget): Promise<string | undefined> => {
   for (const name of ["tsconfig.json", "jsconfig.json"]) {
-    const body = await text(join(directory, name));
+    const body = await text(join(directory, name), budget);
     if (body === undefined) continue;
     const match = /"jsxImportSource"\s*:\s*"([^"]+)"/.exec(body);
     if (match?.[1] !== undefined) return match[1];
@@ -270,24 +337,73 @@ const jsxSource = async (directory: string): Promise<string | undefined> => {
   return undefined;
 };
 
-const hasFile = async (directory: string, pattern: string): Promise<boolean> => {
+const hasFile = async (
+  directory: string,
+  pattern: string,
+  signal?: AbortSignal,
+  canRead?: (absolutePath: string) => Promise<boolean>,
+): Promise<boolean> => {
+  assertNotAborted(signal);
   const glob = new Bun.Glob(pattern);
-  for await (const _ of glob.scan({ cwd: directory, onlyFiles: true })) return true;
+  for await (const entry of glob.scan({ cwd: directory, onlyFiles: true })) {
+    assertNotAborted(signal);
+    if (canRead !== undefined && !(await canRead(join(directory, entry)))) continue;
+    assertNotAborted(signal);
+    return true;
+  }
   return false;
 };
 
-const viteText = async (directory: string): Promise<string | undefined> => {
+const viteText = async (directory: string, budget?: ReadBudget): Promise<string | undefined> => {
   for (const name of ["vite.config.ts", "vite.config.js", "vite.config.mts", "vite.config.mjs"]) {
-    const body = await text(join(directory, name));
+    const body = await text(join(directory, name), budget);
     if (body !== undefined) return body;
   }
   return undefined;
 };
 
-export const detect = async (directory: string): Promise<Report> => {
+const memoizeCanRead = (
+  canRead: ((absolutePath: string) => Promise<boolean>) | undefined,
+): ((absolutePath: string) => Promise<boolean>) | undefined => {
+  if (canRead === undefined) return undefined;
+  const cache = new Map<string, boolean>();
+  return async (absolutePath: string): Promise<boolean> => {
+    const cached = cache.get(absolutePath);
+    if (cached !== undefined) return cached;
+    const allowed = await canRead(absolutePath);
+    cache.set(absolutePath, allowed);
+    return allowed;
+  };
+};
+
+const budgetsFor = (directory: string, options: DetectOptions | undefined) => {
+  assertNotAborted(options?.signal);
   const root = directory === "" ? "." : directory;
+  const canRead = memoizeCanRead(options?.canRead);
+  const file: ReadBudget | undefined =
+    options === undefined
+      ? undefined
+      : {
+          signal: options.signal,
+          canRead,
+          maxFileBytes: options.maxFileBytes,
+          remainingBytes: options.maxTotalBytes,
+        };
+  const lock: ReadBudget | undefined =
+    options === undefined
+      ? undefined
+      : {
+          signal: options.signal,
+          canRead,
+          maxFileBytes: options.maxLockBytes,
+        };
+  return { root, canRead, file, lock };
+};
+
+export const detect = async (directory: string, options?: DetectOptions): Promise<Report> => {
+  const { root, canRead, file, lock } = budgetsFor(directory, options);
   const warnings: Array<string> = [];
-  const manifestBody = await text(join(root, "package.json"));
+  const manifestBody = await text(join(root, "package.json"), file);
   let manifest: {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
@@ -302,7 +418,7 @@ export const detect = async (directory: string): Promise<Report> => {
     }
   }
 
-  const locks = await lockVersions(root);
+  const locks = await lockVersions(root, lock);
   const solidRange = dependencyVersion(manifest, "solid-js");
   const startRange = dependencyVersion(manifest, "@solidjs/start");
   const routerRange = dependencyVersion(manifest, "@solidjs/router");
@@ -315,11 +431,11 @@ export const detect = async (directory: string): Promise<Report> => {
   const routerLine = majorOf(routerRange);
   const metaMajor = firstVersionIn(metaRange)?.split(".")[0];
   const metaLine = metaMajor === "0" ? "0" : majorOf(metaRange);
-  const jsx = await jsxSource(root);
-  const scan = await scanSources(root);
+  const jsx = await jsxSource(root, file);
+  const scan = await scanSources(root, options, file);
 
-  const appConfig = await hasFile(root, "app.config.*");
-  const vite = await viteText(root);
+  const appConfig = await hasFile(root, "app.config.*", options?.signal, canRead);
+  const vite = await viteText(root, file);
   const startPlugin = vite !== undefined && /solidStart\s*\(/.test(vite);
   const solidPlugin = vite?.includes("@solidjs/vite-plugin")
     ? "@solidjs/vite-plugin"

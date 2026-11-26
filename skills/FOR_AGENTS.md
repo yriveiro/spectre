@@ -9,7 +9,7 @@ Read this before adding or changing a skill definition.
 - **Push leaves (32):** 28 `principle-*` skills plus `code-hygiene`, `grammar`, `model-router`, and `look-first`. Each declares `tier: "push"`, `group: "leaf"`, and a single-line `trigger`.
 - **Push communication (1):** `communication` (`tier: "push"`, `group: "communication"`).
 - **Hubs (3):** `spectre-mode`, `playbook`, and `ripwire` (`tier: "hub"`).
-- **Pull skills (49):** 25 `playbook-*`, 6 `design`, 6 `writing`, 5 `stack`, 4 `verification`, and 3 `visual` (`tier: "pull"`).
+- **Pull skills (49):** 25 `playbook` skills (24 `playbook-*` plus `worktree-cleanup`) and 24 domain skills. Domain skills cover 6 `design`, 6 `writing`, 5 `stack`, 4 `verification`, and 3 `visual` (`tier: "pull"`).
 
 `skills/definitions/index.ts` derives `notALeaf` automatically from `!(tier === "push" && group === "leaf")` (53 ids). `skills/catalog.ts` embeds the 33 push triggers into `agents/definitions/spectre.ts` within a `1,500`-token budget, and `tools.spectre.skills` indexes all 85 skills for BM25 lookup. Do not maintain duplicate skill index tables in Markdown.
 
@@ -50,6 +50,12 @@ Pick the shape that matches the skill's job:
 1. **Name the moment, not the doctrine.** Open with what the prompt looks like ("a boolean and a flag that must stay in sync", "one caller", "flatten it"), not abstract principle vocabulary.
 2. **Keep literal nouns and artefacts.** Prompts name concrete files and objects (`README`, `package.json`, `tsconfig.json`). Replacing them with generic phrases drops recall.
 3. **Never borrow a neighbour's vocabulary.** A handoff clause using another leaf's keywords steals its prompts. Keep each leaf sharp because near-synonymous leaves degrade routing across the whole set.
+
+## Checklist for a new or edited playbook
+
+- **Register under `category: "playbook"`** in `skills/definitions/index.ts`. `test/skills/playbook-hygiene.test.ts` gates every `category: "playbook"` skill and exempts `principle-*` leaves.
+- **Stay within the size budget:** at most `200` lines and `2,500` estimated body tokens. Move overflow tables into sibling `references/*.md` files.
+- **Keep phases verifiable and bounded:** add `## Start` with a monotonic `1..K` list and contiguous `## Phase` sections. Include a concrete verification check, a failure-recovery clause, and zero unbounded retries.
 
 ## Checklist for a new or edited leaf
 
