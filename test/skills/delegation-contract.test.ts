@@ -16,13 +16,10 @@ const CONTRACT_TOKENS = [
 ] as const;
 
 describe("delegation and escalation contract", () => {
-  test("operator, spectre, spectre-mode, and model-router share the terminal status and escalation tokens", async () => {
+  test("operator and model-router share the terminal status and escalation wire tokens", async () => {
     expect(operator.system).toBeDefined();
-    expect(spectre.system).toBeDefined();
     const surfaces: ReadonlyArray<readonly [string, string]> = [
       ["agents/definitions/operator.ts", flat(operator.system ?? "")],
-      ["agents/definitions/spectre.ts", flat(spectre.system ?? "")],
-      [HUB, flat(await Bun.file(HUB).text())],
       [ROUTER, flat(await Bun.file(ROUTER).text())],
     ];
 
@@ -33,13 +30,30 @@ describe("delegation and escalation contract", () => {
     }
   });
 
-  test("spectre states main ownership of framing, tradeoffs, integration, and final acceptance", () => {
+  test("spectre stays thin and does not leak router profiles or worker wire tokens", () => {
     const body = flat(spectre.system ?? "");
+    expect(body).toContain("spectre-mode");
+    expect(body).toContain("model-router");
+    for (const leaked of [
+      "STATUS: DONE",
+      "STATUS: ESCALATE",
+      "AMBIGUITY",
+      "FAILURE_CAP",
+      "mechanical",
+      "spectre.json",
+    ]) {
+      expect(body, `agents/definitions/spectre.ts must not leak ${leaked}`).not.toContain(leaked);
+    }
+  });
+
+  test("spectre-mode owns decomposition, main-session ownership, and low-complexity delegation without wire leakage", async () => {
+    const body = flat(await Bun.file(HUB).text());
     expect(body).toContain("framing, tradeoffs, integration, and final acceptance");
-    expect(body).toContain("execute directly without delegating further");
-    expect(body).toContain("mechanical");
-    expect(body).toContain("search");
-    expect(body).toContain("worker");
+    expect(body).toContain("decompose the request into small, verifiable units");
+    expect(body).toContain("low-complexity, bounded units");
+    expect(body).toContain("execute your assigned unit directly without delegating further");
+    expect(body).not.toContain("STATUS: ESCALATE");
+    expect(body).not.toContain("FAILURE_CAP");
   });
 
   test("operator states the stop triggers, first-hit environment blocker, and delivery fields", () => {
