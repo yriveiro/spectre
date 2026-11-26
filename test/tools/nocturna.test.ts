@@ -47,9 +47,27 @@ const toSessionInfo = (row: MockSession) => ({
   location: { directory: "/repo" },
 });
 
+const scanMockStore = (
+  store: Map<string, Schema.Json>,
+  scanOptions: { readonly prefix: string; readonly after?: string; readonly limit?: number },
+  failScan?: boolean,
+) => {
+  if (failScan) return Effect.die(new Error("storage scan unavailable"));
+  const rawLimit = scanOptions.limit ?? 100;
+  const limit = Number.isNaN(rawLimit) ? 100 : Math.min(Math.max(Math.floor(rawLimit), 1), 1000);
+  const matching = [...store.entries()]
+    .filter(([key]) => key.startsWith(scanOptions.prefix))
+    .filter(([key]) => scanOptions.after === undefined || key > scanOptions.after)
+    .toSorted(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+  const entries = matching.slice(0, limit).map(([key, value]) => ({ key, value }));
+  if (matching.length <= limit) return Effect.succeed({ entries });
+  const last = entries.at(-1);
+  return Effect.succeed({ entries, ...(last === undefined ? {} : { next: last.key }) });
+};
+
 const makeHost = (
   initial: ReadonlyArray<MockSession>,
-  options: { readonly failList?: boolean; readonly storageDelayMs?: number } = {},
+  options: { readonly failList?: boolean; readonly failScan?: boolean; readonly storageDelayMs?: number } = {},
 ) => {
   const store = new Map<string, Schema.Json>();
   const rows = new Map<string, MockSession>(initial.map((one) => [one.id, one]));
@@ -77,7 +95,11 @@ const makeHost = (
         Effect.sync(() => {
           store.delete(key);
         }),
-      scan: () => Effect.succeed({ entries: [], cursor: undefined }),
+      scan: (scanOptions: {
+        readonly prefix: string;
+        readonly after?: string;
+        readonly limit?: number;
+      }) => scanMockStore(store, scanOptions, options.failScan),
     },
     session: {
       list: (input?: {
@@ -645,5 +667,75 @@ describe("tools.spectre.nocturna", () => {
 
     expect(page3.output.sessions.map((one) => one.id)).toEqual(["ses_p3"]);
     expect(page3.output.remainingUnanalyzed).toBe(0);
+  });
+
+  test("collect surfaces open cross-project papercuts with empty local sessions and keeps mark isolated", async () => {
+    const { ctx, store } = makeHost([]);
+    store.set("papercut:v1:o:01950000-0000-7000-8000-000000000001", {
+      v: 1,
+      id: "01950000-0000-7000-8000-000000000001",
+      groupId: "pc_112233445566",
+      targetKind: "tool",
+      target: "tools.spectre.worktrees",
+      canonicalTarget: "tool:worktrees",
+      tried: "start",
+      expected: "opens",
+      actual: "rejected",
+      suggestedFix: "Do not leak suggestedFix into collect",
+      projectId: "proj_external",
+      repo: "payments-api",
+      sessionID: "ses_foreign_secret",
+      opencodeVersion: "2.4.2",
+      at: NOW - DAY_MS,
+    });
+
+    const tool = nocturnaTool(ctx, () => NOW);
+    const collected = await Effect.runPromise(tool.execute({}, callContext()));
+    if (collected.output?.status !== "collected") throw new Error("expected collected");
+
+    expect(collected.output.sessions).toEqual([]);
+    expect(collected.output.papercuts).toEqual({
+      status: "ok",
+      openGroups: 1,
+      newReportsInWindow: 1,
+      scanTruncated: false,
+      topGroups: [
+        {
+          groupId: "pc_112233445566",
+          targetKind: "tool",
+          target: "tools.spectre.worktrees",
+          projects: 1,
+          occurrences: 1,
+          reopened: false,
+        },
+      ],
+    });
+    expect(JSON.stringify(collected.output.papercuts)).not.toContain("ses_foreign_secret");
+    expect(JSON.stringify(collected.output.papercuts)).not.toContain("Do not leak");
+
+    await Effect.runPromise(tool.execute({ action: "mark", sessions: [] }, callContext()));
+    const afterMark = await Effect.runPromise(tool.execute({}, callContext()));
+    if (afterMark.output?.status !== "collected") throw new Error("expected collected");
+    expect(afterMark.output.papercuts.openGroups).toBe(1);
+  });
+
+  test("collect isolates papercut storage defects into status=unavailable without failing local results", async () => {
+    const { ctx } = makeHost(
+      [{ id: "ses_local_ok", agent: "spectre", updatedAt: NOW - DAY_MS }],
+      { failScan: true },
+    );
+
+    const tool = nocturnaTool(ctx, () => NOW);
+    const collected = await Effect.runPromise(tool.execute({}, callContext()));
+    if (collected.output?.status !== "collected") throw new Error("expected collected");
+
+    expect(collected.output.sessions.map((one) => one.id)).toEqual(["ses_local_ok"]);
+    expect(collected.output.papercuts).toEqual({
+      status: "unavailable",
+      openGroups: 0,
+      newReportsInWindow: 0,
+      scanTruncated: false,
+      topGroups: [],
+    });
   });
 });

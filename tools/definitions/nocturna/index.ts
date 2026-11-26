@@ -2,6 +2,7 @@ import type { Plugin } from "@opencode/plugin/effect";
 import { Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Effect, Option, Result, Schema } from "effect";
+import { PapercutRollupSchema, summarizeOpenPapercuts } from "../papercuts";
 import {
   digestSession,
   inspectMessages,
@@ -130,6 +131,7 @@ const CollectedOutput = Schema.Struct({
   topTools: Schema.Array(ToolStatSchema),
   topSkills: Schema.Array(SkillCountSchema),
   sessions: Schema.Array(SessionDigestSchema),
+  papercuts: PapercutRollupSchema,
 });
 
 const InspectedCallSchema = Schema.Struct({
@@ -458,6 +460,7 @@ const runCollect = (
         : scanned.pending;
     const batch = ordered.slice(offset, offset + limit);
     const { ranked, unreadable } = yield* digestBatch(ctx, batch);
+    const papercuts = yield* summarizeOpenPapercuts(ctx, cutoffAt);
 
     const output: typeof CollectedOutput.Type = {
       status: "collected",
@@ -474,11 +477,17 @@ const runCollect = (
       topTools: aggregateTools(ranked),
       topSkills: aggregateSkills(ranked),
       sessions: ranked,
+      papercuts,
     };
+
+    const papercutNote =
+      papercuts.status === "unavailable"
+        ? " Papercuts: unavailable."
+        : ` Papercuts: ${papercuts.openGroups} open (${papercuts.newReportsInWindow} new in window${papercuts.scanTruncated ? ", truncated" : ""}).`;
 
     return {
       output,
-      content: `Collected ${ranked.length} session(s) across ${windowDays}d (${scanned.skippedAnalyzed} skipped, ${output.remainingUnanalyzed} remaining, ${unreadable.length} unreadable).`,
+      content: `Collected ${ranked.length} session(s) across ${windowDays}d (${scanned.skippedAnalyzed} skipped, ${output.remainingUnanalyzed} remaining, ${unreadable.length} unreadable).${papercutNote}`,
     };
   });
 

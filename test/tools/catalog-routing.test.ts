@@ -10,6 +10,7 @@ import { comments } from "../../tools/definitions/comments";
 import { goal } from "../../tools/definitions/goal";
 import { historyTool } from "../../tools/definitions/history";
 import { nocturnaTool } from "../../tools/definitions/nocturna";
+import { papercuts } from "../../tools/definitions/papercuts";
 import { pr } from "../../tools/definitions/pr";
 import { prose } from "../../tools/definitions/prose";
 import { routing } from "../../tools/definitions/routing";
@@ -53,6 +54,7 @@ const SPECTRE_TOOLS: ReadonlyArray<RegisteredTool> = [
   goal(ctx),
   historyTool(directory),
   nocturnaTool(ctx),
+  papercuts(ctx),
   pr(ctx),
   prose(directory),
   ripwire(ctx),
@@ -292,12 +294,15 @@ const TASK_QUERIES: ReadonlyArray<readonly [query: string, expectedPath: string]
   ["preview skill headings pull workflows", "tools.spectre.skills"],
   ["audit past opencode sessions rolling window", "tools.spectre.nocturna"],
   ["nocturna session watermark storage", "tools.spectre.nocturna"],
+  ["log spectre friction papercut broken tool flag", "tools.spectre.papercuts"],
+  ["query known workaround before retrying skill", "tools.spectre.papercuts"],
+  ["resolve grouped papercuts across repositories", "tools.spectre.papercuts"],
 ];
 
 describe("Code Mode catalog routing surface", () => {
-  test("mounts a 42-tool catalog (14 spectre tools + 28 MCP distractors)", () => {
-    expect(SPECTRE_TOOLS).toHaveLength(14);
-    expect(runtime.catalog).toHaveLength(42);
+  test("mounts a 43-tool catalog (15 spectre tools + 28 MCP distractors)", () => {
+    expect(SPECTRE_TOOLS).toHaveLength(15);
+    expect(runtime.catalog).toHaveLength(43);
   });
 
   test("zero tools.spectre.* tools set pinned: true", () => {
@@ -327,7 +332,7 @@ describe("Code Mode catalog routing surface", () => {
     expect(NAMESPACE_DESCRIPTION).toContain("spectre_search");
   });
 
-  test("exact-path search({ query: 'tools.spectre.<name>' }) returns [exact] for all 14 tools", async () => {
+  test("exact-path search({ query: 'tools.spectre.<name>' }) returns [exact] for all 15 tools", async () => {
     for (const tool of SPECTRE_TOOLS) {
       const path = `tools.spectre.${tool.name}`;
       const res = await runSearch(path);
