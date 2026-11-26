@@ -1,7 +1,7 @@
 DOCKERFILE := docker/Dockerfile
 
 BUN_VERSION ?= 1.4.4
-OPENCODE_VERSION ?= 2.3.0
+OPENCODE_VERSION ?= 2.4.2
 IMAGE ?= spectre:$(OPENCODE_VERSION)
 
 CONTAINER ?= opencode-test

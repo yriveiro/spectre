@@ -48,8 +48,8 @@ bun run eval:resume -- --build    # rebuild the image first
 bun run eval:resume -- --keep     # keep the container for a look
 ```
 
-The first run builds `spectre-eval:2.3.0` from `docker/Dockerfile` with the
-`docker/` directory as the build context. The image installs OpenCode 2.3.0 and
+The first run builds `spectre-eval:2.4.2` from `docker/Dockerfile` with the
+`docker/` directory as the build context. The image installs OpenCode 2.4.2 and
 Bun 1.4.4. The harness mounts three things into it:
 
 | Host | Container | Why |

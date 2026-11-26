@@ -156,7 +156,7 @@ export const connect = (directory: string, baseUrl: string, password: string): O
     transcript: async (sessionID: string): Promise<Transcript> => {
       // `/api/session/:sessionID/message` defaults `order` to `"desc"`, rejects
       // `cursor` combined with `order`, and sets `cursor.next` on every non-empty
-      // page (`packages/server/src/handlers/message.ts:38-60` at `v2.3.0`).
+      // page (`packages/server/src/handlers/message.ts:38-60` at `v2.4.2`).
       const all: Array<SessionMessageInfo> = [];
       let cursor: string | undefined;
       for (;;) {

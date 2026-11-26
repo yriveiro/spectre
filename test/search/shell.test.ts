@@ -283,7 +283,7 @@ describe("decide, the shell rows above the search", () => {
 
   test("git archaeology is not a search", () => {
     expect(shell("git log --oneline -20").verdict).toEqual({ kind: "pass", why: "not-a-search" });
-    expect(shell("git show v2.3.0:packages/core/src/tool.ts").verdict).toEqual({
+    expect(shell("git show v2.4.2:packages/core/src/tool.ts").verdict).toEqual({
       kind: "pass",
       why: "not-a-search",
     });

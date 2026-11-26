@@ -31,7 +31,15 @@ describe("the script follows the side of the subagent boundary", () => {
   test("the parent's second prompt picks the continuing call", () => {
     const messages: ReadonlyArray<Message> = [
       ...parent(correction.turns[0]!.prompt),
-      { role: "tool", content: '<subagent sessionID="ses_child" state="completed">done</subagent>' },
+      {
+        role: "tool",
+        content: "The subagent is working in the background (sessionID: ses_child).",
+      },
+      {
+        role: "user",
+        content:
+          '<background-result kind="subagent" sessionID="ses_child" state="completed">done</background-result>',
+      },
       { role: "user", content: correction.turns[1]!.prompt },
     ];
     const step = pickStep(correction, messages);
@@ -52,7 +60,15 @@ describe("a new unit does not continue the first child", () => {
   test("the second parent prompt has no sessionID", () => {
     const messages: ReadonlyArray<Message> = [
       ...parent(newUnit.turns[0]!.prompt),
-      { role: "tool", content: '<subagent sessionID="ses_first" state="completed">done</subagent>' },
+      {
+        role: "tool",
+        content: "The subagent is working in the background (sessionID: ses_first).",
+      },
+      {
+        role: "user",
+        content:
+          '<background-result kind="subagent" sessionID="ses_first" state="completed">done</background-result>',
+      },
       { role: "user", content: newUnit.turns[1]!.prompt },
     ];
     const step = pickStep(newUnit, messages);

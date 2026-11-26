@@ -28,7 +28,7 @@ export const registerSubagents = (context: Plugin.Context): (() => void) => {
   // signal redraws whichever surface already rendered a cached answer. A
   // failed read is not cached: it retries on the next render. A config edit
   // in the routing page appears when the model catalogue changes or the TUI
-  // restarts — the page keeps no cross-feature revision signal at v2.3.0.
+  // restarts — the page keeps no cross-feature revision signal at v2.4.2.
   const cache = new Map<string, ReadonlyArray<ProfileRouting>>();
   const counts = new Map<string, number>();
   const pending = new Set<string>();

@@ -10,7 +10,7 @@ import { join } from "node:path";
  * The host owns the loop; this module owns what the loop is told.
  */
 
-/** The host's cap at `packages/core/src/plugin/goal.ts` in OpenCode 2.3.0. */
+/** The host's cap at `packages/core/src/plugin/goal.ts` in OpenCode 2.4.2. */
 export const MAX_OBJECTIVE = 4_000;
 
 /**

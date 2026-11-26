@@ -5,7 +5,7 @@ import { activeMessages } from "../render.ts";
  * Tool-call accounting for one session, derived from its messages.
  *
  * OpenCode records token usage per assistant message
- * (`TokenUsage.Info` on `Session.Message.Assistant` at v2.3.0) and tool calls
+ * (`TokenUsage.Info` on `Session.Message.Assistant` at v2.4.2) and tool calls
  * as `tool` parts inside that same message, so a message that fires three
  * tools carries one usage number. Per-tool tokens are therefore pro-rated:
  * every tool part in the message is charged an equal share. A tool called

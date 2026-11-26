@@ -113,7 +113,7 @@ the model reads.
 ## Platform facts
 
 Every fact here comes from the tag `v2.1.1`, the version floor at the time. The
-floor is now 2.3.0. The ladder table below was re-read at 2.2.7, and 2.3.0
+floor is now 2.4.2. The ladder table below was re-read at 2.2.7, and 2.4.2
 ships the same catalogue snapshot. Each row cites
 the tag it comes from, so read a row as a claim about that tag, not about the
 current floor.
@@ -484,7 +484,7 @@ The Jev arm asks the host through `ctx.experimental.generate.decisions`: the
 task statement is the input, and one `choice` question offers the profiles'
 `match` lines as its choices. The host resolves the decision model from its
 catalogue and finds the endpoint and the credential through the model's
-provider (`packages/core/src/generate.ts` at `v2.3.0`), so the plugin sends no
+provider (`packages/core/src/generate.ts` at `v2.4.2`), so the plugin sends no
 request of its own. The answer carries the choice and the probability for every
 choice, so one call returns the profile and the confidence.
 

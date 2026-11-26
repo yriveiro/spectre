@@ -13,7 +13,7 @@ import {
  * The direct routing call shape: a completed `spectre_routing` part whose
  * single text part is the JSON of the tool's declared output, the persistence
  * shape `normalizeContent` writes (`packages/core/src/tool/runtime.ts` at
- * v2.3.0) when the host lists the tool itself. The default code-mode shape is
+ * v2.4.2) when the host lists the tool itself. The default code-mode shape is
  * `executePart` below.
  */
 const routingPart = (input: Record<string, JsonValue>, output: unknown) => ({
@@ -85,7 +85,7 @@ const otherTool = (name: string) => ({
  * The default code-mode shape: a completed `execute` part whose metadata
  * carries the inner calls and whose text content is the program's return,
  * which is the routing page when the program passed the call's answer
- * through (`packages/core/src/codemode/tool.ts` at v2.3.0).
+ * through (`packages/core/src/codemode/tool.ts` at v2.4.2).
  */
 const executePart = (calls: ReadonlyArray<Record<string, JsonValue>>, output: unknown) => ({
   type: "tool" as const,

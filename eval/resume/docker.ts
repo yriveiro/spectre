@@ -3,7 +3,7 @@ import { connect, type Opencode } from "../opencode";
 /** The repo root, from `eval/resume/`. */
 export const REPO = Bun.fileURLToPath(new URL("../../", import.meta.url));
 
-export const IMAGE = Bun.env.SPECTRE_EVAL_IMAGE ?? "spectre-eval:2.3.0";
+export const IMAGE = Bun.env.SPECTRE_EVAL_IMAGE ?? "spectre-eval:2.4.2";
 
 export const ensureImage = async (build: boolean): Promise<void> => {
   if (!(await Bun.file(`${REPO}/node_modules/effect/package.json`).exists()))

@@ -324,11 +324,11 @@ describe("routing guard", () => {
         content: [
           {
             type: "text",
-            text: `<subagent sessionID="ses_child" state="completed" description="Work">
+            text: `<background-result kind="subagent" sessionID="ses_child" state="completed" description="Work">
 STATUS: ESCALATE
 REASON: AMBIGUITY
 BLOCKER: Two options exist.
-</subagent>`,
+</background-result>`,
           },
         ],
       },

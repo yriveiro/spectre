@@ -16,6 +16,6 @@
  * re-read the catalog and expect the pin to move.
  */
 export const VERIFIED = {
-  opencode: "2.3.0",
+  opencode: "2.4.2",
   effect: "4.1.0",
 } as const;
