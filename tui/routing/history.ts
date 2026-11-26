@@ -15,13 +15,13 @@ import type { Profile } from "./data.ts";
  * A routing decision reaches the transcript in one of two shapes. When the
  * host lists the tool itself, it is a `spectre_routing` part whose completed
  * state carries the tool's declared output as the JSON text of its single text
- * part (`normalizeContent` in `packages/core/src/tool/runtime.ts` at v2.3.0).
+ * part (`normalizeContent` in `packages/core/src/tool/runtime.ts` at v2.4.2).
  * Code mode is the default, though: there the session calls the catalog name
  * `spectre.routing` inside the host's `execute` tool, and the completed
  * `execute` part carries the inner call in its `metadata.toolCalls` with the
  * program's return — the routing page, when the program passed the answer
  * through — as its text content (`packages/core/src/codemode/tool.ts` at
- * v2.3.0). The fold reads both. No second copy of a decision is kept
+ * v2.4.2). The fold reads both. No second copy of a decision is kept
  * anywhere.
  */
 

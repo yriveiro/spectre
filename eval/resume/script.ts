@@ -38,15 +38,23 @@ export const lastUser = (messages: ReadonlyArray<Message>): string => {
   return "";
 };
 
+const SUBAGENT_TOOL_RE = /The subagent is working in the background \(sessionID:\s*([^)\s"]+)\)/;
+const SUBAGENT_RESULT_RE = /<background-result(?=[^>]*\bkind="subagent")[^>]*\bsessionID="([^"]+)"/;
+
 /**
- * The first child id the parent has seen. The host writes it into the tool
- * result as `<subagent sessionID="ses_...">`, and into `metadata.sessionID` on
- * the part. The mock only sees the wire form, so it reads the text.
+ * The first child id the parent has seen. At v2.4.2 the subagent tool returns
+ * `(sessionID: ses_...)` in its tool result and delivers completions as
+ * `<background-result kind="subagent" sessionID="ses_...">` user messages.
  */
 export const firstChild = (messages: ReadonlyArray<Message>): string | undefined => {
   for (const message of messages) {
-    if (message.role !== "tool") continue;
-    const match = textOf(message).match(/sessionID="([^"]+)"/);
+    const pattern =
+      message.role === "tool"
+        ? SUBAGENT_TOOL_RE
+        : message.role === "user"
+          ? SUBAGENT_RESULT_RE
+          : undefined;
+    const match = pattern === undefined ? null : textOf(message).match(pattern);
     if (match?.[1] !== undefined) return match[1];
   }
   return undefined;

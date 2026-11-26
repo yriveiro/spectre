@@ -237,7 +237,7 @@ describe("eval/delegation/observe", () => {
               content: [
                 {
                   type: "text",
-                  text: `<subagent sessionID="ses_child_1" state="completed" description="Update parser">\nSTATUS: ESCALATE\nREASON: SCOPE\nBLOCKER: src/public.ts needs ParseResult union\nOPTIONS_OR_ATTEMPTS: Cannot edit src/public.ts under brief scope\nTOUCHED: none\nRECOMMENDED_NEXT: orchestrator_decision\n</subagent>`,
+                  text: `<background-result kind="subagent" sessionID="ses_child_1" state="completed" description="Update parser">\nSTATUS: ESCALATE\nREASON: SCOPE\nBLOCKER: src/public.ts needs ParseResult union\nOPTIONS_OR_ATTEMPTS: Cannot edit src/public.ts under brief scope\nTOUCHED: none\nRECOMMENDED_NEXT: orchestrator_decision\n</background-result>`,
                 },
               ],
             }),
@@ -260,7 +260,7 @@ describe("eval/delegation/observe", () => {
               content: [
                 {
                   type: "text",
-                  text: `<subagent sessionID="ses_child_1" state="completed" description="Widen scope">\nSTATUS: DONE\nTOUCHED: src/public.ts, src/parser.ts\nVERIFIED: bun test\nOUTCOME: Updated ParseResult\n</subagent>`,
+                  text: `<background-result kind="subagent" sessionID="ses_child_1" state="completed" description="Widen scope">\nSTATUS: DONE\nTOUCHED: src/public.ts, src/parser.ts\nVERIFIED: bun test\nOUTCOME: Updated ParseResult\n</background-result>`,
                 },
               ],
             }),
@@ -456,7 +456,7 @@ describe("eval/delegation/observe", () => {
               content: [
                 {
                   type: "text",
-                  text: `<subagent sessionID="ses_fc">\nSTATUS: ESCALATE\nREASON: FAILURE_CAP\nBLOCKER: cycle\nOPTIONS_OR_ATTEMPTS: 2 attempts\nTOUCHED: src/dag.ts\nRECOMMENDED_NEXT: higher_profile\n</subagent>`,
+                  text: `<background-result kind="subagent" sessionID="ses_fc">\nSTATUS: ESCALATE\nREASON: FAILURE_CAP\nBLOCKER: cycle\nOPTIONS_OR_ATTEMPTS: 2 attempts\nTOUCHED: src/dag.ts\nRECOMMENDED_NEXT: higher_profile\n</background-result>`,
                 },
               ],
             }),

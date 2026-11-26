@@ -10,7 +10,7 @@ import { activeMessages, trimPrefix } from "../render.ts";
  * carries the session's own token and cost totals, each assistant message
  * carries the agent, model ref, token usage, and cost of its own model call,
  * and a transcript marks every execution boundary with an `idle` message
- * (`Session.Message.Idle` at v2.3.0, with the outcome of that execution).
+ * (`Session.Message.Idle` at v2.4.2, with the outcome of that execution).
  *
  * A run is therefore the span from one admitted prompt to the next `idle`:
  * the `subagent` tool prompts a child once per invocation, and a follow-up

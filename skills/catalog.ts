@@ -81,7 +81,7 @@ export const renderCatalog = (skills: ReadonlyArray<Definition>): string => {
     "",
     `Playbooks (${playbooks}) & pull skills (${pullOther} + ${hubs} hubs): call \`tools.spectre.skills({ query })\` or \`tools.spectre.skills({ category })\` in \`execute\` before \`skill({ id })\`:`,
     `- \`playbook\` (${playbooks}): ordered multi-phase task procedures — load \`playbook\` for the selection rule or query \`tools.spectre.skills({ category: "playbook" })\`.`,
-    "- `stack`: Effect 4.1 (`effect-best-practices`), Elysia (`elysia-best-practices`), SolidJS (`solidjs-best-practices`), TypeScript (`typescript-best-practices`), OpenCode 2.3 (`opencode-platform`).",
+    "- `stack`: Effect 4.1 (`effect-best-practices`), Elysia (`elysia-best-practices`), SolidJS (`solidjs-best-practices`), TypeScript (`typescript-best-practices`), OpenCode 2.4 (`opencode-platform`).",
     "- `visual`: interactive HTML pages (`canvas`), diagrams/charts (`diagram`), PR diff walkthroughs (`pr-canvas`).",
     "- `verification`: failing-test-first (`tdd`), impact checks (`blast-radius`), app verification (`create-verification-skill`, `maintain-verification-skill`).",
     "- `design`: architecture (`architect`), multi-model design (`arena`), adversarial review (`interrogate`), parallel fan-out (`swarm`), ad-hoc plans (`figure-it-out`), decision ledger (`show-me-your-work`).",

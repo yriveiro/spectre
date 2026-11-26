@@ -546,7 +546,7 @@ export const registerRouting = (
 
   // The decision models the host lists as available, by directory. The host
   // lists a model only when its provider is connected or enabled
-  // (`packages/core/src/provider.ts` at v2.3.0), so a listed judge can be asked.
+  // (`packages/core/src/provider.ts` at v2.4.2), so a listed judge can be asked.
   const decisions = new Map<string, ReadonlySet<string>>();
   const decisionsFor = (directory: string): ReadonlySet<string> => {
     const listed = decisions.get(directory);

@@ -2,7 +2,7 @@
 
 ## What this is
 
-The host contract that Spectre code targets, at OpenCode 2.3.0. Read it before you write a plugin `effect`. Read it before any `ctx.*` call, hook, tool, command, agent, skill, MCP transform, session prompt, or RPC method. Every fact below comes from the tag `v2.3.0` of `anomalyco/opencode`, not from the `dev` checkout. A doc path is relative to `services/site/src/docs/content/build/`. A source path keeps its `packages/` prefix. Where a doc page and the tag disagree, this skill follows the tag and names the stale page.
+The host contract that Spectre code targets, at OpenCode 2.4.2. Read it before you write a plugin `effect`. Read it before any `ctx.*` call, hook, tool, command, agent, skill, MCP transform, session prompt, or RPC method. Every fact below comes from the tag `v2.4.2` of `anomalyco/opencode`, not from the `dev` checkout. A doc path is relative to `services/site/src/docs/content/build/`. A source path keeps its `packages/` prefix. Where a doc page and the tag disagree, this skill follows the tag and names the stale page.
 
 ## The plugin shape
 
@@ -21,7 +21,7 @@ export default Plugin.define({
 });
 ```
 
-`effect` is a peer dependency plus a dev pin. `@opencode/plugin` is a runtime dependency (`plugins/effect.mdx`, Publish). OpenCode redirects `effect`, every public `effect/*` subpath, and `@opencode/plugin` plus every public `@opencode/plugin/*` subpath to the host's runtime instances. The redirect covers imports from the plugin's own `node_modules` too, so fibers, loggers, and `Schema` parsers share one copy (`plugins/effect.mdx`, Publish). The doc page prints `effect@4.0.1`. The tag's catalog pins `4.1.0`, and that is the build the host ships (`package.json` at `v2.3.0` → `workspaces.catalog.effect`).
+`effect` is a peer dependency plus a dev pin. `@opencode/plugin` is a runtime dependency (`plugins/effect.mdx`, Publish). OpenCode redirects `effect`, every public `effect/*` subpath, and `@opencode/plugin` plus every public `@opencode/plugin/*` subpath to the host's runtime instances. The redirect covers imports from the plugin's own `node_modules` too, so fibers, loggers, and `Schema` parsers share one copy (`plugins/effect.mdx`, Publish). The doc page prints `effect@4.0.1`. The tag's catalog pins `4.1.0`, and that is the build the host ships (`package.json` at `v2.4.2` → `workspaces.catalog.effect`).
 
 Resolution has two paths. `.opencode/plugins/<name>/` loads automatically (`plugins/index.mdx`, Load). A configured local path must name a directory. OpenCode skips a configured `./plugin/local.ts` file with a warning (`plugins/migrate-v1.mdx`). A local directory with `package.json` `name` and `exports` resolves through them. Without them it uses file names at its root: `server` (else `index`), `tui`, and `rpc`. Each carries a `.ts`, `.tsx`, or `.js` extension (`plugins/index.mdx`, Load). The exports map at the tag is `.`, `./effect`, `./host`, `./runtime`, `./tui`, and the `./gui` entrypoints. It carries no explicit `./rpc` entry, so that name resolves only through the `./*` fallback to `src/*.ts` (`packages/plugin/package.json`). A local directory without `name` and `exports` probes `server` else `index`, then `tui`, then `rpc`. It also probes `gui-experimental.cjs` or `.js` for the GUI part (`packages/plugin/src/host.ts`). A plugin's GUI part is `./gui-experimental` in its own package: one prebuilt CommonJS file (`plugins/gui/index.mdx`, Package). Local discovery is `.opencode/plugins/` (plural). A TUI-only package belongs in `cli.json`, and the desktop app loads GUI parts from the global config (`plugins/index.mdx`, Load).
 
@@ -48,7 +48,7 @@ One row per domain of the `Context` interface. An **editor** registers a synchro
 | `command` | `list`, add-only `transform`, `reload` | editor | `packages/plugin/src/effect/command.ts` |
 | `credential` | `activate` | write | `packages/plugin/src/effect/plugin.ts` |
 | `event` | `subscribe({ types })`, which returns a `Stream` | stream | `packages/plugin/src/effect/event.ts` |
-| `experimental` | `terminal.read`, `generate`, `artifact.transform` | mixed | `packages/plugin/src/effect/{plugin,artifact}.ts` |
+| `experimental` | `terminal.read`, `generate` (`text`, `image`, `decisions`, omits `video`), `artifact.transform`, `automation` (`create`, `list`, `delete`) | mixed | `packages/plugin/src/effect/{plugin,artifact}.ts` |
 | `generate` (deprecated) | `text` only; use `experimental.generate.text` | read | `packages/plugin/src/effect/plugin.ts` |
 | `integration` | the API minus deprecated `wellknown`, `transform`, `reload`, and `connection.active`/`resolve`/`status` | editor | `packages/plugin/src/effect/integration.ts` |
 | `mcp` | `list`, `transform`, `reload` | editor | `packages/plugin/src/effect/mcp.ts` |
@@ -87,7 +87,7 @@ OpenCode accepts the optional third argument `{ providerID }` wherever the event
 | `http.request`, `http.response` | every native provider request | the `Request` and the `Response` |
 | `experimental.ws.handshake`, `send`, `receive` | once per model call, then per outbound and inbound `frame` | `url`, `headers`, `frame` |
 | `retry` | after OpenCode classifies a failure, before it schedules a retry | `decision` |
-| `experimental.idle` | when model work ends and no input is pending | nothing. It reads `background` |
+| `experimental.idle` | when model work ends and no input is pending | nothing. It reads `background` (includes `codemode` and `video` kinds) |
 | `fork` | after OpenCode copies the history into a fork, before the fork call returns | nothing. It reads the new `sessionID` |
 
 Three of those rows need more than a cell. `prompt` does not run for synthetic, shell, compaction, or move items. Its edits become the persisted input (`packages/plugin/src/effect/session.ts`, `plugins/server.mdx`, Prompt admission). Native bodies are one-shot streams, so clone a body before you read it (`packages/plugin/src/effect/session.ts`). `decision` is `{ retry: false }` or `{ retry: true, delay }`. Attempt `1` is the first request. A delay of `NaN`, infinity, or a negative number falls back to the computed one (`packages/plugin/src/effect/session.ts`).
@@ -123,6 +123,8 @@ interface ToolBefore {
   readonly agent: Agent.ID;
   readonly messageID: SessionMessage.ID;
   readonly id: Tool.CallID;
+  readonly info?: Tool.Info;
+  readonly codemode: boolean;
   input: unknown;
 }
 
@@ -132,6 +134,8 @@ type ToolAfter = {
   readonly agent: Agent.ID;
   readonly messageID: SessionMessage.ID;
   readonly id: Tool.CallID;
+  readonly info?: Tool.Info;
+  readonly codemode: boolean;
   readonly input: unknown;
 } & ({ readonly status: "completed"; result: Tool.Result } | { readonly status: "error"; error: Tool.Error });
 ```
@@ -144,7 +148,7 @@ type ToolAfter = {
 
 `Tool` is exported from `@opencode/plugin/effect` at this tag, beside `Agent`, `Model`, `Skill`, `Vcs`, `Worktree` and the other schema namespaces (`packages/plugin/src/effect/index.ts`). Import a schema from the barrel whenever the barrel exports it. The redirect makes the barrel's `Tool.Error` the host's class, so the host's `instanceof Tool.Error` holds and `metadata` survives. A `Tool.Error` built from a plugin-local `@opencode/schema/tool` fails that test, and the host re-wraps it with the message only (`packages/core/src/tool/runtime.ts`).
 
-`options.codemode` defaults to true. Only `codemode: false` keeps a tool on the provider's native tool list. Every other tool is reachable solely through the `execute` tool (`packages/core/src/tool.ts`, `packages/schema/src/tool.ts`). When a permission disables the `execute` tool, OpenCode exposes the code-mode tools as direct tools instead. The default is therefore not a silent hiding (`packages/core/src/tool.ts`). `pinned: true` keeps a tool in a partial catalog. The type allows it only while `codemode` is not `false` (`packages/schema/src/tool.ts`, `packages/core/src/codemode/catalog.ts`).
+`options.codemode` defaults to true. It accepts a boolean or `{ pinned?, description?, input?, output? }`. Only `codemode: false` keeps a tool on the provider's native tool list. Every other tool is reachable solely through the `execute` tool (`packages/core/src/tool.ts`, `packages/schema/src/tool.ts`). When a permission disables the `execute` tool, OpenCode exposes the code-mode tools as direct tools instead. The default is therefore not a silent hiding (`packages/core/src/tool.ts`). `options.codemode.pinned: true` keeps a tool in a partial catalog. The schema deprecates top-level `options.pinned`, and the type allows it only while `codemode` is not `false` (`packages/schema/src/tool.ts`, `packages/core/src/codemode/catalog.ts`).
 
 The effective name is `namespace.replaceAll(".", "_") + "_" + name.replace(/[^a-zA-Z0-9_-]/g, "_")`. `get`, `update`, and `remove` all take it, as in `acme_greeting` rather than `greeting` (`packages/core/src/tool/runtime.ts`). An update preserves the name and the namespace. OpenCode logs an invalid update and leaves the previous definition in place (`packages/core/src/tool.ts`).
 
@@ -173,7 +177,7 @@ The MCP editor uses `set` to add or replace a server, `update` to edit one, and 
 
 ## The API and SDK
 
-The HTTP surface is one group file per family under `packages/protocol/src/groups/`. The reference is 170 operations over 139 paths and 501 schemas at `v2.3.0`.
+The HTTP surface is one group file per family under `packages/protocol/src/groups/`. The reference is 188 operations over 152 paths and 542 schemas at `v2.4.2`.
 
 Server is `/api/info` and `/api/pair`, plus `GET /auth/connect/:code` for pairing. Location, agent, plugin, session, model, provider, integration, and credential own a first path segment. So do project, permission, command, skill, rpc, event, pty, shell, worktree, vcs, reference, form, and config.
 
@@ -196,7 +200,7 @@ A plugin uses `ctx`. That context is the Effect client for the connected server,
 - **Code mode is the default.** A tool with no `codemode` option never reaches the native tool list. Set `codemode: false` to be called directly (`packages/core/src/tool.ts`).
 - **`ctx.location` is where the plugin loaded.** It is not where every session or event lives, so read the session data when that distinction matters (`plugins/migrate-v1.mdx`).
 
-`node_modules/@opencode/*` ships compiled `dist/` files only, and fresh worktrees hold no `node_modules` before `bun install`. Read every `packages/*` source path from the `opencode-source-code` reference repository via `git -C <ref-path> show v2.3.0:<path>`.
+`node_modules/@opencode/*` ships compiled `dist/` files only, and fresh worktrees hold no `node_modules` before `bun install`. Read every `packages/*` source path from the `opencode-source-code` reference repository via `git -C <ref-path> show v2.4.2:<path>`.
 
 ## Lookup table
 

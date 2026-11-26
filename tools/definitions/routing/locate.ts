@@ -22,7 +22,7 @@ const set = (name: string): string | undefined => {
  * cannot name one. Never guesses a path it was not given.
  *
  * No plugin context domain names this directory, so the host's precedence is
- * repeated here, read at `v2.3.0`:
+ * repeated here, read at `v2.4.2`:
  *   - `util/src/global.ts:79` — `OPENCODE_CONFIG_DIR ?? Path.config`
  *   - `util/src/global-roots.ts:7` — `XDG_CONFIG_HOME || home/.config`, and
  *     `roots(app)` joins that with `"opencode"` at line 15

@@ -12,14 +12,14 @@ import {
 
 describe("parseWorkerReport", () => {
   test("parses STATUS: DONE with sessionID, paths, and multiline outcome", () => {
-    const raw = `<subagent sessionID="ses_done_1" state="completed" description="Rename key">
+    const raw = `<background-result kind="subagent" sessionID="ses_done_1" state="completed" description="Rename key">
 STATUS: DONE
 TOUCHED: tools/a.ts, \`tools/b.ts\`
 VERIFIED: bun run typecheck (exit 0)
 OUTCOME:
 - Updated schema
 - Updated tests
-</subagent>`;
+</background-result>`;
 
     expect(parseWorkerReport(raw)).toEqual({
       kind: "done",
@@ -46,14 +46,14 @@ OUTCOME: Mapped 3 call sites.`;
   });
 
   test("parses STATUS: ESCALATE for AMBIGUITY, SCOPE, and FAILURE_CAP", () => {
-    const ambiguity = `<subagent sessionID="ses_amb" state="completed" description="Task">
+    const ambiguity = `<background-result kind="subagent" sessionID="ses_amb" state="completed" description="Task">
 STATUS: ESCALATE
 REASON: AMBIGUITY
 BLOCKER: Two conflicting contracts in order.ts and check.ts.
 OPTIONS_OR_ATTEMPTS: (A) fail; (B) fallback
 TOUCHED: none
 RECOMMENDED_NEXT: orchestrator_decision
-</subagent>`;
+</background-result>`;
 
     expect(parseWorkerReport(ambiguity)).toEqual({
       kind: "escalate",
@@ -101,12 +101,12 @@ RECOMMENDED_NEXT: higher_profile`;
   });
 
   test("tolerates markdown bold **STATUS:** and a 1-line preamble", () => {
-    const raw = `<subagent sessionID="ses_pre" state="completed" description="Fix bug">
+    const raw = `<background-result kind="subagent" sessionID="ses_pre" state="completed" description="Fix bug">
 I inspected the module and hit a snag before editing.
 **STATUS:** ESCALATE
 **REASON:** AMBIGUITY
 BLOCKER: Unclear null vs Error convention.
-</subagent>`;
+</background-result>`;
 
     expect(parseWorkerReport(raw)).toEqual({
       kind: "escalate",
@@ -136,17 +136,17 @@ BLOCKER: Repeated test failure.`;
 
   test("passes through swarm PASS/ISSUES/BLOCKED and unstructured prose", () => {
     expect(
-      parseWorkerReport(`<subagent sessionID="ses_sw1" state="completed" description="Worker">
+      parseWorkerReport(`<background-result kind="subagent" sessionID="ses_sw1" state="completed" description="Worker">
 PASS
 Touched files: a.ts
-</subagent>`),
+</background-result>`),
     ).toEqual({ kind: "unstructured", sessionID: "ses_sw1" });
 
     expect(
-      parseWorkerReport(`<subagent sessionID="ses_sw2" state="completed" description="Worker">
+      parseWorkerReport(`<background-result kind="subagent" sessionID="ses_sw2" state="completed" description="Worker">
 BLOCKED
 Missing fixture.
-</subagent>`),
+</background-result>`),
     ).toEqual({ kind: "unstructured", sessionID: "ses_sw2" });
 
     expect(parseWorkerReport("Here is a plain summary with no status header.")).toEqual({
@@ -155,7 +155,7 @@ Missing fixture.
     });
   });
 
-  test("parses OpenCode v2.4.1 <background-result kind=\"subagent\"> reports", () => {
+  test("parses <background-result kind=\"subagent\"> reports", () => {
     const done = `<background-result kind="subagent" sessionID="ses_bg_done" state="completed" description="Update guard">
 STATUS: DONE
 TOUCHED: tools/definitions/routing/guard.ts
@@ -200,6 +200,18 @@ OUTCOME: Ignored tag.
       verified: "",
       outcome: "Ignored tag.\n</background-result>",
     });
+
+    const legacyTag = `<subagent sessionID="ses_legacy" state="completed">
+STATUS: DONE
+OUTCOME: Legacy tag.
+</subagent>`;
+    expect(parseWorkerReport(legacyTag)).toEqual({
+      kind: "done",
+      sessionID: undefined,
+      touched: [],
+      verified: "",
+      outcome: "Legacy tag.\n</subagent>",
+    });
   });
 });
 
@@ -212,11 +224,11 @@ describe("shapeEscalationMessages", () => {
         content: [
           {
             type: "text",
-            text: `<subagent sessionID="ses_w1" state="completed" description="Check">
+            text: `<background-result kind="subagent" sessionID="ses_w1" state="completed" description="Check">
 STATUS: ESCALATE
 REASON: AMBIGUITY
 BLOCKER: Need decision.
-</subagent>`,
+</background-result>`,
           },
         ],
       },
@@ -226,11 +238,11 @@ BLOCKER: Need decision.
         content: [
           {
             type: "text",
-            text: `<subagent sessionID="ses_w2" state="completed" description="Fix">
+            text: `<background-result kind="subagent" sessionID="ses_w2" state="completed" description="Fix">
 STATUS: ESCALATE
 REASON: FAILURE_CAP
 BLOCKER: Two failed runs.
-</subagent>`,
+</background-result>`,
           },
         ],
       },
@@ -240,10 +252,10 @@ BLOCKER: Two failed runs.
         content: [
           {
             type: "text",
-            text: `<subagent sessionID="ses_w3" state="completed" description="Done">
+            text: `<background-result kind="subagent" sessionID="ses_w3" state="completed" description="Done">
 STATUS: DONE
 OUTCOME: All good.
-</subagent>`,
+</background-result>`,
           },
         ],
       },
@@ -270,7 +282,7 @@ OUTCOME: All good.
     expect(shapeEscalationMessages(messages)).toBe(0);
   });
 
-  test("decorates OpenCode v2.4.1 <background-result kind=\"subagent\"> escalation without metadata", () => {
+  test("decorates <background-result kind=\"subagent\"> escalation without metadata", () => {
     const messages: Array<MutableContextMessage> = [
       {
         role: "user",

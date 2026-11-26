@@ -182,7 +182,7 @@ const splitPaths = (raw: string | undefined): ReadonlyArray<string> => {
     .filter((entry) => entry !== "" && !/^none$/i.test(entry));
 };
 
-const SUBAGENT_OPEN_RE = /<(?:subagent|background-result(?=[^>]*\bkind="subagent"))\b[^>]*>/;
+const SUBAGENT_OPEN_RE = /<background-result(?=[^>]*\bkind="subagent")\b[^>]*>/;
 
 const unwrapSubagentBody = (
   raw: string,
@@ -191,10 +191,8 @@ const unwrapSubagentBody = (
   if (tagMatch === null) return { inner: raw.trim() };
   const tag = tagMatch[0];
   const sessionID = tag.match(/\bsessionID="([^"]+)"/)?.[1];
-  const closeTag = tag.startsWith("<background-result") ? "</background-result>" : "</subagent>";
   const afterOpen = raw.slice((tagMatch.index ?? 0) + tag.length).replace(/^\r?\n/, "");
-  const closePattern = new RegExp(`\\r?\\n?${closeTag}\\s*$`);
-  return { sessionID, inner: afterOpen.replace(closePattern, "").trim() };
+  return { sessionID, inner: afterOpen.replace(/\r?\n?<\/background-result>\s*$/, "").trim() };
 };
 
 export const parseWorkerReport = (raw: string): WorkerReport => {
