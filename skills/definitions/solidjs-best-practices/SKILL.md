@@ -4,7 +4,9 @@ Solid is not React, and Solid 1.x is not Solid 2.0. A component runs once. Reads
 
 ## The version gate is mandatory
 
-Do not write or review Solid code until you establish one line. Call the tool before anything else:
+Do not write or review Solid code until you establish one line.
+
+Read an attached `<skill_preload skill="solidjs-best-practices">` block first when its `cwd` matches your target directory. Call the tool when no preload block appears or when your target lives elsewhere:
 
 ```ts
 const report = await tools.spectre.solidjs({ action: "detect", target: "." });
@@ -39,7 +41,7 @@ Three facts that decide most cases:
 
 Every task that touches Solid code runs these, in order. Skip one only by saying why in the report.
 
-1. **Detect the version and the framework layer.** Call `tools.spectre.solidjs({ action: "detect" })`. Record `solid-js`, `@solidjs/start`, `@solidjs/router`, `@solidjs/meta`, `@solidjs/web`, the JSX import source, and the build plugin. If the detector says `unknown`, `mixed`, or `compatible: false`, stop and ask.
+1. **Detect the version and the framework layer.** Read an attached `<skill_preload skill="solidjs-best-practices">` block when its `cwd` matches your target, or call `tools.spectre.solidjs({ action: "detect" })`. Record `solid-js`, `@solidjs/start`, `@solidjs/router`, `@solidjs/meta`, `@solidjs/web`, the JSX import source, and the build plugin. If the detector says `unknown`, `mixed`, or `compatible: false`, stop and ask.
 2. **Inspect the actual code before changing it.** Read the component, its parent, the store or context that feeds it, and the config. A prop that "does not update" is usually read once in the child, not missing from the parent. Find the owner before adding a cleanup.
 3. **Consult the authoritative source for that exact version.** Solid 1.9: `https://docs.solidjs.com` (the v1 docs). Solid 2.0 RC: `https://v2.solidjs.com`, plus `node_modules/solid-js/CHEATSHEET.md` and `node_modules/solid-js/skills/solid-2.0/SKILL.md` when installed. SolidStart 1: `/solid-start/v1/…`; SolidStart 2: `/solid-start/v2/…`. Do not use a v2 page to justify v1 code, or the reverse.
 4. **Write the simplest correct solution.** Derive before you store; store before you effect; effect only at the edge where Solid must touch something it does not own. Add no primitive the problem does not require.

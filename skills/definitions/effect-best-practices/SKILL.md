@@ -25,6 +25,12 @@ so a near-miss is not rediscovered every session.
 Effect the pin is the source, because `node_modules/effect` holds the build that runs and
 there is no checkout to read instead.
 
+Read an attached `<skill_preload skill="effect-best-practices">` block first when its `cwd`
+matches your target directory. It reports the manifest pin, the installed `node_modules/effect`
+version, and whether they align with `4.1.0`. Read `package.json` and
+`node_modules/effect/package.json` manually when no preload block appears or when your target
+lives elsewhere.
+
 An export name is a claim, and the installed declaration settles it. Open
 `node_modules/effect/dist/<Module>.d.ts` and read the declaration before writing the call. The
 declaration carries its own worked example, and that example is the spelling to copy.

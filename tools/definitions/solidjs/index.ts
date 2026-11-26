@@ -3,7 +3,15 @@ import type { Tool } from "@opencode/plugin/effect";
 import type { AbsolutePath } from "@opencode/schema/schema";
 import { Effect, Schema } from "effect";
 import { audit } from "./audit";
-import { detect } from "./detect";
+import {
+  DetectAbortedError,
+  DetectBoundedError,
+  type DetectOptions,
+  detect,
+  type Report as SolidDetectReport,
+} from "./detect";
+
+export { DetectAbortedError, DetectBoundedError, detect, type DetectOptions, type SolidDetectReport };
 
 const Mode = Schema.Literals(["solid-1", "solid-2", "mixed", "unknown"]);
 const Line = Schema.Literals(["1", "2", "unknown"]);

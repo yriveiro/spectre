@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { attachSkillToolContract } from "./catalog";
 import { load, toSkillInfo } from "./definitions";
 import { attach as watchEffectVersion } from "./definitions/effect-best-practices/watch";
+import { attachSkillPreload } from "./preload";
 
 const hasRipwire = () =>
   Boolean(Bun.env.SPECTRE_RIPWIRE?.trim()) ||
@@ -22,6 +23,7 @@ export const update = (ctx: Pick<Plugin.Context, "skill"> & Plugin.Context) =>
 
     yield* attachSkillToolContract(ctx);
     yield* watchEffectVersion(ctx);
+    yield* attachSkillPreload(ctx, skills);
 
     yield* Effect.logInfo("Registered skills", {
       skills: skills.map((skill) => skill.id),
