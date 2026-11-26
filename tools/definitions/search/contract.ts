@@ -40,3 +40,10 @@ export const landRefusal = (paths: ReadonlyArray<string>): string => {
   const affected = paths.length === 0 ? "." : [...paths].sort().join(",");
   return `This change cannot land yet: the tree holds code edits and neither measurement ran against them. Call \`tools.spectre.ripwire({ action: "check" })\` in \`execute\`, or run \`ripwire . --quality-delta\` and \`ripwire . --affected=${affected}\`, then re-issue the command. The gate checks that both commands ran after the last mutation. It refuses once, then it is advisory by design, because a blocked model must be able to land.`;
 };
+
+export const shellReadRefusal = (path: string, ready: boolean): string => {
+  const alternatives = ready
+    ? `\`read({ path: "${path}", offset, limit })\` or \`spectre_search\``
+    : `\`read({ path: "${path}", offset, limit })\``;
+  return `\`${path}\` is a large file; avoid dumping it whole through the shell. Use ${alternatives} to inspect only the lines or symbols you need. This gate refuses once per file, then lets the second call through.`;
+};

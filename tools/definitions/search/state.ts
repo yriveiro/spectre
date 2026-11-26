@@ -37,6 +37,8 @@ const fresh = (): Memory => ({
   measured: {},
   spent: new Set(),
   subagents: 0,
+  shunted: new Map(),
+  shellReadRefused: new Set(),
 });
 
 /** The session's `Memory`, created on first use, evicting the oldest at the cap. */

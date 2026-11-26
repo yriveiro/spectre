@@ -228,6 +228,12 @@ export const readingContext = (
     },
   }) as unknown as Plugin.Context;
 
+export interface AfterEventOptions {
+  readonly codemode?: boolean;
+  readonly content?: unknown;
+  readonly metadata?: Record<string, unknown>;
+}
+
 /** A completed `execute.after` event, with the output the tool returned. */
 export const afterEvent = (
   tool: string,
@@ -236,6 +242,7 @@ export const afterEvent = (
   id: string,
   output?: unknown,
   agent = "spectre",
+  options?: AfterEventOptions,
 ): unknown => ({
   tool,
   sessionID: Session.ID.make(session),
@@ -243,8 +250,13 @@ export const afterEvent = (
   messageID: "msg_measure_rows",
   id: Tool.CallID.make(id),
   input,
+  ...(options?.codemode === undefined ? {} : { codemode: options.codemode }),
   status: "completed",
-  result: output === undefined ? {} : { output },
+  result: {
+    ...(output === undefined ? {} : { output }),
+    ...(options?.content === undefined ? {} : { content: options.content }),
+    ...(options?.metadata === undefined ? {} : { metadata: options.metadata }),
+  },
 });
 
 /** A failed `execute.after` event: the tool ran and returned a `Tool.Error`. */
