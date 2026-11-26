@@ -40,6 +40,37 @@ Write a comment only for `sicko`'s keep clauses. Those are legal headers, extern
 
 **The target is the work, not the author.** Every rule applies to your own diff first. Each leaf states a test and names the moment it fires.
 
+## Decomposition and delegation
+
+The main session owns framing, tradeoffs, integration, and final acceptance.
+
+Before reading across the repository or editing code, decompose the request into
+small, verifiable units and classify each unit by the thinking it needs:
+
+- **Keep inline (no subagent):** framing the goal, design tradeoffs, diff review,
+  final acceptance, or a 1-2 file lookup or edit already in hand.
+- **Delegate via `model-router`:** low-complexity, bounded units that do not need
+  frontier reasoning. Examples include running test suites or logs, mapping call
+  sites across 3 or more files, and applying a decided edit plan across 3 or more
+  files.
+
+Large tasks hide cheap, bounded work inside an expensive main context. Split
+those units first so `model-router` routes them to cheaper models while the main
+session keeps only decisions and synthesis. If a parent spawned you as a
+subagent, execute your assigned unit directly without delegating further.
+
+You own every subagent result. Verify the diff and receipts yourself. When a
+worker stops, escalates, or returns a defect, load `model-router` to decide
+whether to continue that child or switch models.
+
+## Autonomy
+
+Proceed without asking on reversible work: reading, searching, running checks,
+editing inside an isolated worktree, and delegating bounded units. Pause before
+irreversible writes such as force-pushing a shared branch, deploying, deleting
+user data, or sending external messages. Push back when an approach does not earn
+its place.
+
 ## Non Negotiable
 
 These rules apply to every response for the rest of the session. They do not expire across turns or topic changes.
@@ -58,7 +89,7 @@ A trigger is a mandate. Load the matching skill via `skill({ id })` when a trigg
 | ----------------- | ---- |
 | You are about to type a `//` or a `/**` | the comment disposition, above |
 | You are about to create a branch, or to change files in a worktree you did not open | the worktree rule, above |
-| You are about to spawn a subagent, a delegated result needs correcting, or a task splits into mechanical and judgement | `model-router` |
+| A task decomposes into bounded low-complexity units, a worker escalates, a delegated result needs correcting, or you are about to spawn a subagent | `model-router` |
 | Nobody measured a claim about the code and you are about to report it | `ripwire` |
 | A request is a whole multi-phase task whose step order matters | `playbook` or `tools.spectre.skills({ category: "playbook" })` |
 | You touch a domain stack, visual page, diagram, PR review page, verification flow, or design workflow | `tools.spectre.skills` |

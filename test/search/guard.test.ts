@@ -5,7 +5,16 @@ import { Effect, Exit } from "effect";
 import { decide, type Health, type Memory } from "../../tools/definitions/search/policy";
 import { grepAsk } from "../../tools/definitions/search/signals";
 import { memories, rerouted } from "../../tools/definitions/search/state";
-import { captureGuard, cleanupDirs, forget, makeBin, READY_BIN, tempDir, toolEvent, withBinary } from "./host";
+import {
+  captureGuard,
+  cleanupDirs,
+  forget,
+  makeBin,
+  READY_BIN,
+  tempDir,
+  toolEvent,
+  withBinary,
+} from "./host";
 
 /**
  * The text rows and the guard's applier, against a stub binary. The guard runs
@@ -78,14 +87,21 @@ describe("the guard's text rows", () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
       const { callback, asserts } = await captureGuard();
-      const asked = toolEvent("grep", { pattern: "resolveTool" }, "ses_guard_grep", "call_guard_grep") as {
+      const asked = toolEvent(
+        "grep",
+        { pattern: "resolveTool" },
+        "ses_guard_grep",
+        "call_guard_grep",
+      ) as {
         tool: string;
         input: Record<string, unknown>;
       };
       await Effect.runPromise(callback(asked));
       expect(asked.tool).toBe("spectre_search");
-      expect(asked.input["pattern"]).toBe("resolveTool");
-      expect(memories.get(session("ses_guard_grep"))?.asked.get("resolveTool")).toEqual({ kind: "pending" });
+      expect(asked.input.pattern).toBe("resolveTool");
+      expect(memories.get(session("ses_guard_grep"))?.asked.get("resolveTool")).toEqual({
+        kind: "pending",
+      });
       expect(asserts.map((one) => one.action)).toEqual(["grep", "read"]);
       rerouted.delete(Tool.CallID.make("call_guard_grep"));
       forget("ses_guard_grep");
@@ -96,7 +112,12 @@ describe("the guard's text rows", () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
       const { callback } = await captureGuard();
-      const asked = toolEvent("ripgrep", { pattern: "resolveTool" }, "ses_guard_rg", "call_guard_rg") as {
+      const asked = toolEvent(
+        "ripgrep",
+        { pattern: "resolveTool" },
+        "ses_guard_rg",
+        "call_guard_rg",
+      ) as {
         tool: string;
       };
       await Effect.runPromise(callback(asked));
@@ -127,9 +148,19 @@ describe("the guard's text rows", () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
       const { callback } = await captureGuard();
-      const first = toolEvent("grep", { pattern: "resolveTool" }, "ses_guard_twice", "call_guard_first");
+      const first = toolEvent(
+        "grep",
+        { pattern: "resolveTool" },
+        "ses_guard_twice",
+        "call_guard_first",
+      );
       await Effect.runPromise(callback(first));
-      const second = toolEvent("grep", { pattern: "resolveTool" }, "ses_guard_twice", "call_guard_second") as {
+      const second = toolEvent(
+        "grep",
+        { pattern: "resolveTool" },
+        "ses_guard_twice",
+        "call_guard_second",
+      ) as {
         tool: string;
       };
       await Effect.runPromise(callback(second));
@@ -143,7 +174,9 @@ describe("the guard's text rows", () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
       const { callback } = await captureGuard();
-      const asked = toolEvent("grep", { pattern: "ab" }, "ses_guard_broad", "call_guard_broad") as { tool: string };
+      const asked = toolEvent("grep", { pattern: "ab" }, "ses_guard_broad", "call_guard_broad") as {
+        tool: string;
+      };
       await Effect.runPromise(callback(asked));
       expect(asked.tool).toBe("grep");
       forget("ses_guard_broad");
@@ -154,7 +187,12 @@ describe("the guard's text rows", () => {
     const bin = `${tempDir()}/missing-ripwire`;
     await withBinary(bin, async () => {
       const { callback } = await captureGuard();
-      const asked = toolEvent("grep", { pattern: "resolveTool" }, "ses_guard_absent", "call_guard_absent") as {
+      const asked = toolEvent(
+        "grep",
+        { pattern: "resolveTool" },
+        "ses_guard_absent",
+        "call_guard_absent",
+      ) as {
         tool: string;
       };
       await Effect.runPromise(callback(asked));
@@ -169,7 +207,12 @@ echo "ripwire 0.1.0 (Release, built_from=test)"
 `);
     await withBinary(bin, async () => {
       const { callback } = await captureGuard();
-      const asked = toolEvent("grep", { pattern: "resolveTool" }, "ses_guard_stale", "call_guard_stale") as {
+      const asked = toolEvent(
+        "grep",
+        { pattern: "resolveTool" },
+        "ses_guard_stale",
+        "call_guard_stale",
+      ) as {
         tool: string;
       };
       await Effect.runPromise(callback(asked));
@@ -196,10 +239,15 @@ describe("the guard remembers every allow", () => {
       const name = "ses_guard_remember";
       memories.set(
         session(name),
-        held({ mutation: 4, editedCode: new Set(["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"]) }),
+        held({
+          mutation: 4,
+          editedCode: new Set(["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts"]),
+        }),
       );
       await Effect.runPromise(
-        callback(toolEvent("shell", { command: "ripwire . --quality-delta" }, name, "call_guard_remember")),
+        callback(
+          toolEvent("shell", { command: "ripwire . --quality-delta" }, name, "call_guard_remember"),
+        ),
       );
       const after = memories.get(session(name));
       expect(after?.touched).toBe(1);
@@ -243,7 +291,12 @@ describe("the guard's shell reroute", () => {
         "rg -n ERROR app.log",
         "rg ab resolveTool",
       ].entries()) {
-        const asked = toolEvent("shell", { command }, "ses_guard_native", `call_guard_native_${index}`) as {
+        const asked = toolEvent(
+          "shell",
+          { command },
+          "ses_guard_native",
+          `call_guard_native_${index}`,
+        ) as {
           tool: string;
         };
         await Effect.runPromise(callback(asked));
@@ -274,7 +327,12 @@ describe("the guard's shell reroute", () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
       const { callback } = await captureGuard();
-      const asked = toolEvent("shell", { command: "npm run typecheck" }, "ses_guard_other", "call_guard_other") as {
+      const asked = toolEvent(
+        "shell",
+        { command: "npm run typecheck" },
+        "ses_guard_other",
+        "call_guard_other",
+      ) as {
         tool: string;
       };
       await Effect.runPromise(callback(asked));
@@ -289,7 +347,12 @@ describe("the guard's failure channel", () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
       const { callback } = await captureGuard(() => Effect.die(new Error("declined")));
-      const asked = toolEvent("grep", { pattern: "resolveTool" }, "ses_guard_decline", "call_guard_decline");
+      const asked = toolEvent(
+        "grep",
+        { pattern: "resolveTool" },
+        "ses_guard_decline",
+        "call_guard_decline",
+      );
       const exit = await Effect.runPromiseExit(callback(asked));
       expect(Exit.isFailure(exit)).toBe(true);
       expect(memories.get(session("ses_guard_decline"))?.asked.size ?? 0).toBe(0);
@@ -303,14 +366,24 @@ describe("the applier depends on the reader", () => {
     const bin = await makeBin(READY_BIN);
     await withBinary(bin, async () => {
       const enforced = await captureGuard();
-      const routed = toolEvent("grep", { pattern: "resolveTool" }, "ses_guard_reader_on", "call_guard_on") as {
+      const routed = toolEvent(
+        "grep",
+        { pattern: "resolveTool" },
+        "ses_guard_reader_on",
+        "call_guard_on",
+      ) as {
         tool: string;
       };
       await Effect.runPromise(enforced.callback(routed));
       expect(routed.tool).toBe("spectre_search");
 
       const absent = await captureGuard(undefined, () => undefined);
-      const kept = toolEvent("grep", { pattern: "resolveTool" }, "ses_guard_reader_off", "call_guard_off") as {
+      const kept = toolEvent(
+        "grep",
+        { pattern: "resolveTool" },
+        "ses_guard_reader_off",
+        "call_guard_off",
+      ) as {
         tool: string;
       };
       await Effect.runPromise(absent.callback(kept));
@@ -327,17 +400,46 @@ describe("the applier depends on the reader", () => {
     await withBinary(bin, async () => {
       const enforced = await captureGuard();
       await Effect.runPromise(
-        enforced.callback(toolEvent("edit", { path: "src/retry.ts" }, "ses_guard_edit_on", "call_edit_on")),
+        enforced.callback(
+          toolEvent("edit", { path: "src/retry.ts" }, "ses_guard_edit_on", "call_edit_on"),
+        ),
       );
       expect(memories.get(session("ses_guard_edit_on"))?.mutation).toBe(1);
 
       const absent = await captureGuard(undefined, () => undefined);
       await Effect.runPromise(
-        absent.callback(toolEvent("edit", { path: "src/retry.ts" }, "ses_guard_edit_off", "call_edit_off")),
+        absent.callback(
+          toolEvent("edit", { path: "src/retry.ts" }, "ses_guard_edit_off", "call_edit_off"),
+        ),
       );
       expect(memories.get(session("ses_guard_edit_off"))).toBeUndefined();
 
       forget("ses_guard_edit_on");
+    });
+  });
+});
+
+describe("the guard refuses recursive .spectre deletion", () => {
+  test("rm -rf .spectre and .spectre/brain fail on every attempt even when ripwire is absent", async () => {
+    const missing = `${tempDir()}/missing-ripwire`;
+    await withBinary(missing, async () => {
+      const { callback } = await captureGuard();
+      const name = "ses_guard_spectre_rm";
+      for (const [idx, command] of [
+        "rm -rf .spectre",
+        "rm -rf .spectre",
+        "cd repo && rm -fr .spectre/brain",
+      ].entries()) {
+        const exit = await Effect.runPromiseExit(
+          callback(toolEvent("shell", { command }, name, `call_rm_spectre_${idx}`)),
+        );
+        expect(Exit.isFailure(exit)).toBe(true);
+        if (Exit.isFailure(exit)) {
+          expect(String(exit.cause)).toContain(".spectre/brain");
+          expect(String(exit.cause)).toContain("institutional memory");
+        }
+      }
+      forget(name);
     });
   });
 });

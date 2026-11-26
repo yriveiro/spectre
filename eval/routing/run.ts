@@ -29,7 +29,7 @@ import { progress } from "../progress";
 import { ask, type Description, jev, lexical } from "./arms";
 import { blind, tuned } from "./fixture";
 import { prices } from "./prices";
-import { type Report, score } from "./score";
+import { blendedRate, type Report, score } from "./score";
 
 // The root sits two levels up from here, one more than `eval/run.ts` reports
 // for its own home. `boot` joins `index.ts` onto the path it is given, so the
@@ -188,7 +188,7 @@ try {
         ? primary.ref
         : `${primary.ref}#${primary.rung}`,
     );
-    return { rate: primary.costInput + primary.costOutput, effort: entry.effort };
+    return { rate: blendedRate(primary.costInput, primary.costOutput), effort: entry.effort };
   };
 
   const profileRows = Object.entries(tables.profiles).map(([name, entry]) => ({
@@ -225,10 +225,17 @@ try {
   // lists the profiles. A profile with no match line cannot be picked by
   // reading the surface, so it is named and left out rather than dropped in
   // silence.
+  const pricedNames = new Set(priceList.map((one) => one.profile));
   const described: Array<Description> = [];
   for (const [name, entry] of Object.entries(tables.profiles)) {
     if (entry.match === undefined) {
       say(`  note      ${name}: no match line, so no arm can pick it by reading the surface`);
+      continue;
+    }
+    if (!pricedNames.has(name)) {
+      say(
+        `  note      ${name}: ${refusals.get(name) ?? "unpriced"}, so it is excluded from surface`,
+      );
       continue;
     }
     described.push({ profile: name, text: entry.match });

@@ -793,6 +793,26 @@ export const routing = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Out
 });
 
 export { candidates, isFree, known, ladder } from "./catalogue";
+export type {
+  DriftKind,
+  DriftSignal,
+  DriftVerdict,
+  EscalationReason,
+  MutableContextMessage,
+  RecommendedNext,
+  TurnDriftState,
+  WorkerReport,
+} from "./delegation";
+export {
+  advanceDrift,
+  classifyShellMechanical,
+  DELEGATION_KEY,
+  DRIFT_THRESHOLDS,
+  ESCALATION_SENTINEL,
+  emptyDriftState,
+  parseWorkerReport,
+  shapeEscalationMessages,
+} from "./delegation";
 export { clampEffort, effortOf, fit, KNOWN_ORDER, ladderOf, rungs } from "./effort";
 export { attachRoutingGuard, SUBAGENT_MODEL_DESCRIPTION } from "./guard";
 export { hostCatalogue, sessionState } from "./host";

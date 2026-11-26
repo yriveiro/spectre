@@ -2,7 +2,9 @@ Open a pull request for this branch.
 
 Follow the attached `playbook-opening-a-pr` skill. Trust `<pr-preflight>` when present instead of running redundant git, signing, or `ripwire` discovery commands.
 
-`/pr` authorizes staging branch files, committing, pushing without force, and opening the pull request. Do not edit source code, open a `todolist` for one PR, or spawn `interrogate` or `sicko` subagents unless the user passed `--review`.
+`/pr` authorizes staging branch files, committing, pushing without force, and opening the pull request. Do not edit source code or open a `todolist` for one PR.
+
+For diffs touching `>=3` code files or `>=100` LOC, run `interrogate` (different model family) and `code-hygiene` by default. Skip that review only when the user passes `--no-review`. On smaller diffs, skip `interrogate` and `sicko` subagents unless the user passes `--review`.
 
 Call `tools.spectre.pr` directly through `execute` without calling `search()` first:
 

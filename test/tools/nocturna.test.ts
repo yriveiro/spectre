@@ -19,6 +19,7 @@ interface MockSession {
     readonly input?: number;
     readonly output?: number;
     readonly reasoning?: number;
+    readonly cacheRead?: number;
   };
   readonly contextError?: string;
   readonly messages?: ReadonlyArray<unknown>;
@@ -35,7 +36,7 @@ const toSessionInfo = (row: MockSession) => ({
     input: row.tokens?.input ?? 1_000,
     output: row.tokens?.output ?? 500,
     reasoning: row.tokens?.reasoning ?? 0,
-    cache: { read: 0, write: 0 },
+    cache: { read: row.tokens?.cacheRead ?? 0, write: 0 },
   },
   ...(row.outcome === undefined ? {} : { outcome: row.outcome }),
   time: {
@@ -59,13 +60,15 @@ const makeHost = (
       project: { id: "proj_spectre", directory: "/repo", canonical: "/repo" },
     },
     storage: {
-      get: (key: string) =>
-        options.storageDelayMs === undefined
+      get: (key: string) => {
+        const delay = options.storageDelayMs;
+        return delay === undefined
           ? Effect.succeed(store.get(key))
           : Effect.promise(async () => {
-              await Bun.sleep(options.storageDelayMs!);
+              await Bun.sleep(delay);
               return store.get(key);
-            }),
+            });
+      },
       set: (key: string, value: Schema.Json) =>
         Effect.sync(() => {
           store.set(key, value);
@@ -489,5 +492,158 @@ describe("tools.spectre.nocturna", () => {
       { name: "skill", calls: 1, errors: 0 },
       { name: "spectre.brain", calls: 1, errors: 0 },
     ]);
+  });
+
+  test("collect counts assistant shell non-zero exits and errors, excludes subagent resumes, and weights cost/steps/cacheRead", async () => {
+    const stepMessages = Array.from({ length: 400 }, (_, idx) => ({
+      id: `msg_step_${idx}`,
+      type: "assistant",
+      agent: "spectre",
+      model: { providerID: "anthropic", id: "claude-sonnet-4" },
+      content: [],
+    }));
+
+    const { ctx } = makeHost([
+      {
+        id: "ses_expensive_outlier",
+        agent: "spectre",
+        updatedAt: NOW - DAY_MS,
+        cost: 70,
+        tokens: { input: 100_000, output: 10_000, reasoning: 0, cacheRead: 10_000_000 },
+        messages: stepMessages,
+      },
+      {
+        id: "ses_shell_and_subagent",
+        agent: "spectre",
+        updatedAt: NOW - 2 * DAY_MS,
+        messages: [
+          {
+            id: "msg_tools",
+            type: "assistant",
+            agent: "spectre",
+            model: { providerID: "anthropic", id: "claude-sonnet-4" },
+            content: [
+              {
+                type: "tool",
+                id: "call_shell_ok",
+                name: "shell",
+                state: {
+                  status: "completed",
+                  input: { command: "echo ok" },
+                  content: [{ type: "text", text: "ok\nExit code: 0" }],
+                },
+              },
+              {
+                type: "tool",
+                id: "call_shell_nonzero",
+                name: "shell",
+                state: {
+                  status: "completed",
+                  input: { command: "false" },
+                  content: [{ type: "text", text: "boom\nExit code: 2" }],
+                },
+              },
+              {
+                type: "tool",
+                id: "call_shell_err",
+                name: "shell",
+                state: {
+                  status: "error",
+                  input: { command: "bad" },
+                  error: { type: "tool.execution", message: "timed out" },
+                },
+              },
+              {
+                type: "tool",
+                id: "call_sub_spawn",
+                name: "subagent",
+                state: {
+                  status: "completed",
+                  input: { agent: "operator", prompt: "do task" },
+                  content: [{ type: "text", text: "spawned" }],
+                },
+              },
+              {
+                type: "tool",
+                id: "call_sub_resume",
+                name: "subagent",
+                state: {
+                  status: "completed",
+                  input: { agent: "operator", sessionID: "ses_child_1", prompt: "follow up" },
+                  content: [{ type: "text", text: "resumed" }],
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "ses_small_failed",
+        agent: "operator",
+        outcome: "failed",
+        updatedAt: NOW - 3 * DAY_MS,
+        cost: 0.1,
+      },
+    ]);
+
+    const tool = nocturnaTool(ctx, () => NOW);
+    const res = await Effect.runPromise(tool.execute({}, callContext()));
+    if (res.output?.status !== "collected") throw new Error("expected collected");
+
+    expect(res.output.sessions[0]?.id).toBe("ses_expensive_outlier");
+    expect(res.output.sessions[0]?.anomalyScore).toBeGreaterThan(100);
+
+    const shellAndSub = res.output.sessions.find((one) => one.id === "ses_shell_and_subagent");
+    expect(shellAndSub?.shellFailed).toBe(2);
+    expect(shellAndSub?.subagentsSpawned).toBe(1);
+  });
+
+  test("collect paginates ranked pending sessions with offset", async () => {
+    const { ctx } = makeHost([
+      {
+        id: "ses_p1",
+        agent: "spectre",
+        outcome: "failed",
+        updatedAt: NOW - DAY_MS,
+        cost: 1,
+        tokens: { input: 50_000, output: 10_000, reasoning: 0 },
+      },
+      {
+        id: "ses_p2",
+        agent: "spectre",
+        updatedAt: NOW - 2 * DAY_MS,
+        cost: 0.5,
+        tokens: { input: 40_000, output: 5_000, reasoning: 0 },
+      },
+      {
+        id: "ses_p3",
+        agent: "spectre",
+        updatedAt: NOW - 3 * DAY_MS,
+        cost: 0.1,
+        tokens: { input: 10_000, output: 1_000, reasoning: 0 },
+      },
+    ]);
+
+    const tool = nocturnaTool(ctx, () => NOW);
+    const page1 = await Effect.runPromise(tool.execute({ limit: 1, offset: 0 }, callContext()));
+    const page2 = await Effect.runPromise(tool.execute({ limit: 1, offset: 1 }, callContext()));
+    const page3 = await Effect.runPromise(tool.execute({ limit: 2, offset: 2 }, callContext()));
+
+    if (
+      page1.output?.status !== "collected" ||
+      page2.output?.status !== "collected" ||
+      page3.output?.status !== "collected"
+    ) {
+      throw new Error("expected collected");
+    }
+
+    expect(page1.output.sessions.map((one) => one.id)).toEqual(["ses_p1"]);
+    expect(page1.output.remainingUnanalyzed).toBe(2);
+
+    expect(page2.output.sessions.map((one) => one.id)).toEqual(["ses_p2"]);
+    expect(page2.output.remainingUnanalyzed).toBe(1);
+
+    expect(page3.output.sessions.map((one) => one.id)).toEqual(["ses_p3"]);
+    expect(page3.output.remainingUnanalyzed).toBe(0);
   });
 });

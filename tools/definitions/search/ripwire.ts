@@ -2,7 +2,7 @@ import type { Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect, Schema } from "effect";
 import { CONTRACT, INSTALL } from "./contract";
 import { recordCheck, recordsOf, type UsageRecord } from "./measure";
-import type { Health } from "./policy";
+import { codeMutationOf, type Health } from "./policy";
 import { probe } from "./probe";
 import { rootOf } from "./root";
 import { scope } from "./run";
@@ -338,13 +338,14 @@ const recordCompletedCheck = (
   Effect.gen(function* () {
     const prev = memoryOf(sessionID);
     const full = coversEditedPaths(root, targetPaths, prev.editedCode);
+    const code = codeMutationOf(prev);
     remember(sessionID, {
       ...prev,
       touched: prev.touched + 1,
       measured: {
         ...prev.measured,
-        delta: prev.editedCode.size,
-        ...(full ? { affected: prev.editedCode.size } : {}),
+        delta: code,
+        ...(full ? { affected: code } : {}),
       },
     });
     yield* recordCheck(ctx.storage, ctx.location.project.id, sessionID, full);

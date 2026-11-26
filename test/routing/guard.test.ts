@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { Tool } from "@opencode/plugin/effect";
 import { Effect, Exit } from "effect";
-import { attachRoutingGuard, SUBAGENT_MODEL_DESCRIPTION } from "../../tools/definitions/routing";
+import {
+  attachRoutingGuard,
+  DELEGATION_KEY,
+  ESCALATION_SENTINEL,
+  SUBAGENT_MODEL_DESCRIPTION,
+} from "../../tools/definitions/routing";
 import { useTempDirs } from "../fixture";
 
 const temp = useTempDirs("routing-guard");
@@ -306,5 +311,464 @@ describe("routing guard", () => {
       Effect.scoped(attachRoutingGuard({ location: { directory: dir } } as never)),
     );
     expect(Exit.isSuccess(exit)).toBe(true);
+  });
+
+  test("context hook decorates STATUS: ESCALATE messages for spectre without mutating system", async () => {
+    const dir = temp();
+    const { contextHandler } = await setupGuard(dir);
+    const system = [{ type: "text", text: "Static system prompt" }];
+    const makeMessages = () => [
+      {
+        role: "user",
+        metadata: { source: "subagent" },
+        content: [
+          {
+            type: "text",
+            text: `<subagent sessionID="ses_child" state="completed" description="Work">
+STATUS: ESCALATE
+REASON: AMBIGUITY
+BLOCKER: Two options exist.
+</subagent>`,
+          },
+        ],
+      },
+    ];
+
+    const operatorMessages = makeMessages();
+    await Effect.runPromise(
+      contextHandler({
+        agent: "operator",
+        tools: {},
+        system,
+        messages: operatorMessages,
+      } as never),
+    );
+    expect(operatorMessages[0]?.content[0]?.text).not.toContain(ESCALATION_SENTINEL);
+
+    const spectreMessages = makeMessages();
+    await Effect.runPromise(
+      contextHandler({
+        agent: "spectre",
+        tools: {},
+        system,
+        messages: spectreMessages,
+      } as never),
+    );
+    expect(spectreMessages[0]?.content[0]?.text).toContain(ESCALATION_SENTINEL);
+    expect(system).toEqual([{ type: "text", text: "Static system prompt" }]);
+  });
+
+  test("execute.after and prompt hooks sync DELEGATION_KEY for root spectre sessions only", async () => {
+    const dir = temp();
+    const puts: Array<{ sessionID: string; key: string; value: string }> = [];
+    const removes: Array<{ sessionID: string; key: string }> = [];
+    let promptHandler: ((event: { sessionID: string }) => Effect.Effect<void>) | undefined;
+    let afterHandler:
+      | ((event: {
+          tool: string;
+          sessionID: string;
+          agent: string;
+          messageID: string;
+          id: string;
+          input: unknown;
+          status: "completed" | "error";
+        }) => Effect.Effect<void>)
+      | undefined;
+
+    const ctx = {
+      location: { directory: dir },
+      session: {
+        hook: (name: string, cb: (event: never) => Effect.Effect<void>) => {
+          if (name === "prompt") promptHandler = cb as typeof promptHandler;
+          return Effect.void;
+        },
+        get: ({ sessionID }: { sessionID: string }) =>
+          Effect.succeed({
+            id: sessionID,
+            parentID: sessionID === "ses_child" ? "ses_root" : undefined,
+            location: { directory: dir },
+          }),
+        instructions: {
+          entry: {
+            put: (args: { sessionID: string; key: string; value: string }) => {
+              puts.push(args);
+              return Effect.void;
+            },
+            remove: (args: { sessionID: string; key: string }) => {
+              removes.push(args);
+              return Effect.void;
+            },
+          },
+        },
+      },
+      tool: {
+        hook: (name: string, cb: (event: never) => Effect.Effect<void>) => {
+          if (name === "execute.after") afterHandler = cb as typeof afterHandler;
+          return Effect.void;
+        },
+      },
+    };
+
+    await Effect.runPromise(Effect.scoped(attachRoutingGuard(ctx as never)));
+    if (promptHandler === undefined || afterHandler === undefined) {
+      throw new Error("expected prompt and execute.after hooks");
+    }
+
+    for (let i = 1; i <= 4; i += 1) {
+      await Effect.runPromise(
+        afterHandler({
+          tool: "read",
+          sessionID: "ses_child",
+          agent: "spectre",
+          messageID: "m1",
+          id: `c${i}`,
+          input: { path: `child_${i}.ts` },
+          status: "completed",
+        }),
+      );
+    }
+    expect(puts).toHaveLength(0);
+
+    await Effect.runPromise(
+      afterHandler({
+        tool: "shell",
+        sessionID: "ses_root",
+        agent: "spectre",
+        messageID: "m2",
+        id: "s1",
+        input: { command: "bun test" },
+        status: "completed",
+      }),
+    );
+    expect(puts).toHaveLength(0);
+
+    await Effect.runPromise(
+      afterHandler({
+        tool: "shell",
+        sessionID: "ses_root",
+        agent: "spectre",
+        messageID: "m3",
+        id: "s2",
+        input: { command: "bun run typecheck" },
+        status: "completed",
+      }),
+    );
+    expect(puts).toHaveLength(1);
+    expect(puts[0]?.sessionID).toBe("ses_root");
+    expect(puts[0]?.key).toBe(DELEGATION_KEY);
+
+    await Effect.runPromise(promptHandler({ sessionID: "ses_root" }));
+    expect(removes).toEqual([{ sessionID: "ses_root", key: DELEGATION_KEY }]);
+
+    const declinedDir = temp();
+    await Bun.write(join(declinedDir, "spectre.json"), JSON.stringify({ setup: "declined" }));
+    const declinedPuts: Array<unknown> = [];
+    let declinedAfter: typeof afterHandler | undefined;
+    await Effect.runPromise(
+      Effect.scoped(
+        attachRoutingGuard({
+          location: { directory: declinedDir },
+          session: {
+            hook: () => Effect.void,
+            get: () => Effect.succeed({ id: "ses_dec", location: { directory: declinedDir } }),
+            instructions: {
+              entry: {
+                put: (args: unknown) => {
+                  declinedPuts.push(args);
+                  return Effect.void;
+                },
+                remove: () => Effect.void,
+              },
+            },
+          },
+          tool: {
+            hook: (name: string, cb: (event: never) => Effect.Effect<void>) => {
+              if (name === "execute.after") declinedAfter = cb as NonNullable<typeof afterHandler>;
+              return Effect.void;
+            },
+          },
+        } as never),
+      ),
+    );
+    if (declinedAfter === undefined) {
+      throw new Error("expected execute.after hook");
+    }
+    for (let i = 1; i <= 2; i += 1) {
+      await Effect.runPromise(
+        declinedAfter({
+          tool: "shell",
+          sessionID: "ses_dec",
+          agent: "spectre",
+          messageID: "m4",
+          id: `d${i}`,
+          input: { command: "bun test" },
+          status: "completed",
+        }),
+      );
+    }
+    expect(declinedPuts).toHaveLength(0);
+  });
+
+  test("execute.after counts ripgrep and glob sweeps toward search drift and resets on subagent", async () => {
+    const dir = temp();
+    const puts: Array<{ sessionID: string; key: string; value: string }> = [];
+    const removes: Array<{ sessionID: string; key: string }> = [];
+    let afterHandler:
+      | ((event: {
+          tool: string;
+          sessionID: string;
+          agent: string;
+          messageID: string;
+          id: string;
+          input: unknown;
+          status: "completed" | "error";
+        }) => Effect.Effect<void>)
+      | undefined;
+
+    await Effect.runPromise(
+      Effect.scoped(
+        attachRoutingGuard({
+          location: { directory: dir },
+          session: {
+            hook: () => Effect.void,
+            get: () => Effect.succeed({ id: "ses_sweep", location: { directory: dir } }),
+            instructions: {
+              entry: {
+                put: (args: { sessionID: string; key: string; value: string }) => {
+                  puts.push(args);
+                  return Effect.void;
+                },
+                remove: (args: { sessionID: string; key: string }) => {
+                  removes.push(args);
+                  return Effect.void;
+                },
+              },
+            },
+          },
+          tool: {
+            hook: (name: string, cb: (event: never) => Effect.Effect<void>) => {
+              if (name === "execute.after") afterHandler = cb as typeof afterHandler;
+              return Effect.void;
+            },
+          },
+        } as never),
+      ),
+    );
+    if (afterHandler === undefined) throw new Error("expected execute.after hook");
+
+    const calls = [
+      { tool: "glob", input: { pattern: "**/*.ts" } },
+      { tool: "ripgrep", input: { pattern: "alpha", path: "tools" } },
+      { tool: "ripgrep", input: { pattern: "beta", path: "tools" } },
+      { tool: "read", input: { path: "tools/a.ts" } },
+    ];
+    for (const [i, call] of calls.entries()) {
+      await Effect.runPromise(
+        afterHandler({
+          tool: call.tool,
+          sessionID: "ses_sweep",
+          agent: "spectre",
+          messageID: "m1",
+          id: `sw${i}`,
+          input: call.input,
+          status: "completed",
+        }),
+      );
+    }
+    expect(puts).toHaveLength(1);
+    expect(puts[0]?.value).toContain("Delegation drift:");
+
+    await Effect.runPromise(
+      afterHandler({
+        tool: "subagent",
+        sessionID: "ses_sweep",
+        agent: "spectre",
+        messageID: "m2",
+        id: "sub1",
+        input: { agent: "operator" },
+        status: "completed",
+      }),
+    );
+    expect(removes).toEqual([{ sessionID: "ses_sweep", key: DELEGATION_KEY }]);
+
+    for (let i = 1; i <= 3; i += 1) {
+      await Effect.runPromise(
+        afterHandler({
+          tool: "edit",
+          sessionID: "ses_sweep",
+          agent: "spectre",
+          messageID: "m3",
+          id: `ed${i}`,
+          input: { path: `file_${i}.ts` },
+          status: "completed",
+        }),
+      );
+    }
+    expect(puts).toHaveLength(2);
+    expect(puts[1]?.value).toContain("3 files mutated inline");
+  });
+
+  test("execute.before enforces cross-family diversity for spectre review/crosscheck spawns", async () => {
+    const dir = temp();
+    await Bun.write(
+      join(dir, "spectre.json"),
+      JSON.stringify({
+        models: {
+          claude: "github-copilot/claude-sonnet-4.6",
+          gemini: "github-copilot/gemini-2.5-pro",
+        },
+        crosscheck: ["gemini", "claude"],
+      }),
+    );
+
+    const models = [
+      {
+        providerID: "github-copilot",
+        id: "claude-sonnet-4.6",
+        name: "Claude Sonnet 4.6",
+        family: "claude",
+        variants: [{ id: "medium" }],
+        cost: [{ input: 3, output: 15 }],
+        enabled: true,
+        status: "active",
+        capabilities: { tools: true },
+      },
+      {
+        providerID: "github-copilot",
+        id: "gemini-2.5-pro",
+        name: "Gemini 2.5 Pro",
+        family: "gemini",
+        variants: [{ id: "high" }],
+        cost: [{ input: 2, output: 10 }],
+        enabled: true,
+        status: "active",
+        capabilities: { tools: true },
+      },
+    ];
+
+    let beforeHandler: ((event: BeforeEvent) => Effect.Effect<void, Tool.Error>) | undefined;
+    await Effect.runPromise(
+      Effect.scoped(
+        attachRoutingGuard({
+          location: { directory: dir },
+          model: { list: () => Effect.succeed({ data: models }) },
+          session: {
+            hook: () => Effect.void,
+            get: () =>
+              Effect.succeed({
+                id: "ses_parent",
+                location: { directory: dir },
+                model: { providerID: "github-copilot", id: "claude-sonnet-4.6" },
+              }),
+          },
+          tool: {
+            hook: (name: string, cb: (event: BeforeEvent) => Effect.Effect<void, Tool.Error>) => {
+              if (name === "execute.before") beforeHandler = cb;
+              return Effect.void;
+            },
+          },
+        } as never),
+      ),
+    );
+    if (beforeHandler === undefined) throw new Error("expected execute.before hook");
+
+    const sameFamilyReview = await Effect.runPromiseExit(
+      beforeHandler(
+        beforeEvent({
+          agent: "spectre",
+          input: {
+            agent: "operator",
+            description: "Run adversarial review on guard changes",
+            prompt: "Review diff",
+            model: "github-copilot/claude-sonnet-4.6#medium",
+          },
+        }),
+      ),
+    );
+    expect(Exit.isFailure(sameFamilyReview)).toBe(true);
+    if (Exit.isFailure(sameFamilyReview)) {
+      const failReason = sameFamilyReview.cause.reasons.find((r) => r._tag === "Fail");
+      if (failReason === undefined) throw new Error("expected Fail reason");
+      expect(failReason.error).toBeInstanceOf(Tool.Error);
+      expect((failReason.error as Tool.Error).message).toContain("github-copilot/gemini-2.5-pro");
+    }
+
+    const diffFamilyReview = await Effect.runPromiseExit(
+      beforeHandler(
+        beforeEvent({
+          agent: "spectre",
+          input: {
+            agent: "operator",
+            description: "Run crosscheck on guard changes",
+            prompt: "Review diff",
+            model: "github-copilot/gemini-2.5-pro#high",
+          },
+        }),
+      ),
+    );
+    expect(Exit.isSuccess(diffFamilyReview)).toBe(true);
+
+    const sameFamilyNonReview = await Effect.runPromiseExit(
+      beforeHandler(
+        beforeEvent({
+          agent: "spectre",
+          input: {
+            agent: "operator",
+            description: "Implement guard changes",
+            prompt: "Edit file",
+            model: "github-copilot/claude-sonnet-4.6#medium",
+          },
+        }),
+      ),
+    );
+    expect(Exit.isSuccess(sameFamilyNonReview)).toBe(true);
+  });
+
+  test("prompt hook neutralizes accidental YubiKey ModHex OTP touches and sets queue delivery", async () => {
+    const dir = temp();
+    let promptHandler:
+      | ((event: {
+          sessionID: string;
+          prompt: { text: string };
+          delivery: "steer" | "queue";
+        }) => Effect.Effect<void>)
+      | undefined;
+
+    await Effect.runPromise(
+      Effect.scoped(
+        attachRoutingGuard({
+          location: { directory: dir },
+          session: {
+            hook: (name: string, cb: (event: never) => Effect.Effect<void>) => {
+              if (name === "prompt") promptHandler = cb as typeof promptHandler;
+              return Effect.void;
+            },
+            get: () => Effect.succeed({ id: "ses_yubi", location: { directory: dir } }),
+          },
+          tool: { hook: () => Effect.void },
+        } as never),
+      ),
+    );
+    if (promptHandler === undefined) throw new Error("expected prompt hook");
+
+    const otpEvent = {
+      sessionID: "ses_yubi",
+      prompt: { text: "  ccccccbcdefghijklnrtuvbcdefghijklnrtuvbcdefghi  " },
+      delivery: "steer" as const,
+    };
+    await Effect.runPromise(promptHandler(otpEvent));
+    expect(otpEvent.prompt.text).toBe(
+      "[spectre:yubikey-otp-ignored] Accidental YubiKey OTP input detected; reply with 'Ignored accidental YubiKey touch.' and take no action.",
+    );
+    expect(otpEvent.delivery as string).toBe("queue");
+
+    const normalEvent = {
+      sessionID: "ses_yubi",
+      prompt: { text: "Please run the test suite" },
+      delivery: "steer" as const,
+    };
+    await Effect.runPromise(promptHandler(normalEvent));
+    expect(normalEvent.prompt.text).toBe("Please run the test suite");
+    expect(normalEvent.delivery).toBe("steer");
   });
 });

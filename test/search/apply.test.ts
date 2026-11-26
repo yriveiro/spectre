@@ -375,3 +375,96 @@ describe("attachGuard exempts child subagents from onRead while preserving onMut
     });
   });
 });
+
+describe("attachGuard gates spectre_pr open and repairs file->path inputs", () => {
+  test("spectre_pr compose passes unmeasured while open refuses until ripwire measurements are fresh", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const { callback } = await captureGuard();
+      const name = "ses_pr_gate";
+
+      await Effect.runPromise(
+        callback(toolEvent("edit", { path: "src/retry.ts" }, name, "call_pr_edit")),
+      );
+
+      const composeExit = await Effect.runPromiseExit(
+        callback(toolEvent("spectre_pr", { action: "compose" }, name, "call_pr_compose")),
+      );
+      expect(Exit.isSuccess(composeExit)).toBe(true);
+      expect(memories.get(Session.ID.make(name))?.spent.has("land")).toBe(false);
+
+      const openRefused = await Effect.runPromiseExit(
+        callback(toolEvent("spectre_pr", { action: "open" }, name, "call_pr_open_1")),
+      );
+      expect(Exit.isFailure(openRefused)).toBe(true);
+      expect(memories.get(Session.ID.make(name))?.spent.has("land")).toBe(true);
+
+      const nameMeasured = "ses_pr_gate_measured";
+      await Effect.runPromise(
+        callback(toolEvent("edit", { path: "src/retry.ts" }, nameMeasured, "call_pr_m_edit")),
+      );
+      await Effect.runPromise(
+        callback(
+          toolEvent(
+            "shell",
+            { command: "ripwire . --quality-delta && ripwire . --affected=src/retry.ts" },
+            nameMeasured,
+            "call_pr_m_ripwire",
+          ),
+        ),
+      );
+      const defaultOpenMeasured = await Effect.runPromiseExit(
+        callback(toolEvent("spectre_pr", { subject: "ship fix" }, nameMeasured, "call_pr_m_open")),
+      );
+      expect(Exit.isSuccess(defaultOpenMeasured)).toBe(true);
+
+      memories.delete(Session.ID.make(name));
+      memories.delete(Session.ID.make(nameMeasured));
+    });
+  });
+
+  test("read, edit, and write normalize { file } to { path } when path is undefined", async () => {
+    const bin = await makeBin(READY_BIN);
+    await withBinary(bin, async () => {
+      const { callback } = await captureGuard();
+      const name = "ses_input_repair";
+
+      const readDoc = toolEvent("read", { file: "README.md" }, name, "call_repair_read");
+      await Effect.runPromise(callback(readDoc));
+      expect(readDoc.input).toEqual({ path: "README.md" });
+      expect("file" in readDoc.input).toBe(false);
+
+      const editCode = toolEvent(
+        "edit",
+        { file: "src/retry.ts", oldString: "a", newString: "b" },
+        name,
+        "call_repair_edit",
+      );
+      await Effect.runPromise(callback(editCode));
+      expect(editCode.input).toEqual({ path: "src/retry.ts", oldString: "a", newString: "b" });
+      expect("file" in editCode.input).toBe(false);
+      expect(memories.get(Session.ID.make(name))?.editedCode.has("src/retry.ts")).toBe(true);
+
+      const writeCode = toolEvent(
+        "write",
+        { file: "src/other.ts", content: "export {};\n" },
+        name,
+        "call_repair_write",
+      );
+      await Effect.runPromise(callback(writeCode));
+      expect(writeCode.input).toEqual({ path: "src/other.ts", content: "export {};\n" });
+      expect("file" in writeCode.input).toBe(false);
+
+      const preserved = toolEvent(
+        "read",
+        { file: "wrong.md", path: "README.md" },
+        name,
+        "call_repair_keep",
+      );
+      await Effect.runPromise(callback(preserved));
+      expect(preserved.input).toEqual({ file: "wrong.md", path: "README.md" });
+
+      memories.delete(Session.ID.make(name));
+    });
+  });
+});

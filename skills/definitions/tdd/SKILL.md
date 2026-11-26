@@ -33,8 +33,8 @@ Open a `todolist` with one entry per phase before launching anything.
    wrong answer, not the one the reporter happened to use.
 3. Name the path, not the file. "Where does this value get read" is a path. A
    filename is a guess about where to look. When the stack trace names a frame
-   you do not recognize, `ripwire.from_trace` starts from the trace rather than
-   from a guess about which project owns it.
+   you do not recognize, `ripwire . --from-trace` starts from the trace rather
+   than from a guess about which project owns it.
 4. Get a current green first if the suite has one. A red suite before you start
    means the bug is not the only thing that is broken, and you will not be able
    to tell your failure from the noise.

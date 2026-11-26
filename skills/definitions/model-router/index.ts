@@ -10,7 +10,8 @@ export const modelRouter: Definition = {
   catalog: {
     tier: "push",
     group: "leaf",
-    trigger: "spawning a subagent, picking a profile, or resuming a rejected child",
+    trigger:
+      "delegating >=3-file search/edits or suite runs, spawning a subagent, or handling child escalations",
   },
   path: anchor(import.meta.dir),
 };

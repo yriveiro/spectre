@@ -144,6 +144,7 @@ export type ShellAsk =
     }
   | { readonly kind: "unmappable" }
   | { readonly kind: "landing"; readonly command: string }
+  | { readonly kind: "destructive"; readonly command: string }
   | {
       readonly kind: "ripwire";
       readonly command: string;
@@ -215,7 +216,11 @@ export type Verdict =
       readonly origin: "grep" | "shell";
       readonly input: Record<string, unknown>;
     }
-  | { readonly kind: "refuse"; readonly gate: "read" | "land"; readonly message: string }
+  | {
+      readonly kind: "refuse";
+      readonly gate: "read" | "land" | "spectre";
+      readonly message: string;
+    }
   | { readonly kind: "prose"; readonly key: "rule" | "end-of-work"; readonly text: string };
 
 export interface Memory {
@@ -226,6 +231,7 @@ export interface Memory {
   readonly edited: Set<string>;
   readonly editedCode: Set<string>;
   readonly mutation: number;
+  readonly codeMutation?: number;
   readonly measured: { readonly delta?: number; readonly affected?: number };
   readonly spent: Set<"read" | "land">;
   readonly subagents: number;
@@ -484,22 +490,150 @@ const scanWords = (
   };
 };
 
-/**
- * Read one bare `rg`, `git grep` or `grep` into a pattern, at most one path and
- * an optional include. A composed command, a flag this reader does not know,
- * `-e`, `-f`, or a second path is `unmappable`: the native command runs and
- * answers in the same call. `-F` and its long forms force a literal route.
- */
-const parseSearch = (command: string, kind: "rg" | "git" | "grep"): ShellAsk => {
-  const lexed = lex(command);
-  if ("broken" in lexed || lexed.composed) return { kind: "unmappable" };
+export const SPECTRE_DELETE_REFUSAL =
+  "Refusing recursive deletion of `.spectre`: `.spectre/brain` is git-tracked institutional memory and must not be deleted. Remove only specific scratch files if needed.";
+
+const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const WRAPPERS: ReadonlySet<string> = new Set(["env", "command", "sudo"]);
+const GIT_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  "-C",
+  "-c",
+  "--git-dir",
+  "--work-tree",
+  "--namespace",
+  "--config-env",
+]);
+
+const baseName = (word: string): string => word.slice(word.lastIndexOf("/") + 1);
+
+const operatorLength = (command: string, index: number): number => {
+  const pair = command.slice(index, index + 2);
+  if (pair === "&&" || pair === "||") return 2;
+  const char = command[index] ?? "";
+  return char === ";" || char === "|" || char === "\n" ? 1 : 0;
+};
+
+const advanceQuoted = (
+  command: string,
+  index: number,
+  quote: '"' | "'",
+): { readonly next: number; readonly closed: boolean } => {
+  const char = command[index] ?? "";
+  if (char === quote) return { next: index + 1, closed: true };
+  if (char === "\\" && quote === '"' && index + 1 < command.length) {
+    return { next: index + 2, closed: false };
+  }
+  return { next: index + 1, closed: false };
+};
+
+const splitSegments = (command: string): ReadonlyArray<string> | undefined => {
+  const segments: Array<string> = [];
+  let start = 0;
+  let index = 0;
+  let quote: '"' | "'" | undefined;
+  while (index < command.length) {
+    if (quote !== undefined) {
+      const step = advanceQuoted(command, index, quote);
+      if (step.closed) quote = undefined;
+      index = step.next;
+      continue;
+    }
+    const char = command[index] ?? "";
+    if (char === "'" || char === '"') {
+      quote = char;
+      index += 1;
+      continue;
+    }
+    if (char === "\\" && index + 1 < command.length) {
+      index += 2;
+      continue;
+    }
+    const op = operatorLength(command, index);
+    if (op > 0) {
+      segments.push(command.slice(start, index));
+      index += op;
+      start = index;
+      continue;
+    }
+    index += 1;
+  }
+  if (quote !== undefined) return undefined;
+  segments.push(command.slice(start));
+  return segments;
+};
+
+const stripLeadingEnv = (tokens: ReadonlyArray<string>): ReadonlyArray<string> => {
+  const first = tokens.findIndex(
+    (word) => !ENV_ASSIGNMENT.test(word) && !WRAPPERS.has(baseName(word)),
+  );
+  return first < 0 ? [] : tokens.slice(first);
+};
+
+const gitWords = (words: ReadonlyArray<string>): ReadonlyArray<string> => {
+  let index = 1;
+  while (index < words.length) {
+    const word = words[index] ?? "";
+    if (GIT_VALUE_FLAGS.has(word)) {
+      index += 2;
+      continue;
+    }
+    if (word.startsWith("-")) {
+      index += 1;
+      continue;
+    }
+    break;
+  }
+  return ["git", ...words.slice(index)];
+};
+
+const isSpectreTarget = (raw: string): boolean => {
+  let clean = raw.replace(/\/+/g, "/");
+  while (clean.startsWith("./")) clean = clean.slice(2);
+  while (clean.length > 1 && clean.endsWith("/")) clean = clean.slice(0, -1);
+  if (clean === ".spectre" || clean.endsWith("/.spectre")) return true;
+  if (clean === ".spectre/*" || clean.endsWith("/.spectre/*")) return true;
+  return (
+    clean === ".spectre/brain" ||
+    clean.endsWith("/.spectre/brain") ||
+    clean.startsWith(".spectre/brain/") ||
+    clean.includes("/.spectre/brain/")
+  );
+};
+
+const isRecursiveRmFlag = (word: string): boolean =>
+  word === "--recursive" ||
+  (word.startsWith("-") && !word.startsWith("--") && (word.includes("r") || word.includes("R")));
+
+const isSpectreDelete = (words: ReadonlyArray<string>): boolean => {
+  if (baseName(words[0] ?? "") !== "rm") return false;
+  let recursive = false;
+  let flagsDone = false;
+  const targets: Array<string> = [];
+  for (const word of words.slice(1)) {
+    if (!flagsDone && word === "--") {
+      flagsDone = true;
+      continue;
+    }
+    if (!flagsDone && word.startsWith("-") && word.length > 1) {
+      if (isRecursiveRmFlag(word)) recursive = true;
+      continue;
+    }
+    targets.push(word);
+  }
+  return recursive && targets.some(isSpectreTarget);
+};
+
+const parseSearchTokens = (
+  args: ReadonlyArray<string>,
+  composed: boolean,
+  kind: "rg" | "git" | "grep",
+): ShellAsk => {
+  if (composed) return { kind: "unmappable" };
   const flags = kind === "rg" ? RG_FLAGS : kind === "git" ? GIT_GREP_FLAGS : GREP_FLAGS;
-  const scanned = scanWords(lexed.tokens.slice(kind === "git" ? 2 : 1), flags, kind);
+  const scanned = scanWords(args, flags, kind);
   if (scanned === undefined) return { kind: "unmappable" };
   const [pattern, ...paths] = scanned.positional;
-  if (pattern === undefined || pattern === "") return { kind: "unmappable" };
-  if (paths.length > 1) return { kind: "unmappable" };
-  // `grep` with no path and no recursive flag reads stdin, which a reroute cannot carry.
+  if (pattern === undefined || pattern === "" || paths.length > 1) return { kind: "unmappable" };
   if (kind === "grep" && paths.length === 0 && !scanned.recursive) return { kind: "unmappable" };
   const path = paths[0];
   return {
@@ -511,17 +645,25 @@ const parseSearch = (command: string, kind: "rg" | "git" | "grep"): ShellAsk => 
   };
 };
 
-/**
- * Read a shell command into the shapes the rule can act on: a bare search, a
- * ripwire lookup, a landing command, or nothing this reader recognises.
- */
-export const shellParse = (command: string): ShellAsk => {
-  const words = command
-    .trim()
-    .split(/\s+/)
-    .filter((word) => word !== "");
-  const head = words[0] ?? "";
-  const name = head.slice(head.lastIndexOf("/") + 1);
+const searchKindOf = (
+  name: string,
+  second: string | undefined,
+): "rg" | "grep" | "git" | undefined => {
+  if (name === "rg" || name === "ripgrep") return "rg";
+  if (name === "grep") return "grep";
+  if (name === "git" && second === "grep") return "git";
+  return undefined;
+};
+
+const classifySegment = (segment: string, command: string, single: boolean): ShellAsk => {
+  const lexed = lex(segment);
+  if ("broken" in lexed) return { kind: "unmappable" };
+  const words = stripLeadingEnv(lexed.tokens);
+  const name = baseName(words[0] ?? "");
+  if (name === "") return { kind: "other" };
+  if (isSpectreDelete(words)) return { kind: "destructive", command };
+  const canonical = name === "git" ? gitWords(words) : [name, ...words.slice(1)];
+  if (LANDING.some((prefix) => startsWith(canonical, prefix))) return { kind: "landing", command };
   if (name === "ripwire") {
     return {
       kind: "ripwire",
@@ -532,11 +674,52 @@ export const shellParse = (command: string): ShellAsk => {
       fanout: hasFlag(words, "--pack-task") || hasFlag(words, "--partition"),
     };
   }
-  if (LANDING.some((prefix) => startsWith(words, prefix))) return { kind: "landing", command };
-  if (name === "rg" || name === "ripgrep") return parseSearch(command, "rg");
-  if (name === "grep") return parseSearch(command, "grep");
-  if (name === "git" && isGitGrep(command)) return parseSearch(command, "git");
-  return { kind: "other" };
+  const searchKind = searchKindOf(name, canonical[1]);
+  if (searchKind === undefined) return { kind: "other" };
+  if (
+    !single ||
+    words.length !== lexed.tokens.length ||
+    (searchKind === "git" && words[1] !== "grep")
+  ) {
+    return { kind: "unmappable" };
+  }
+  return parseSearchTokens(words.slice(searchKind === "git" ? 2 : 1), lexed.composed, searchKind);
+};
+
+const mergeRipwireSegments = (
+  command: string,
+  items: ReadonlyArray<Extract<ShellAsk, { readonly kind: "ripwire" }>>,
+): ShellAsk => ({
+  kind: "ripwire",
+  command,
+  lookup: items.some((one) => one.lookup),
+  delta: items.some((one) => one.delta),
+  affected: items.some((one) => one.affected),
+  fanout: items.some((one) => one.fanout),
+});
+
+export const shellParse = (command: string): ShellAsk => {
+  const segments = splitSegments(command);
+  if (segments === undefined) {
+    const rawHead = baseName(command.trim().split(/\s+/)[0] ?? "");
+    return searchKindOf(rawHead, isGitGrep(command) ? "grep" : undefined) !== undefined
+      ? { kind: "unmappable" }
+      : { kind: "other" };
+  }
+  const single = segments.length === 1;
+  const classified = segments.map((segment) => classifySegment(segment, command, single));
+  const destructive = classified.find((one) => one.kind === "destructive");
+  if (destructive !== undefined) return destructive;
+  const landing = classified.find((one) => one.kind === "landing");
+  if (landing !== undefined) return landing;
+  const ripwires = classified.filter(
+    (one): one is Extract<ShellAsk, { readonly kind: "ripwire" }> => one.kind === "ripwire",
+  );
+  if (ripwires.length > 0) return mergeRipwireSegments(command, ripwires);
+  if (single) return classified[0] ?? { kind: "other" };
+  return classified.some((one) => one.kind === "search" || one.kind === "unmappable")
+    ? { kind: "unmappable" }
+    : { kind: "other" };
 };
 
 /** A pattern's route. The shell reader and the text reader agree on what a metacharacter means. */
@@ -583,9 +766,12 @@ export const rerouteInput = (input: TextAsk, route: Route): Record<string, unkno
   }
 };
 
+export const codeMutationOf = (memory: Memory): number =>
+  Math.max(memory.codeMutation ?? 0, memory.editedCode.size);
+
 const measuredFresh = (memory: Memory): boolean => {
   const { delta, affected } = memory.measured;
-  const code = memory.editedCode.size;
+  const code = codeMutationOf(memory);
   return delta !== undefined && affected !== undefined && delta >= code && affected >= code;
 };
 
@@ -668,12 +854,18 @@ const onShell = (parsed: ShellAsk, memory: Memory): Decision => {
       return passed("unmappable", memory);
     case "search":
       return onShellSearch(parsed, memory);
+    case "destructive":
+      return {
+        verdict: { kind: "refuse", gate: "spectre", message: SPECTRE_DELETE_REFUSAL },
+        next: memory,
+      };
     case "ripwire": {
       if (!parsed.lookup) return passed("not-a-search", memory);
+      const code = codeMutationOf(memory);
       const measured = {
         ...memory.measured,
-        ...(parsed.delta ? { delta: memory.editedCode.size } : {}),
-        ...(parsed.affected ? { affected: memory.editedCode.size } : {}),
+        ...(parsed.delta ? { delta: code } : {}),
+        ...(parsed.affected ? { affected: code } : {}),
       };
       return {
         verdict: { kind: "pass", why: "not-a-search" },
@@ -707,9 +899,10 @@ const onMutate = (ask: SurfaceAsk<"mutate">, memory: Memory): Decision => {
   edited.add(ask.path);
   const editedCode = new Set(memory.editedCode);
   if (ask.code) editedCode.add(ask.path);
+  const codeMutation = ask.code ? codeMutationOf(memory) + 1 : codeMutationOf(memory);
   return {
     verdict: { kind: "pass", why: "not-a-gate" },
-    next: { ...memory, edited, editedCode, mutation: memory.mutation + 1 },
+    next: { ...memory, edited, editedCode, mutation: memory.mutation + 1, codeMutation },
   };
 };
 
@@ -736,6 +929,12 @@ const onComplete = (ask: SurfaceAsk<"complete">, memory: Memory): Decision => {
  */
 export const decide = (ask: Ask, memory: Memory, env: Env): Decision => {
   if (ask.surface === "context") return onContext(ask.tools, memory, env.health);
+  if (ask.surface === "shell" && ask.parsed.kind === "destructive") {
+    return {
+      verdict: { kind: "refuse", gate: "spectre", message: SPECTRE_DELETE_REFUSAL },
+      next: memory,
+    };
+  }
   if (env.health.kind !== "ready") return passed("no-instrument", memory);
   switch (ask.surface) {
     case "text":

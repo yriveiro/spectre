@@ -44,9 +44,9 @@ with `how` over the affected subsystem and `why` for the regression history, and
 `tools.spectre.history` for the line that changed when it started.
 
 Each pass takes the split that cuts the most remaining problem space, gets
-runtime evidence, and eliminates. A stack trace or error pasted into
-`ripwire.from_trace` maps onto indexed symbols innermost-first, which turns a
-frame list into a starting point instead of a reading exercise.
+runtime evidence, and eliminates. A stack trace or error piped into
+`ripwire . --from-trace` maps onto indexed symbols innermost-first, which turns
+a frame list into a starting point instead of a reading exercise.
 
 When program state is unclear, add instrumentation or logging and read it as
 the
@@ -69,8 +69,9 @@ first, because a boundary crossed by accident is a redesign by the back door.
 
 Delegate the implementation to a `subagent` with a specific scope: the file
 paths, the mechanism, the behaviour to hold, and what done looks like. Choose
-the model with `tools.spectre.routing({})` — the judgement profile is the right
-seat for a mechanism nobody confirmed. No model id is written by hand
+the profile with `tools.spectre.routing({})` and pass `agent: profile.agent`
+and `model: profile.model.ref` — the judgement profile is the right seat for a
+mechanism nobody confirmed. No model id is written by hand
 anywhere in this playbook. A hardcoded slug rots the day the allowlist moves.
 
 Read the diff yourself before running anything.
@@ -96,7 +97,7 @@ read as a story. One commit asks the reviewer to trust you on both halves at
 once.
 
 Order the branch with `tools.spectre.stack`, and open the pull request with
-`gh pr create`. Say what was broken, the root cause, the fix, and how you
+`tools.spectre.pr`. Say what was broken, the root cause, the fix, and how you
 verified it.
 
 ## Outputs
