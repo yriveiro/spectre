@@ -21,16 +21,30 @@ const EMPTY_NOTE =
 const TRUNCATE_BYTES = 32_000;
 const HEADER_AT = 8_192;
 
+const expandHome = (path: string): string | undefined => {
+  if (path !== "~" && !path.startsWith("~/") && !path.startsWith("~\\")) return path;
+  const home = Bun.env.HOME ?? Bun.env.USERPROFILE;
+  if (home === undefined || home === "") return undefined;
+  return path.length === 1 ? home : resolve(home, path.slice(2).replace(/^[/\\]+/, ""));
+};
+
 /**
  * Resolve `path` against `root` for the spawn. `undefined` means no path was
  * given or the path escapes the root; the caller branches on the path first.
  */
 export const scope = (root: string, path?: string): string | undefined => {
   if (path === undefined) return undefined;
+  const expanded = expandHome(path);
+  if (expanded === undefined) return undefined;
   const base = resolve(root);
-  const resolved = isAbsolute(path) ? resolve(path) : resolve(base, path);
+  const resolved = isAbsolute(expanded) ? resolve(expanded) : resolve(base, expanded);
   const rel = relative(base, resolved);
-  if (rel === "" || (rel !== ".." && !rel.startsWith("../"))) return resolved;
+  if (
+    rel === "" ||
+    (!isAbsolute(rel) && rel !== ".." && !rel.startsWith("../") && !rel.startsWith("..\\"))
+  ) {
+    return resolved;
+  }
   return undefined;
 };
 

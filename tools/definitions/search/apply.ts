@@ -6,11 +6,14 @@ import { Effect, type Scope } from "effect";
 import { isSpectre } from "./agents";
 import { shape } from "./catalogue";
 import { CONTRACT, END_OF_WORK } from "./contract";
+import { legendSeenFile, recordLegendSeen } from "./legend";
 import {
   type Ask,
   contextRule,
   type Decision,
   decide,
+  decideShellRead,
+  decideShunt,
   type Env,
   type Health,
   type Memory,
@@ -20,8 +23,29 @@ import {
   type Verdict,
 } from "./policy";
 import { probe } from "./probe";
-import { sessionScopeOf } from "./root";
-import { contextAsk, grepAsk, mutateAsk, readAsk, shellAsk } from "./signals";
+import { rootOf, sessionScopeOf } from "./root";
+import { scope } from "./run";
+import {
+  classifyFormat,
+  countLines,
+  readShuntConfig,
+  type ShuntConfig,
+  type ShuntFormat,
+  type SummaryAttempt,
+  summarizeFile,
+} from "./shunt";
+import {
+  contextAsk,
+  decodeReadInput,
+  grepAsk,
+  inspectReadResult,
+  isControlPlanePath,
+  mutateAsk,
+  type ReadInputParsed,
+  type ReadResultShape,
+  readAsk,
+  shellAsk,
+} from "./signals";
 import { markRerouted, memories, memoryOf, remember } from "./state";
 
 /**
@@ -293,6 +317,67 @@ const applyVerdict = (step: GuardStep): Effect.Effect<void, Tool.Error> =>
 const resolveAsk = (root: string, event: ToolBefore, read?: AskReader): Ask | undefined =>
   read === undefined ? askOf(root, event) : read(event);
 
+export const isShuntAgent = (agent: string): boolean =>
+  isSpectre(agent) && agent !== "nocturna" && agent !== "sicko";
+
+const isLargeFile = async (resolved: string, cfg: ShuntConfig): Promise<boolean> => {
+  try {
+    const file = Bun.file(resolved);
+    const stat = await file.stat();
+    if (!stat.isFile()) return false;
+    if (stat.size >= cfg.minBytes) return true;
+    const text = await file.slice(0, cfg.minBytes).text();
+    return countLines(text) >= cfg.minLines;
+  } catch {
+    return false;
+  }
+};
+
+const resolveShellReadPath = (
+  root: string,
+  path: string,
+  workdir?: string,
+): string | undefined => {
+  if (workdir === undefined) return scope(root, path);
+  const base = scope(root, workdir);
+  if (base === undefined) return undefined;
+  const resolved = scope(base, path);
+  return resolved !== undefined && scope(root, resolved) !== undefined ? resolved : undefined;
+};
+
+const isSmallShellSlice = (
+  parsed: Extract<ShellAsk, { readonly kind: "read" }>,
+  cfg: ShuntConfig,
+): boolean =>
+  (parsed.boundedLines !== undefined && parsed.boundedLines < cfg.minLines) ||
+  (parsed.boundedBytes !== undefined && parsed.boundedBytes < cfg.minBytes);
+
+interface ShellReadStep {
+  readonly event: ToolBefore;
+  readonly root: string;
+  readonly parsed: Extract<ShellAsk, { readonly kind: "read" }>;
+  readonly workdir?: string;
+  readonly prev: Memory;
+  readonly health: Health;
+}
+
+const guardShellRead = (step: ShellReadStep): Effect.Effect<void, Tool.Error> =>
+  Effect.gen(function* () {
+    if (!isShuntAgent(step.event.agent)) return;
+    const cfg = readShuntConfig();
+    if (isSmallShellSlice(step.parsed, cfg)) return;
+    const resolved = resolveShellReadPath(step.root, step.parsed.path, step.workdir);
+    if (resolved === undefined || isControlPlanePath(step.parsed.path, resolved, step.root)) return;
+    const large = yield* Effect.promise(() => isLargeFile(resolved, cfg)).pipe(
+      Effect.catchCause(() => Effect.succeed(false)),
+    );
+    if (!large) return;
+    const shellDecision = decideShellRead(resolved, step.parsed.path, step.prev, step.health);
+    if (shellDecision.verdict.kind !== "refuse") return;
+    remember(step.event.sessionID, shellDecision.next);
+    return yield* Effect.fail(new Tool.Error({ message: shellDecision.verdict.message }));
+  });
+
 const guardBefore = (
   ctx: Plugin.Context,
   event: ToolBefore,
@@ -310,6 +395,16 @@ const guardBefore = (
     const health = yield* healthOf();
     if (health === undefined) return;
     const prev = memoryOf(event.sessionID);
+    if (ask.surface === "shell" && ask.parsed.kind === "read") {
+      yield* guardShellRead({
+        event,
+        root: sessionScope.directory,
+        parsed: ask.parsed,
+        workdir: ask.workdir,
+        prev,
+        health,
+      });
+    }
     const decision = decide(ask, prev, envOf(health));
     yield* applyVerdict({
       ctx,
@@ -322,6 +417,299 @@ const guardBefore = (
       health,
     });
   });
+
+export type ToolAfter = {
+  readonly tool: string;
+  readonly sessionID: Session.ID;
+  readonly agent: Agent.ID;
+  readonly input: unknown;
+  readonly codemode?: boolean;
+} & ({ readonly status: "completed"; readonly result: Tool.Result } | { readonly status: "error" });
+
+export interface ShuntTelemetryEvent {
+  readonly bytesRaw: number;
+  readonly bytesServed: number;
+  readonly summarized: boolean;
+  readonly escalation: boolean;
+}
+
+type MutableToolResult = {
+  output?: unknown;
+  content?: string | ReadonlyArray<Tool.Content>;
+  metadata?: Tool.Metadata;
+};
+
+const isTextOutput = (
+  value: unknown,
+): value is Record<string, unknown> & { readonly type: "text"; readonly content: string } =>
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  "type" in value &&
+  value.type === "text" &&
+  "content" in value &&
+  typeof value.content === "string";
+
+type SummarizedAttempt = Extract<SummaryAttempt, { readonly kind: "summarized" }>;
+
+const mutateReadResult = (result: Tool.Result, attempt: SummarizedAttempt): void => {
+  const mutableResult = result as MutableToolResult;
+  mutableResult.content = attempt.text;
+  if (isTextOutput(result.output)) {
+    const { next: _next, ...rest } = result.output;
+    mutableResult.output = { ...rest, content: attempt.text };
+  }
+  const { truncated: _truncated, ...restMeta } = result.metadata ?? {};
+  mutableResult.metadata = {
+    ...restMeta,
+    spectreShunt: { bytesRaw: attempt.rawBytes, bytesServed: attempt.servedBytes },
+  };
+};
+
+const shuntMutateAfter = (root: string, event: ToolAfter): undefined => {
+  const parsed = decodeReadInput(event.input);
+  if (parsed === undefined) return undefined;
+  const resolved = scope(root, parsed.path);
+  if (resolved === undefined) return undefined;
+  const prev = memoryOf(event.sessionID);
+  const shunted = new Map(prev.shunted);
+  shunted.set(resolved, { kind: "edited" });
+  remember(event.sessionID, { ...prev, shunted });
+  return undefined;
+};
+
+const MAX_DISK_READ_BYTES = 2 * 1024 * 1024;
+
+interface DiskFile {
+  readonly size: number;
+  readonly file: ReturnType<typeof Bun.file>;
+}
+
+const statDiskFile = async (resolved: string): Promise<DiskFile | undefined> => {
+  try {
+    const file = Bun.file(resolved);
+    const stat = await file.stat();
+    return stat.isFile() ? { size: stat.size, file } : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+interface SummarySource {
+  readonly rawText: string;
+  readonly rawBytes: number;
+  readonly pageBytes: number;
+  readonly lines: number;
+  readonly format: ShuntFormat;
+}
+
+const estimateLines = (shape: ReadResultShape, effectiveBytes: number): number =>
+  shape.rawBytes > 0
+    ? Math.max(shape.lines, Math.round((shape.lines * effectiveBytes) / shape.rawBytes))
+    : shape.lines;
+
+interface ResolveSourceInput {
+  readonly resolved: string;
+  readonly shape: ReadResultShape;
+  readonly health: Health;
+  readonly cfg: ShuntConfig;
+  readonly disk: DiskFile | undefined;
+}
+
+const readDiskSource = async (
+  input: ResolveSourceInput,
+  effectiveBytes: number,
+  disk: DiskFile,
+): Promise<SummarySource | undefined> => {
+  try {
+    const fullText = await disk.file.text();
+    const lines = countLines(fullText);
+    return {
+      rawText: fullText,
+      rawBytes: effectiveBytes,
+      pageBytes: input.shape.rawBytes,
+      lines,
+      format: classifyFormat(input.resolved, lines, effectiveBytes, input.cfg),
+    };
+  } catch {
+    return undefined;
+  }
+};
+
+const resolveSummarySource = async (
+  input: ResolveSourceInput,
+): Promise<SummarySource | undefined> => {
+  const { resolved, shape, health, cfg, disk } = input;
+  const diskSize = disk?.size ?? 0;
+  const effectiveBytes = Math.max(shape.rawBytes, diskSize);
+  const initialFormat = classifyFormat(resolved, shape.lines, effectiveBytes, cfg);
+  if (!shape.truncatedByHost && diskSize <= shape.rawBytes) {
+    return {
+      rawText: shape.rawText,
+      rawBytes: shape.rawBytes,
+      pageBytes: shape.rawBytes,
+      lines: shape.lines,
+      format: initialFormat,
+    };
+  }
+  const usesRipwire =
+    health.kind === "ready" && (initialFormat.kind === "code" || initialFormat.kind === "markdown");
+  if (disk === undefined || disk.size > MAX_DISK_READ_BYTES) {
+    if (!usesRipwire) return undefined;
+    const lines = estimateLines(shape, effectiveBytes);
+    return {
+      rawText: "",
+      rawBytes: effectiveBytes,
+      pageBytes: shape.rawBytes,
+      lines,
+      format: classifyFormat(resolved, lines, effectiveBytes, cfg),
+    };
+  }
+  return readDiskSource(input, effectiveBytes, disk);
+};
+
+const maybeStatDisk = (
+  resolved: string | undefined,
+  readInput: ReadInputParsed,
+  root: string,
+  shape: ReadResultShape,
+): Effect.Effect<DiskFile | undefined> => {
+  if (resolved === undefined || shape.kind !== "text") return Effect.succeed(undefined);
+  if (readInput.offset !== undefined || readInput.limit !== undefined) {
+    return Effect.succeed(undefined);
+  }
+  if (isControlPlanePath(readInput.path, resolved, root)) return Effect.succeed(undefined);
+  return Effect.promise(() => statDiskFile(resolved)).pipe(
+    Effect.catchCause(() => Effect.succeed(undefined)),
+  );
+};
+
+interface ShuntDecisionContext {
+  readonly readInput: ReadInputParsed;
+  readonly resolved: string | undefined;
+  readonly root: string;
+  readonly shape: ReadResultShape;
+  readonly diskSize: number;
+  readonly cfg: ShuntConfig;
+  readonly sessionID: Session.ID;
+}
+
+const shuntDecisionFor = (ctx: ShuntDecisionContext) =>
+  decideShunt(
+    {
+      resolvedPath: ctx.resolved ?? ctx.readInput.path,
+      insideRoot: ctx.resolved !== undefined,
+      controlPlane:
+        ctx.resolved === undefined
+          ? true
+          : isControlPlanePath(ctx.readInput.path, ctx.resolved, ctx.root),
+      sliced: ctx.readInput.offset !== undefined || ctx.readInput.limit !== undefined,
+      mediaOrDirectory: ctx.shape.kind !== "text",
+      lines: ctx.shape.lines,
+      bytes: Math.max(ctx.shape.rawBytes, ctx.diskSize),
+      minLines: ctx.cfg.minLines,
+      minBytes: ctx.cfg.minBytes,
+    },
+    memoryOf(ctx.sessionID),
+  );
+
+const commitSummaryState = (sessionID: Session.ID, resolved: string): boolean => {
+  const latest = memoryOf(sessionID);
+  const current = latest.shunted?.get(resolved)?.kind;
+  if (current === "edited" || current === "verbatim-unlocked") return false;
+  const shunted = new Map(latest.shunted);
+  shunted.set(resolved, { kind: "summarized" });
+  remember(sessionID, { ...latest, shunted });
+  return true;
+};
+
+const finishSummary = (
+  event: Extract<ToolAfter, { readonly status: "completed" }>,
+  resolved: string,
+  health: Health,
+  attempt: SummarizedAttempt,
+): Effect.Effect<ShuntTelemetryEvent | undefined> =>
+  Effect.gen(function* () {
+    if (!commitSummaryState(event.sessionID, resolved)) return undefined;
+    if (attempt.legendXml !== undefined && health.kind === "ready") {
+      const xml = attempt.legendXml;
+      yield* Effect.promise(() => recordLegendSeen(health.binary, event.sessionID, xml)).pipe(
+        Effect.catchCause(() => Effect.void),
+      );
+    }
+    mutateReadResult(event.result, attempt);
+    return {
+      bytesRaw: attempt.rawBytes,
+      bytesServed: attempt.servedBytes,
+      summarized: true,
+      escalation: false,
+    };
+  });
+
+const shuntReadAfter = (
+  root: string,
+  event: Extract<ToolAfter, { readonly status: "completed" }>,
+  health: Health,
+): Effect.Effect<ShuntTelemetryEvent | undefined> =>
+  Effect.gen(function* () {
+    if (event.codemode === true) return undefined;
+    const readInput = decodeReadInput(event.input);
+    if (readInput === undefined) return undefined;
+    const resolved = scope(root, readInput.path);
+    const shape = inspectReadResult(event.result);
+    const disk = yield* maybeStatDisk(resolved, readInput, root, shape);
+    const cfg = readShuntConfig();
+    const { verdict, next } = shuntDecisionFor({
+      readInput,
+      resolved,
+      root,
+      shape,
+      diskSize: disk?.size ?? 0,
+      cfg,
+      sessionID: event.sessionID,
+    });
+    if (verdict.kind === "bypass") {
+      if (!verdict.escalation) return undefined;
+      remember(event.sessionID, next);
+      return { bytesRaw: 0, bytesServed: shape.rawBytes, summarized: false, escalation: true };
+    }
+    if (resolved === undefined) return undefined;
+    const source = yield* Effect.promise(() =>
+      resolveSummarySource({ resolved, shape, health, cfg, disk }),
+    );
+    if (source === undefined) return undefined;
+    const attempt = yield* Effect.promise(() =>
+      summarizeFile({
+        root,
+        resolvedPath: resolved,
+        displayPath: readInput.path,
+        ...source,
+        health,
+        legendSeenFile: legendSeenFile(event.sessionID),
+      }),
+    );
+    if (attempt.kind === "fail-open") return undefined;
+    return yield* finishSummary(event, resolved, health, attempt);
+  });
+
+export const shuntAfter = (
+  ctx: Plugin.Context,
+  event: ToolAfter,
+  health: Health,
+  root?: string,
+): Effect.Effect<ShuntTelemetryEvent | undefined> =>
+  Effect.gen(function* () {
+    if (event.status !== "completed") return undefined;
+    if (event.tool === "edit" || event.tool === "write") {
+      const dir = root ?? (yield* rootOf(ctx, event.sessionID));
+      return shuntMutateAfter(dir, event);
+    }
+    if (event.tool === "read") {
+      const dir = root ?? (yield* rootOf(ctx, event.sessionID));
+      return yield* shuntReadAfter(dir, event, health);
+    }
+    return undefined;
+  }).pipe(Effect.catchCause(() => Effect.succeed(undefined)));
 
 export const attachGuard = (
   ctx: Plugin.Context,

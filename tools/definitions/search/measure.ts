@@ -1,12 +1,20 @@
-import type { Agent, Plugin, Tool } from "@opencode/plugin/effect";
+import type { Plugin } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Effect, Option, Schema, type Scope, Semaphore } from "effect";
 import { isSpectre } from "./agents";
-import { envOf, needsEndOfWork, syncEndOfWork, syncEndOfWorkFromMemory } from "./apply";
+import {
+  envOf,
+  isShuntAgent,
+  needsEndOfWork,
+  shuntAfter,
+  syncEndOfWork,
+  syncEndOfWorkFromMemory,
+  type ToolAfter,
+} from "./apply";
 import { recordLegendSeen } from "./legend";
-import { decide, type Outcome, type SurfaceAsk } from "./policy";
+import { decide, type Health, type Outcome, type SurfaceAsk } from "./policy";
 import { probe } from "./probe";
-import { rootOf, sessionScopeOf } from "./root";
+import { sessionScopeOf } from "./root";
 import { scope } from "./run";
 import { mutateAsk, readAsk, shellAsk, subagentAsk } from "./signals";
 import { memories, memoryOf, remember } from "./state";
@@ -24,6 +32,14 @@ import { memories, memoryOf, remember } from "./state";
 const CAP = 64;
 const PREFIX = "usage:";
 
+export const ShuntUsage = Schema.Struct({
+  bytesRaw: Schema.Number,
+  bytesServed: Schema.Number,
+  summarized: Schema.Number,
+  escalations: Schema.Number,
+});
+export type ShuntUsage = typeof ShuntUsage.Type;
+
 export const UsageRecord = Schema.Struct({
   session: Schema.String,
   project: Schema.String,
@@ -38,6 +54,7 @@ export const UsageRecord = Schema.Struct({
     affected: Schema.optional(Schema.Number),
   }),
   outcome: Schema.optional(Schema.Literals(["answered", "empty", "partial", "absent", "refused"])),
+  shunt: Schema.optional(ShuntUsage),
 });
 export type UsageRecord = typeof UsageRecord.Type;
 
@@ -74,11 +91,18 @@ type Change =
     }
   | { readonly kind: "read" }
   | { readonly kind: "edit" }
-  | { readonly kind: "spawn" };
+  | { readonly kind: "spawn" }
+  | {
+      readonly kind: "shunt";
+      readonly bytesRaw: number;
+      readonly bytesServed: number;
+      readonly summarized: boolean;
+      readonly escalation: boolean;
+    };
 
 interface Observed {
   readonly session: Session.ID;
-  readonly change: Change;
+  readonly changes: ReadonlyArray<Change>;
   readonly child?: Session.ID;
 }
 
@@ -99,6 +123,19 @@ const blank = (session: string, project: string, parent?: string): UsageRecord =
   packed: 0,
   measured: {},
 });
+
+const mergeShunt = (
+  prev: ShuntUsage | undefined,
+  change: Extract<Change, { readonly kind: "shunt" }>,
+): ShuntUsage => {
+  const base = prev ?? { bytesRaw: 0, bytesServed: 0, summarized: 0, escalations: 0 };
+  return {
+    bytesRaw: base.bytesRaw + change.bytesRaw,
+    bytesServed: base.bytesServed + change.bytesServed,
+    summarized: base.summarized + (change.summarized ? 1 : 0),
+    escalations: base.escalations + (change.escalation ? 1 : 0),
+  };
+};
 
 const merged = (record: UsageRecord, change: Change): UsageRecord => {
   switch (change.kind) {
@@ -123,6 +160,8 @@ const merged = (record: UsageRecord, change: Change): UsageRecord => {
       return { ...record, edits: record.edits + 1 };
     case "spawn":
       return { ...record, subagents: record.subagents + 1 };
+    case "shunt":
+      return { ...record, shunt: mergeShunt(record.shunt, change) };
   }
 };
 
@@ -145,7 +184,8 @@ const advance = (
     others.some((one) => one.session === event.child)
       ? []
       : [blank(event.child, project, event.session)];
-  return [...others, ...child, merged(prior, event.change)].slice(-CAP);
+  const updated = event.changes.reduce(merged, prior);
+  return [...others, ...child, updated].slice(-CAP);
 };
 
 // Two sessions can finish a tool call at once, and a read-modify-write on one
@@ -174,7 +214,7 @@ export const recordCheck = (
     ? Effect.void
     : write(storage, project, {
         session,
-        change: { kind: "ripwire", lookup: true, delta: true, affected, fanout: false },
+        changes: [{ kind: "ripwire", lookup: true, delta: true, affected, fanout: false }],
       });
 
 const SearchInput = Schema.Struct({
@@ -189,14 +229,6 @@ const SearchAnswer = Schema.Struct({
 
 const decodeSearchInput = Schema.decodeUnknownOption(SearchInput);
 const decodeSearchAnswer = Schema.decodeUnknownOption(SearchAnswer);
-
-/** The `execute.after` event, as far as the record reads it. */
-type ToolAfter = {
-  readonly tool: string;
-  readonly sessionID: Session.ID;
-  readonly agent: Agent.ID;
-  readonly input: unknown;
-} & ({ readonly status: "completed"; readonly result: Tool.Result } | { readonly status: "error" });
 
 const outputOf = (event: ToolAfter): unknown =>
   event.status === "completed" ? event.result.output : undefined;
@@ -278,21 +310,45 @@ const readEvent = (event: ToolAfter, root: string): Observation | undefined => {
   }
 };
 
-const observe = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
+const probeHealth = (): Effect.Effect<Health> =>
+  Effect.promise(() => probe()).pipe(
+    Effect.catchCause(() => Effect.succeed<Health>({ kind: "absent", why: "probe-failed" })),
+  );
+
+const writeChanges = (
+  storage: Plugin.Context["storage"],
+  project: string,
+  session: Session.ID,
+  changes: ReadonlyArray<Change>,
+  child?: Session.ID,
+): Effect.Effect<void> =>
+  changes.length === 0
+    ? Effect.void
+    : write(storage, project, {
+        session,
+        changes,
+        ...(child === undefined ? {} : { child }),
+      });
+
+interface ObserveContext {
+  readonly root: string;
+  readonly health: Health;
+  readonly shuntChange?: Change;
+}
+
+const applyObservation = (
+  ctx: Plugin.Context,
+  event: ToolAfter,
+  observation: Observation,
+  health: Extract<Health, { readonly kind: "ready" }>,
+  base: ReadonlyArray<Change>,
+): Effect.Effect<void> =>
   Effect.gen(function* () {
-    if (!isSpectre(event.agent)) return;
-
-    const root = yield* rootOf(ctx, event.sessionID);
-    const observation = readEvent(event, root);
-    if (observation === undefined) {
-      yield* syncEndOfWorkFromMemory(ctx, event.sessionID);
-      return;
-    }
-
-    const health = yield* Effect.promise(() => probe());
-    if (health.kind !== "ready") return;
-
-    if (event.status === "completed" && event.tool === "shell" && observation.change.kind === "ripwire") {
+    if (
+      event.status === "completed" &&
+      event.tool === "shell" &&
+      observation.change.kind === "ripwire"
+    ) {
       const text = shellTextOf(event);
       if (text !== "") {
         yield* Effect.promise(() => recordLegendSeen(health.binary, event.sessionID, text));
@@ -304,11 +360,13 @@ const observe = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
       remember(event.sessionID, decision.next);
     }
 
-    yield* write(ctx.storage, ctx.location.project.id, {
-      session: event.sessionID,
-      change: observation.change,
-      ...(observation.child === undefined ? {} : { child: observation.child }),
-    });
+    yield* writeChanges(
+      ctx.storage,
+      ctx.location.project.id,
+      event.sessionID,
+      [...base, observation.change],
+      observation.child,
+    );
 
     const memory = memories.get(event.sessionID);
     if (memory !== undefined) {
@@ -316,17 +374,50 @@ const observe = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
     }
   });
 
+const observe = (
+  ctx: Plugin.Context,
+  event: ToolAfter,
+  context: ObserveContext,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const base: ReadonlyArray<Change> =
+      context.shuntChange === undefined ? [] : [context.shuntChange];
+    const observation = readEvent(event, context.root);
+    if (observation === undefined) {
+      yield* writeChanges(ctx.storage, ctx.location.project.id, event.sessionID, base);
+      yield* syncEndOfWorkFromMemory(ctx, event.sessionID);
+      return;
+    }
+    if (context.health.kind !== "ready") {
+      yield* writeChanges(ctx.storage, ctx.location.project.id, event.sessionID, base);
+      return;
+    }
+    yield* applyObservation(ctx, event, observation, context.health, base);
+  });
+
 const observeFiltered = (ctx: Plugin.Context, event: ToolAfter): Effect.Effect<void> =>
   Effect.gen(function* () {
-    if (event.agent === "nocturna" || event.agent === "sicko") return;
-    if (event.tool === "read") {
-      const scope = yield* sessionScopeOf(ctx, event.sessionID);
-      if (event.agent !== "spectre" || scope.hasParent) {
-        yield* syncEndOfWorkFromMemory(ctx, event.sessionID);
-        return;
-      }
+    if (!isShuntAgent(event.agent)) return;
+    const sessionScope = yield* sessionScopeOf(ctx, event.sessionID);
+    const health = yield* probeHealth();
+    const shuntEvent = yield* shuntAfter(ctx, event, health, sessionScope.directory);
+    const shuntChange: Change | undefined =
+      shuntEvent === undefined ? undefined : { kind: "shunt", ...shuntEvent };
+    if (event.tool === "read" && (event.agent !== "spectre" || sessionScope.hasParent)) {
+      yield* writeChanges(
+        ctx.storage,
+        ctx.location.project.id,
+        event.sessionID,
+        shuntChange === undefined ? [] : [shuntChange],
+      );
+      yield* syncEndOfWorkFromMemory(ctx, event.sessionID);
+      return;
     }
-    yield* observe(ctx, event);
+    yield* observe(ctx, event, {
+      root: sessionScope.directory,
+      health,
+      ...(shuntChange === undefined ? {} : { shuntChange }),
+    });
   });
 
 export const attachMeasure = (ctx: Plugin.Context): Effect.Effect<void, never, Scope.Scope> =>

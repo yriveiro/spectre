@@ -1,4 +1,4 @@
-import { CONTRACT, END_OF_WORK, landRefusal, readRefusal } from "./contract";
+import { CONTRACT, END_OF_WORK, landRefusal, readRefusal, shellReadRefusal } from "./contract";
 
 export type TextAsk = {
   readonly pattern: string;
@@ -134,6 +134,8 @@ export const judge = ({ ask, seen, health }: JudgeInput): JudgeVerdict => {
   return { kind: "route", route: { kind: "regex", pattern: ask.pattern } };
 };
 
+export type ShellReadBinary = "cat" | "head" | "tail" | "less" | "more";
+
 export type ShellAsk =
   | {
       readonly kind: "search";
@@ -153,12 +155,25 @@ export type ShellAsk =
       readonly affected: boolean;
       readonly fanout: boolean;
     }
+  | {
+      readonly kind: "read";
+      readonly binary: ShellReadBinary;
+      readonly path: string;
+      readonly command: string;
+      readonly boundedLines?: number;
+      readonly boundedBytes?: number;
+    }
   | { readonly kind: "other" };
 
 export type Ask =
   | { readonly surface: "context"; readonly tools: ReadonlyArray<string> }
   | { readonly surface: "text"; readonly id: "grep" | "ripgrep"; readonly ask: TextAsk }
-  | { readonly surface: "shell"; readonly command: string; readonly parsed: ShellAsk }
+  | {
+      readonly surface: "shell";
+      readonly command: string;
+      readonly parsed: ShellAsk;
+      readonly workdir?: string;
+    }
   | {
       readonly surface: "read";
       readonly path: string;
@@ -223,6 +238,37 @@ export type Verdict =
     }
   | { readonly kind: "prose"; readonly key: "rule" | "end-of-work"; readonly text: string };
 
+export type ShuntFileState =
+  | { readonly kind: "summarized"; readonly summarizedAt?: number }
+  | { readonly kind: "verbatim-unlocked" }
+  | { readonly kind: "edited" };
+
+export type ShuntSkipWhy =
+  | "outside-root"
+  | "control-plane"
+  | "media-or-directory"
+  | "sliced"
+  | "edited"
+  | "verbatim-unlocked"
+  | "already-summarized"
+  | "below-threshold";
+
+export interface ShuntDecisionInput {
+  readonly resolvedPath: string;
+  readonly insideRoot: boolean;
+  readonly controlPlane: boolean;
+  readonly mediaOrDirectory: boolean;
+  readonly sliced: boolean;
+  readonly lines: number;
+  readonly bytes: number;
+  readonly minLines: number;
+  readonly minBytes: number;
+}
+
+export type ShuntVerdict =
+  | { readonly kind: "bypass"; readonly why: ShuntSkipWhy; readonly escalation: boolean }
+  | { readonly kind: "summarize" };
+
 export interface Memory {
   readonly search: boolean;
   readonly touched: number;
@@ -235,6 +281,8 @@ export interface Memory {
   readonly measured: { readonly delta?: number; readonly affected?: number };
   readonly spent: Set<"read" | "land">;
   readonly subagents: number;
+  readonly shunted?: ReadonlyMap<string, ShuntFileState>;
+  readonly shellReadRefused?: ReadonlySet<string>;
 }
 
 export interface Env {
@@ -655,6 +703,252 @@ const searchKindOf = (
   return undefined;
 };
 
+const SHELL_READ_BINARIES: ReadonlySet<string> = new Set([
+  "cat",
+  "head",
+  "tail",
+  "less",
+  "more",
+]);
+
+const isShellReadBinary = (name: string): name is ShellReadBinary =>
+  SHELL_READ_BINARIES.has(name);
+
+const SMALL_BOUND_LINES = 200;
+const SMALL_BOUND_BYTES = 8_192;
+const DEFAULT_SLICE_LINES = 10;
+
+const BYTE_MULTIPLIERS: Record<string, number> = {
+  "": 1,
+  b: 512,
+  k: 1024,
+  K: 1024,
+  kB: 1000,
+  KB: 1000,
+  m: 1024 * 1024,
+  M: 1024 * 1024,
+  MB: 1000 * 1000,
+  g: 1024 * 1024 * 1024,
+  G: 1024 * 1024 * 1024,
+  GB: 1000 * 1000 * 1000,
+};
+
+type ShellReadBound =
+  | { readonly kind: "lines"; readonly count: number }
+  | { readonly kind: "bytes"; readonly count: number }
+  | { readonly kind: "unbounded" };
+
+interface ShellFlagStep {
+  readonly nextIndex: number;
+  readonly bound?: ShellReadBound;
+}
+
+const SHELL_READ_BOOL_LONG: Record<ShellReadBinary, ReadonlySet<string>> = {
+  cat: new Set([
+    "--number",
+    "--number-nonblank",
+    "--squeeze-blank",
+    "--show-ends",
+    "--show-tabs",
+    "--show-nonprinting",
+    "--show-all",
+  ]),
+  head: new Set(["--quiet", "--silent", "--verbose", "--zero-terminated"]),
+  tail: new Set(["--quiet", "--silent", "--verbose", "--zero-terminated"]),
+  less: new Set([
+    "--LINE-NUMBERS",
+    "--quit-if-one-screen",
+    "--no-init",
+    "--RAW-CONTROL-CHARS",
+    "--chop-long-lines",
+    "--quiet",
+    "--silent",
+  ]),
+  more: new Set(["--quiet", "--silent", "--squeeze"]),
+};
+
+const SHELL_READ_VALUE_LONG: Record<ShellReadBinary, ReadonlySet<string>> = {
+  cat: new Set(),
+  head: new Set(["--lines", "--bytes"]),
+  tail: new Set(["--lines", "--bytes"]),
+  less: new Set(),
+  more: new Set(),
+};
+
+const SHELL_READ_SHORT: Record<ShellReadBinary, ReadonlySet<string>> = {
+  cat: new Set(["n", "b", "e", "E", "s", "t", "T", "u", "v", "A"]),
+  head: new Set(["q", "v", "z", "n", "c"]),
+  tail: new Set(["q", "v", "z", "n", "c"]),
+  less: new Set(["N", "n", "s", "S", "R", "r", "F", "X", "e", "E", "q", "Q", "c", "u", "w"]),
+  more: new Set(["N", "n", "s", "e", "q", "c", "u", "w"]),
+};
+
+const SHELL_READ_VALUE_SHORT: Record<ShellReadBinary, ReadonlySet<string>> = {
+  cat: new Set(),
+  head: new Set(["n", "c"]),
+  tail: new Set(["n", "c"]),
+  less: new Set(),
+  more: new Set(),
+};
+
+const parseShellReadBound = (
+  binary: ShellReadBinary,
+  unit: "lines" | "bytes",
+  raw: string,
+): ShellReadBound | undefined => {
+  if (binary === "tail" && /^\+\d+[a-zA-Z]*$/.test(raw)) return { kind: "unbounded" };
+  if (binary === "head" && /^-\d+[a-zA-Z]*$/.test(raw)) return { kind: "unbounded" };
+  const match = /^[+-]?(\d+)([a-zA-Z]*)$/.exec(raw);
+  if (match === null) return undefined;
+  const digits = Number(match[1]);
+  const suffix = match[2] ?? "";
+  if (unit === "lines") {
+    return suffix === "" ? { kind: "lines", count: digits } : undefined;
+  }
+  const mult = BYTE_MULTIPLIERS[suffix];
+  return mult === undefined ? undefined : { kind: "bytes", count: digits * mult };
+};
+
+const consumeShellReadLongFlag = (
+  binary: ShellReadBinary,
+  args: ReadonlyArray<string>,
+  index: number,
+): ShellFlagStep | undefined => {
+  const word = args[index] ?? "";
+  const eq = word.indexOf("=");
+  const flagName = eq >= 0 ? word.slice(0, eq) : word;
+  if (SHELL_READ_VALUE_LONG[binary].has(flagName)) {
+    const raw = eq >= 0 ? word.slice(eq + 1) : args[index + 1];
+    if (raw === undefined) return undefined;
+    const bound = parseShellReadBound(binary, flagName === "--bytes" ? "bytes" : "lines", raw);
+    return bound === undefined ? undefined : { nextIndex: eq >= 0 ? index : index + 1, bound };
+  }
+  return eq < 0 && SHELL_READ_BOOL_LONG[binary].has(flagName) ? { nextIndex: index } : undefined;
+};
+
+const consumeShellReadValueShort = (
+  binary: ShellReadBinary,
+  args: ReadonlyArray<string>,
+  index: number,
+): ShellFlagStep | undefined => {
+  const chars = (args[index] ?? "").slice(1);
+  const first = chars[0] ?? "";
+  const raw = chars.length === 1 ? args[index + 1] : chars.slice(1);
+  if (raw === undefined) return undefined;
+  const bound = parseShellReadBound(binary, first === "c" ? "bytes" : "lines", raw);
+  if (bound === undefined) return undefined;
+  return { nextIndex: chars.length === 1 ? index + 1 : index, bound };
+};
+
+const consumeShellReadShortFlag = (
+  binary: ShellReadBinary,
+  args: ReadonlyArray<string>,
+  index: number,
+): ShellFlagStep | undefined => {
+  const word = args[index] ?? "";
+  if ((binary === "head" || binary === "tail") && /^-\d+$/.test(word)) {
+    const bound = parseShellReadBound(binary, "lines", word.slice(1));
+    return bound === undefined ? undefined : { nextIndex: index, bound };
+  }
+  const chars = word.slice(1);
+  const valueShort = SHELL_READ_VALUE_SHORT[binary];
+  if (valueShort.has(chars[0] ?? "")) {
+    return consumeShellReadValueShort(binary, args, index);
+  }
+  const boolShort = SHELL_READ_SHORT[binary];
+  const valid = [...chars].every((ch) => boolShort.has(ch) && !valueShort.has(ch));
+  return valid ? { nextIndex: index } : undefined;
+};
+
+const consumeShellReadFlag = (
+  binary: ShellReadBinary,
+  args: ReadonlyArray<string>,
+  index: number,
+): ShellFlagStep | undefined =>
+  (args[index] ?? "").startsWith("--")
+    ? consumeShellReadLongFlag(binary, args, index)
+    : consumeShellReadShortFlag(binary, args, index);
+
+const finalizeShellRead = (
+  binary: ShellReadBinary,
+  path: string,
+  command: string,
+  bound: ShellReadBound | undefined,
+): ShellAsk => {
+  if (binary !== "head" && binary !== "tail") {
+    return { kind: "read", binary, path, command };
+  }
+  const effective: ShellReadBound = bound ?? { kind: "lines", count: DEFAULT_SLICE_LINES };
+  if (effective.kind === "unbounded") {
+    return { kind: "read", binary, path, command };
+  }
+  if (effective.kind === "lines") {
+    if (effective.count <= SMALL_BOUND_LINES) return { kind: "other" };
+    return { kind: "read", binary, path, command, boundedLines: effective.count };
+  }
+  if (effective.count <= SMALL_BOUND_BYTES) return { kind: "other" };
+  return { kind: "read", binary, path, command, boundedBytes: effective.count };
+};
+
+interface ShellReadScan {
+  readonly binary: ShellReadBinary;
+  readonly args: ReadonlyArray<string>;
+  readonly positional: Array<string>;
+  pathsOnly: boolean;
+  bound?: ShellReadBound;
+}
+
+const stepShellReadScan = (scan: ShellReadScan, index: number): number | undefined => {
+  const word = scan.args[index] ?? "";
+  if (word === "-") return undefined;
+  if (scan.pathsOnly) {
+    scan.positional.push(word);
+    return index;
+  }
+  if (word === "--") {
+    scan.pathsOnly = true;
+    return index;
+  }
+  if (scan.binary === "tail" && /^\+\d+$/.test(word)) {
+    scan.bound = { kind: "unbounded" };
+    return index;
+  }
+  if (word.startsWith("-") && word.length > 1) {
+    const step = consumeShellReadFlag(scan.binary, scan.args, index);
+    if (step === undefined) return undefined;
+    if (step.bound !== undefined) scan.bound = step.bound;
+    return step.nextIndex;
+  }
+  scan.positional.push(word);
+  return index;
+};
+
+const parseShellReadTokens = (
+  binary: ShellReadBinary,
+  args: ReadonlyArray<string>,
+  command: string,
+): ShellAsk => {
+  const scan: ShellReadScan = { binary, args, positional: [], pathsOnly: false };
+  for (let index = 0; index < args.length; index += 1) {
+    const nextIndex = stepShellReadScan(scan, index);
+    if (nextIndex === undefined) return { kind: "other" };
+    index = nextIndex;
+  }
+  const target = scan.positional[0];
+  if (scan.positional.length !== 1 || target === undefined) return { kind: "other" };
+  return finalizeShellRead(binary, target, command, scan.bound);
+};
+
+const classifyShellRead = (
+  name: ShellReadBinary,
+  words: ReadonlyArray<string>,
+  command: string,
+  isolated: boolean,
+): ShellAsk => {
+  if (!isolated) return { kind: "other" };
+  return parseShellReadTokens(name, words.slice(1), command);
+};
+
 const classifySegment = (segment: string, command: string, single: boolean): ShellAsk => {
   const lexed = lex(segment);
   if ("broken" in lexed) return { kind: "unmappable" };
@@ -673,6 +967,9 @@ const classifySegment = (segment: string, command: string, single: boolean): She
       affected: hasFlag(words, "--affected"),
       fanout: hasFlag(words, "--pack-task") || hasFlag(words, "--partition"),
     };
+  }
+  if (isShellReadBinary(name)) {
+    return classifyShellRead(name, words, command, single && !lexed.composed);
   }
   const searchKind = searchKindOf(name, canonical[1]);
   if (searchKind === undefined) return { kind: "other" };
@@ -875,6 +1172,8 @@ const onShell = (parsed: ShellAsk, memory: Memory): Decision => {
     }
     case "landing":
       return onLanding(memory);
+    case "read":
+      return passed("not-a-search", memory);
   }
 };
 
@@ -951,6 +1250,70 @@ export const decide = (ask: Ask, memory: Memory, env: Env): Decision => {
     case "complete":
       return onComplete(ask, memory);
   }
+};
+
+export const decideShunt = (
+  input: ShuntDecisionInput,
+  memory: Memory,
+): { readonly verdict: ShuntVerdict; readonly next: Memory } => {
+  if (!input.insideRoot) {
+    return { verdict: { kind: "bypass", why: "outside-root", escalation: false }, next: memory };
+  }
+  if (input.controlPlane) {
+    return { verdict: { kind: "bypass", why: "control-plane", escalation: false }, next: memory };
+  }
+  if (input.mediaOrDirectory) {
+    return {
+      verdict: { kind: "bypass", why: "media-or-directory", escalation: false },
+      next: memory,
+    };
+  }
+  if (input.sliced) {
+    return { verdict: { kind: "bypass", why: "sliced", escalation: false }, next: memory };
+  }
+  const existing = memory.shunted?.get(input.resolvedPath);
+  if (existing?.kind === "edited") {
+    return { verdict: { kind: "bypass", why: "edited", escalation: false }, next: memory };
+  }
+  if (existing?.kind === "verbatim-unlocked") {
+    return {
+      verdict: { kind: "bypass", why: "verbatim-unlocked", escalation: false },
+      next: memory,
+    };
+  }
+  if (existing?.kind === "summarized") {
+    const shunted = new Map(memory.shunted);
+    shunted.set(input.resolvedPath, { kind: "verbatim-unlocked" });
+    return {
+      verdict: { kind: "bypass", why: "already-summarized", escalation: true },
+      next: { ...memory, shunted },
+    };
+  }
+  if (input.lines < input.minLines && input.bytes < input.minBytes) {
+    return { verdict: { kind: "bypass", why: "below-threshold", escalation: false }, next: memory };
+  }
+  return { verdict: { kind: "summarize" }, next: memory };
+};
+
+export const decideShellRead = (
+  resolvedPath: string,
+  displayPath: string,
+  memory: Memory,
+  health: Health,
+): Decision => {
+  if (memory.shellReadRefused?.has(resolvedPath)) {
+    return passed("gate-spent", memory);
+  }
+  const shellReadRefused = new Set(memory.shellReadRefused);
+  shellReadRefused.add(resolvedPath);
+  return {
+    verdict: {
+      kind: "refuse",
+      gate: "read",
+      message: shellReadRefusal(displayPath, health.kind === "ready"),
+    },
+    next: { ...memory, shellReadRefused },
+  };
 };
 
 export type ArgvInput = {
