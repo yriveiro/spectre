@@ -68,33 +68,6 @@ describe("serialise", () => {
     expect(Object.keys(JSON.parse(serialise(withSchema)))).toEqual(["$schema", "models"]);
   });
 
-  test("a judge written before the host owned the call loses its endpoint and key on the next write", () => {
-    const legacy: File = {
-      judge: {
-        kind: "jev",
-        model: "jev-1.13-free",
-        endpoint: "https://opencode.ai/inference/systemone/v1/systemone",
-        key: "OPENCODE_API_KEY",
-        timeout: 5000,
-      },
-    };
-    expect(JSON.parse(serialise(legacy))).toEqual({
-      judge: { kind: "jev", model: "jev-1.13-free", timeout: 5000 },
-    });
-  });
-
-  test("a judge on another endpoint keeps it, so the user can still see what it asked", () => {
-    const elsewhere: File = {
-      judge: {
-        kind: "jev",
-        model: "typesafe/jev-1.13",
-        endpoint: "https://openrouter.ai/x",
-        key: "K",
-      },
-    };
-    expect(JSON.parse(serialise(elsewhere))).toEqual(elsewhere);
-  });
-
   test("the order inside models is preserved as a readable map", () => {
     const preference: File = {
       models: { deepseek: "opencode-go/deepseek-v4.1-flash", glm: "opencode-go/glm-5.3-flash" },

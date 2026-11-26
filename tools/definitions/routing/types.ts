@@ -44,24 +44,10 @@ export const modelNames = (
   return typeof model === "string" ? [model] : model;
 };
 
-/**
- * A path to the reader's own copy of the ASD-STE100 dictionary, as JSON.
- *
- * It is a path and not the words themselves. The standard restricts reproduction
- * of its dictionary to eight categories of organisation, so nothing in this
- * repository carries the word list. A `null` removes a path an earlier config
- * file set, which is why it is a union with null rather than a bare string.
- */
-const IgnoredLegacyJudgeFields = {
-  endpoint: Schema.optional(Schema.String),
-  key: Schema.optional(Schema.String),
-};
-
 const Judge = Schema.Struct({
   /** Which arm answers. The lexical one reads the surface; the System One one asks a model. */
   kind: Schema.optional(Schema.Literals(["lexical", "jev"])),
   model: Schema.optional(Schema.String),
-  ...IgnoredLegacyJudgeFields,
   /** The budget for one question, in milliseconds. */
   timeout: Schema.optional(Schema.Int),
   /**
@@ -72,6 +58,14 @@ const Judge = Schema.Struct({
 });
 export type JudgeConfig = typeof Judge.Type;
 
+/**
+ * A path to the reader's own copy of the ASD-STE100 dictionary, as JSON.
+ *
+ * It is a path and not the words themselves. The standard restricts reproduction
+ * of its dictionary to eight categories of organisation, so nothing in this
+ * repository carries the word list. A `null` removes a path an earlier config
+ * file set, which is why it is a union with null rather than a bare string.
+ */
 const Dictionary = Schema.Union([Schema.String, Schema.Null]);
 
 /**

@@ -273,7 +273,7 @@ const judgeFor = (ctx: Plugin.Context, tables: Tables): Judge | undefined => {
   if (settings === undefined) return undefined;
   if (settings.kind === "lexical") return lexicalJudge(tables.profiles);
   return jevJudge(
-    { model: settings.model, endpoint: settings.endpoint, timeout: settings.timeout },
+    { model: settings.model, timeout: settings.timeout },
     criteria(tables.profiles),
     ctx.experimental.generate.decisions,
   );

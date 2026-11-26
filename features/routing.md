@@ -564,11 +564,7 @@ probability, because it is the only one that has one.
 
 `kind` is `lexical` or `jev`. `model` is a decision model ref, and a bare id
 such as `jev-1.13-free` names the `opencode` provider's model. The file names
-no endpoint and no key, because the host owns both. A file written before
-2.3.0 still carries `endpoint` and `key`. When the endpoint is the Console's,
-the reader ignores both and the writer drops them on the next save. Any other
-endpoint keeps the judge quiet with a reason that names it, and the writer
-keeps it so the user can see what the file asked for. A file with no
+no endpoint and no key, because the host owns both. A file with no
 `judge` key has no judge, and `"judge": null` in a repository's file turns a
 judge off that a global file asked for, through the same merge rule the other
 keys use.
