@@ -31,17 +31,20 @@ principle quoted at something it was never about.
 
 ## The search moment
 
-For a code search, call `spectre_search`. It runs ripwire's `--for`, `--grep`,
-`--regex` or `--expand` and returns the enclosing symbol or body. For plain
-text, logs, docs prose, fixtures and lock files, call `ripgrep`.
-`spectre_search` answers a code-shaped `ripgrep` call once, and the result says
-so. Rule 4 allows a second `ripgrep` for the same pattern, and `literal: true`
-always stays on `ripgrep`.
+For a code search, call `spectre_search`. It runs ripwire's answer-first `--for`
+(12 KB paged with inline key bodies, `<act read="path:l-e,..."/>` for parallel
+ranged Reads, and automatic `--callers`/`--uses`/`--impact` routing on backticked
+symbol questions), `--grep`, `--regex` or `--expand`, and deduplicates repeated
+legends per session with `--legend-seen`. Pass `page` to continue a paged task
+answer, or `name@lang` to order multi-language results. For plain text, logs,
+docs prose, fixtures and lock files, call `ripgrep`. `spectre_search` answers a
+code-shaped `ripgrep` call once, and the result says so. Rule 4 allows a second
+`ripgrep` for the same pattern, and `literal: true` always stays on `ripgrep`.
 
 ## The map
 
 Keyed on the test, not the name. The test is the falsifiable half. The map is
-checked against ripwire 0.6.10, and an older install fails
+checked against ripwire 0.7.0, and an older install fails
 `test/skills/ripwire-map.test.ts`.
 
 | Leaf | Its test | The verb that answers it |
@@ -95,23 +98,24 @@ set and neither is obvious from its name:
 
 ## Two ways in
 
-The direct `spectre_search` tool is the front door because the Code Mode catalog renders the 33 MCP tools as none shown. Before landing code edits, call `tools.spectre.ripwire` in `execute` to run `--quality-delta` and `--affected`. Pass `action: "report"` to audit session usage. The MCP server is the second hop for the graph verbs, and the `ripgrep` tool is the renamed built-in `grep` tool which already runs ripgrep.
+The direct `spectre_search` tool is the front door because the Code Mode catalog renders MCP namespaces behind `execute`. Before landing code edits, call `tools.spectre.ripwire` in `execute` to run `--quality-delta` (13 kinds, including `tangle`) and `--affected`. Pass `range` to check `--quality-delta=<range>`, or pass `action: "report"` to audit session usage. The `ripgrep` tool is the renamed built-in `grep` tool which already runs ripgrep.
 
 **The MCP server**, as `tools.ripwire.*`. Thirty-three tools: thirty-one verbs,
 ranked, with lazy handles, plus `batch` (sixteen read sub-queries in one turn)
 and `explore` (one-call orientation with bodies attached). Prefer it when the
-session has it, because it ranks and it batches. The server takes
-`--mcp-tools=core|no-edit|full`, and `no-edit` hides the three edit verbs, which
-is what `ripwire wrap claude` registers. `memory_recall` serves six documents by
-default, down from eight.
+session configures it, because it ranks and it batches with `--mcp-legend=session`
+by default. The server takes `--mcp-tools=core|no-edit|full`, and `no-edit`
+hides the three edit verbs, which is what `ripwire wrap claude` registers.
+`memory_recall` serves six documents by default, down from eight.
 
 **The CLI**, as `ripwire <dir> --flag`. Same engine, and `--test-gate` and
 `--defs` live only here, so the exit-code gate that `ripwire-quality-bar` pairs
 with `--quality-delta` is a shell command. Two more live only here: the `--for`
-body fold, which the MCP `for` does not serve, and `--quality-delta=A..B` with
+body fold (`--bodies=inline|pointer`, `--rows=lines|elements`, `--no-verb-route`),
+which the MCP `for` does not serve, and `--quality-delta=A..B` with
 the `--quality-kinds` replay. The MCP `for` is signatures-only (`bundle="sigs"`),
 so call `fetch_body` when you need a body. Use the CLI when you need a script,
-an exit code, or one of those.
+an exit code, `--deadline-ms` prompt hooks, or one of those.
 
 A `--quality-delta=A..B` answer that ran out of memory is a partial answer and
 not a pass: it exits 2 when a kind that ran gates, 6 otherwise, and 5 when even

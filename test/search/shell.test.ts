@@ -13,7 +13,7 @@ import {
  * passes as `unmappable`, so the native command answers in the same call.
  */
 
-const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
+const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.7.0" };
 const absent: Health = { kind: "absent", why: "ripwire is not on PATH" };
 
 const held = (overrides?: Partial<Memory>): Memory => ({

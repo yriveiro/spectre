@@ -1,6 +1,7 @@
 import type { Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect, Schema } from "effect";
 import { CONTRACT, INSTALL } from "./contract";
+import { legendSeenFile, recordLegendSeen } from "./legend";
 import { recordCheck, recordsOf, type UsageRecord } from "./measure";
 import { codeMutationOf, type Health } from "./policy";
 import { probe } from "./probe";
@@ -17,6 +18,10 @@ export const RipwireInput = Schema.Struct({
   paths: Schema.optional(Schema.Array(Schema.String)).annotate({
     description: "Optional project-relative code paths to check instead of session memory.",
   }),
+  range: Schema.optional(Schema.String).annotate({
+    description:
+      "Optional git revision or two-dot range (such as `main..HEAD`) for `--quality-delta=<range>`.",
+  }),
 });
 
 const Finding = Schema.Struct({
@@ -28,7 +33,7 @@ const Finding = Schema.Struct({
 
 const CheckResult = Schema.Struct({
   action: Schema.Literals(["check"]),
-  status: Schema.Literals(["ok", "gating", "nothing-edited", "absent", "refused"]),
+  status: Schema.Literals(["ok", "gating", "partial", "nothing-edited", "absent", "refused"]),
   sha: Schema.String,
   gating: Schema.Number,
   regressions: Schema.Number,
@@ -155,8 +160,12 @@ const parseDelta = (xml: string, code: number) => {
   const regressions = Number(attr("regressions") ?? "0");
   const newSymbolsRaw = attr("new-symbol") ?? attr("new_symbol");
   const newSymbols = newSymbolsRaw !== undefined ? Number(newSymbolsRaw) : newSymbolRows.length;
-  const sha = attr("at") ?? "";
-  return { sha, gating, regressions, newSymbols, newSymbolRows };
+  const sha = attr("at") ?? attr("target_ref") ?? "";
+  const baseline = attr("baseline");
+  const stale = Number(attr("stale") ?? "0");
+  const kindsSkipped = attr("kinds_skipped");
+  const kindsNext = attr("kinds_next");
+  return { sha, gating, regressions, newSymbols, newSymbolRows, baseline, stale, kindsSkipped, kindsNext };
 };
 
 const parseAffected = (xml: string): Array<string> => {
@@ -267,6 +276,27 @@ const resolveTargetPaths = async (
   return gitPaths.length === 0 ? { kind: "empty" } : { kind: "ready", paths: gitPaths };
 };
 
+const validRange = (range: string): boolean =>
+  range !== "" &&
+  range !== ".." &&
+  !range.startsWith("-") &&
+  !/\s/.test(range) &&
+  !range.includes("...");
+
+const checkStatus = (code: number, gating: number): "ok" | "gating" | "partial" => {
+  if (code === 2 || gating > 0) return "gating";
+  return code === 6 ? "partial" : "ok";
+};
+
+const formatCheckExtras = (parsed: ReturnType<typeof parseDelta>): string => {
+  const parts: Array<string> = [];
+  if (parsed.baseline) parts.push(`baseline=${parsed.baseline}`);
+  if (parsed.stale > 0) parts.push(`stale-acks=${parsed.stale}`);
+  if (parsed.kindsSkipped) parts.push(`kinds_skipped=${parsed.kindsSkipped}`);
+  if (parsed.kindsNext) parts.push(`next=${parsed.kindsNext}`);
+  return parts.length === 0 ? "" : ` (${parts.join(", ")})`;
+};
+
 const buildCheckOutput = (
   delta: SpawnOutcome,
   affectedXml: string,
@@ -275,10 +305,11 @@ const buildCheckOutput = (
 ): CheckOutput => {
   const parsed = parseDelta(delta.stdout, delta.code);
   const testsToRun = parseAffected(affectedXml);
-  const status = delta.code === 2 || parsed.gating > 0 ? ("gating" as const) : ("ok" as const);
+  const status = checkStatus(delta.code, parsed.gating);
   const at = parsed.sha === "" ? "" : ` at=${parsed.sha}`;
   const tests = testsToRun.length === 0 ? "none" : testsToRun.join(", ");
-  const summary = `ripwire check (${status}${at}): gating=${parsed.gating} regressions=${parsed.regressions} new-symbol=${parsed.newSymbols}; tests to run: ${tests}`;
+  const extraText = formatCheckExtras(parsed);
+  const summary = `ripwire check (${status}${at}): gating=${parsed.gating} regressions=${parsed.regressions} new-symbol=${parsed.newSymbols}${extraText}; tests to run: ${tests}`;
   return {
     action: "check",
     status,
@@ -294,27 +325,66 @@ const buildCheckOutput = (
   };
 };
 
+const buildCheckCommands = (
+  binary: string,
+  root: string,
+  sessionID: string,
+  targetPaths: Array<string>,
+  range?: string,
+) => {
+  const seen = legendSeenFile(sessionID);
+  const seenArg = seen === undefined ? [] : [`--legend-seen=${seen}`];
+  const deltaFlag = range === undefined ? "--quality-delta" : `--quality-delta=${range}`;
+  const deltaArgs = [binary, root, deltaFlag, ...seenArg];
+  const affectedArgs =
+    targetPaths.length === 0
+      ? undefined
+      : [binary, root, `--affected=${targetPaths.join(",")}`, ...seenArg];
+  const commands = [
+    deltaArgs.join(" "),
+    ...(affectedArgs === undefined ? [] : [affectedArgs.join(" ")]),
+  ];
+  return { deltaArgs, affectedArgs, commands };
+};
+
 const executeCheckSpawns = async (
   binary: string,
   root: string,
+  sessionID: string,
   targetPaths: Array<string>,
+  range?: string,
 ): Promise<{ readonly ok: boolean; readonly output: CheckOutput }> => {
-  const deltaArgs = [binary, root, "--quality-delta", "--legend=compact"];
-  const affectedArgs = [binary, root, `--affected=${targetPaths.join(",")}`, "--legend=compact"];
-  const commands = [deltaArgs.join(" "), affectedArgs.join(" ")];
+  const { deltaArgs, affectedArgs, commands } = buildCheckCommands(
+    binary,
+    root,
+    sessionID,
+    targetPaths,
+    range,
+  );
   const [delta, affected] = await Promise.all([
     spawnRipwire(deltaArgs, root),
-    spawnRipwire(affectedArgs, root),
+    affectedArgs === undefined ? Promise.resolve(undefined) : spawnRipwire(affectedArgs, root),
   ]);
-  if (!delta.ok || (delta.code !== 0 && delta.code !== 2)) {
-    const summary = failureMessage("ripwire --quality-delta", delta);
-    return { ok: false, output: emptyCheck("refused", summary, targetPaths, commands) };
+  if (!delta.ok || ![0, 2, 6].includes(delta.code)) {
+    return {
+      ok: false,
+      output: emptyCheck("refused", failureMessage("ripwire --quality-delta", delta), targetPaths, commands),
+    };
   }
-  if (!affected.ok || affected.code !== 0) {
-    const summary = failureMessage("ripwire --affected", affected);
-    return { ok: false, output: emptyCheck("refused", summary, targetPaths, commands) };
+  if (affected !== undefined && (!affected.ok || affected.code !== 0)) {
+    return {
+      ok: false,
+      output: emptyCheck("refused", failureMessage("ripwire --affected", affected), targetPaths, commands),
+    };
   }
-  return { ok: true, output: buildCheckOutput(delta, affected.stdout, targetPaths, commands) };
+  await Promise.all([
+    recordLegendSeen(binary, sessionID, delta.stdout),
+    ...(affected === undefined ? [] : [recordLegendSeen(binary, sessionID, affected.stdout)]),
+  ]);
+  return {
+    ok: true,
+    output: buildCheckOutput(delta, affected?.stdout ?? "", targetPaths, commands),
+  };
 };
 
 const coversEditedPaths = (
@@ -353,7 +423,7 @@ const recordCompletedCheck = (
 
 const absentSummary = (health: Exclude<Health, { readonly kind: "ready" }>): string =>
   health.kind === "stale"
-    ? `${health.binary} is version ${health.version}, older than 0.6.10. Run ripwire --doctor.`
+    ? `${health.binary} is version ${health.version}, older than 0.7.0. Run ripwire --doctor.`
     : `${health.why}. Install it:\n${INSTALL}`;
 
 const runCheck = (ctx: Plugin.Context, input: typeof RipwireInput.Type, context: Tool.Context) =>
@@ -366,6 +436,14 @@ const runCheck = (ctx: Plugin.Context, input: typeof RipwireInput.Type, context:
       resources: [root],
       source: { type: "tool", messageID: context.messageID, id: context.id },
     });
+
+    if (input.range !== undefined && !validRange(input.range)) {
+      const output = emptyCheck(
+        "refused",
+        `Invalid range "${input.range}": pass a revision or two-dot range such as main..HEAD.`,
+      );
+      return { output, content: output.summary };
+    }
 
     const health = yield* Effect.promise(() => probe());
     if (health.kind !== "ready") {
@@ -380,15 +458,18 @@ const runCheck = (ctx: Plugin.Context, input: typeof RipwireInput.Type, context:
       const output = emptyCheck("refused", selected.summary);
       return { output, content: output.summary };
     }
-    if (selected.kind === "empty") {
+    if (selected.kind === "empty" && input.range === undefined) {
       const output = emptyCheck("nothing-edited", "No code files were edited in this session.");
       return { output, content: output.summary };
     }
 
+    const targetPaths = selected.kind === "ready" ? selected.paths : [];
     const run = yield* Effect.promise(() =>
-      executeCheckSpawns(health.binary, root, selected.paths),
+      executeCheckSpawns(health.binary, root, context.sessionID, targetPaths, input.range),
     );
-    if (run.ok) yield* recordCompletedCheck(ctx, context.sessionID, root, selected.paths);
+    if (run.ok && run.output.status !== "partial") {
+      yield* recordCompletedCheck(ctx, context.sessionID, root, targetPaths);
+    }
     return { output: run.output, content: run.output.summary };
   });
 

@@ -2,6 +2,7 @@ import { type Plugin, Tool } from "@opencode/plugin/effect";
 import { Effect, Schema, type Scope } from "effect";
 import { attachCatalogue, attachGuard } from "./apply";
 import { CONTRACT, INSTALL } from "./contract";
+import { legendSeenFile, recordLegendSeen } from "./legend";
 import { attachMeasure } from "./measure";
 import { argv, type Health, type Route } from "./policy";
 import { probe } from "./probe";
@@ -28,7 +29,12 @@ export const SearchInput = Schema.Struct({
     description: "Scope the search to this path, relative to the project directory or absolute.",
   }),
   budget: Schema.optional(Schema.Number).annotate({
-    description: "Token budget for a task answer. Default 2000.",
+    description:
+      "Optional token budget for a task answer. Omit for ripwire's 12KB answer-first page with inline key bodies and <act read=.../>.",
+  }),
+  page: Schema.optional(Schema.Number).annotate({
+    description:
+      "1-based page number to continue a paged task answer (maps to --page-bytes=12000:<page>).",
   }),
   fresh: Schema.optional(Schema.Boolean).annotate({
     description: "Re-read the index instead of using the cache.",
@@ -136,7 +142,7 @@ const refusedOutput = (reason: string, note: string) => {
 const absentOutput = (health: Exclude<Health, { readonly kind: "ready" }>) => {
   const note =
     health.kind === "stale"
-      ? `${health.binary} is version ${health.version}, older than 0.6.10. Run ripwire --doctor.`
+      ? `${health.binary} is version ${health.version}, older than 0.7.0. Run ripwire --doctor.`
       : `${health.why}. Install it:\n${INSTALL}`;
   const output = {
     tool: "spectre_search" as const,
@@ -173,33 +179,49 @@ const mergeWidened = (initial: RunResult, widened: RunResult, coverage: number):
   };
 };
 
+const recordIfAnswered = async (
+  binary: string,
+  sessionID: string,
+  result: RunResult,
+): Promise<void> => {
+  if (result.status !== "answered" && result.status !== "partial") return;
+  await recordLegendSeen(binary, sessionID, result.answer);
+};
+
+const widenArgs = (scoped: string, task: string, sessionID: string): string[] => {
+  const seen = legendSeenFile(sessionID);
+  return [scoped, `--for=${task}`, "--limit=40", ...(seen === undefined ? [] : [`--legend-seen=${seen}`])];
+};
+
 const runSearchRoute = async (params: {
+  readonly binary: string;
+  readonly sessionID: string;
   readonly root: string;
   readonly scoped: string;
   readonly route: Route;
-  readonly budget: number;
+  readonly budget?: number;
+  readonly page?: number;
   readonly fresh?: boolean;
 }): Promise<RunResult> => {
   const options = params.fresh === undefined ? {} : { fresh: params.fresh };
+  const initialSeen = legendSeenFile(params.sessionID);
   const initial = await run(
     params.root,
-    argv({ route: params.route, root: params.scoped, budget: params.budget }),
+    argv({
+      route: params.route,
+      root: params.scoped,
+      ...(params.budget === undefined ? {} : { budget: params.budget }),
+      ...(params.page === undefined ? {} : { page: params.page }),
+      ...(initialSeen === undefined ? {} : { legendSeen: initialSeen }),
+    }),
     options,
   );
-  if (params.route.kind !== "task") return initial;
+  await recordIfAnswered(params.binary, params.sessionID, initial);
+  if (params.route.kind !== "task" || (params.page ?? 1) > 1) return initial;
   const coverage = thinCoverage(initial);
   if (coverage === undefined) return initial;
-  const widened = await run(
-    params.root,
-    [
-      params.scoped,
-      `--for=${params.route.task}`,
-      `--token-budget=${params.budget}`,
-      "--limit=40",
-      "--legend=compact",
-    ],
-    options,
-  );
+  const widened = await run(params.root, widenArgs(params.scoped, params.route.task, params.sessionID), options);
+  await recordIfAnswered(params.binary, params.sessionID, widened);
   return mergeWidened(initial, widened, coverage);
 };
 
@@ -258,6 +280,13 @@ export const search = (ctx: Plugin.Context): Tool.Info<typeof SearchInput, typeo
       const health = yield* Effect.promise(() => probe());
       if (health.kind !== "ready") return absentOutput(health);
 
+      if (input.budget !== undefined && (!Number.isInteger(input.budget) || input.budget < 1)) {
+        return refusedOutput("invalid-budget", "`budget` must be a positive integer.");
+      }
+      if (input.page !== undefined && (!Number.isInteger(input.page) || input.page < 1)) {
+        return refusedOutput("invalid-page", "`page` must be a positive integer.");
+      }
+
       const selected = routeOf(input);
       if (selected === undefined) {
         return refusedOutput("empty-query", "Neither query, pattern, nor expand was given, so nothing was asked.");
@@ -265,10 +294,13 @@ export const search = (ctx: Plugin.Context): Tool.Info<typeof SearchInput, typeo
 
       const result = yield* Effect.promise(() =>
         runSearchRoute({
+          binary: health.binary,
+          sessionID: context.sessionID,
           root,
           scoped,
           route: selected.route,
-          budget: input.budget ?? 2000,
+          ...(input.budget === undefined ? {} : { budget: input.budget }),
+          ...(input.page === undefined ? {} : { page: input.page }),
           ...(input.fresh === undefined ? {} : { fresh: input.fresh }),
         }),
       );

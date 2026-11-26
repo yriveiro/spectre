@@ -11,7 +11,7 @@ import {
   shellParse,
 } from "../../tools/definitions/search/policy";
 
-const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.6.10" };
+const ready: Health = { kind: "ready", binary: "/bin/ripwire", version: "0.7.0" };
 const absent: Health = { kind: "absent", why: "no binary" };
 const stale: Health = { kind: "stale", binary: "/bin/ripwire", version: "0.5.0" };
 const empty = new Set<string>();
@@ -150,22 +150,31 @@ describe("judge", () => {
 });
 
 describe("argv", () => {
-  test("a task carries the signatures flag, the budget, and compact legend", () => {
+  test("a task defaults to answer-first --for with no --signatures-only, no --token-budget, and no --legend=compact", () => {
     expect(
-      argv({ route: { kind: "task", task: "function rescue" }, root: "/root", budget: 4000 }),
-    ).toEqual([
-      "/root",
-      "--for=function rescue",
-      "--signatures-only",
-      "--token-budget=4000",
-      "--legend=compact",
-    ]);
+      argv({ route: { kind: "task", task: "function rescue" }, root: "/root" }),
+    ).toEqual(["/root", "--for=function rescue"]);
   });
 
-  test("an expand carries the expand flag and compact legend", () => {
+  test("a task with an explicit budget passes --token-budget and suppresses --page-bytes", () => {
+    expect(
+      argv({ route: { kind: "task", task: "function rescue" }, root: "/root", budget: 4000, page: 2 }),
+    ).toEqual(["/root", "--for=function rescue", "--token-budget=4000"]);
+  });
+
+  test("a task with page > 1 and no budget passes --page-bytes=12000:<floor(page)>", () => {
+    expect(
+      argv({ route: { kind: "task", task: "function rescue" }, root: "/root", page: 2.8 }),
+    ).toEqual(["/root", "--for=function rescue", "--page-bytes=12000:2"]);
+    expect(
+      argv({ route: { kind: "task", task: "function rescue" }, root: "/root", page: 1 }),
+    ).toEqual(["/root", "--for=function rescue"]);
+  });
+
+  test("an expand carries the expand flag without --legend=compact", () => {
     expect(
       argv({ route: { kind: "expand", symbol: "src/a.ts:rescue" }, root: "/root", budget: 4000 }),
-    ).toEqual(["/root", "--expand=src/a.ts:rescue", "--legend=compact"]);
+    ).toEqual(["/root", "--expand=src/a.ts:rescue"]);
   });
 
   test("a literal carries the grep flag and a 50-hit limit", () => {
@@ -178,6 +187,25 @@ describe("argv", () => {
     expect(
       argv({ route: { kind: "regex", pattern: "re.*" }, root: "/root", budget: 4000 }),
     ).toEqual(["/root", "--regex=re.*", "--limit=50"]);
+  });
+
+  test("legendSeen appends --legend-seen=<file> on every route when non-empty", () => {
+    const legendSeen = "/tmp/seen.txt";
+    expect(
+      argv({ route: { kind: "task", task: "x" }, root: "/root", legendSeen }),
+    ).toEqual(["/root", "--for=x", `--legend-seen=${legendSeen}`]);
+    expect(
+      argv({ route: { kind: "expand", symbol: "a:b" }, root: "/root", legendSeen }),
+    ).toEqual(["/root", "--expand=a:b", `--legend-seen=${legendSeen}`]);
+    expect(
+      argv({ route: { kind: "literal", text: "foo" }, root: "/root", legendSeen }),
+    ).toEqual(["/root", "--grep=foo", "--limit=50", `--legend-seen=${legendSeen}`]);
+    expect(
+      argv({ route: { kind: "regex", pattern: "f.*" }, root: "/root", legendSeen }),
+    ).toEqual(["/root", "--regex=f.*", "--limit=50", `--legend-seen=${legendSeen}`]);
+    expect(
+      argv({ route: { kind: "task", task: "x" }, root: "/root", legendSeen: "" }),
+    ).toEqual(["/root", "--for=x"]);
   });
 });
 
@@ -263,11 +291,15 @@ describe("decide, the context surface", () => {
   test("a ready session carries CONTRACT.rule and the compact moment cues", () => {
     const rule = contextRule(ready);
     expect(rule).toContain(CONTRACT.rule);
+    expect(rule).toContain('<act read="path:l-e,..."/>');
+    expect(rule).toContain("name@lang");
     expect(rule).toContain("--exemplar=");
+    expect(rule).toContain("ripwire . --impact=<sym> --uses=<sym>");
     expect(rule).toContain("--impact=");
     expect(rule).toContain("--pack-task=");
     expect(rule).toContain("--stray-content");
     expect(rule).toContain('tools.spectre.ripwire({ action: "check" })');
+    expect(rule).toContain('range: "main..HEAD"');
     expect(rule).not.toContain("this session is native");
     expect(decide({ surface: "context", tools: [] }, held(), env()).verdict).toEqual({
       kind: "prose",

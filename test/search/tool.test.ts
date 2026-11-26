@@ -25,7 +25,7 @@ describe("search execute scoping", () => {
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, AppleClang 21.0.0.21000101, emit=std::print, built_from=test)"
+  echo "ripwire 0.7.0 (Release, AppleClang 21.0.0.21000101, emit=std::print, built_from=test)"
   exit 0
 fi
 printf '%s' '<grep pattern="hello" hits="1"><f p="a.ts"><hit l="1" in="hello">function hello() { return 1; }</hit></f></grep>'
@@ -66,7 +66,7 @@ exit 1
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 echo "must not run" >&2
@@ -88,7 +88,7 @@ exit 1
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, AppleClang 21.0.0.21000101, emit=std::print, built_from=test)"
+  echo "ripwire 0.7.0 (Release, AppleClang 21.0.0.21000101, emit=std::print, built_from=test)"
   exit 0
 fi
 printf '%s' "$1"
@@ -125,7 +125,7 @@ exit 0
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 exit 0
@@ -145,7 +145,7 @@ exit 0
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 printf '%s' '<grep pattern="hello" hits="1"/>'
@@ -165,11 +165,11 @@ exit 0
 });
 
 describe("search expand and thin-coverage auto-widening", () => {
-  test("expand fetches a symbol body via --expand and --legend=compact", async () => {
+  test("expand fetches a symbol body via --expand without --legend=compact", async () => {
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 printf '%s' "args:$*|<expand sym=\"src/a.ts:hello\">function hello() { return 42; }</expand>"
@@ -184,16 +184,16 @@ exit 0
       expect(result.output?.verb).toBe("expand");
       expect(result.output?.reason).toBe("expand");
       expect(result.output?.command).toContain("--expand=src/a.ts:hello");
-      expect(result.output?.command).toContain("--legend=compact");
+      expect(result.output?.command).not.toContain("--legend=compact");
       expect(result.output?.answer).toContain("function hello() { return 42; }");
     });
   });
 
-  test("a thin --for answer with coverage below 50 replaces initial with a budgeted --limit=40 run, while coverage at 50 stays single-shot", async () => {
+  test("a thin --for answer with coverage below 50 widens with --limit=40 without --token-budget, while coverage at 50 stays single-shot", async () => {
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 case "$*" in
@@ -218,9 +218,10 @@ exit 0
       expect(thin.output?.verb).toBe("for");
       expect(thin.output?.command).toContain("--token-budget=1500");
       expect(thin.output?.command).toContain("--limit=40");
-      expect(thin.output?.command).toContain("--legend=compact");
+      expect(thin.output?.command).not.toContain("--legend=compact");
+      expect(thin.output?.command).not.toContain("--signatures-only");
       expect(thin.output?.answer).toContain('widened="1"');
-      expect(thin.output?.answer).toContain("--token-budget=1500");
+      expect(thin.output?.answer).not.toContain("--token-budget=1500");
       expect(thin.output?.answer).not.toContain('coverage="32"');
       expect(thin.output?.note).toBe("Widened with --limit=40 because initial coverage was 32% (<50%).");
       expect(thin.content).toBe(`${thin.output?.answer}\n[${thin.output?.note}]`);
@@ -228,6 +229,8 @@ exit 0
       const ample = await Effect.runPromise(tool.execute({ query: "ample" }, calling("call_ample")));
       expect(ample.output?.status).toBe("answered");
       expect(ample.output?.command).not.toContain("--limit=40");
+      expect(ample.output?.command).not.toContain("--token-budget");
+      expect(ample.output?.command).not.toContain("--signatures-only");
       expect(ample.output?.answer).toContain('coverage="50"');
       expect(ample.output?.answer).not.toContain('widened="1"');
       expect(ample.output?.note).toBeUndefined();
@@ -239,7 +242,7 @@ exit 0
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 case "$*" in
@@ -266,7 +269,7 @@ exit 0
     const worktreeDir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 printf '%s' "cwd:$(pwd)|target:$1"
@@ -288,6 +291,62 @@ exit 0
       expect(result.output?.command).not.toContain("/main");
       expect(result.output?.answer).toContain(`target:${worktreeDir}/src`);
       expect(resources).toEqual([[`${worktreeDir}/src`]]);
+    });
+  });
+
+  test("page: 2 passes --page-bytes=12000:2 and skips thin-coverage widening", async () => {
+    const dir = tempDir();
+    const bin = await makeBin(`#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.7.0 (Release, built_from=test)"
+  exit 0
+fi
+printf '%s' "args:$*|"
+printf '%s' '<for task="paged" coverage="10"><d n="next" p="b.ts"/></for>'
+exit 0
+`);
+    await withBinary(bin, async () => {
+      const tool = search(contextAt(dir));
+      const result = await Effect.runPromise(
+        tool.execute({ query: "paged", page: 2 }, calling("call_paged")),
+      );
+      expect(result.output?.status).toBe("answered");
+      expect(result.output?.command).toContain("--page-bytes=12000:2");
+      expect(result.output?.command).not.toContain("--limit=40");
+      expect(result.output?.command).not.toContain("--token-budget");
+      expect(result.output?.note).toBeUndefined();
+    });
+  });
+
+  test("non-positive or non-integer budget and page are refused without spawning", async () => {
+    const dir = tempDir();
+    const bin = await makeBin(`#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "ripwire 0.7.0 (Release, built_from=test)"
+  exit 0
+fi
+echo "must not run" >&2
+exit 1
+`);
+    await withBinary(bin, async () => {
+      const tool = search(contextAt(dir));
+      for (const budget of [0, -5, 1.5]) {
+        const res = await Effect.runPromise(
+          tool.execute({ query: "q", budget }, calling(`call_bad_budget_${budget}`)),
+        );
+        expect(res.output?.status).toBe("refused");
+        expect(res.output?.reason).toBe("invalid-budget");
+        expect(res.output?.note).toBe("`budget` must be a positive integer.");
+      }
+
+      for (const page of [0, -1, 2.5]) {
+        const res = await Effect.runPromise(
+          tool.execute({ query: "q", page }, calling(`call_bad_page_${page}`)),
+        );
+        expect(res.output?.status).toBe("refused");
+        expect(res.output?.reason).toBe("invalid-page");
+        expect(res.output?.note).toBe("`page` must be a positive integer.");
+      }
     });
   });
 });

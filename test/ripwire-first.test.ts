@@ -53,7 +53,7 @@ describe("ready context carries moment cues while native context carries none", 
       await Effect.runPromise(context(draft));
 
       const text = draft.system.at(-1)?.text ?? "";
-      expect(text).toBe(contextRule({ kind: "ready", binary: bin, version: "0.6.10" }));
+      expect(text).toBe(contextRule({ kind: "ready", binary: bin, version: "0.7.0" }));
       expect(text).toContain("--exemplar=");
       expect(text).toContain("--impact=");
       expect(text).toContain("--pack-task=");
@@ -317,7 +317,7 @@ describe("tools.spectre.ripwire reports skipped verbs and check clears both gate
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 case "$*" in
@@ -379,7 +379,7 @@ exit 1
     const dir = tempDir();
     const bin = await makeBin(`#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "ripwire 0.6.10 (Release, built_from=test)"
+  echo "ripwire 0.7.0 (Release, built_from=test)"
   exit 0
 fi
 case "$*" in

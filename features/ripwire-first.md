@@ -24,13 +24,18 @@ Three parts of the design follow from that shape:
 - **The search surface moves the call and widens thin task reads.** The plugin
   renames a code-shaped `grep` or a bare shell `rg` to `spectre_search` and
   rewrites its input, so the model gets the answer in the same turn.
-  `spectre_search` also serves symbol bodies via `expand` (`--expand=`) and
-  widens `--for` answers whose `coverage=` falls below `50` with `--limit=40`.
+  `spectre_search` uses ripwire 0.7.0's 12 KB answer-first `--for` default
+  (inline key bodies, `<act read="path:l-e,..."/>`, `rows=lines`, and
+  backticked symbol routing), continues pages with `page`, serves symbol bodies
+  via `expand` (`--expand=`), widens `<50%` `coverage` answers with file-grain
+  `--limit=40` (no `--token-budget`), and deduplicates repeated legends per
+  session via `--legend-seen`.
 - **The end of work carries two measurements.** The landing gate refuses the
   first commit, push or PR of a session that holds an unmeasured code edit. It
-  accepts `tools.spectre.ripwire({ action: "check" })` or shell calls to
-  `ripwire . --quality-delta` and `ripwire . --affected=`, both after the last
-  code edit, and then it steps aside.
+  accepts `tools.spectre.ripwire({ action: "check" })` (with optional `range`
+  for `--quality-delta=<range>` and `status: "partial"` on exit 6) or shell
+  calls to `ripwire . --quality-delta` and `ripwire . --affected=`, both after
+  the last code edit, and then it steps aside.
 
 Two candidates lost. Prompt attachment of a `ripwire-first` skill paid ~856
 persisted tokens on every primary and child session, including native machines
@@ -204,11 +209,12 @@ The shell row is a tool rename on `tool.execute.before`, not a rewrite in
 
 | Verb | Enforced or taught | Entry point |
 | ---- | ------------------ | ----------- |
-| `--for` | enforced, on the search surface | `spectre_search({ query })`, auto-widening thin `coverage` under `50` with `--limit=40` |
+| `--for` | enforced, on the search surface | `spectre_search({ query, page?, budget? })`, 12 KB answer-first default with file-grain `--limit=40` widening under `50` `coverage` |
 | `--expand` | tool arm, on the search surface | `spectre_search({ expand })` |
 | `--grep` | enforced, on the search surface | `spectre_search({ pattern })`, and the literal reroute |
 | `--regex` | enforced, on the search surface | `spectre_search({ pattern, kind: "regex" })` |
-| `--quality-delta` | enforced, via `check` or shell | `tools.spectre.ripwire({ action: "check" })`, or the shell flag after the last code edit |
+| `--legend-seen` | enforced, on search and check | `legend.ts` tracks 16-hex hashes via `--legend-dict=seen` from `spectre_search`, `tools.spectre.ripwire`, and shell `ripwire` calls |
+| `--quality-delta` | enforced, via `check` or shell | `tools.spectre.ripwire({ action: "check", range? })` (13 kinds, exit 6 `partial`), or the shell flag after the last code edit |
 | `--affected` | enforced, via `check` or shell | `tools.spectre.ripwire({ action: "check" })`, or the shell flag after the last code edit |
 | `--impact` | taught | the `contextRule(ready)` contract-edit cue; no hook can name the symbol a change touches |
 | `--uses` | taught | the `contextRule(ready)` contract-edit cue |
