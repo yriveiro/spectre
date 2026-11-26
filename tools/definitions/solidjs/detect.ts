@@ -52,6 +52,7 @@ export interface Report {
 
 export interface DetectOptions {
   readonly signal?: AbortSignal;
+  readonly canRead?: (absolutePath: string) => Promise<boolean>;
   readonly maxSourceFiles?: number;
   readonly maxFileBytes?: number;
   readonly maxTotalBytes?: number;
@@ -74,6 +75,7 @@ export class DetectBoundedError extends Error {
 
 interface ReadBudget {
   readonly signal?: AbortSignal;
+  readonly canRead?: (absolutePath: string) => Promise<boolean>;
   readonly maxFileBytes?: number;
   remainingBytes?: number;
 }
@@ -103,6 +105,8 @@ const lineAt = (text: string, index: number): number => {
 };
 
 const text = async (path: string, budget?: ReadBudget): Promise<string | undefined> => {
+  assertNotAborted(budget?.signal);
+  if (budget?.canRead !== undefined && !(await budget.canRead(path))) return undefined;
   assertNotAborted(budget?.signal);
   const file = Bun.file(path);
   if (!(await file.exists())) return undefined;
@@ -159,6 +163,7 @@ const isOurs = (name: string): boolean =>
 const sourceFiles = async (
   directory: string,
   options?: DetectOptions,
+  canRead?: (absolutePath: string) => Promise<boolean>,
 ): Promise<ReadonlyArray<string>> => {
   const found: Array<string> = [];
   const glob = new Bun.Glob(SOURCE);
@@ -166,6 +171,8 @@ const sourceFiles = async (
     assertNotAborted(options?.signal);
     const first = entry.split("/")[0];
     if (first === undefined || SKIP.has(first)) continue;
+    if (canRead !== undefined && !(await canRead(join(directory, entry)))) continue;
+    assertNotAborted(options?.signal);
     if (options?.maxSourceFiles !== undefined && found.length >= options.maxSourceFiles) {
       throw new DetectBoundedError(`Source files exceed preload bound (${options.maxSourceFiles})`);
     }
@@ -277,7 +284,7 @@ const scanSources = async (
   const v2Tags: Array<Evidence> = [];
   let files = 0;
 
-  for (const entry of await sourceFiles(directory, options)) {
+  for (const entry of await sourceFiles(directory, options, budget?.canRead)) {
     const body = await text(join(directory, entry), budget);
     if (body === undefined) continue;
     files += 1;
@@ -334,10 +341,13 @@ const hasFile = async (
   directory: string,
   pattern: string,
   signal?: AbortSignal,
+  canRead?: (absolutePath: string) => Promise<boolean>,
 ): Promise<boolean> => {
   assertNotAborted(signal);
   const glob = new Bun.Glob(pattern);
-  for await (const _ of glob.scan({ cwd: directory, onlyFiles: true })) {
+  for await (const entry of glob.scan({ cwd: directory, onlyFiles: true })) {
+    assertNotAborted(signal);
+    if (canRead !== undefined && !(await canRead(join(directory, entry)))) continue;
     assertNotAborted(signal);
     return true;
   }
@@ -352,14 +362,30 @@ const viteText = async (directory: string, budget?: ReadBudget): Promise<string 
   return undefined;
 };
 
+const memoizeCanRead = (
+  canRead: ((absolutePath: string) => Promise<boolean>) | undefined,
+): ((absolutePath: string) => Promise<boolean>) | undefined => {
+  if (canRead === undefined) return undefined;
+  const cache = new Map<string, boolean>();
+  return async (absolutePath: string): Promise<boolean> => {
+    const cached = cache.get(absolutePath);
+    if (cached !== undefined) return cached;
+    const allowed = await canRead(absolutePath);
+    cache.set(absolutePath, allowed);
+    return allowed;
+  };
+};
+
 const budgetsFor = (directory: string, options: DetectOptions | undefined) => {
   assertNotAborted(options?.signal);
   const root = directory === "" ? "." : directory;
+  const canRead = memoizeCanRead(options?.canRead);
   const file: ReadBudget | undefined =
     options === undefined
       ? undefined
       : {
           signal: options.signal,
+          canRead,
           maxFileBytes: options.maxFileBytes,
           remainingBytes: options.maxTotalBytes,
         };
@@ -368,13 +394,14 @@ const budgetsFor = (directory: string, options: DetectOptions | undefined) => {
       ? undefined
       : {
           signal: options.signal,
+          canRead,
           maxFileBytes: options.maxLockBytes,
         };
-  return { root, file, lock };
+  return { root, canRead, file, lock };
 };
 
 export const detect = async (directory: string, options?: DetectOptions): Promise<Report> => {
-  const { root, file, lock } = budgetsFor(directory, options);
+  const { root, canRead, file, lock } = budgetsFor(directory, options);
   const warnings: Array<string> = [];
   const manifestBody = await text(join(root, "package.json"), file);
   let manifest: {
@@ -407,7 +434,7 @@ export const detect = async (directory: string, options?: DetectOptions): Promis
   const jsx = await jsxSource(root, file);
   const scan = await scanSources(root, options, file);
 
-  const appConfig = await hasFile(root, "app.config.*", options?.signal);
+  const appConfig = await hasFile(root, "app.config.*", options?.signal, canRead);
   const vite = await viteText(root, file);
   const startPlugin = vite !== undefined && /solidStart\s*\(/.test(vite);
   const solidPlugin = vite?.includes("@solidjs/vite-plugin")

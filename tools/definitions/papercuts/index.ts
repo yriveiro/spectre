@@ -16,23 +16,26 @@ import {
   targetBody,
 } from "./normalize";
 import {
-  escapeOptional,
-  escapeUntrusted,
   FIELD_LIMITS,
   fenceUntrusted,
   redactOptional,
   redactText,
+  sanitizeDisplay,
+  sanitizeDisplayOptional,
   sanitizeRepoName,
 } from "./redact";
 import {
   type LoadedStore,
   loadStore,
+  logOccurrenceWriteCap,
+  logStateWriteCap,
   MAX_OCCURRENCES_PER_CYCLE,
   type PapercutRollup,
   PapercutRollupSchema,
   type PapercutsRollupOptions,
   type PapercutsStoreOptions,
   persistEvent,
+  pruneExpiredResolvedForRecovery,
   pruneExpiredResolvedGroups,
   summarizeOpenPapercuts,
   writeLock,
@@ -48,6 +51,7 @@ export {
 };
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
+const CANONICAL_TARGET_LIMIT = FIELD_LIMITS.target + 16;
 const QueryStatusSchema = Schema.Literals(["open", "resolved", "all"]);
 const ProjectScopeSchema = Schema.Literals(["all", "current"]);
 
@@ -292,10 +296,7 @@ const toStorageError = (cause: Cause.Cause<unknown>): Tool.Error =>
     error: Cause.squash(cause),
   });
 
-const captureCallerMeta = (
-  ctx: Plugin.Context,
-  context: Tool.Context | undefined,
-): CallerMeta => ({
+const captureCallerMeta = (ctx: Plugin.Context, context: Tool.Context | undefined): CallerMeta => ({
   projectId: ctx.location.project.id,
   repo: sanitizeRepoName(ctx.location.project.canonical),
   ...(context?.sessionID === undefined ? {} : { sessionID: context.sessionID }),
@@ -307,64 +308,76 @@ const captureCallerMeta = (
 const formatSample = (
   occ: OccurrenceRecord,
   currentProjectId: string,
-): typeof OccurrenceSampleSchema.Type => ({
-  id: occ.id,
-  repo: escapeUntrusted(occ.repo),
-  projectId: occ.projectId,
-  ...(occ.sessionID !== undefined && occ.projectId === currentProjectId
-    ? { sessionID: occ.sessionID }
-    : {}),
-  ...(occ.agent === undefined ? {} : { agent: escapeUntrusted(occ.agent) }),
-  opencodeVersion: escapeUntrusted(occ.opencodeVersion),
-  tried: escapeUntrusted(occ.tried),
-  expected: escapeUntrusted(occ.expected),
-  actual: escapeUntrusted(occ.actual),
-  ...(occ.suggestedFix === undefined ? {} : { suggestedFix: escapeUntrusted(occ.suggestedFix) }),
-  ...(occ.workaround === undefined ? {} : { workaround: escapeUntrusted(occ.workaround) }),
-  ...(occ.context === undefined ? {} : { context: escapeUntrusted(occ.context) }),
-  at: occ.at,
-});
+): typeof OccurrenceSampleSchema.Type => {
+  const agent = sanitizeDisplayOptional(occ.agent, FIELD_LIMITS.target);
+  const suggestedFix = sanitizeDisplayOptional(occ.suggestedFix, FIELD_LIMITS.suggestedFix);
+  const workaround = sanitizeDisplayOptional(occ.workaround, FIELD_LIMITS.workaround);
+  const context = sanitizeDisplayOptional(occ.context, FIELD_LIMITS.context);
+  return {
+    id: occ.id,
+    repo: sanitizeDisplay(occ.repo, FIELD_LIMITS.repo),
+    projectId: occ.projectId,
+    ...(occ.sessionID !== undefined && occ.projectId === currentProjectId
+      ? { sessionID: occ.sessionID }
+      : {}),
+    ...(agent === undefined ? {} : { agent }),
+    opencodeVersion: sanitizeDisplay(occ.opencodeVersion, FIELD_LIMITS.fixedInVersion),
+    tried: sanitizeDisplay(occ.tried, FIELD_LIMITS.tried),
+    expected: sanitizeDisplay(occ.expected, FIELD_LIMITS.expected),
+    actual: sanitizeDisplay(occ.actual, FIELD_LIMITS.actual),
+    ...(suggestedFix === undefined ? {} : { suggestedFix }),
+    ...(workaround === undefined ? {} : { workaround }),
+    ...(context === undefined ? {} : { context }),
+    at: occ.at,
+  };
+};
 
 const formatGroup = (
   group: FoldedGroup,
   currentProjectId: string,
   includeOccurrences: boolean,
   score?: number,
-): typeof PapercutGroupSchema.Type => ({
-  groupId: group.groupId,
-  status: group.status,
-  reopened: group.reopened,
-  targetKind: group.targetKind,
-  target: escapeUntrusted(group.target),
-  canonicalTarget: escapeUntrusted(group.canonicalTarget),
-  occurrences: group.occurrences,
-  sessions: group.sessions,
-  projects: group.projects,
-  repos: group.repos.map(escapeUntrusted),
-  firstSeenAt: group.firstSeenAt,
-  lastSeenAt: group.lastSeenAt,
-  ...(score === undefined ? {} : { score }),
-  latestTried: escapeUntrusted(group.latestTried),
-  latestExpected: escapeUntrusted(group.latestExpected),
-  latestActual: escapeUntrusted(group.latestActual),
-  ...(group.suggestedFix === undefined ? {} : { suggestedFix: escapeUntrusted(group.suggestedFix) }),
-  ...(group.workaround === undefined ? {} : { workaround: escapeUntrusted(group.workaround) }),
-  ...(group.resolution === undefined ? {} : { resolution: escapeUntrusted(group.resolution) }),
-  ...(group.previousResolution === undefined
-    ? {}
-    : { previousResolution: escapeUntrusted(group.previousResolution) }),
-  ...(group.fixedInVersion === undefined
-    ? {}
-    : { fixedInVersion: escapeUntrusted(group.fixedInVersion) }),
-  ...(includeOccurrences
-    ? {
-        samples: group.occurrenceRecords
-          .slice(-5)
-          .toReversed()
-          .map((occ) => formatSample(occ, currentProjectId)),
-      }
-    : {}),
-});
+): typeof PapercutGroupSchema.Type => {
+  const suggestedFix = sanitizeDisplayOptional(group.suggestedFix, FIELD_LIMITS.suggestedFix);
+  const workaround = sanitizeDisplayOptional(group.workaround, FIELD_LIMITS.workaround);
+  const resolution = sanitizeDisplayOptional(group.resolution, FIELD_LIMITS.resolution);
+  const previousResolution = sanitizeDisplayOptional(
+    group.previousResolution,
+    FIELD_LIMITS.resolution,
+  );
+  const fixedInVersion = sanitizeDisplayOptional(group.fixedInVersion, FIELD_LIMITS.fixedInVersion);
+  return {
+    groupId: group.groupId,
+    status: group.status,
+    reopened: group.reopened,
+    targetKind: group.targetKind,
+    target: sanitizeDisplay(group.target, FIELD_LIMITS.target),
+    canonicalTarget: sanitizeDisplay(group.canonicalTarget, CANONICAL_TARGET_LIMIT),
+    occurrences: group.occurrences,
+    sessions: group.sessions,
+    projects: group.projects,
+    repos: group.repos.map((repo) => sanitizeDisplay(repo, FIELD_LIMITS.repo)),
+    firstSeenAt: group.firstSeenAt,
+    lastSeenAt: group.lastSeenAt,
+    ...(score === undefined ? {} : { score }),
+    latestTried: sanitizeDisplay(group.latestTried, FIELD_LIMITS.tried),
+    latestExpected: sanitizeDisplay(group.latestExpected, FIELD_LIMITS.expected),
+    latestActual: sanitizeDisplay(group.latestActual, FIELD_LIMITS.actual),
+    ...(suggestedFix === undefined ? {} : { suggestedFix }),
+    ...(workaround === undefined ? {} : { workaround }),
+    ...(resolution === undefined ? {} : { resolution }),
+    ...(previousResolution === undefined ? {} : { previousResolution }),
+    ...(fixedInVersion === undefined ? {} : { fixedInVersion }),
+    ...(includeOccurrences
+      ? {
+          samples: group.occurrenceRecords
+            .slice(-5)
+            .toReversed()
+            .map((occ) => formatSample(occ, currentProjectId)),
+        }
+      : {}),
+  };
+};
 
 const matchesTargetFilter = (
   group: FoldedGroup,
@@ -429,19 +442,20 @@ const formatQueryItems = (
 
   const docs = candidates.map((group) => ({
     groupId: group.groupId,
-    target: group.target,
-    canonicalTarget: group.canonicalTarget,
+    target: redactText(group.target, FIELD_LIMITS.target),
+    canonicalTarget: redactText(group.canonicalTarget, CANONICAL_TARGET_LIMIT),
     body: [
-      group.latestActual,
-      group.latestTried,
-      group.latestExpected,
-      group.workaround ?? "",
-      group.suggestedFix ?? "",
+      redactText(group.latestActual, FIELD_LIMITS.actual),
+      redactText(group.latestTried, FIELD_LIMITS.tried),
+      redactText(group.latestExpected, FIELD_LIMITS.expected),
+      redactOptional(group.workaround, FIELD_LIMITS.workaround) ?? "",
+      redactOptional(group.suggestedFix, FIELD_LIMITS.suggestedFix) ?? "",
     ].join(" "),
     group,
   }));
   const scored = rankByBm25(docs, queryNeedle).toSorted(
-    (left, right) => right.score - left.score || compareGroupOrder(left.item.group, right.item.group),
+    (left, right) =>
+      right.score - left.score || compareGroupOrder(left.item.group, right.item.group),
   );
   return {
     totalMatched: scored.length,
@@ -492,7 +506,9 @@ const runQuery = (
 
 const parseLogInput = (
   input: typeof LogInput.Type,
-): { readonly ok: true; readonly parsed: ParsedLog } | { readonly ok: false; readonly reason: string } => {
+):
+  | { readonly ok: true; readonly parsed: ParsedLog }
+  | { readonly ok: false; readonly reason: string } => {
   const target = redactText(input.target, FIELD_LIMITS.target);
   const tried = redactText(input.tried, FIELD_LIMITS.tried);
   const expected = redactText(input.expected, FIELD_LIMITS.expected);
@@ -556,7 +572,7 @@ const resolveLogGroup = (
   if (existing.canonicalTarget !== parsed.canonicalTarget) {
     return {
       ok: false,
-      reason: `Explicit groupId ${parsed.explicitGroupId} targets ${existing.canonicalTarget}, not ${parsed.canonicalTarget}.`,
+      reason: `Explicit groupId ${parsed.explicitGroupId} targets ${redactText(existing.canonicalTarget, CANONICAL_TARGET_LIMIT)}, not ${parsed.canonicalTarget}.`,
     };
   }
   return { ok: true, groupId: parsed.explicitGroupId, existing };
@@ -574,13 +590,20 @@ const buildExistingLogResponse = (
   },
   content: string,
 ): ToolOutputResult => {
-  const knownWorkaround = escapeOptional(flags.workaround ?? existing.workaround);
+  const knownWorkaround = sanitizeDisplayOptional(
+    flags.workaround ?? existing.workaround,
+    FIELD_LIMITS.workaround,
+  );
+  const previousResolution = sanitizeDisplayOptional(
+    existing.previousResolution,
+    FIELD_LIMITS.resolution,
+  );
   const output: typeof LoggedOutput.Type = {
     status: "logged",
     id: flags.id,
     groupId: existing.groupId,
     targetKind: existing.targetKind,
-    canonicalTarget: escapeUntrusted(existing.canonicalTarget),
+    canonicalTarget: sanitizeDisplay(existing.canonicalTarget, CANONICAL_TARGET_LIMIT),
     wrote: flags.wrote,
     deduplicated: true,
     alreadyLoggedInSession: flags.alreadyLoggedInSession,
@@ -589,11 +612,9 @@ const buildExistingLogResponse = (
     scanTruncated: flags.scanTruncated,
     occurrences: existing.occurrences,
     projects: existing.projects,
-    repos: existing.repos.map(escapeUntrusted),
+    repos: existing.repos.map((repo) => sanitizeDisplay(repo, FIELD_LIMITS.repo)),
     ...(knownWorkaround === undefined ? {} : { knownWorkaround }),
-    ...(existing.previousResolution === undefined
-      ? {}
-      : { previousResolution: escapeUntrusted(existing.previousResolution) }),
+    ...(previousResolution === undefined ? {} : { previousResolution }),
   };
   return { output, content };
 };
@@ -605,13 +626,33 @@ interface WorkaroundWriteArgs {
   readonly meta: CallerMeta;
   readonly now: number;
   readonly loaded: LoadedStore;
+  readonly options: PapercutsStoreOptions;
   readonly alreadyLoggedInSession: boolean;
   readonly saturated: boolean;
 }
 
+const isLogStateAtCap = (loaded: LoadedStore): boolean =>
+  loaded.stateTruncated || loaded.stateCount >= logStateWriteCap(loaded.stateCap);
+
+const isLogOccurrenceAtCap = (loaded: LoadedStore): boolean =>
+  loaded.occurrenceTruncated ||
+  loaded.occurrenceCount >= logOccurrenceWriteCap(loaded.occurrenceCap);
+
 const annotateExistingWorkaround = (args: WorkaroundWriteArgs): Effect.Effect<ToolOutputResult> =>
   Effect.gen(function* () {
-    if (args.loaded.stateTruncated) {
+    let loaded = args.loaded;
+    if (isLogStateAtCap(loaded)) {
+      const recovered = yield* pruneExpiredResolvedForRecovery(
+        args.storage,
+        loaded,
+        args.now,
+        args.existing.groupId,
+      );
+      if (recovered > 0) {
+        loaded = yield* loadStore(args.storage, args.options);
+      }
+    }
+    if (isLogStateAtCap(loaded)) {
       return reject(
         "log",
         "Papercut state store reached scan capacity; cannot append workaround annotation safely.",
@@ -631,7 +672,7 @@ const annotateExistingWorkaround = (args: WorkaroundWriteArgs): Effect.Effect<To
       at: args.now,
     };
     yield* persistEvent(args.storage, "state", annotation);
-    const escaped = escapeUntrusted(args.workaround);
+    const escaped = sanitizeDisplay(args.workaround, FIELD_LIMITS.workaround);
     return buildExistingLogResponse(
       args.existing,
       {
@@ -639,7 +680,7 @@ const annotateExistingWorkaround = (args: WorkaroundWriteArgs): Effect.Effect<To
         wrote: true,
         alreadyLoggedInSession: args.alreadyLoggedInSession,
         saturated: args.saturated,
-        scanTruncated: args.loaded.scanTruncated,
+        scanTruncated: loaded.scanTruncated,
         workaround: args.workaround,
       },
       `Updated workaround on ${args.existing.groupId}.\n${fenceUntrusted(`workaround: ${escaped}`)}`,
@@ -679,23 +720,31 @@ const buildOccurrenceRecord = (id: string, args: AppendOccurrenceArgs): Occurren
 
 const buildLoggedResult = (id: string, args: AppendOccurrenceArgs): ToolOutputResult => {
   const reopened = args.existing !== undefined && args.existing.status === "resolved";
-  const previousResolution = escapeOptional(
+  const previousResolution = sanitizeDisplayOptional(
     reopened ? args.existing?.resolution : args.existing?.previousResolution,
+    FIELD_LIMITS.resolution,
   );
-  const knownWorkaround = escapeOptional(args.parsed.workaround ?? args.existing?.workaround);
+  const knownWorkaround = sanitizeDisplayOptional(
+    args.parsed.workaround ?? args.existing?.workaround,
+    FIELD_LIMITS.workaround,
+  );
   const updatedProjects = new Set(args.existing?.projectIds ?? []);
   updatedProjects.add(args.meta.projectId);
   const updatedRepos = [...new Set([...(args.existing?.repos ?? []), args.meta.repo])].toSorted(
     (left, right) => (left < right ? -1 : left > right ? 1 : 0),
   );
   const occurrences = (args.existing?.occurrences ?? 0) + 1;
+  const displayCanonicalTarget = sanitizeDisplay(
+    args.parsed.canonicalTarget,
+    CANONICAL_TARGET_LIMIT,
+  );
 
   const output: typeof LoggedOutput.Type = {
     status: "logged",
     id,
     groupId: args.groupId,
     targetKind: args.parsed.targetKind,
-    canonicalTarget: escapeUntrusted(args.parsed.canonicalTarget),
+    canonicalTarget: displayCanonicalTarget,
     wrote: true,
     deduplicated: args.existing !== undefined,
     alreadyLoggedInSession: false,
@@ -704,7 +753,7 @@ const buildLoggedResult = (id: string, args: AppendOccurrenceArgs): ToolOutputRe
     scanTruncated: args.scanTruncated,
     occurrences,
     projects: updatedProjects.size,
-    repos: updatedRepos.map(escapeUntrusted),
+    repos: updatedRepos.map((repo) => sanitizeDisplay(repo, FIELD_LIMITS.repo)),
     ...(knownWorkaround === undefined ? {} : { knownWorkaround }),
     ...(previousResolution === undefined ? {} : { previousResolution }),
   };
@@ -713,7 +762,7 @@ const buildLoggedResult = (id: string, args: AppendOccurrenceArgs): ToolOutputRe
     ? `Reopened papercut ${args.groupId} on regression (${occurrences} hit(s) across ${updatedProjects.size} project(s)).`
     : args.existing !== undefined
       ? `Logged occurrence on existing papercut ${args.groupId} (${occurrences} hit(s) across ${updatedProjects.size} project(s)).`
-      : `Logged new papercut ${args.groupId} for ${escapeUntrusted(args.parsed.canonicalTarget)}.`;
+      : `Logged new papercut ${args.groupId} for ${displayCanonicalTarget}.`;
 
   return {
     output,
@@ -738,6 +787,7 @@ const handleOpenGroupGuard = (args: {
   readonly meta: CallerMeta;
   readonly now: number;
   readonly loaded: LoadedStore;
+  readonly options: PapercutsStoreOptions;
 }): Effect.Effect<ToolOutputResult | undefined> => {
   const newWorkaround =
     args.workaround !== undefined && args.workaround !== args.existing.workaround
@@ -758,12 +808,13 @@ const handleOpenGroupGuard = (args: {
       meta: args.meta,
       now: args.now,
       loaded: args.loaded,
+      options: args.options,
       alreadyLoggedInSession: repeatInSession,
       saturated: !repeatInSession && saturated,
     });
   }
 
-  const known = escapeOptional(args.existing.workaround);
+  const known = sanitizeDisplayOptional(args.existing.workaround, FIELD_LIMITS.workaround);
   const content = repeatInSession
     ? known === undefined
       ? `Papercut ${args.existing.groupId} was already logged in this session.`
@@ -792,47 +843,62 @@ const runLog = (
   now: number,
   options: PapercutsStoreOptions,
 ) =>
-  writeLock.withPermits(1)(
-    Effect.gen(function* () {
-      const checked = parseLogInput(input);
-      if (!checked.ok) return reject("log", checked.reason);
-      const parsed = checked.parsed;
+  writeLock
+    .withPermits(1)(
+      Effect.gen(function* () {
+        const checked = parseLogInput(input);
+        if (!checked.ok) return reject("log", checked.reason);
+        const parsed = checked.parsed;
 
-      const loaded = yield* loadStore(ctx.storage, options);
-      const target = resolveLogGroup(loaded, parsed);
-      if (!target.ok) return reject("log", target.reason);
-      if (loaded.occurrenceTruncated) {
-        return reject(
-          "log",
-          "Papercut occurrence store reached scan capacity; resolve older groups before logging new reports.",
-        );
-      }
+        let loaded = yield* loadStore(ctx.storage, options);
+        if (isLogOccurrenceAtCap(loaded)) {
+          const recovered = yield* pruneExpiredResolvedForRecovery(
+            ctx.storage,
+            loaded,
+            now,
+            parsed.explicitGroupId,
+          );
+          if (recovered > 0) {
+            loaded = yield* loadStore(ctx.storage, options);
+          }
+        }
+        const target = resolveLogGroup(loaded, parsed);
+        if (!target.ok) return reject("log", target.reason);
 
-      const meta = captureCallerMeta(ctx, context);
-      const { groupId, existing } = target;
-      if (existing !== undefined && existing.status === "open") {
-        const guarded = yield* handleOpenGroupGuard({
+        const meta = captureCallerMeta(ctx, context);
+        const { groupId, existing } = target;
+        if (existing !== undefined && existing.status === "open") {
+          const guarded = yield* handleOpenGroupGuard({
+            storage: ctx.storage,
+            existing,
+            workaround: parsed.workaround,
+            meta,
+            now,
+            loaded,
+            options,
+          });
+          if (guarded !== undefined) return guarded;
+        }
+
+        if (isLogOccurrenceAtCap(loaded)) {
+          return reject(
+            "log",
+            "Papercut occurrence store reached scan capacity; resolve older groups before logging new reports.",
+          );
+        }
+
+        return yield* appendNewOccurrence({
           storage: ctx.storage,
+          parsed,
+          groupId,
           existing,
-          workaround: parsed.workaround,
           meta,
           now,
-          loaded,
+          scanTruncated: loaded.scanTruncated,
         });
-        if (guarded !== undefined) return guarded;
-      }
-
-      return yield* appendNewOccurrence({
-        storage: ctx.storage,
-        parsed,
-        groupId,
-        existing,
-        meta,
-        now,
-        scanTruncated: loaded.scanTruncated,
-      });
-    }),
-  ).pipe(Effect.catchCause((cause) => Effect.fail(toStorageError(cause))));
+      }),
+    )
+    .pipe(Effect.catchCause((cause) => Effect.fail(toStorageError(cause))));
 
 const isRedundantState = (
   existing: FoldedGroup,
@@ -915,6 +981,42 @@ const writeResolutionIfNeeded = (
     return true;
   });
 
+const loadStoreForResolve = (
+  storage: Plugin.Context["storage"],
+  options: PapercutsStoreOptions,
+  groupId: string,
+  now: number,
+): Effect.Effect<{ readonly loaded: LoadedStore; readonly prePrunedKeys: number }> =>
+  Effect.gen(function* () {
+    let loaded = yield* loadStore(storage, options);
+    let prePrunedKeys = 0;
+    if (loaded.stateTruncated || loaded.stateCount >= loaded.stateCap) {
+      prePrunedKeys = yield* pruneExpiredResolvedForRecovery(storage, loaded, now, groupId);
+      if (prePrunedKeys > 0) {
+        loaded = yield* loadStore(storage, options);
+      }
+    }
+    return { loaded, prePrunedKeys };
+  });
+
+const buildResolvedResult = (
+  parsed: ParsedResolve,
+  wrote: boolean,
+  prunedKeys: number,
+  scanTruncated: boolean,
+): ToolOutputResult => ({
+  output: {
+    status: "resolved",
+    groupId: parsed.groupId,
+    stateStatus: parsed.targetStatus,
+    wrote,
+    resolution: sanitizeDisplay(parsed.resolution, FIELD_LIMITS.resolution),
+    prunedKeys,
+    scanTruncated,
+  },
+  content: `Papercut ${parsed.groupId} set to ${parsed.targetStatus} (wrote=${wrote}, prunedKeys=${prunedKeys}${scanTruncated ? ", scan truncated" : ""}).`,
+});
+
 const runResolve = (
   ctx: Plugin.Context,
   input: typeof ResolveInput.Type,
@@ -922,46 +1024,55 @@ const runResolve = (
   now: number,
   options: PapercutsStoreOptions,
 ) =>
-  writeLock.withPermits(1)(
-    Effect.gen(function* () {
-      const checked = parseResolveInput(input);
-      if (!checked.ok) return reject("resolve", checked.reason);
-      const parsed = checked.parsed;
+  writeLock
+    .withPermits(1)(
+      Effect.gen(function* () {
+        const checked = parseResolveInput(input);
+        if (!checked.ok) return reject("resolve", checked.reason);
+        const parsed = checked.parsed;
 
-      const loaded = yield* loadStore(ctx.storage, options);
-      const existing = loaded.groups.get(parsed.groupId);
-      if (existing === undefined) {
-        return reject(
-          "resolve",
-          loaded.scanTruncated
-            ? `Unknown or truncated groupId: ${parsed.groupId}`
-            : `Unknown groupId: ${parsed.groupId}`,
+        const { loaded, prePrunedKeys } = yield* loadStoreForResolve(
+          ctx.storage,
+          options,
+          parsed.groupId,
+          now,
         );
-      }
-      if (loaded.stateTruncated) {
-        return reject(
-          "resolve",
-          "Papercut state store reached scan capacity; cannot append state event safely.",
+        const existing = loaded.groups.get(parsed.groupId);
+        if (existing === undefined) {
+          return reject(
+            "resolve",
+            loaded.scanTruncated
+              ? `Unknown or truncated groupId: ${parsed.groupId}`
+              : `Unknown groupId: ${parsed.groupId}`,
+          );
+        }
+        const redundant = isRedundantState(
+          existing,
+          parsed.targetStatus,
+          parsed.resolution,
+          parsed.fixedInVersion,
+          parsed.workaround,
         );
-      }
+        if (loaded.stateTruncated || (!redundant && loaded.stateCount >= loaded.stateCap)) {
+          return reject(
+            "resolve",
+            "Papercut state store reached scan capacity; cannot append state event safely.",
+          );
+        }
 
-      const wrote = yield* writeResolutionIfNeeded(ctx, existing, parsed, context, now);
-      const prunedKeys = yield* pruneExpiredResolvedGroups(ctx.storage, loaded, now, parsed.groupId);
-      const output: typeof ResolvedOutput.Type = {
-        status: "resolved",
-        groupId: parsed.groupId,
-        stateStatus: parsed.targetStatus,
-        wrote,
-        resolution: escapeUntrusted(parsed.resolution),
-        prunedKeys,
-        scanTruncated: loaded.scanTruncated,
-      };
-      return {
-        output,
-        content: `Papercut ${parsed.groupId} set to ${parsed.targetStatus} (wrote=${wrote}, prunedKeys=${prunedKeys}${loaded.scanTruncated ? ", scan truncated" : ""}).`,
-      };
-    }),
-  ).pipe(Effect.catchCause((cause) => Effect.fail(toStorageError(cause))));
+        const wrote = redundant
+          ? false
+          : yield* writeResolutionIfNeeded(ctx, existing, parsed, context, now);
+        const postPruned = yield* pruneExpiredResolvedGroups(
+          ctx.storage,
+          loaded,
+          now,
+          parsed.groupId,
+        );
+        return buildResolvedResult(parsed, wrote, prePrunedKeys + postPruned, loaded.scanTruncated);
+      }),
+    )
+    .pipe(Effect.catchCause((cause) => Effect.fail(toStorageError(cause))));
 
 const dispatchAction = (
   ctx: Plugin.Context,

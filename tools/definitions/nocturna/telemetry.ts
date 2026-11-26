@@ -124,12 +124,12 @@ interface OpenSkillEntry {
 interface LiveSessionState {
   readonly sessionID: string;
   projectID: string;
-  turnSeq: number;
   currentTurnID: string;
   lastSettledStepID: string | undefined;
   partial: boolean;
   truncated: boolean;
   dirty: boolean;
+  hasPersisted: boolean;
   updatedAt: number;
   readonly pendingPrompts: Map<string, PendingPrompt>;
   readonly contextQueue: Array<ContextSnapshot>;
@@ -141,19 +141,25 @@ interface LiveSessionState {
   readonly stepsById: Map<string, StoredAttributedStep>;
 }
 
+const createLiveTurnID = (executionEventID?: string): string =>
+  executionEventID !== undefined && executionEventID.length > 0
+    ? `live:${executionEventID}`
+    : `live:${Bun.randomUUIDv7()}`;
+
 const createSessionState = (
   sessionID: string,
   projectID: string,
   now: number,
+  executionEventID?: string,
 ): LiveSessionState => ({
   sessionID,
   projectID,
-  turnSeq: 0,
-  currentTurnID: "live:0",
+  currentTurnID: createLiveTurnID(executionEventID),
   lastSettledStepID: undefined,
   partial: false,
   truncated: false,
   dirty: false,
+  hasPersisted: false,
   updatedAt: now,
   pendingPrompts: new Map(),
   contextQueue: [],
@@ -212,10 +218,7 @@ const parseStoredTokens = (raw: unknown): StoredTokens | undefined => {
   };
 };
 
-const collectSkillResultCallIDs = (
-  content: ReadonlyArray<unknown>,
-  target: Set<string>,
-): void => {
+const collectSkillResultCallIDs = (content: ReadonlyArray<unknown>, target: Set<string>): void => {
   for (const part of content) {
     if (!Predicate.isObject(part)) continue;
     const p = part as { type?: unknown; name?: unknown; id?: unknown; result?: unknown };
@@ -227,10 +230,7 @@ const collectSkillResultCallIDs = (
   }
 };
 
-const extractContextSnapshot = (
-  messages: ReadonlyArray<unknown>,
-  at: number,
-): ContextSnapshot => {
+const extractContextSnapshot = (messages: ReadonlyArray<unknown>, at: number): ContextSnapshot => {
   const userMessageIDs = new Set<string>();
   const skillToolResultCallIDs = new Set<string>();
   const priorAssistantIDs = new Set<string>();
@@ -359,6 +359,13 @@ type BusAction =
       readonly at: number;
     }
   | {
+      readonly kind: "bus.execution.started";
+      readonly sessionID: string;
+      readonly eventID?: string;
+      readonly location?: LocationRefLike;
+      readonly at: number;
+    }
+  | {
       readonly kind: "bus.execution.terminal";
       readonly sessionID: string;
       readonly outcome: "succeeded" | "failed" | "interrupted";
@@ -391,6 +398,7 @@ const TELEMETRY_EVENT_TYPES = [
   "session.step.failed",
   "session.retry.scheduled",
   "session.compaction.ended",
+  "session.execution.started",
   "session.execution.succeeded",
   "session.execution.failed",
   "session.execution.interrupted",
@@ -479,6 +487,16 @@ const parseInterruptReason = (
 
 const translateExecutionEvent = (env: BusEnvelope): BusAction | undefined => {
   const loc = env.location === undefined ? {} : { location: env.location };
+  if (env.type === "session.execution.started") {
+    const eventID = typeof env.id === "string" && env.id.length > 0 ? env.id : undefined;
+    return {
+      kind: "bus.execution.started",
+      sessionID: env.sessionID,
+      ...(eventID === undefined ? {} : { eventID }),
+      ...loc,
+      at: env.at,
+    };
+  }
   if (env.type === "session.execution.succeeded") {
     return {
       kind: "bus.execution.terminal",
@@ -552,6 +570,7 @@ const EVENT_TRANSLATORS: Readonly<Record<string, (env: BusEnvelope) => BusAction
   "session.step.failed": translateStepEvent,
   "session.retry.scheduled": translateStepEvent,
   "session.compaction.ended": translateSessionMetaEvent,
+  "session.execution.started": translateSessionMetaEvent,
   "session.execution.succeeded": translateSessionMetaEvent,
   "session.execution.failed": translateSessionMetaEvent,
   "session.execution.interrupted": translateSessionMetaEvent,
@@ -607,11 +626,7 @@ const putCappedEntry = <V>(
   state.dirty = true;
 };
 
-const recordCompletedLoad = (
-  state: LiveSessionState,
-  entry: OpenSkillEntry,
-  at: number,
-): void => {
+const recordCompletedLoad = (state: LiveSessionState, entry: OpenSkillEntry, at: number): void => {
   putCappedEntry(
     state.loadsById,
     entry.loadID,
@@ -707,8 +722,7 @@ const eligibleSkillsForSnapshot = (
 
 const closeTurnWindow = (state: LiveSessionState, dropAbortedContext: boolean): void => {
   state.openLoads.length = 0;
-  state.turnSeq += 1;
-  state.currentTurnID = `live:${state.turnSeq}`;
+  state.currentTurnID = createLiveTurnID();
   if (dropAbortedContext && state.contextQueue.length > 0) {
     const head = state.contextQueue[0];
     if (
@@ -744,29 +758,6 @@ interface TelemetryRuntime {
   readonly droppedSessions: Set<string>;
 }
 
-const getOrCreateSession = (
-  rt: TelemetryRuntime,
-  sessionID: string,
-  at: number,
-  projectID: string = rt.ctx.location.project.id,
-): LiveSessionState => {
-  const existing = rt.sessions.get(sessionID);
-  if (existing !== undefined) {
-    if (rt.droppedSessions.delete(sessionID)) {
-      existing.partial = true;
-      existing.dirty = true;
-    }
-    return existing;
-  }
-  const created = createSessionState(sessionID, projectID, at);
-  if (rt.droppedSessions.delete(sessionID)) {
-    created.partial = true;
-    created.dirty = true;
-  }
-  setBoundedMap(rt.sessions, sessionID, created, MAX_TRACKED_SESSIONS);
-  return created;
-};
-
 const flushSession = (rt: TelemetryRuntime, state: LiveSessionState): Effect.Effect<void> => {
   if (!state.dirty || rt.deletedSessions.has(state.sessionID)) return Effect.void;
   if (state.loadsById.size === 0 && state.stepsById.size === 0) {
@@ -774,8 +765,64 @@ const flushSession = (rt: TelemetryRuntime, state: LiveSessionState): Effect.Eff
     return Effect.void;
   }
   state.dirty = false;
-  return writeSessionTelemetry(rt.ctx.storage, toStorageRecord(state));
+  const markPartialOnExisting = !state.hasPersisted;
+  return writeSessionTelemetry(rt.ctx.storage, toStorageRecord(state), {
+    markPartialOnExisting,
+  }).pipe(
+    Effect.tap((merged) =>
+      Effect.sync(() => {
+        if (merged !== undefined) {
+          state.hasPersisted = true;
+          if (merged.partial) state.partial = true;
+        }
+      }),
+    ),
+    Effect.asVoid,
+  );
 };
+
+const evictOverflowSessions = (rt: TelemetryRuntime): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    while (rt.sessions.size > MAX_TRACKED_SESSIONS) {
+      const oldestKey = rt.sessions.keys().next().value;
+      if (oldestKey === undefined) break;
+      const evicted = rt.sessions.get(oldestKey);
+      rt.sessions.delete(oldestKey);
+      if (evicted === undefined || evicted.openLoads.length === 0) continue;
+      evicted.partial = true;
+      evicted.dirty = true;
+      addBoundedSet(rt.droppedSessions, oldestKey, MAX_TRACKED_SESSIONS);
+      yield* flushSession(rt, evicted);
+    }
+  });
+
+const getOrCreateSession = (
+  rt: TelemetryRuntime,
+  sessionID: string,
+  at: number,
+  projectID: string = rt.ctx.location.project.id,
+  executionEventID?: string,
+): Effect.Effect<LiveSessionState> =>
+  Effect.gen(function* () {
+    const existing = rt.sessions.get(sessionID);
+    if (existing !== undefined) {
+      rt.sessions.delete(sessionID);
+      rt.sessions.set(sessionID, existing);
+      if (rt.droppedSessions.delete(sessionID)) {
+        existing.partial = true;
+        existing.dirty = true;
+      }
+      return existing;
+    }
+    const created = createSessionState(sessionID, projectID, at, executionEventID);
+    if (rt.droppedSessions.delete(sessionID)) {
+      created.partial = true;
+      created.dirty = true;
+    }
+    rt.sessions.set(sessionID, created);
+    yield* evictOverflowSessions(rt);
+    return created;
+  });
 
 const excludeSession = (rt: TelemetryRuntime, sessionID: string): void => {
   addBoundedSet(rt.excludedSessions, sessionID, MAX_TRACKED_SESSIONS);
@@ -841,46 +888,47 @@ const checkBusOwnership = (
 const applySkillToolHook = (
   rt: TelemetryRuntime,
   action: Extract<HookAction, { readonly kind: "hook.skill-tool" }>,
-): Effect.Effect<void> => {
-  addBoundedSet(rt.ownedSessions, action.sessionID, MAX_TRACKED_SESSIONS);
-  const state = getOrCreateSession(rt, action.sessionID, action.at);
-  if (action.status === "completed") {
-    const skill = sanitizeCompletedSkillID(action.rawSkillID);
-    if (skill === undefined) return Effect.void;
-    rt.knownSkillIDs.add(skill);
-    recordCompletedLoad(
-      state,
-      {
-        loadID: `tool:${action.callID}`,
-        skill,
-        trigger: "agent-tool",
-        turnID: state.currentTurnID,
-        exposureKind: "tool-result",
-        exposureID: action.callID,
-      },
-      action.at,
-    );
-  } else {
-    const skill = canonicalizeFailedSkillID(action.rawSkillID, rt.knownSkillIDs);
-    putCappedEntry(
-      state.loadsById,
-      `tool:${action.callID}`,
-      {
-        id: `tool:${action.callID}`,
-        turnID: state.currentTurnID,
-        skill,
-        trigger: "agent-tool",
-        status: "error",
-        at: action.at,
-      },
-      MAX_LOADS_PER_SESSION,
-      state,
-      action.at,
-      true,
-    );
-  }
-  return flushSession(rt, state);
-};
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    addBoundedSet(rt.ownedSessions, action.sessionID, MAX_TRACKED_SESSIONS);
+    const state = yield* getOrCreateSession(rt, action.sessionID, action.at);
+    if (action.status === "completed") {
+      const skill = sanitizeCompletedSkillID(action.rawSkillID);
+      if (skill === undefined) return;
+      rt.knownSkillIDs.add(skill);
+      recordCompletedLoad(
+        state,
+        {
+          loadID: `tool:${action.callID}`,
+          skill,
+          trigger: "agent-tool",
+          turnID: state.currentTurnID,
+          exposureKind: "tool-result",
+          exposureID: action.callID,
+        },
+        action.at,
+      );
+    } else {
+      const skill = canonicalizeFailedSkillID(action.rawSkillID, rt.knownSkillIDs);
+      putCappedEntry(
+        state.loadsById,
+        `tool:${action.callID}`,
+        {
+          id: `tool:${action.callID}`,
+          turnID: state.currentTurnID,
+          skill,
+          trigger: "agent-tool",
+          status: "error",
+          at: action.at,
+        },
+        MAX_LOADS_PER_SESSION,
+        state,
+        action.at,
+        true,
+      );
+    }
+    yield* flushSession(rt, state);
+  });
 
 const applyStepSettled = (
   rt: TelemetryRuntime,
@@ -950,6 +998,25 @@ const applyMovedAction = (
     }
   });
 
+const applyExecutionStarted = (
+  rt: TelemetryRuntime,
+  action: Extract<BusAction, { readonly kind: "bus.execution.started" }>,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const owner = yield* checkBusOwnership(rt, action.sessionID, action.location, true);
+    if (!owner.owned) return;
+    const state = yield* getOrCreateSession(
+      rt,
+      action.sessionID,
+      action.at,
+      owner.projectID,
+      action.eventID,
+    );
+    if (state.openLoads.length === 0) {
+      state.currentTurnID = createLiveTurnID(action.eventID);
+    }
+  });
+
 const applyTerminalAction = (
   rt: TelemetryRuntime,
   action: Extract<BusAction, { readonly kind: "bus.execution.terminal" }>,
@@ -982,27 +1049,29 @@ const applyHookAction = (rt: TelemetryRuntime, action: HookAction): Effect.Effec
   }
   if (action.kind === "hook.skill-tool") return applySkillToolHook(rt, action);
   if (action.kind === "hook.prompt") {
-    addBoundedSet(rt.ownedSessions, action.sessionID, MAX_TRACKED_SESSIONS);
-    const state = getOrCreateSession(rt, action.sessionID, action.at);
-    if (state.pendingPrompts.get(action.messageID)?.validated !== true) {
-      setBoundedMap(
-        state.pendingPrompts,
-        action.messageID,
-        { skillIDs: action.skillIDs, validated: false },
-        MAX_BOUNDED_ENTRIES,
-      );
-    }
-    return Effect.void;
+    return Effect.gen(function* () {
+      addBoundedSet(rt.ownedSessions, action.sessionID, MAX_TRACKED_SESSIONS);
+      const state = yield* getOrCreateSession(rt, action.sessionID, action.at);
+      if (state.pendingPrompts.get(action.messageID)?.validated !== true) {
+        setBoundedMap(
+          state.pendingPrompts,
+          action.messageID,
+          { skillIDs: action.skillIDs, validated: false },
+          MAX_BOUNDED_ENTRIES,
+        );
+      }
+    });
   }
   if (action.kind === "hook.context") {
-    addBoundedSet(rt.ownedSessions, action.sessionID, MAX_TRACKED_SESSIONS);
-    const state = getOrCreateSession(rt, action.sessionID, action.snapshot.at);
-    if (state.contextQueue.length >= MAX_BOUNDED_ENTRIES) {
-      state.contextQueue.shift();
-      state.partial = true;
-    }
-    state.contextQueue.push(action.snapshot);
-    return Effect.void;
+    return Effect.gen(function* () {
+      addBoundedSet(rt.ownedSessions, action.sessionID, MAX_TRACKED_SESSIONS);
+      const state = yield* getOrCreateSession(rt, action.sessionID, action.snapshot.at);
+      if (state.contextQueue.length >= MAX_BOUNDED_ENTRIES) {
+        state.contextQueue.shift();
+        state.partial = true;
+      }
+      state.contextQueue.push(action.snapshot);
+    });
   }
   const state = rt.sessions.get(action.sessionID);
   if (state === undefined) return Effect.void;
@@ -1031,7 +1100,7 @@ const applyInboxAction = (
       return;
     }
     if (action.kind === "bus.inbox.enqueued") {
-      const state = getOrCreateSession(rt, action.sessionID, action.at, owner.projectID);
+      const state = yield* getOrCreateSession(rt, action.sessionID, action.at, owner.projectID);
       for (const skill of action.skillIDs) rt.knownSkillIDs.add(skill);
       setBoundedMap(
         state.pendingPrompts,
@@ -1042,7 +1111,10 @@ const applyInboxAction = (
       return;
     }
     const state = rt.sessions.get(action.sessionID);
-    if (state !== undefined && promotePendingPrompt(state, action.inboxID, action.at, rt.knownSkillIDs)) {
+    if (
+      state !== undefined &&
+      promotePendingPrompt(state, action.inboxID, action.at, rt.knownSkillIDs)
+    ) {
       yield* flushSession(rt, state);
     }
   });
@@ -1054,7 +1126,7 @@ const applySkillActivated = (
   Effect.gen(function* () {
     const owner = yield* checkBusOwnership(rt, action.sessionID, action.location, true);
     if (!owner.owned) return;
-    const state = getOrCreateSession(rt, action.sessionID, action.at, owner.projectID);
+    const state = yield* getOrCreateSession(rt, action.sessionID, action.at, owner.projectID);
     rt.knownSkillIDs.add(action.skillID);
     const messageID = action.eventID.replace(/^evt_/, "msg_");
     recordCompletedLoad(
@@ -1128,6 +1200,8 @@ const applyBusAction = (rt: TelemetryRuntime, action: BusAction): Effect.Effect<
       return applyStepSettled(rt, action);
     case "bus.compaction.ended":
       return applyCompactionEnded(rt, action);
+    case "bus.execution.started":
+      return applyExecutionStarted(rt, action);
     case "bus.execution.terminal":
       return applyTerminalAction(rt, action);
   }

@@ -1,5 +1,5 @@
 import { mkdir, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { parseRegistered } from "../boot";
 import { defaultLiveModel } from "../delegation/ab";
 import { systemic } from "../guard";
@@ -96,11 +96,21 @@ export const isolatedServerEnv = (
 ): Readonly<Record<string, string | undefined>> => ({
   OPENCODE_CONFIG: undefined,
   OPENCODE_CONFIG_CONTENT: undefined,
+  OPENCODE_DB: undefined,
   OPENCODE_DISABLE_CLAUDE_CODE: "1",
   OPENCODE_DISABLE_CLAUDE_CODE_SKILLS: "1",
   OPENCODE_DISABLE_CLAUDE_CODE_PROMPT: "1",
   ...(extra ?? {}),
 });
+
+export const trialServerEnv = (
+  trialDir: string,
+  extra?: Readonly<Record<string, string | undefined>>,
+): Readonly<Record<string, string | undefined>> =>
+  isolatedServerEnv({
+    OPENCODE_DB: resolve(trialDir, "opencode.db"),
+    ...(extra ?? {}),
+  });
 
 const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -448,7 +458,7 @@ const executeSingleTrial = async (input: {
       configDir,
       pluginDir: input.stage.pluginDir,
       model: input.actorModel,
-      env: isolatedServerEnv(),
+      env: trialServerEnv(trialRoot),
     });
     input.activeServers.add(server);
     input.onCatalogue(await server.client.models());
@@ -592,7 +602,7 @@ const runJudgeComparisonPhase = async (input: {
       configDir: judgeCfg,
       pluginDir: undefined,
       model: resolvedJudge.judgeRef,
-      env: isolatedServerEnv(),
+      env: trialServerEnv(judgeRoot),
     });
     input.activeServers.add(judgeServer);
 

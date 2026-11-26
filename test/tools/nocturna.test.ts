@@ -14,7 +14,10 @@ interface MockSession {
   readonly id: string;
   readonly projectID?: string;
   readonly parentID?: string;
-  readonly fork?: { readonly sessionID: string; readonly boundary: { readonly type: "message"; readonly id: string } };
+  readonly fork?: {
+    readonly sessionID: string;
+    readonly boundary: { readonly type: "message"; readonly id: string };
+  };
   readonly agent?: string;
   readonly title?: string;
   readonly outcome?: "succeeded" | "failed" | "interrupted";
@@ -29,6 +32,11 @@ interface MockSession {
   };
   readonly contextError?: string;
   readonly messages?: ReadonlyArray<unknown>;
+  readonly permissions?: ReadonlyArray<{
+    readonly action: string;
+    readonly resource: string;
+    readonly effect: "allow" | "deny" | "ask";
+  }>;
 }
 
 const toSessionInfo = (row: MockSession) => ({
@@ -51,6 +59,7 @@ const toSessionInfo = (row: MockSession) => ({
     updated: DateTime.makeUnsafe(row.updatedAt),
   },
   ...(row.title === undefined ? {} : { title: row.title }),
+  ...(row.permissions === undefined ? {} : { permissions: row.permissions }),
   location: { directory: "/repo" },
 });
 
@@ -72,10 +81,53 @@ const scanMockStore = (
   return Effect.succeed({ entries, ...(last === undefined ? {} : { next: last.key }) });
 };
 
-const makeHost = (
-  initial: ReadonlyArray<MockSession>,
-  options: { readonly failList?: boolean; readonly failScan?: boolean; readonly storageDelayMs?: number } = {},
-) => {
+interface MockHostOptions {
+  readonly failList?: boolean;
+  readonly failScan?: boolean;
+  readonly storageDelayMs?: number;
+  readonly permissionAssert?: (input: {
+    readonly sessionID: string;
+    readonly agent?: string;
+    readonly action: string;
+    readonly resources: ReadonlyArray<string>;
+  }) => Effect.Effect<void, Tool.Error>;
+  readonly agentPermissions?: Readonly<
+    Record<
+      string,
+      ReadonlyArray<{
+        readonly action: string;
+        readonly resource: string;
+        readonly effect: "allow" | "deny" | "ask";
+      }>
+    >
+  >;
+}
+
+const makeOptionalAccessDomains = (options: MockHostOptions) => ({
+  ...(options.permissionAssert === undefined
+    ? {}
+    : { permission: { assert: options.permissionAssert } }),
+  ...(options.agentPermissions === undefined
+    ? {}
+    : {
+        agent: {
+          get: ({ agentID }: { readonly agentID: string }) => {
+            const permissions = options.agentPermissions?.[agentID];
+            return permissions === undefined
+              ? Effect.fail(new Error(`Agent not found: ${agentID}`))
+              : Effect.succeed({
+                  location: {
+                    directory: "/repo",
+                    project: { id: "proj_spectre", directory: "/repo", canonical: "/repo" },
+                  },
+                  data: { id: agentID, name: agentID, permissions },
+                });
+          },
+        },
+      }),
+});
+
+const makeHost = (initial: ReadonlyArray<MockSession>, options: MockHostOptions = {}) => {
   const store = new Map<string, Schema.Json>();
   const rows = new Map<string, MockSession>(initial.map((one) => [one.id, one]));
 
@@ -84,6 +136,7 @@ const makeHost = (
       directory: "/repo",
       project: { id: "proj_spectre", directory: "/repo", canonical: "/repo" },
     },
+    ...makeOptionalAccessDomains(options),
     storage: {
       get: (key: string) => {
         const delay = options.storageDelayMs;
@@ -743,10 +796,9 @@ describe("tools.spectre.nocturna", () => {
   });
 
   test("collect isolates papercut storage defects into status=unavailable without failing local results", async () => {
-    const { ctx } = makeHost(
-      [{ id: "ses_local_ok", agent: "spectre", updatedAt: NOW - DAY_MS }],
-      { failScan: true },
-    );
+    const { ctx } = makeHost([{ id: "ses_local_ok", agent: "spectre", updatedAt: NOW - DAY_MS }], {
+      failScan: true,
+    });
 
     const tool = nocturnaTool(ctx, () => NOW);
     const collected = await Effect.runPromise(tool.execute({}, callContext()));
@@ -760,6 +812,109 @@ describe("tools.spectre.nocturna", () => {
       scanTruncated: false,
       topGroups: [],
     });
+  });
+
+  test("collect respects papercuts permission denial and ask rules without prompting or failing local sessions", async () => {
+    const papercutRow = {
+      v: 1,
+      id: "01950000-0000-7000-8000-000000000099",
+      groupId: "pc_aabbccddeeff",
+      targetKind: "tool",
+      target: "tools.spectre.worktrees",
+      canonicalTarget: "tool:worktrees",
+      tried: "start",
+      expected: "opens",
+      actual: "rejected",
+      projectId: "proj_external",
+      repo: "secret-repo",
+      opencodeVersion: "2.4.2",
+      at: NOW - DAY_MS,
+    } as const;
+
+    const assertCalls: Array<{ readonly action: string; readonly sessionID: string }> = [];
+    const deniedHost = makeHost(
+      [{ id: "ses_local_visible", agent: "spectre", updatedAt: NOW - DAY_MS }],
+      {
+        permissionAssert: (input) => {
+          assertCalls.push({ action: input.action, sessionID: input.sessionID });
+          return Effect.fail(new Tool.Error({ message: "Permission denied: papercuts" }));
+        },
+      },
+    );
+    deniedHost.store.set("papercut:v1:o:01950000-0000-7000-8000-000000000099", papercutRow);
+
+    const deniedRes = await Effect.runPromise(
+      nocturnaTool(deniedHost.ctx, () => NOW).execute({}, callContext("ses_caller")),
+    );
+    if (deniedRes.output?.status !== "collected") throw new Error("expected collected");
+    expect(deniedRes.output.sessions.map((one) => one.id)).toEqual(["ses_local_visible"]);
+    expect(deniedRes.output.papercuts).toEqual({
+      status: "unavailable",
+      openGroups: 0,
+      newReportsInWindow: 0,
+      scanTruncated: false,
+      topGroups: [],
+    });
+    expect(assertCalls).toEqual([{ action: "papercuts", sessionID: "ses_caller" }]);
+
+    let promptAttempted = false;
+    const askHost = makeHost(
+      [
+        { id: "ses_local_ask", agent: "spectre", updatedAt: NOW - DAY_MS },
+        {
+          id: "ses_caller",
+          agent: "nocturna",
+          updatedAt: NOW - 1_000,
+          permissions: [{ action: "papercuts", resource: "*", effect: "ask" }],
+        },
+      ],
+      {
+        agentPermissions: {
+          nocturna: [{ action: "*", resource: "*", effect: "allow" }],
+        },
+        permissionAssert: () => {
+          promptAttempted = true;
+          return Effect.void;
+        },
+      },
+    );
+    askHost.store.set("papercut:v1:o:01950000-0000-7000-8000-000000000099", papercutRow);
+
+    const askRes = await Effect.runPromise(
+      nocturnaTool(askHost.ctx, () => NOW).execute({}, callContext("ses_caller")),
+    );
+    if (askRes.output?.status !== "collected") throw new Error("expected collected");
+    expect(askRes.output.sessions.map((one) => one.id)).toEqual(["ses_local_ask"]);
+    expect(askRes.output.papercuts).toEqual({
+      status: "unavailable",
+      openGroups: 0,
+      newReportsInWindow: 0,
+      scanTruncated: false,
+      topGroups: [],
+    });
+    expect(promptAttempted).toBe(false);
+
+    const allowedHost = makeHost(
+      [
+        { id: "ses_local_allow", agent: "spectre", updatedAt: NOW - DAY_MS },
+        { id: "ses_caller", agent: "nocturna", updatedAt: NOW - 1_000 },
+      ],
+      {
+        agentPermissions: {
+          nocturna: [{ action: "*", resource: "*", effect: "allow" }],
+        },
+        permissionAssert: () => Effect.void,
+      },
+    );
+    allowedHost.store.set("papercut:v1:o:01950000-0000-7000-8000-000000000099", papercutRow);
+
+    const allowedRes = await Effect.runPromise(
+      nocturnaTool(allowedHost.ctx, () => NOW).execute({}, callContext("ses_caller")),
+    );
+    if (allowedRes.output?.status !== "collected") throw new Error("expected collected");
+    expect(allowedRes.output.sessions.map((one) => one.id)).toEqual(["ses_local_allow"]);
+    expect(allowedRes.output.papercuts.status).toBe("ok");
+    expect(allowedRes.output.papercuts.openGroups).toBe(1);
   });
 
   test("extracts User.skills prompt attachments, excludes Step k and sibling errors, keeps steered prompts in one turn, and tracks completed vs failed compaction", async () => {

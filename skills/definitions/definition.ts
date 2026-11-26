@@ -34,6 +34,7 @@ export interface PreloadContext {
   readonly directory: AbsolutePath;
   readonly sessionID: Session.ID;
   readonly signal: AbortSignal;
+  readonly canRead: (absolutePath: string) => Effect.Effect<boolean>;
 }
 
 export type PreloadOutcome =

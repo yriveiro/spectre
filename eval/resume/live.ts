@@ -39,13 +39,14 @@ const buildLiveConfig = (input: {
     2,
   )}\n`;
 
-const buildLiveEnv = (input: {
+export const buildLiveEnv = (input: {
   readonly configDir: string;
   readonly password: string;
   readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly baseEnv?: Readonly<Record<string, string | undefined>>;
 }): Record<string, string | undefined> => {
   const childEnv: Record<string, string | undefined> = {
-    ...Bun.env,
+    ...(input.baseEnv ?? Bun.env),
     ...(input.env ?? {}),
     OPENCODE_CONFIG_DIR: input.configDir,
     OPENCODE_CONFIG_PROJECT_DISABLE: "1",
@@ -55,6 +56,66 @@ const buildLiveEnv = (input: {
     if (value === undefined) delete childEnv[key];
   }
   return childEnv;
+};
+
+type LiveModelEntry = {
+  readonly providerID: string;
+  readonly id: string;
+  readonly variants: ReadonlyArray<{ readonly id: string }>;
+};
+
+export const hasModel = (
+  models: ReadonlyArray<LiveModelEntry>,
+  targetModel: string,
+): boolean => {
+  const slash = targetModel.indexOf("/");
+  if (slash === -1) return false;
+  const providerID = targetModel.slice(0, slash);
+  const rest = targetModel.slice(slash + 1);
+  const [id, variant] = rest.split("#");
+  return models.some(
+    (model) =>
+      model.providerID === providerID &&
+      model.id === id &&
+      (variant === undefined || model.variants.some((one) => one.id === variant)),
+  );
+};
+
+export const waitForLiveModel = async <T extends LiveModelEntry>(input: {
+  readonly fetchModels: () => Promise<ReadonlyArray<T>>;
+  readonly model: string;
+  readonly maxAttempts?: number;
+  readonly delayMs?: number;
+  readonly sleep?: (ms: number) => Promise<unknown>;
+}): Promise<
+  | { readonly ok: true; readonly models: ReadonlyArray<T> }
+  | { readonly ok: false; readonly reason: "unreachable"; readonly failure: unknown }
+  | { readonly ok: false; readonly reason: "missing-model"; readonly models: ReadonlyArray<T> }
+> => {
+  const maxAttempts = input.maxAttempts ?? 60;
+  const delayMs = input.delayMs ?? 300;
+  const sleep = input.sleep ?? Bun.sleep;
+  let models: ReadonlyArray<T> | undefined;
+  let failure: unknown;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      models = await input.fetchModels();
+      if (hasModel(models, input.model)) {
+        return { ok: true, models };
+      }
+    } catch (cause) {
+      failure = cause;
+    }
+    if (attempt + 1 < maxAttempts) {
+      await sleep(delayMs);
+    }
+  }
+
+  if (models === undefined) {
+    return { ok: false, reason: "unreachable", failure };
+  }
+  return { ok: false, reason: "missing-model", models };
 };
 
 const stopSpawned = async (
@@ -128,34 +189,20 @@ export const startLive = async (input: {
   if (assigned === undefined) return abort("the live server did not start");
 
   const client = connect(input.directory, `http://127.0.0.1:${assigned}`, password);
-  let models: Awaited<ReturnType<Opencode["models"]>> | undefined;
-  let failure: unknown;
-  for (let attempt = 0; attempt < 60; attempt++) {
-    try {
-      models = await client.models();
-      break;
-    } catch (cause) {
-      failure = cause;
-      await Bun.sleep(300);
+  const ready = await waitForLiveModel({
+    fetchModels: () => client.models(),
+    model: input.model,
+  });
+  if (!ready.ok) {
+    if (ready.reason === "unreachable") {
+      return abort(
+        `the live server did not answer: ${ready.failure instanceof Error ? ready.failure.message : String(ready.failure)}`,
+      );
     }
+    return abort(
+      `the live model "${input.model}" is not in the catalogue. Providers: ${[...new Set(ready.models.map((model) => model.providerID))].join(", ")}`,
+    );
   }
-  if (models === undefined)
-    return abort(
-      `the live server did not answer: ${failure instanceof Error ? failure.message : String(failure)}`,
-    );
-
-  const [providerID, rest] = input.model.split("/");
-  const [id, variant] = (rest ?? "").split("#");
-  const known = models.some(
-    (model) =>
-      model.providerID === providerID &&
-      model.id === id &&
-      (variant === undefined || model.variants.some((one) => one.id === variant)),
-  );
-  if (!known)
-    return abort(
-      `the live model "${input.model}" is not in the catalogue. Providers: ${[...new Set(models.map((model) => model.providerID))].join(", ")}`,
-    );
 
   return {
     client,

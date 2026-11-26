@@ -1655,6 +1655,296 @@ describe("nocturna live skill telemetry", () => {
     expect(capped?.partial).toBe(true);
   });
 
+  test("uses durable unique turn IDs and marks partial across plugin reload and LRU eviction without false sameTurn co-use", async () => {
+    const sharedStore = new Map<string, Schema.Json>();
+    const sessions = new Map<string, MockSessionRow>([
+      [
+        "ses_reload_turns",
+        { id: "ses_reload_turns", agent: "spectre", cost: 0.3, updatedAt: NOW - 1_000 },
+      ],
+    ]);
+    const loc = { directory: "/repo/main" };
+
+    const host1 = makeTelemetryHost({ store: sharedStore, sessions });
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* attachSkillTelemetry(host1.ctx, () => NOW);
+          yield* host1.settle(10);
+
+          yield* host1.fireSessionHook("context", {
+            sessionID: "ses_reload_turns",
+            agent: "spectre",
+            messages: [{ id: "msg_u1", role: "user", content: [] }],
+          });
+          yield* host1.fireToolHook("execute.after", {
+            tool: "skill",
+            codemode: false,
+            sessionID: "ses_reload_turns",
+            agent: "spectre",
+            messageID: "msg_1",
+            id: "call_a",
+            input: { id: "A" },
+            status: "completed",
+            result: { output: { content: "A" } },
+          });
+          yield* host1.publishEvent({
+            id: "evt_1",
+            type: "session.step.ended",
+            created: NOW + 1,
+            location: loc,
+            data: {
+              sessionID: "ses_reload_turns",
+              assistantMessageID: "msg_1",
+              finish: "tool-calls",
+              cost: 0.02,
+              tokens: stepTokens(50, 10),
+            },
+          });
+          yield* host1.fireSessionHook("context", {
+            sessionID: "ses_reload_turns",
+            agent: "spectre",
+            messages: [
+              { id: "msg_u1", role: "user", content: [] },
+              { id: "msg_1", role: "assistant", content: [] },
+              toolResultMsg("call_a", "skill"),
+            ],
+          });
+          yield* host1.publishEvent({
+            id: "evt_2",
+            type: "session.step.ended",
+            created: NOW + 2,
+            location: loc,
+            data: {
+              sessionID: "ses_reload_turns",
+              assistantMessageID: "msg_2",
+              finish: "stop",
+              cost: 0.1,
+              tokens: stepTokens(200, 50),
+            },
+          });
+          yield* host1.publishEvent({
+            id: "evt_done_1",
+            type: "session.execution.succeeded",
+            created: NOW + 3,
+            data: { sessionID: "ses_reload_turns" },
+          });
+          yield* host1.settle(40);
+        }),
+      ),
+    );
+
+    const host2 = makeTelemetryHost({ store: sharedStore, sessions });
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* attachSkillTelemetry(host2.ctx, () => NOW + 10_000);
+          yield* host2.settle(10);
+
+          yield* host2.fireSessionHook("context", {
+            sessionID: "ses_reload_turns",
+            agent: "spectre",
+            messages: [{ id: "msg_u2", role: "user", content: [] }],
+          });
+          yield* host2.fireToolHook("execute.after", {
+            tool: "skill",
+            codemode: false,
+            sessionID: "ses_reload_turns",
+            agent: "spectre",
+            messageID: "msg_3",
+            id: "call_b",
+            input: { id: "B" },
+            status: "completed",
+            result: { output: { content: "B" } },
+          });
+          yield* host2.publishEvent({
+            id: "evt_3",
+            type: "session.step.ended",
+            created: NOW + 10_001,
+            location: loc,
+            data: {
+              sessionID: "ses_reload_turns",
+              assistantMessageID: "msg_3",
+              finish: "tool-calls",
+              cost: 0.02,
+              tokens: stepTokens(50, 10),
+            },
+          });
+          yield* host2.fireSessionHook("context", {
+            sessionID: "ses_reload_turns",
+            agent: "spectre",
+            messages: [
+              { id: "msg_u2", role: "user", content: [] },
+              { id: "msg_3", role: "assistant", content: [] },
+              toolResultMsg("call_b", "skill"),
+            ],
+          });
+          yield* host2.publishEvent({
+            id: "evt_4",
+            type: "session.step.ended",
+            created: NOW + 10_002,
+            location: loc,
+            data: {
+              sessionID: "ses_reload_turns",
+              assistantMessageID: "msg_4",
+              finish: "stop",
+              cost: 0.2,
+              tokens: stepTokens(300, 80),
+            },
+          });
+          yield* host2.publishEvent({
+            id: "evt_done_2",
+            type: "session.execution.succeeded",
+            created: NOW + 10_003,
+            data: { sessionID: "ses_reload_turns" },
+          });
+          yield* host2.settle(40);
+        }),
+      ),
+    );
+
+    const storedReload = await Effect.runPromise(
+      readSessionTelemetry(host2.ctx.storage, "ses_reload_turns"),
+    );
+    expect(storedReload?.partial).toBe(true);
+    expect(storedReload?.loads).toHaveLength(2);
+    const turnA = storedReload?.loads.find((load) => load.skill === "A")?.turnID;
+    const turnB = storedReload?.loads.find((load) => load.skill === "B")?.turnID;
+    expect(turnA).toBeDefined();
+    expect(turnB).toBeDefined();
+    expect(turnA).not.toBe("live:0");
+    expect(turnB).not.toBe("live:0");
+    expect(turnA).not.toBe(turnB);
+
+    const toolReload = nocturnaTool(host2.ctx, () => NOW + 20_000);
+    const collectedReload = await Effect.runPromise(toolReload.execute({}, NOCTURNA_CALL_CONTEXT));
+    if (collectedReload.output?.status !== "collected") throw new Error("expected collected");
+    expect(collectedReload.output.sessions[0]?.telemetryPartial).toBe(true);
+    expect(collectedReload.output.skillCoUse).toEqual([
+      { left: "A", right: "B", sessions: 1, sameTurn: 0, jaccard: 1 },
+    ]);
+
+    const evictSessions = new Map<string, MockSessionRow>([
+      [
+        "ses_evict_turns",
+        { id: "ses_evict_turns", agent: "spectre", cost: 0.25, updatedAt: NOW - 1_000 },
+      ],
+    ]);
+    const evictHost = makeTelemetryHost({ sessions: evictSessions });
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* attachSkillTelemetry(evictHost.ctx, () => NOW);
+          yield* evictHost.settle(10);
+
+          yield* evictHost.publishEvent({
+            id: "evt_exec_turn1",
+            type: "session.execution.started",
+            created: NOW,
+            location: loc,
+            data: { sessionID: "ses_evict_turns" },
+          });
+          yield* evictHost.settle(10);
+          yield* evictHost.fireSessionHook("context", {
+            sessionID: "ses_evict_turns",
+            agent: "spectre",
+            messages: [{ id: "msg_eu1", role: "user", content: [] }],
+          });
+          yield* evictHost.fireToolHook("execute.after", {
+            tool: "skill",
+            codemode: false,
+            sessionID: "ses_evict_turns",
+            agent: "spectre",
+            messageID: "msg_e1",
+            id: "call_ea",
+            input: { id: "A" },
+            status: "completed",
+            result: { output: { content: "A" } },
+          });
+          yield* evictHost.publishEvent({
+            id: "evt_e1",
+            type: "session.step.ended",
+            created: NOW + 1,
+            location: loc,
+            data: {
+              sessionID: "ses_evict_turns",
+              assistantMessageID: "msg_e1",
+              finish: "stop",
+              cost: 0.05,
+              tokens: stepTokens(100, 20),
+            },
+          });
+          yield* evictHost.publishEvent({
+            id: "evt_edone1",
+            type: "session.execution.succeeded",
+            created: NOW + 2,
+            data: { sessionID: "ses_evict_turns" },
+          });
+          yield* evictHost.settle(30);
+
+          for (let i = 0; i < 260; i += 1) {
+            yield* evictHost.fireSessionHook("context", {
+              sessionID: `ses_fill_${i}`,
+              agent: "spectre",
+              messages: [{ id: `msg_fill_${i}`, role: "user", content: [] }],
+            });
+          }
+          yield* evictHost.settle(40);
+
+          yield* evictHost.publishEvent({
+            id: "evt_exec_turn2",
+            type: "session.execution.started",
+            created: NOW + 100,
+            location: loc,
+            data: { sessionID: "ses_evict_turns" },
+          });
+          yield* evictHost.settle(10);
+          yield* evictHost.fireSessionHook("context", {
+            sessionID: "ses_evict_turns",
+            agent: "spectre",
+            messages: [{ id: "msg_eu2", role: "user", content: [] }],
+          });
+          yield* evictHost.fireToolHook("execute.after", {
+            tool: "skill",
+            codemode: false,
+            sessionID: "ses_evict_turns",
+            agent: "spectre",
+            messageID: "msg_e2",
+            id: "call_eb",
+            input: { id: "B" },
+            status: "completed",
+            result: { output: { content: "B" } },
+          });
+          yield* evictHost.publishEvent({
+            id: "evt_edone2",
+            type: "session.execution.succeeded",
+            created: NOW + 102,
+            data: { sessionID: "ses_evict_turns" },
+          });
+          yield* evictHost.settle(40);
+        }),
+      ),
+    );
+
+    const storedEvict = await Effect.runPromise(
+      readSessionTelemetry(evictHost.ctx.storage, "ses_evict_turns"),
+    );
+    expect(storedEvict?.partial).toBe(true);
+    const evictTurnA = storedEvict?.loads.find((load) => load.skill === "A")?.turnID;
+    const evictTurnB = storedEvict?.loads.find((load) => load.skill === "B")?.turnID;
+    expect(evictTurnA).toContain("evt_exec_turn1");
+    expect(evictTurnB).toContain("evt_exec_turn2");
+    expect(evictTurnA).not.toBe(evictTurnB);
+
+    const toolEvict = nocturnaTool(evictHost.ctx, () => NOW + 20_000);
+    const collectedEvict = await Effect.runPromise(toolEvict.execute({}, NOCTURNA_CALL_CONTEXT));
+    if (collectedEvict.output?.status !== "collected") throw new Error("expected collected");
+    expect(collectedEvict.output.sessions[0]?.telemetryPartial).toBe(true);
+    expect(collectedEvict.output.skillCoUse).toEqual([
+      { left: "A", right: "B", sessions: 1, sameTurn: 0, jaccard: 1 },
+    ]);
+  });
+
   test("NocturnaInput and NocturnaOutput emit valid JSON Schema documents", () => {
     expect(() => Schema.toJsonSchemaDocument(NocturnaInput)).not.toThrow();
     expect(() => Schema.toJsonSchemaDocument(NocturnaOutput)).not.toThrow();

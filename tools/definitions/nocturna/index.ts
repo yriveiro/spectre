@@ -1,8 +1,7 @@
-import type { Plugin } from "@opencode/plugin/effect";
-import { Tool } from "@opencode/plugin/effect";
+import { Agent, type Plugin, Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
 import { Effect, Option, Result, Schema } from "effect";
-import { PapercutRollupSchema, summarizeOpenPapercuts } from "../papercuts";
+import { type PapercutRollup, PapercutRollupSchema, summarizeOpenPapercuts } from "../papercuts";
 import {
   digestSession,
   inspectMessages,
@@ -38,7 +37,8 @@ export const CollectInput = Schema.Struct({
     description: "Maximum unanalyzed sessions to digest in this call (1..100). Default 25.",
   }),
   offset: Schema.optional(Schema.Int).annotate({
-    description: "Number of ranked pending sessions to skip before slicing limit (>= 0). Default 0.",
+    description:
+      "Number of ranked pending sessions to skip before slicing limit (>= 0). Default 0.",
   }),
   includeAnalyzed: Schema.optional(Schema.Boolean).annotate({
     description: "Re-scan sessions in the window even when their updatedAt matches ctx.storage.",
@@ -230,7 +230,120 @@ const clampFinite = (
 interface CallerFilter {
   readonly sessionID: string | undefined;
   readonly parentID: string | undefined;
+  readonly info: Session.Info | undefined;
 }
+
+interface PermissionRuleLike {
+  readonly action: string;
+  readonly resource: string;
+  readonly effect: "allow" | "deny" | "ask";
+}
+
+const UNAVAILABLE_PAPERCUTS: PapercutRollup = {
+  status: "unavailable",
+  openGroups: 0,
+  newReportsInWindow: 0,
+  scanTruncated: false,
+  topGroups: [],
+};
+
+const matchesPermissionPattern = (value: string, rawPattern: string): boolean => {
+  const target = value.replaceAll("\\", "/");
+  const normalized = rawPattern.replaceAll("\\", "/");
+  const trailingOptional = normalized.endsWith(" *");
+  const pattern = trailingOptional ? normalized.slice(0, -2) : normalized;
+  let ti = 0;
+  let pi = 0;
+  let starPi = -1;
+  let starTi = 0;
+
+  while (ti < target.length) {
+    const pc = pattern[pi];
+    if (pc === "*") {
+      starPi = pi;
+      starTi = ti;
+      pi += 1;
+    } else if (pc === "?" || pc === target[ti]) {
+      pi += 1;
+      ti += 1;
+    } else if (trailingOptional && pi === pattern.length && target[ti] === " ") {
+      return true;
+    } else if (starPi >= 0) {
+      pi = starPi + 1;
+      starTi += 1;
+      ti = starTi;
+    } else {
+      return false;
+    }
+  }
+  while (pattern[pi] === "*") pi += 1;
+  return pi === pattern.length;
+};
+
+const matchesPapercutsRule = (rule: PermissionRuleLike): boolean =>
+  matchesPermissionPattern("papercuts", rule.action) &&
+  matchesPermissionPattern("*", rule.resource);
+
+const evaluateConfiguredPapercuts = (
+  agentRules: ReadonlyArray<PermissionRuleLike> | undefined,
+  sessionRules: ReadonlyArray<PermissionRuleLike> | undefined,
+): "allow" | "deny" | "ask" | undefined => {
+  if (agentRules === undefined) {
+    if (sessionRules === undefined || sessionRules.length === 0) return undefined;
+    return sessionRules.findLast(matchesPapercutsRule)?.effect;
+  }
+  const combined = [...agentRules, ...(sessionRules ?? [])];
+  return combined.findLast(matchesPapercutsRule)?.effect ?? "ask";
+};
+
+const loadAgentPermissions = (
+  ctx: Plugin.Context,
+  agentID: Agent.ID | undefined,
+): Effect.Effect<ReadonlyArray<PermissionRuleLike> | undefined> => {
+  const getAgent = ctx.agent?.get;
+  if (typeof getAgent !== "function" || agentID === undefined) {
+    return Effect.succeed(undefined);
+  }
+  return Effect.result(getAgent({ agentID })).pipe(
+    Effect.map((res) => (Result.isSuccess(res) ? res.success.data.permissions : undefined)),
+    Effect.catchCause(() => Effect.succeed(undefined)),
+  );
+};
+
+const canReadPapercuts = (
+  ctx: Plugin.Context,
+  callerInfo: Session.Info | undefined,
+  context: Tool.Context | undefined,
+): Effect.Effect<boolean> =>
+  Effect.gen(function* () {
+    const rawAgent = context?.agent ?? callerInfo?.agent;
+    const agentID =
+      typeof rawAgent === "string" && rawAgent.length > 0 ? Agent.ID.make(rawAgent) : undefined;
+    const agentRules = yield* loadAgentPermissions(ctx, agentID);
+    const configured = evaluateConfiguredPapercuts(agentRules, callerInfo?.permissions);
+    if (configured === "deny" || configured === "ask") return false;
+
+    const assertPermission = ctx.permission?.assert;
+    if (typeof assertPermission !== "function") return true;
+
+    const rawSessionID = context?.sessionID ?? callerInfo?.id;
+    const parsedSessionID =
+      rawSessionID === undefined ? undefined : Option.getOrUndefined(decodeSessionID(rawSessionID));
+    if (parsedSessionID === undefined) return false;
+
+    return yield* assertPermission({
+      sessionID: parsedSessionID,
+      ...(agentID === undefined ? {} : { agent: agentID }),
+      action: "papercuts",
+      resources: ["*"],
+      ...(context?.messageID !== undefined && context?.id !== undefined
+        ? { source: { type: "tool" as const, messageID: context.messageID, id: context.id } }
+        : {}),
+    }).pipe(
+      Effect.as(true),
+      Effect.catchCause(() => Effect.succeed(false)),
+    );
+  });
 
 const isExcludedSession = (info: Session.Info, caller: CallerFilter): boolean => {
   if (info.agent === "nocturna") return true;
@@ -659,9 +772,11 @@ const resolveCallerFilter = (
   callerSessionID: string | undefined,
 ): Effect.Effect<CallerFilter> =>
   Effect.gen(function* () {
-    if (callerSessionID === undefined) return { sessionID: undefined, parentID: undefined };
+    if (callerSessionID === undefined) {
+      return { sessionID: undefined, parentID: undefined, info: undefined };
+    }
     const info = yield* resolveProjectSession(ctx, callerSessionID);
-    return { sessionID: callerSessionID, parentID: info?.parentID };
+    return { sessionID: callerSessionID, parentID: info?.parentID, info };
   });
 
 const digestBatch = (
@@ -691,10 +806,22 @@ const digestBatch = (
     return { ranked, unreadable };
   });
 
+const collectVisiblePapercuts = (
+  ctx: Plugin.Context,
+  callerInfo: Session.Info | undefined,
+  context: Tool.Context | undefined,
+  cutoffAt: number,
+): Effect.Effect<PapercutRollup> =>
+  canReadPapercuts(ctx, callerInfo, context).pipe(
+    Effect.flatMap((allowed) =>
+      allowed ? summarizeOpenPapercuts(ctx, cutoffAt) : Effect.succeed(UNAVAILABLE_PAPERCUTS),
+    ),
+  );
+
 const runCollect = (
   ctx: Plugin.Context,
   input: typeof CollectInput.Type,
-  callerSessionID: string | undefined,
+  context: Tool.Context | undefined,
   now: number,
 ) =>
   Effect.gen(function* () {
@@ -706,7 +833,7 @@ const runCollect = (
 
     yield* pruneSkillTelemetry(ctx.storage, project, now);
 
-    const caller = yield* resolveCallerFilter(ctx, callerSessionID);
+    const caller = yield* resolveCallerFilter(ctx, context?.sessionID);
     const ledger = yield* openLedger(ctx.storage, project, now);
     const scanned = yield* scanWindowSessions(
       ctx,
@@ -723,7 +850,7 @@ const runCollect = (
     const batch = ordered.slice(offset, offset + limit);
     const { ranked, unreadable } = yield* digestBatch(ctx, batch);
     const digests = ranked.map((item) => item.digest);
-    const papercuts = yield* summarizeOpenPapercuts(ctx, cutoffAt);
+    const papercuts = yield* collectVisiblePapercuts(ctx, caller.info, context, cutoffAt);
 
     const output: typeof CollectedOutput.Type = {
       status: "collected",
@@ -853,6 +980,6 @@ export const nocturnaTool = (
     const now = clock();
     if (input.action === "inspect") return runInspect(ctx, input);
     if (input.action === "mark") return runMark(ctx, input, now);
-    return runCollect(ctx, input, context?.sessionID, now);
+    return runCollect(ctx, input, context, now);
   },
 });

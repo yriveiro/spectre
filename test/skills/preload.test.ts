@@ -1026,6 +1026,7 @@ describe("v1 skill preloads: solidjs-best-practices and effect-best-practices", 
         directory: AbsolutePath.make(join(process.cwd(), "test/fixtures/solidjs/v1")),
         sessionID: SESSION_ID,
         signal: new AbortController().signal,
+        canRead: () => Effect.succeed(true),
       }),
     );
     expect(v1Outcome.kind).toBe("ok");
@@ -1039,6 +1040,7 @@ describe("v1 skill preloads: solidjs-best-practices and effect-best-practices", 
         directory: AbsolutePath.make(join(process.cwd(), "test/fixtures/solidjs/start-v2-on-solid-2")),
         sessionID: SESSION_ID,
         signal: new AbortController().signal,
+        canRead: () => Effect.succeed(true),
       }),
     );
     expect(incompatibleOutcome.kind).toBe("ok");
@@ -1059,6 +1061,7 @@ describe("v1 skill preloads: solidjs-best-practices and effect-best-practices", 
           directory: AbsolutePath.make(dir),
           sessionID: SESSION_ID,
           signal: new AbortController().signal,
+          canRead: () => Effect.succeed(true),
         }),
       );
 
@@ -1111,5 +1114,148 @@ describe("v1 skill preloads: solidjs-best-practices and effect-best-practices", 
     await Bun.write(join(absentDir, "package.json"), JSON.stringify({ dependencies: { react: "19.0.0" } }));
     const absent = await runIn(absentDir);
     expect(absent.kind).toBe("skip");
+  });
+
+  test("enforces host read policy per file so denying private/* prevents solidjs-best-practices from reading or leaking private/feature.ts", async () => {
+    const loaded = await Effect.runPromise(load());
+    const solidSkill = loaded.find((s) => s.id === "solidjs-best-practices");
+    if (solidSkill === undefined) throw new Error("expected solidjs-best-practices");
+
+    const workDir = temp("solid-private-deny");
+    await Bun.write(
+      join(workDir, "package.json"),
+      JSON.stringify({ dependencies: { "solid-js": "^1.9.17" } }),
+    );
+    await Bun.write(
+      join(workDir, "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { jsxImportSource: "solid-js" } }),
+    );
+    await Bun.write(
+      join(workDir, "src/app.tsx"),
+      'import { onMount } from "solid-js";\nexport const App = () => <div />;\n',
+    );
+    await Bun.write(
+      join(workDir, "private/feature.ts"),
+      'import { createProjection } from "solid-js";\nimport { render } from "@solidjs/web";\nexport { createProjection, render };\n',
+    );
+    await Bun.write(join(workDir, "bun.lock"), '"@solidjs/start@2.0.0"\n');
+    await Bun.write(join(workDir, "app.config.ts"), "export default {};\n");
+    await Bun.write(join(workDir, "vite.config.mjs"), 'import solidStart from "@solidjs/start";\nexport default { plugins: [solidStart()] };\n');
+
+    const { ctx, hooks } = makeFakeContext({
+      pluginDir: temp("plugin-root-private-deny"),
+      sessionDir: workDir,
+      registeredSkills: [solidSkill],
+      agentPermissions: ALLOW_READ_RULES,
+      sessionPermissions: [
+        { action: "read", resource: "private/*", effect: "deny" },
+        { action: "read", resource: "bun.lock", effect: "ask" },
+        { action: "read", resource: "app.config.*", effect: "deny" },
+        { action: "read", resource: "vite.config.mjs", effect: "deny" },
+      ],
+    });
+    await Bun.write(join(ctx.location.directory, ".keep"), "");
+    await Effect.runPromise(Effect.scoped(attachSkillPreload(ctx, [solidSkill])));
+
+    const renderedSkill = renderSkillOutput(solidSkill);
+    const initialResult: Tool.Result = Object.freeze({
+      content: Object.freeze([Object.freeze({ type: "text" as const, text: renderedSkill })]),
+      output: Object.freeze({ directory: dirname(solidSkill.path), content: renderedSkill }),
+      metadata: Object.freeze({ name: solidSkill.name, directory: dirname(solidSkill.path) }),
+    });
+    const event = {
+      tool: "skill",
+      codemode: false,
+      sessionID: SESSION_ID,
+      agent: AGENT_ID,
+      messageID: "msg_private",
+      id: "call_private",
+      input: { id: solidSkill.id },
+      status: "completed" as const,
+      result: initialResult,
+    };
+
+    await Effect.runPromise(hooks.toolAfter!(event));
+
+    expect(event.result).not.toBe(initialResult);
+    const items = event.result.content as ReadonlyArray<Tool.Content>;
+    const first = items[0];
+    expect(first?.type).toBe("text");
+    if (first?.type !== "text") return;
+
+    const preloadBlock = first.text.slice(renderedSkill.length);
+    expect(preloadBlock).toContain("mode: solid-1");
+    expect(preloadBlock).toContain("compatible: true");
+    expect(preloadBlock).toContain("src/app.tsx:1");
+    expect(preloadBlock).toContain("config: appConfig=false, viteConfig=false, startPlugin=false");
+    expect(preloadBlock).not.toContain("private/feature.ts");
+    expect(preloadBlock).not.toContain("createProjection");
+    expect(preloadBlock).not.toContain("@solidjs/web");
+    expect(preloadBlock).not.toContain("app.config.*");
+    expect(preloadBlock).not.toContain("solidStart()");
+
+    const assertedResources = hooks.permissionAsserts.flatMap((call) => call.resources);
+    expect(assertedResources).not.toContain("private/feature.ts");
+    expect(assertedResources).not.toContain("bun.lock");
+    expect(assertedResources).not.toContain("app.config.ts");
+    expect(assertedResources).not.toContain("vite.config.mjs");
+
+    const promptEvent = {
+      sessionID: SESSION_ID,
+      messageID: "msg_prompt_private",
+      prompt: { text: "review component", skills: [{ id: solidSkill.id }] },
+      metadata: undefined as Record<string, unknown> | undefined,
+      delivery: "steer",
+    };
+    await Effect.runPromise(hooks.sessionPrompt!(promptEvent));
+    const stored = promptEvent.metadata?.[PRELOAD_METADATA_KEY] as {
+      entries: ReadonlyArray<{ body: string }>;
+    };
+    expect(stored.entries).toHaveLength(1);
+    const promptBody = stored.entries[0]?.body ?? "";
+    expect(promptBody).toContain("mode: solid-1");
+    expect(promptBody).toContain("compatible: true");
+    expect(promptBody).not.toContain("private/feature.ts");
+    expect(promptBody).not.toContain("createProjection");
+    expect(promptBody).not.toContain("@solidjs/web");
+  });
+
+  test("effect-best-practices preload checks canRead on every file it reads", async () => {
+    const preload = effectBestPractices.preload;
+    expect(preload).toBeDefined();
+    if (preload === undefined) return;
+
+    const dir = temp("effect-canread");
+    await Bun.write(
+      join(dir, "package.json"),
+      JSON.stringify({ dependencies: { effect: "4.1.0" } }),
+    );
+    await Bun.write(
+      join(dir, "node_modules/effect/package.json"),
+      JSON.stringify({ name: "effect", version: "4.1.0" }),
+    );
+    await Bun.write(join(dir, "node_modules/effect/dist/Effect.d.ts"), "export {};\n");
+
+    const checked: Array<string> = [];
+    const outcome = await Effect.runPromise(
+      preload.run({
+        directory: AbsolutePath.make(dir),
+        sessionID: SESSION_ID,
+        signal: new AbortController().signal,
+        canRead: (absolutePath: string) =>
+          Effect.sync(() => {
+            checked.push(absolutePath);
+            return !absolutePath.endsWith("node_modules/effect/package.json");
+          }),
+      }),
+    );
+
+    expect(checked).toContain(join(dir, "package.json"));
+    expect(checked).toContain(join(dir, "node_modules/effect/package.json"));
+    expect(outcome.kind).toBe("ok");
+    if (outcome.kind === "ok") {
+      expect(outcome.body).toContain("status: uninstalled");
+      expect(outcome.body).toContain("installed: not-installed");
+    }
   });
 });

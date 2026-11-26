@@ -10,7 +10,7 @@ import {
   StateEventRecordSchema,
   TargetKindSchema,
 } from "./fold";
-import { escapeUntrusted } from "./redact";
+import { FIELD_LIMITS, sanitizeDisplay } from "./redact";
 
 export const STATE_PREFIX = "papercut:v1:s:";
 export const OCCURRENCE_PREFIX = "papercut:v1:o:";
@@ -20,7 +20,23 @@ export const DEFAULT_OCCURRENCE_SCAN_CAP = 4_000;
 export const MAX_OCCURRENCES_PER_CYCLE = 50;
 export const RESOLVED_RETENTION_MS = 90 * 24 * 60 * 60 * 1_000;
 const MAX_PRUNE_GROUPS_PER_CALL = 5;
+const MAX_RECOVERY_PRUNE_GROUPS = 20;
+const MAX_RECOVERY_STATE_SCAN_CAP = 10_000;
+const MAX_RECOVERY_OCCURRENCE_SCAN_CAP = 20_000;
+const STATE_RESOLVE_HEADROOM = 64;
+const OCCURRENCE_WRITE_HEADROOM = 32;
 const STORAGE_PAGE_LIMIT = 1_000;
+
+const reserveWriteHeadroom = (cap: number, ratio: number, maxHeadroom: number): number =>
+  cap - Math.min(maxHeadroom, Math.max(1, Math.floor(cap * ratio)));
+
+export const logOccurrenceWriteCap = (occurrenceCap: number): number =>
+  occurrenceCap <= 3
+    ? occurrenceCap
+    : reserveWriteHeadroom(occurrenceCap, 0.05, OCCURRENCE_WRITE_HEADROOM);
+
+export const logStateWriteCap = (stateCap: number): number =>
+  stateCap <= 1 ? 0 : reserveWriteHeadroom(stateCap, 0.1, STATE_RESOLVE_HEADROOM);
 
 export const writeLock = Semaphore.makeUnsafe(1);
 
@@ -98,6 +114,10 @@ export interface LoadedStore {
   readonly scanTruncated: boolean;
   readonly stateTruncated: boolean;
   readonly occurrenceTruncated: boolean;
+  readonly stateCount: number;
+  readonly occurrenceCount: number;
+  readonly stateCap: number;
+  readonly occurrenceCap: number;
   readonly problems: ReadonlyArray<string>;
 }
 
@@ -159,6 +179,10 @@ export const loadStore = (
       scanTruncated: stateScan.truncated || occurrenceScan.truncated,
       stateTruncated: stateScan.truncated,
       occurrenceTruncated: occurrenceScan.truncated,
+      stateCount: stateScan.entries.length,
+      occurrenceCount: occurrenceScan.entries.length,
+      stateCap,
+      occurrenceCap,
       problems,
     };
   });
@@ -170,16 +194,15 @@ export const persistEvent = (
 ): Effect.Effect<void> =>
   storage.set(`${kind === "occurrence" ? OCCURRENCE_PREFIX : STATE_PREFIX}${record.id}`, record);
 
-export const pruneExpiredResolvedGroups = (
+const deleteExpiredResolvedGroups = (
   storage: Plugin.Context["storage"],
-  loaded: LoadedStore,
+  groups: ReadonlyMap<string, FoldedGroup>,
   now: number,
-  excludeGroupId?: string,
+  excludeGroupId: string | undefined,
+  maxGroups: number,
 ): Effect.Effect<number> =>
   Effect.gen(function* () {
-    if (loaded.scanTruncated) return 0;
-
-    const expired = [...loaded.groups.values()]
+    const expired = [...groups.values()]
       .filter(
         (group) =>
           group.groupId !== excludeGroupId &&
@@ -190,7 +213,7 @@ export const pruneExpiredResolvedGroups = (
           group.stateKeys.length > 0,
       )
       .toSorted((left, right) => (left.resolvedAt ?? 0) - (right.resolvedAt ?? 0))
-      .slice(0, MAX_PRUNE_GROUPS_PER_CALL);
+      .slice(0, maxGroups);
 
     let pruned = 0;
     for (const group of expired) {
@@ -205,6 +228,54 @@ export const pruneExpiredResolvedGroups = (
     }
 
     return pruned;
+  });
+
+export const pruneExpiredResolvedGroups = (
+  storage: Plugin.Context["storage"],
+  loaded: LoadedStore,
+  now: number,
+  excludeGroupId?: string,
+): Effect.Effect<number> =>
+  loaded.scanTruncated
+    ? Effect.succeed(0)
+    : deleteExpiredResolvedGroups(
+        storage,
+        loaded.groups,
+        now,
+        excludeGroupId,
+        MAX_PRUNE_GROUPS_PER_CALL,
+      );
+
+export const pruneExpiredResolvedForRecovery = (
+  storage: Plugin.Context["storage"],
+  loaded: LoadedStore,
+  now: number,
+  excludeGroupId?: string,
+): Effect.Effect<number> =>
+  Effect.gen(function* () {
+    if (!loaded.scanTruncated) {
+      return yield* deleteExpiredResolvedGroups(
+        storage,
+        loaded.groups,
+        now,
+        excludeGroupId,
+        MAX_RECOVERY_PRUNE_GROUPS,
+      );
+    }
+
+    const recovery = yield* loadStore(storage, {
+      stateScanCap: Math.max(loaded.stateCap, MAX_RECOVERY_STATE_SCAN_CAP),
+      occurrenceScanCap: Math.max(loaded.occurrenceCap, MAX_RECOVERY_OCCURRENCE_SCAN_CAP),
+    });
+    if (recovery.scanTruncated) return 0;
+
+    return yield* deleteExpiredResolvedGroups(
+      storage,
+      recovery.groups,
+      now,
+      excludeGroupId,
+      MAX_RECOVERY_PRUNE_GROUPS,
+    );
   });
 
 export const summarizeOpenPapercuts = (
@@ -229,7 +300,7 @@ export const summarizeOpenPapercuts = (
       const topGroups = open.slice(0, limit).map((group) => ({
         groupId: group.groupId,
         targetKind: group.targetKind,
-        target: escapeUntrusted(group.target),
+        target: sanitizeDisplay(group.target, FIELD_LIMITS.target),
         projects: group.projects,
         occurrences: group.occurrences,
         reopened: group.reopened,

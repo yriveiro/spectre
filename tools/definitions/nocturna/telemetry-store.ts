@@ -110,6 +110,7 @@ const mergeByKey = <T>(
 export const mergeSessionTelemetry = (
   existing: SessionTelemetryRecord,
   incoming: SessionTelemetryRecord,
+  markPartial = false,
 ): SessionTelemetryRecord => {
   const loads = mergeByKey(
     existing.loads,
@@ -132,7 +133,7 @@ export const mergeSessionTelemetry = (
     projectID: incoming.projectID,
     sessionID: incoming.sessionID,
     updatedAt: Math.max(existing.updatedAt, incoming.updatedAt),
-    partial: existing.partial || incoming.partial || truncated,
+    partial: existing.partial || incoming.partial || truncated || markPartial,
     truncated,
     loads: loads.items,
     steps: steps.items,
@@ -144,27 +145,38 @@ export const readSessionTelemetry = (
   sessionID: string,
 ): Effect.Effect<SessionTelemetryRecord | undefined> =>
   Effect.suspend(() =>
-    storage.get(telemetryStorageKey(sessionID)).pipe(
-      Effect.map((raw) => Option.getOrUndefined(decodeRecord(raw))),
-    ),
+    storage
+      .get(telemetryStorageKey(sessionID))
+      .pipe(Effect.map((raw) => Option.getOrUndefined(decodeRecord(raw)))),
   ).pipe(
     Effect.catchCause(() => logTelemetryError("STORAGE_READ_FAILED").pipe(Effect.as(undefined))),
   );
 
+export interface WriteSessionTelemetryOptions {
+  readonly markPartialOnExisting?: boolean;
+}
+
 export const writeSessionTelemetry = (
   storage: Plugin.Context["storage"],
   record: SessionTelemetryRecord,
-): Effect.Effect<void> =>
+  options: WriteSessionTelemetryOptions = {},
+): Effect.Effect<SessionTelemetryRecord | undefined> =>
   Effect.suspend(() =>
     Effect.gen(function* () {
       const key = telemetryStorageKey(record.sessionID);
       const raw = yield* storage.get(key);
       const existing = Option.getOrUndefined(decodeRecord(raw));
-      const merged = existing === undefined ? record : mergeSessionTelemetry(existing, record);
+      const merged =
+        existing === undefined
+          ? record
+          : mergeSessionTelemetry(existing, record, options.markPartialOnExisting === true);
       const encoded = encodeRecord(merged) as unknown as Schema.Json;
       yield* storage.set(key, encoded);
+      return merged;
     }),
-  ).pipe(Effect.catchCause(() => logTelemetryError("STORAGE_WRITE_FAILED")));
+  ).pipe(
+    Effect.catchCause(() => logTelemetryError("STORAGE_WRITE_FAILED").pipe(Effect.as(undefined))),
+  );
 
 export const deleteSessionTelemetry = (
   storage: Plugin.Context["storage"],

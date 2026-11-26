@@ -82,6 +82,11 @@ describe("playbook contracts", () => {
 
     expect(flat).toContain("rows[].ci");
     expect(flat).toContain("github-rejected");
+    expect(flat).not.toContain("rather than a CI failure");
+    expect(flat).toMatch(/github-rejected[^.]*check failed/i);
+    expect(flat).toMatch(/github-rejected[^.]*triage the failed check/i);
+    expect(flat).toMatch(/both the failed check evidence and the merge rejection/i);
+    expect(flat).toMatch(/never retrigger merely to clear/i);
     expect(flat).toContain("unknown");
     expect(flat).toMatch(/stop without retrying/i);
 

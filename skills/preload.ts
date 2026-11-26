@@ -1,4 +1,4 @@
-import { dirname } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import type { Agent, Plugin, Tool } from "@opencode/plugin/effect";
 import type { SessionRequestMessage } from "@opencode/plugin/effect/session";
 import type { ToolHooks } from "@opencode/plugin/effect/tool";
@@ -6,7 +6,7 @@ import type { Permission } from "@opencode/schema/permission";
 import { AbsolutePath } from "@opencode/schema/schema";
 import type { Session } from "@opencode/schema/session";
 import { Cause, Clock, Duration, Effect, Option, Predicate, Schema, type Scope } from "effect";
-import type { LoadedSkill, PreloadOutcome, SkillPreload } from "./definitions/definition";
+import type { LoadedSkill, PreloadContext, PreloadOutcome, SkillPreload } from "./definitions/definition";
 
 export const DEFAULT_TIMEOUT_MS = 2_500;
 export const MIN_TIMEOUT_MS = 100;
@@ -298,59 +298,99 @@ const resolveWorkspaceDirectory = (
     return exists ? AbsolutePath.make(candidate) : undefined;
   });
 
-const evaluateStaticReadPolicy = (
-  ctx: Plugin.Context,
-  input: {
-    readonly agent?: Agent.ID;
-    readonly sessionPermissions?: ReadonlyArray<Permission.Rule>;
-    readonly resources: ReadonlyArray<string>;
-  },
-): Effect.Effect<"allow" | "blocked" | "unknown"> =>
-  Effect.gen(function* () {
-    if (input.agent !== undefined && typeof ctx.agent?.get === "function") {
-      const agentRes = yield* ctx.agent
-        .get({ agentID: input.agent })
-        .pipe(catchNonInterrupt(() => Effect.succeed(undefined)));
-      if (agentRes !== undefined) {
-        const merged = [...agentRes.data.permissions, ...(input.sessionPermissions ?? [])];
-        return evaluateReadRules(merged, input.resources) === "allow" ? "allow" : "blocked";
-      }
-    }
-    if (input.sessionPermissions !== undefined && input.sessionPermissions.length > 0) {
-      return evaluateReadRules(input.sessionPermissions, input.resources) === "allow"
-        ? "allow"
-        : "blocked";
-    }
-    return "unknown";
-  });
+const toReadResource = (directory: string, absolutePath: string): string | undefined => {
+  const root = resolve(directory);
+  const target = resolve(root, absolutePath);
+  const rel = relative(root, target);
+  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return undefined;
+  return rel === "" ? "." : rel.replaceAll("\\", "/");
+};
 
-const checkReadPermission = (
+const loadAgentPermissions = (
+  ctx: Plugin.Context,
+  agent: Agent.ID | undefined,
+): Effect.Effect<ReadonlyArray<Permission.Rule> | undefined> => {
+  if (agent === undefined || typeof ctx.agent?.get !== "function") {
+    return Effect.succeed(undefined);
+  }
+  return ctx.agent.get({ agentID: agent }).pipe(
+    Effect.map((res) => res.data.permissions),
+    catchNonInterrupt(() => Effect.succeed(undefined)),
+  );
+};
+
+const evaluateStaticRules = (
+  agentPermissions: ReadonlyArray<Permission.Rule> | undefined,
+  sessionPermissions: ReadonlyArray<Permission.Rule> | undefined,
+  resources: ReadonlyArray<string>,
+): "allow" | "blocked" | "unknown" => {
+  if (agentPermissions !== undefined) {
+    const merged = [...agentPermissions, ...(sessionPermissions ?? [])];
+    return evaluateReadRules(merged, resources) === "allow" ? "allow" : "blocked";
+  }
+  if (sessionPermissions !== undefined && sessionPermissions.length > 0) {
+    return evaluateReadRules(sessionPermissions, resources) === "allow" ? "allow" : "blocked";
+  }
+  return "unknown";
+};
+
+interface ReadPolicy {
+  readonly checkResources: (resources: ReadonlyArray<string>) => Effect.Effect<boolean>;
+  readonly canRead: (absolutePath: string) => Effect.Effect<boolean>;
+}
+
+const createReadPolicy = (
   ctx: Plugin.Context,
   input: {
+    readonly directory: AbsolutePath;
     readonly sessionID: Session.ID;
     readonly agent?: Agent.ID;
     readonly sessionPermissions?: ReadonlyArray<Permission.Rule>;
-    readonly resources: ReadonlyArray<string>;
     readonly source?: Permission.Source;
   },
-): Effect.Effect<boolean> =>
+): Effect.Effect<ReadPolicy> =>
   Effect.gen(function* () {
-    const staticVerdict = yield* evaluateStaticReadPolicy(ctx, input);
-    if (staticVerdict === "blocked") return false;
-    if (typeof ctx.permission?.assert !== "function") return staticVerdict === "allow";
-    return yield* ctx.permission
-      .assert({
-        sessionID: input.sessionID,
-        ...(input.agent === undefined ? {} : { agent: input.agent }),
-        action: "read",
-        resources: [...input.resources],
-        ...(input.source === undefined ? {} : { source: input.source }),
-      })
-      .pipe(
-        Effect.as(true),
-        catchNonInterrupt(() => Effect.succeed(false)),
-      );
+    const agentPermissions = yield* loadAgentPermissions(ctx, input.agent);
+    const cache = new Map<string, boolean>();
+
+    const checkResources = (resources: ReadonlyArray<string>): Effect.Effect<boolean> =>
+      Effect.gen(function* () {
+        const staticVerdict = evaluateStaticRules(
+          agentPermissions,
+          input.sessionPermissions,
+          resources,
+        );
+        if (staticVerdict !== "allow") return false;
+        if (typeof ctx.permission?.assert !== "function") return true;
+        return yield* ctx.permission
+          .assert({
+            sessionID: input.sessionID,
+            ...(input.agent === undefined ? {} : { agent: input.agent }),
+            action: "read",
+            resources: [...resources],
+            ...(input.source === undefined ? {} : { source: input.source }),
+          })
+          .pipe(
+            Effect.as(true),
+            catchNonInterrupt(() => Effect.succeed(false)),
+          );
+      });
+
+    const canRead = (absolutePath: string): Effect.Effect<boolean> =>
+      Effect.gen(function* () {
+        const resource = toReadResource(input.directory, absolutePath);
+        if (resource === undefined) return false;
+        const cached = cache.get(resource);
+        if (cached !== undefined) return cached;
+        const allowed = yield* checkResources([resource]);
+        cache.set(resource, allowed);
+        return allowed;
+      });
+
+    return { checkResources, canRead };
   });
+
+const DENY_ALL_READ: PreloadContext["canRead"] = () => Effect.succeed(false);
 
 const makeOmitted = (
   skill: string,
@@ -375,7 +415,11 @@ type SettledRun =
 const runPreloadWithTimeout = (
   skillId: string,
   preload: SkillPreload,
-  input: { readonly directory: AbsolutePath; readonly sessionID: Session.ID },
+  input: {
+    readonly directory: AbsolutePath;
+    readonly sessionID: Session.ID;
+    readonly canRead?: PreloadContext["canRead"];
+  },
   timeoutMs: number,
 ): Effect.Effect<SettledRun> =>
   Effect.scoped(
@@ -388,6 +432,7 @@ const runPreloadWithTimeout = (
         directory: input.directory,
         sessionID: input.sessionID,
         signal: controller.signal,
+        canRead: input.canRead ?? DENY_ALL_READ,
       });
     }),
   ).pipe(
@@ -456,7 +501,11 @@ const finalizePreloadOutcome = (
 
 export const executePreload = (
   skill: LoadedSkill,
-  input: { readonly directory: AbsolutePath; readonly sessionID: Session.ID },
+  input: {
+    readonly directory: AbsolutePath;
+    readonly sessionID: Session.ID;
+    readonly canRead?: PreloadContext["canRead"];
+  },
 ): Effect.Effect<ExecutedPreload> =>
   Effect.gen(function* () {
     const preload = skill.preload;
@@ -741,16 +790,23 @@ const handleToolAfter = (
       const directory = yield* resolveWorkspaceDirectory(ctx, sessionInfo);
       if (directory === undefined) return;
 
-      const allowed = yield* checkReadPermission(ctx, {
+      const policy = yield* createReadPolicy(ctx, {
+        directory,
         sessionID: event.sessionID,
         agent: event.agent,
         sessionPermissions: sessionInfo?.permissions,
-        resources: skill.preload.readResources ?? DEFAULT_READ_RESOURCES,
         source: { type: "tool", messageID: event.messageID, id: event.id },
       });
+      const allowed = yield* policy.checkResources(
+        skill.preload.readResources ?? DEFAULT_READ_RESOURCES,
+      );
       if (!allowed) return;
 
-      const executed = yield* executePreload(skill, { directory, sessionID: event.sessionID });
+      const executed = yield* executePreload(skill, {
+        directory,
+        sessionID: event.sessionID,
+        canRead: policy.canRead,
+      });
       if (executed.kind !== "attached" || executed.block === undefined) return;
 
       event.result = appendPreloadToToolResult(event.result, {
@@ -765,20 +821,15 @@ const handleToolAfter = (
   );
 
 const authorizePromptSkills = (
-  ctx: Plugin.Context,
-  sessionID: Session.ID,
-  sessionInfo: Session.Info | undefined,
+  policy: ReadPolicy,
   skills: ReadonlyArray<LoadedSkill>,
 ): Effect.Effect<ReadonlyArray<LoadedSkill>> =>
   Effect.gen(function* () {
     const authorized: Array<LoadedSkill> = [];
     for (const skill of skills) {
-      const allowed = yield* checkReadPermission(ctx, {
-        sessionID,
-        agent: sessionInfo?.agent,
-        sessionPermissions: sessionInfo?.permissions,
-        resources: skill.preload?.readResources ?? DEFAULT_READ_RESOURCES,
-      });
+      const allowed = yield* policy.checkResources(
+        skill.preload?.readResources ?? DEFAULT_READ_RESOURCES,
+      );
       if (allowed) authorized.push(skill);
     }
     return authorized;
@@ -809,12 +860,23 @@ const handleSessionPrompt = (
       const directory = yield* resolveWorkspaceDirectory(ctx, sessionInfo);
       if (directory === undefined) return;
 
-      const authorized = yield* authorizePromptSkills(ctx, event.sessionID, sessionInfo, owned);
+      const policy = yield* createReadPolicy(ctx, {
+        directory,
+        sessionID: event.sessionID,
+        agent: sessionInfo?.agent,
+        sessionPermissions: sessionInfo?.permissions,
+      });
+      const authorized = yield* authorizePromptSkills(policy, owned);
       if (authorized.length === 0) return;
 
       const results = yield* Effect.forEach(
         authorized,
-        (skill) => executePreload(skill, { directory, sessionID: event.sessionID }),
+        (skill) =>
+          executePreload(skill, {
+            directory,
+            sessionID: event.sessionID,
+            canRead: policy.canRead,
+          }),
         { concurrency: MAX_PROMPT_PRELOADS },
       );
       const entries = collectAdmittedEntries(results);

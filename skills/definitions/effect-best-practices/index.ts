@@ -19,7 +19,10 @@ type ManifestRecord = Record<string, unknown>;
 const readBoundedJson = async (
   filePath: string,
   signal: AbortSignal,
+  canRead: (absolutePath: string) => Promise<boolean>,
 ): Promise<{ readonly kind: "ok"; readonly value: ManifestRecord } | { readonly kind: "missing" | "oversized" | "invalid" }> => {
+  if (signal.aborted) return { kind: "missing" };
+  if (!(await canRead(filePath))) return { kind: "missing" };
   if (signal.aborted) return { kind: "missing" };
   const file = Bun.file(filePath);
   if (!(await file.exists())) return { kind: "missing" };
@@ -58,8 +61,9 @@ const collectEffectDeclarations = (manifest: ManifestRecord) => {
 const probeEffectWorkspace = async (
   directory: string,
   signal: AbortSignal,
+  canRead: (absolutePath: string) => Promise<boolean>,
 ): Promise<PreloadOutcome> => {
-  const manifestRes = await readBoundedJson(join(directory, "package.json"), signal);
+  const manifestRes = await readBoundedJson(join(directory, "package.json"), signal, canRead);
   if (manifestRes.kind === "oversized") {
     return { kind: "skip", reason: "package.json exceeds preload read bound" };
   }
@@ -72,6 +76,7 @@ const probeEffectWorkspace = async (
   const installedRes = await readBoundedJson(
     join(directory, "node_modules/effect/package.json"),
     signal,
+    canRead,
   );
   if (installedRes.kind === "oversized") {
     return { kind: "skip", reason: "node_modules/effect/package.json exceeds preload read bound" };
@@ -85,12 +90,14 @@ const probeEffectWorkspace = async (
     return { kind: "skip", reason: "effect is not declared or installed in this workspace" };
   }
 
-  const distPresent = signal.aborted
-    ? false
-    : await Bun.file(join(directory, "node_modules/effect/dist"))
-        .stat()
-        .then((stat) => stat.isDirectory())
-        .catch(() => false);
+  const distPath = join(directory, "node_modules/effect/dist");
+  const distPresent =
+    signal.aborted || !(await canRead(distPath))
+      ? false
+      : await Bun.file(distPath)
+          .stat()
+          .then((stat) => stat.isDirectory())
+          .catch(() => false);
 
   const status =
     installedVersion === undefined
@@ -125,7 +132,18 @@ const effectPreload: SkillPreload = {
   maxLines: 30,
   run: (context) =>
     Effect.tryPromise({
-      try: () => probeEffectWorkspace(context.directory, context.signal),
+      try: () =>
+        probeEffectWorkspace(context.directory, context.signal, async (absolutePath) => {
+          if (context.signal.aborted) return false;
+          try {
+            return await Effect.runPromise(context.canRead(absolutePath), {
+              signal: context.signal,
+            });
+          } catch (cause) {
+            if (context.signal.aborted) return false;
+            throw cause;
+          }
+        }),
       catch: (cause) => cause,
     }),
 };

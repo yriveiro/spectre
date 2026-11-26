@@ -81,9 +81,21 @@ const solidjsPreload: SkillPreload = {
   run: (context) =>
     Effect.tryPromise({
       try: async (): Promise<PreloadOutcome> => {
+        const canRead = async (absolutePath: string): Promise<boolean> => {
+          if (context.signal.aborted) throw new DetectAbortedError();
+          try {
+            return await Effect.runPromise(context.canRead(absolutePath), {
+              signal: context.signal,
+            });
+          } catch (cause) {
+            if (context.signal.aborted) throw new DetectAbortedError();
+            throw cause;
+          }
+        };
         try {
           const report = await detect(context.directory, {
             signal: context.signal,
+            canRead,
             ...SOLIDJS_DETECT_BOUNDS,
           });
           return { kind: "ok", body: formatSolidReport(context.directory, report) };

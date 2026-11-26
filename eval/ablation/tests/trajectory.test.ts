@@ -10,6 +10,7 @@ const makeToolPart = (input: {
   readonly id: string;
   readonly name: string;
   readonly created: number;
+  readonly ran?: number;
   readonly completed?: number;
   readonly args: Record<string, unknown>;
   readonly status?: "completed" | "error" | "running";
@@ -51,6 +52,7 @@ const makeToolPart = (input: {
     state: baseState as SessionMessageAssistantTool["state"],
     time: {
       created: input.created,
+      ...(input.ran === undefined ? {} : { ran: input.ran }),
       ...(input.completed === undefined ? {} : { completed: input.completed }),
     },
   };
@@ -385,5 +387,242 @@ describe("v2.4.2 wire decoding and causal trajectory grading", () => {
         }),
       ).kind,
     ).toBe("killed");
+  });
+
+  test("rejects overlapping production edits when an earlier-created edit finishes after the green run", async () => {
+    const scenario = await loadScenario(SCENARIO_PATH);
+
+    const overlappingProd = extractTrajectory({
+      scenario,
+      parent: makeTranscript([
+        makeAssistant("m1", [
+          makeToolPart({
+            id: "c1",
+            name: "edit",
+            created: 100,
+            ran: 100,
+            completed: 110,
+            args: { path: "spec/limiter.spec.ts" },
+          }),
+          makeToolPart({
+            id: "c2",
+            name: "shell",
+            created: 120,
+            ran: 120,
+            completed: 150,
+            args: { command: "bun test" },
+            text: "4 pass\n1 fail\nExpected: true\nReceived: false",
+            metadata: { status: "completed", exit: 1 },
+          }),
+          makeToolPart({
+            id: "c3",
+            name: "edit",
+            created: 160,
+            ran: 160,
+            completed: 250,
+            args: { path: "src/limiter.ts" },
+          }),
+          makeToolPart({
+            id: "c4",
+            name: "edit",
+            created: 170,
+            ran: 170,
+            completed: 180,
+            args: { path: "src/limiter.ts" },
+          }),
+          makeToolPart({
+            id: "c5",
+            name: "shell",
+            created: 190,
+            ran: 190,
+            completed: 210,
+            args: { command: "bun test" },
+            text: "5 pass\n0 fail",
+            metadata: { status: "completed", exit: 0 },
+          }),
+        ]),
+      ]),
+      children: new Map(),
+    });
+
+    expect(overlappingProd.trajectory.greenRunAfterLastProdEdit).toBe(false);
+    expect(overlappingProd.trajectory.causalRedBeforeEdit).toBe(false);
+    expect(overlappingProd.trajectory.redWitnessRejectionReasons).toContain(
+      "no_green_test_after_last_prod_edit",
+    );
+
+    const greenAfterAllProdEdits = extractTrajectory({
+      scenario,
+      parent: makeTranscript([
+        makeAssistant("m1", [
+          makeToolPart({
+            id: "c1",
+            name: "edit",
+            created: 100,
+            ran: 100,
+            completed: 110,
+            args: { path: "spec/limiter.spec.ts" },
+          }),
+          makeToolPart({
+            id: "c2",
+            name: "shell",
+            created: 120,
+            ran: 120,
+            completed: 150,
+            args: { command: "bun test" },
+            text: "4 pass\n1 fail\nExpected: true\nReceived: false",
+            metadata: { status: "completed", exit: 1 },
+          }),
+          makeToolPart({
+            id: "c3",
+            name: "edit",
+            created: 160,
+            ran: 160,
+            completed: 250,
+            args: { path: "src/limiter.ts" },
+          }),
+          makeToolPart({
+            id: "c4",
+            name: "edit",
+            created: 170,
+            ran: 170,
+            completed: 180,
+            args: { path: "src/limiter.ts" },
+          }),
+          makeToolPart({
+            id: "c5",
+            name: "shell",
+            created: 190,
+            ran: 260,
+            completed: 290,
+            args: { command: "bun test" },
+            text: "5 pass\n0 fail",
+            metadata: { status: "completed", exit: 0 },
+          }),
+        ]),
+      ]),
+      children: new Map(),
+    });
+
+    expect(greenAfterAllProdEdits.trajectory.greenRunAfterLastProdEdit).toBe(true);
+    expect(greenAfterAllProdEdits.trajectory.causalRedBeforeEdit).toBe(true);
+    expect(greenAfterAllProdEdits.trajectory.redWitnessRejectionReasons).toEqual([]);
+  });
+
+  test("rejects unsettled or errored production edits as a valid green state", async () => {
+    const scenario = await loadScenario(SCENARIO_PATH);
+
+    const unsettledProd = extractTrajectory({
+      scenario,
+      parent: makeTranscript([
+        makeAssistant("m1", [
+          makeToolPart({
+            id: "c1",
+            name: "edit",
+            created: 100,
+            ran: 100,
+            completed: 110,
+            args: { path: "spec/limiter.spec.ts" },
+          }),
+          makeToolPart({
+            id: "c2",
+            name: "shell",
+            created: 120,
+            ran: 120,
+            completed: 150,
+            args: { command: "bun test" },
+            text: "4 pass\n1 fail\nExpected: true\nReceived: false",
+            metadata: { status: "completed", exit: 1 },
+          }),
+          makeToolPart({
+            id: "c3",
+            name: "edit",
+            created: 160,
+            ran: 160,
+            completed: 170,
+            args: { path: "src/limiter.ts" },
+          }),
+          makeToolPart({
+            id: "c4",
+            name: "edit",
+            created: 175,
+            ran: 175,
+            status: "running",
+            args: { path: "src/limiter.ts" },
+          }),
+          makeToolPart({
+            id: "c5",
+            name: "shell",
+            created: 200,
+            ran: 200,
+            completed: 220,
+            args: { command: "bun test" },
+            text: "5 pass\n0 fail",
+            metadata: { status: "completed", exit: 0 },
+          }),
+        ]),
+      ]),
+      children: new Map(),
+    });
+
+    expect(unsettledProd.trajectory.greenRunAfterLastProdEdit).toBe(false);
+    expect(unsettledProd.trajectory.causalRedBeforeEdit).toBe(false);
+
+    const erroredProd = extractTrajectory({
+      scenario,
+      parent: makeTranscript([
+        makeAssistant("m1", [
+          makeToolPart({
+            id: "c1",
+            name: "edit",
+            created: 100,
+            ran: 100,
+            completed: 110,
+            args: { path: "spec/limiter.spec.ts" },
+          }),
+          makeToolPart({
+            id: "c2",
+            name: "shell",
+            created: 120,
+            ran: 120,
+            completed: 150,
+            args: { command: "bun test" },
+            text: "4 pass\n1 fail\nExpected: true\nReceived: false",
+            metadata: { status: "completed", exit: 1 },
+          }),
+          makeToolPart({
+            id: "c3",
+            name: "edit",
+            created: 160,
+            ran: 160,
+            completed: 170,
+            args: { path: "src/limiter.ts" },
+          }),
+          makeToolPart({
+            id: "c4",
+            name: "edit",
+            created: 175,
+            ran: 175,
+            completed: 185,
+            status: "error",
+            args: { path: "src/limiter.ts" },
+          }),
+          makeToolPart({
+            id: "c5",
+            name: "shell",
+            created: 200,
+            ran: 200,
+            completed: 220,
+            args: { command: "bun test" },
+            text: "5 pass\n0 fail",
+            metadata: { status: "completed", exit: 0 },
+          }),
+        ]),
+      ]),
+      children: new Map(),
+    });
+
+    expect(erroredProd.trajectory.greenRunAfterLastProdEdit).toBe(false);
+    expect(erroredProd.trajectory.causalRedBeforeEdit).toBe(false);
   });
 });

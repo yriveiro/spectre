@@ -217,18 +217,25 @@ const matchesTargetFiles = (
 const fileArgOf = (event: ToolCallEvent): string | undefined =>
   pickText(event.input, "path", "filePath");
 
-const completedBeforeStart = (earlier: ToolCallEvent, later: ToolCallEvent): boolean => {
-  if (earlier.completedAt === undefined) return false;
-  if (earlier.completedAt < later.createdAt) return true;
-  if (earlier.completedAt > later.createdAt) return false;
-  return earlier.seq < later.seq;
+const startTimeOf = (event: ToolCallEvent): number => event.ranAt ?? event.createdAt;
+
+const isCompletedWitness = (event: ToolCallEvent): boolean =>
+  event.status === "completed" && event.completedAt !== undefined;
+
+const startedEarlier = (left: ToolCallEvent, right: ToolCallEvent): boolean => {
+  const leftStart = startTimeOf(left);
+  const rightStart = startTimeOf(right);
+  if (leftStart !== rightStart) return leftStart < rightStart;
+  return left.sessionID === right.sessionID && left.seq < right.seq;
 };
 
-const startedAfterEnd = (later: ToolCallEvent, earlier: ToolCallEvent): boolean => {
-  const earlierEnd = earlier.completedAt ?? earlier.createdAt;
-  if (later.createdAt > earlierEnd) return true;
-  if (later.createdAt < earlierEnd) return false;
-  return later.seq > earlier.seq;
+const completedBeforeStart = (earlier: ToolCallEvent, later: ToolCallEvent): boolean => {
+  if (!isCompletedWitness(earlier)) return false;
+  const earlierEnd = earlier.completedAt!;
+  const laterStart = startTimeOf(later);
+  if (earlierEnd < laterStart) return true;
+  if (earlierEnd > laterStart) return false;
+  return earlier.sessionID === later.sessionID && earlier.seq < later.seq;
 };
 
 const collectEvents = (
@@ -267,6 +274,61 @@ const collectEvents = (
   return seq;
 };
 
+const classifyRedWitness = (
+  run: ToolCallEvent,
+  earliestProdEdit: ToolCallEvent,
+): "valid" | "ignore" | string => {
+  if (!startedEarlier(run, earliestProdEdit)) return "ignore";
+  if (!completedBeforeStart(run, earliestProdEdit)) {
+    return run.shellOutcome?.kind === "failed"
+      ? "red_test_not_completed_before_prod_edit"
+      : "red_test_incomplete_or_non_exit";
+  }
+  const outcome = run.shellOutcome;
+  if (outcome === undefined || outcome.kind === "passed") return "ignore";
+  if (outcome.kind !== "failed") return "red_test_incomplete_or_non_exit";
+  if (isSyntaxOrSetupError(run.outputText)) return "red_test_was_syntax_or_setup_error";
+  if (!hasAssertionFailureEvidence(run.outputText)) return "red_test_missing_assertion_evidence";
+  return "valid";
+};
+
+const collectValidRedWitnesses = (
+  testRuns: ReadonlyArray<ToolCallEvent>,
+  earliestProdEdit: ToolCallEvent,
+  reasons: Set<string>,
+): ReadonlyArray<ToolCallEvent> => {
+  const valid: Array<ToolCallEvent> = [];
+  for (const run of testRuns) {
+    const verdict = classifyRedWitness(run, earliestProdEdit);
+    if (verdict === "valid") valid.push(run);
+    else if (verdict !== "ignore") reasons.add(verdict);
+  }
+  return valid;
+};
+
+const hasGreenRunAfterProdEdits = (
+  testRuns: ReadonlyArray<ToolCallEvent>,
+  prodEdits: ReadonlyArray<ToolCallEvent>,
+  reasons: Set<string>,
+): boolean => {
+  if (prodEdits.some((edit) => !isCompletedWitness(edit))) {
+    reasons.add("unsettled_or_errored_prod_edit");
+    return false;
+  }
+  const latestProdEditCompletedAt = prodEdits.reduce(
+    (max, edit) => Math.max(max, edit.completedAt!),
+    -Infinity,
+  );
+  return testRuns.some(
+    (run) =>
+      isCompletedWitness(run) &&
+      run.shellOutcome?.kind === "passed" &&
+      hasPassingTestEvidence(run.outputText) &&
+      startTimeOf(run) >= latestProdEditCompletedAt &&
+      prodEdits.every((edit) => completedBeforeStart(edit, run)),
+  );
+};
+
 const gradeCausalRedBeforeEdit = (input: {
   readonly scenario: AblationScenario;
   readonly events: ReadonlyArray<ToolCallEvent>;
@@ -280,13 +342,15 @@ const gradeCausalRedBeforeEdit = (input: {
 } => {
   const testCmd = new RegExp(input.scenario.testCommandRegex);
   const editEvents = input.events.filter(
-    (event) => (event.name === "edit" || event.name === "write") && !event.isToolError,
+    (event) => event.name === "edit" || event.name === "write",
   );
   const prodEdits = editEvents.filter((event) =>
     matchesTargetFiles(fileArgOf(event), input.scenario.productionFiles, input.workspaceDir),
   );
-  const testEdits = editEvents.filter((event) =>
-    matchesTargetFiles(fileArgOf(event), input.scenario.testFiles, input.workspaceDir),
+  const testEdits = editEvents.filter(
+    (event) =>
+      isCompletedWitness(event) &&
+      matchesTargetFiles(fileArgOf(event), input.scenario.testFiles, input.workspaceDir),
   );
   const testRuns = input.events.filter(
     (event) =>
@@ -296,9 +360,7 @@ const gradeCausalRedBeforeEdit = (input: {
 
   const reasons = new Set<string>();
   const firstProdEdit = prodEdits[0];
-  const lastProdEdit = prodEdits.at(-1);
-
-  if (firstProdEdit === undefined || lastProdEdit === undefined) {
+  if (firstProdEdit === undefined) {
     reasons.add("no_production_edit");
     return {
       causalRedBeforeEdit: false,
@@ -309,39 +371,12 @@ const gradeCausalRedBeforeEdit = (input: {
     };
   }
 
-  const validRedWitnesses: Array<ToolCallEvent> = [];
-  for (const run of testRuns) {
-    const startedBefore =
-      run.createdAt < firstProdEdit.createdAt ||
-      (run.createdAt === firstProdEdit.createdAt && run.seq < firstProdEdit.seq);
-    if (!startedBefore) continue;
-
-    if (!completedBeforeStart(run, firstProdEdit)) {
-      if (run.shellOutcome?.kind === "failed") {
-        reasons.add("red_test_not_completed_before_prod_edit");
-      } else {
-        reasons.add("red_test_incomplete_or_non_exit");
-      }
-      continue;
-    }
-
-    const outcome = run.shellOutcome;
-    if (outcome === undefined || outcome.kind === "passed") continue;
-    if (outcome.kind !== "failed") {
-      reasons.add("red_test_incomplete_or_non_exit");
-      continue;
-    }
-    if (isSyntaxOrSetupError(run.outputText)) {
-      reasons.add("red_test_was_syntax_or_setup_error");
-      continue;
-    }
-    if (!hasAssertionFailureEvidence(run.outputText)) {
-      reasons.add("red_test_missing_assertion_evidence");
-      continue;
-    }
-    validRedWitnesses.push(run);
+  let earliestProdEdit = firstProdEdit;
+  for (const edit of prodEdits.slice(1)) {
+    if (startedEarlier(edit, earliestProdEdit)) earliestProdEdit = edit;
   }
 
+  const validRedWitnesses = collectValidRedWitnesses(testRuns, earliestProdEdit, reasons);
   const redRunCompletedBeforeProdEdit = validRedWitnesses.length > 0;
   if (!redRunCompletedBeforeProdEdit && reasons.size === 0) {
     reasons.add("prod_edit_before_red_test");
@@ -354,12 +389,7 @@ const gradeCausalRedBeforeEdit = (input: {
     reasons.add("no_test_edit_before_red_run");
   }
 
-  const greenRunAfterLastProdEdit = testRuns.some(
-    (run) =>
-      run.shellOutcome?.kind === "passed" &&
-      hasPassingTestEvidence(run.outputText) &&
-      startedAfterEnd(run, lastProdEdit),
-  );
+  const greenRunAfterLastProdEdit = hasGreenRunAfterProdEdits(testRuns, prodEdits, reasons);
   if (!greenRunAfterLastProdEdit) {
     reasons.add("no_green_test_after_last_prod_edit");
   }
@@ -389,7 +419,10 @@ export const extractTrajectory = (input: {
   }
 
   const events = rawEvents.toSorted(
-    (left, right) => left.createdAt - right.createdAt || left.seq - right.seq,
+    (left, right) =>
+      startTimeOf(left) - startTimeOf(right) ||
+      left.createdAt - right.createdAt ||
+      left.seq - right.seq,
   );
 
   const activatedSet = new Set<string>(input.parent.activated);

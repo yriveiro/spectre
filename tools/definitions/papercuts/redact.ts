@@ -13,12 +13,23 @@ export const FIELD_LIMITS = {
   repo: 80,
 } as const;
 
+const REDACTED_GUARD = String.raw`(?!\[REDACTED(?:_[A-Z]+)?\])`;
+const SENSITIVE_KEY_NAME =
+  "(?:[A-Za-z0-9]+[._-]){0,4}(?:api[_-]?key|apikey|access[_-]?key(?:[_-]?id)?|private[_-]?key|secret[_-]?key|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|authorization|auth|cookie|bearer|password|passwd|pwd|secret|token|pat|credential|credentials)";
+const SENSITIVE_KEY_ASSIGN =
+  String.raw`(?:\\"${SENSITIVE_KEY_NAME}\\"|"${SENSITIVE_KEY_NAME}"|'${SENSITIVE_KEY_NAME}'|` +
+  "`" +
+  SENSITIVE_KEY_NAME +
+  "`" +
+  String.raw`|\b${SENSITIVE_KEY_NAME}\b)\s*[:=]\s*`;
+
 const PEM_PRIVATE_KEY =
   /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g;
 const URL_CREDENTIALS = /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^/\s@:]+(?::[^/\s@]*)?)@/g;
 const SECRET_QUERY_PARAM =
-  /([?&](?:token|access_token|refresh_token|api_key|apikey|key|secret|sig|signature|auth|password|passwd|jwt)=)[^&\s"'`<>]+/gi;
-const AUTH_HEADER = /(\bAuthorization\s*:\s*(?:Bearer|Basic|Token)\s+)[^\s"',;}\]]+/gi;
+  /([?&](?:token|access_token|refresh_token|api_key|apikey|access_key|private_key|client_secret|authorization|bearer|cookie|key|secret|sig|signature|auth|password|passwd|pwd|jwt)=)(?!\[REDACTED(?:_[A-Z]+)?\])[^&\s"'`<>]+/gi;
+const AUTH_HEADER =
+  /((?:\\?"|'|`)?\bAuthorization(?:\\?"|'|`)?\s*:\s*(?:\\?"|'|`)?(?:Bearer|Basic|Token)\s+)(?!\[REDACTED(?:_[A-Z]+)?\])[^\s"'`,;}\]\\]+/gi;
 const BEARER_OR_BASIC = /(\b(?:Bearer|Basic)\s+)[A-Za-z0-9._~+/=-]{8,}/gi;
 const GITHUB_CLASSIC_TOKEN = /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{16,}\b/g;
 const GITHUB_FINE_PAT = /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g;
@@ -30,8 +41,28 @@ const PYPI_TOKEN = /\bpypi-[A-Za-z0-9_-]{20,}\b/g;
 const GOOGLE_API_KEY = /\bAIza[0-9A-Za-z_-]{20,}\b/g;
 const AWS_ACCESS_KEY = /\b(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}\b/g;
 const JWT_TOKEN = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
-const KEY_VALUE_SECRET =
-  /(\b(?:api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|auth[_-]?token|client[_-]?secret|private[_-]?key|secret[_-]?key|aws[_-]?secret[_-]?access[_-]?key|password|passwd|pwd|secret|token|pat|credential|credentials)\s*[:=]\s*["']?)([^\s"',;}\]]{4,})(["']?)/gi;
+const JSON_ESCAPED_QUOTED_SECRET = new RegExp(
+  String.raw`(${SENSITIVE_KEY_ASSIGN}\\")${REDACTED_GUARD}(?!(?:Bearer|Basic|Token)\s+\[REDACTED(?:_[A-Z]+)?\]\\")(?:[^\\"]|\\\\\\\\|\\\\\\"|\\\\[^\\"]|\\[^\\"])+(\\")`,
+  "gi",
+);
+const DOUBLE_QUOTED_SECRET = new RegExp(
+  String.raw`(${SENSITIVE_KEY_ASSIGN}")${REDACTED_GUARD}(?!(?:Bearer|Basic|Token)\s+\[REDACTED(?:_[A-Z]+)?\]")(?:[^"\\]|\\.)+(")`,
+  "gi",
+);
+const SINGLE_QUOTED_SECRET = new RegExp(
+  String.raw`(${SENSITIVE_KEY_ASSIGN}')${REDACTED_GUARD}(?!(?:Bearer|Basic|Token)\s+\[REDACTED(?:_[A-Z]+)?\]')(?:[^'\\]|\\.)+(')`,
+  "gi",
+);
+const UNQUOTED_COOKIE_SECRET = new RegExp(
+  String.raw`(\b(?:Set-)?Cookie\s*:\s*)${REDACTED_GUARD}(?!["']|\\")[^\s"',;}\]]+(?:\s*;\s*[^\s"',;}\]]+)*`,
+  "gi",
+);
+const UNQUOTED_KEY_VALUE_SECRET = new RegExp(
+  String.raw`(${SENSITIVE_KEY_ASSIGN})${REDACTED_GUARD}(?!\\")(?!(?:Bearer|Basic|Token)\s+\[REDACTED(?:_[A-Z]+)?\])(?!(?:null|true|false|undefined)(?=[\s,}\]\)]|$))[^\s"'` +
+    "`" +
+    String.raw`,;}\]{[\]]{3,}`,
+  "gi",
+);
 const EMAIL_ADDRESS = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 const POSIX_HOME_PATH = /(?:file:\/\/)?\/(?:Users|home)\/[^/\s"'`<>]+(?:\/[^\s"'`<>]*)?/g;
 const WINDOWS_HOME_PATH = /[A-Za-z]:\\Users\\[^\s"'`<>]+/g;
@@ -77,7 +108,11 @@ export const redactText = (raw: string, maxChars: number): string => {
       .replace(GOOGLE_API_KEY, "[REDACTED_TOKEN]")
       .replace(AWS_ACCESS_KEY, "[REDACTED_TOKEN]")
       .replace(JWT_TOKEN, "[REDACTED_TOKEN]")
-      .replace(KEY_VALUE_SECRET, "$1[REDACTED]$3")
+      .replace(JSON_ESCAPED_QUOTED_SECRET, "$1[REDACTED]$2")
+      .replace(DOUBLE_QUOTED_SECRET, "$1[REDACTED]$2")
+      .replace(SINGLE_QUOTED_SECRET, "$1[REDACTED]$2")
+      .replace(UNQUOTED_COOKIE_SECRET, "$1[REDACTED]")
+      .replace(UNQUOTED_KEY_VALUE_SECRET, "$1[REDACTED]")
       .replace(EMAIL_ADDRESS, "[REDACTED_EMAIL]")
       .replace(POSIX_HOME_PATH, "[REDACTED_PATH]")
       .replace(WINDOWS_HOME_PATH, "[REDACTED_PATH]"),
@@ -106,6 +141,14 @@ export const escapeUntrusted = (text: string): string =>
 
 export const escapeOptional = (text: string | undefined): string | undefined =>
   text === undefined ? undefined : escapeUntrusted(text);
+
+export const sanitizeDisplay = (text: string, maxChars: number): string =>
+  escapeUntrusted(redactText(text, maxChars));
+
+export const sanitizeDisplayOptional = (
+  text: string | undefined,
+  maxChars: number,
+): string | undefined => escapeOptional(redactOptional(text, maxChars));
 
 export const fenceUntrusted = (escapedBody: string): string =>
   `<UNTRUSTED_CONTENT>\n${escapedBody}\n</UNTRUSTED_CONTENT>`;

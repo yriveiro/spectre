@@ -422,6 +422,209 @@ describe("fail-closed secret & PII redaction and untrusted read fencing", () => 
     expect(escapeUntrusted("<tag & 'x'>")).toBe("&lt;tag &amp; 'x'&gt;");
     expect(sanitizeRepoName("/Users/alice/work/my-service")).toBe("my-service");
   });
+
+  test("redacts quoted JSON/YAML secrets in storage and re-scrubs legacy unredacted rows on read/display paths", async () => {
+    const quotedSample = [
+      '{"api_key":"my_super_secret_marker_99"}',
+      `'client_secret': "tok_987654"`,
+      `'access_token': 'acc_tok_4567'`,
+      String.raw`{\"password\":\"escaped_pwd_123\"}`,
+      '{"authorization": "raw_auth_hdr_77", "auth": "auth_secret_88", "cookie": "sid=cookie_val_99; csrf=csrf_val_11"}',
+      '{"private_key": "priv_key_22", "access_key": "acc_key_33", "bearer": "bear_val_44", "passwd": "pw_val_55", "pwd": "pwd_val_66", "apikey": "ak_val_77", "secret": "sec_val_88", "token": "tok_val_99"}',
+      "api_key=unquoted_api_key_00",
+    ].join(" ");
+
+    const scrubbedOnce = redactText(quotedSample, 4000);
+    const scrubbedTwice = redactText(scrubbedOnce, 4000);
+    expect(scrubbedTwice).toBe(scrubbedOnce);
+
+    for (const secret of [
+      "my_super_secret_marker_99",
+      "tok_987654",
+      "acc_tok_4567",
+      "escaped_pwd_123",
+      "raw_auth_hdr_77",
+      "auth_secret_88",
+      "cookie_val_99",
+      "csrf_val_11",
+      "priv_key_22",
+      "acc_key_33",
+      "bear_val_44",
+      "pw_val_55",
+      "pwd_val_66",
+      "ak_val_77",
+      "sec_val_88",
+      "tok_val_99",
+      "unquoted_api_key_00",
+    ]) {
+      expect(scrubbedOnce).not.toContain(secret);
+    }
+
+    const { storage, data } = makeMemoryStorage();
+    const ctxA = makeCtx(storage, { projectId: "proj_a", canonical: "/work/repo-a" });
+    const ctxB = makeCtx(storage, { projectId: "proj_b", canonical: "/work/repo-b" });
+    const toolA = papercuts(ctxA, () => BASE_TIME);
+    const toolB = papercuts(ctxB, () => BASE_TIME + 1_000);
+
+    const logged = await Effect.runPromise(
+      toolA.execute(
+        sampleLogInput({
+          actual: 'Request failed with {"api_key":"my_super_secret_marker_99"}',
+          workaround: `Pass 'client_secret': "tok_987654" via env`,
+          context: String.raw`payload {\"token\":\"escaped_tok_555\"}`,
+        }),
+        callCtx("ses_json_1"),
+      ),
+    );
+    expect(logged.output?.status).toBe("logged");
+    if (logged.output?.status !== "logged") throw new Error("expected logged");
+
+    const storedAfterLog = JSON.stringify([...data.entries()]);
+    expect(storedAfterLog).not.toContain("my_super_secret_marker_99");
+    expect(storedAfterLog).not.toContain("tok_987654");
+    expect(storedAfterLog).not.toContain("escaped_tok_555");
+
+    const crossQuery = await Effect.runPromise(
+      toolB.execute(
+        { action: "query", groupId: logged.output.groupId, includeOccurrences: true },
+        callCtx("ses_json_q"),
+      ),
+    );
+    expect(crossQuery.output?.status).toBe("queried");
+    const serializedCross = JSON.stringify(crossQuery);
+    expect(serializedCross).not.toContain("my_super_secret_marker_99");
+    expect(serializedCross).not.toContain("tok_987654");
+    expect(serializedCross).not.toContain("escaped_tok_555");
+
+    const legacyGid = "pc_deadbeefcafe";
+    data.set("papercut:v1:o:01950000-0000-7000-8000-000000009001", {
+      v: 1,
+      id: "01950000-0000-7000-8000-000000009001",
+      groupId: legacyGid,
+      targetKind: "tool",
+      target: 'tools.spectre.auth {"api_key":"legacy_target_secret_11"}',
+      canonicalTarget: 'tool:auth {"api_key":"legacy_target_secret_11"}',
+      tried: 'curl -d \'{"api_key":"my_super_secret_marker_99"}\'',
+      expected: "succeeds",
+      actual: `500 with 'client_secret': "tok_987654"`,
+      suggestedFix: 'scrub {"password":"legacy_fix_secret_22"}',
+      workaround: 'use {"access_token":"legacy_wa_secret_33"}',
+      context: 'headers {"authorization":"legacy_ctx_secret_44"}',
+      projectId: "proj_a",
+      repo: "repo-a",
+      opencodeVersion: "2.4.2",
+      at: BASE_TIME,
+    });
+    data.set("papercut:v1:s:01950000-0000-7000-8000-000000009002", {
+      v: 1,
+      id: "01950000-0000-7000-8000-000000009002",
+      groupId: legacyGid,
+      status: "resolved",
+      resolution: 'rotated {"secret":"legacy_res_secret_55"}',
+      workaround: 'fallback {"cookie":"legacy_state_wa_66"}',
+      projectId: "proj_a",
+      repo: "repo-a",
+      at: BASE_TIME + 500,
+    });
+
+    const legacyQuery = await Effect.runPromise(
+      toolB.execute(
+        { action: "query", groupId: legacyGid, includeOccurrences: true },
+        callCtx("ses_legacy_q"),
+      ),
+    );
+    expect(legacyQuery.output?.status).toBe("queried");
+    const serializedLegacyQuery = JSON.stringify(legacyQuery);
+    for (const secret of [
+      "legacy_target_secret_11",
+      "my_super_secret_marker_99",
+      "tok_987654",
+      "legacy_fix_secret_22",
+      "legacy_wa_secret_33",
+      "legacy_ctx_secret_44",
+      "legacy_res_secret_55",
+      "legacy_state_wa_66",
+    ]) {
+      expect(serializedLegacyQuery).not.toContain(secret);
+    }
+
+    const legacyReopen = await Effect.runPromise(
+      toolB.execute(
+        sampleLogInput({
+          target: 'tools.spectre.auth {"api_key":"legacy_target_secret_11"}',
+          actual: "repro after fix",
+          groupId: legacyGid,
+        }),
+        callCtx("ses_legacy_reopen"),
+      ),
+    );
+    const serializedLegacyReopen = JSON.stringify(legacyReopen);
+    expect(serializedLegacyReopen).not.toContain("legacy_res_secret_55");
+    expect(serializedLegacyReopen).not.toContain("legacy_state_wa_66");
+    expect(serializedLegacyReopen).not.toContain("legacy_target_secret_11");
+
+    const legacyCleanTargetGid = "pc_cafebabef00d";
+    data.set("papercut:v1:o:01950000-0000-7000-8000-000000009003", {
+      v: 1,
+      id: "01950000-0000-7000-8000-000000009003",
+      groupId: legacyCleanTargetGid,
+      targetKind: "tool",
+      target: "tools.spectre.worktrees",
+      canonicalTarget: "tool:worktrees",
+      tried: "start",
+      expected: "opens",
+      actual: 'failed {"api_key":"legacy_clean_occ_77"}',
+      projectId: "proj_a",
+      repo: "repo-a",
+      opencodeVersion: "2.4.2",
+      at: BASE_TIME,
+    });
+    data.set("papercut:v1:s:01950000-0000-7000-8000-000000009004", {
+      v: 1,
+      id: "01950000-0000-7000-8000-000000009004",
+      groupId: legacyCleanTargetGid,
+      status: "resolved",
+      resolution: 'fixed with {"secret":"legacy_clean_res_88"}',
+      workaround: 'use {"access_token":"legacy_clean_wa_99"}',
+      projectId: "proj_a",
+      repo: "repo-a",
+      at: BASE_TIME + 500,
+    });
+
+    const reopenedClean = await Effect.runPromise(
+      toolB.execute(
+        sampleLogInput({
+          actual: "regression hit",
+          groupId: legacyCleanTargetGid,
+        }),
+        callCtx("ses_legacy_clean"),
+      ),
+    );
+    expect(reopenedClean.output?.status).toBe("logged");
+    if (reopenedClean.output?.status !== "logged") throw new Error("expected logged");
+    expect(reopenedClean.output.reopened).toBe(true);
+    const serializedReopenedClean = JSON.stringify(reopenedClean);
+    expect(serializedReopenedClean).not.toContain("legacy_clean_res_88");
+    expect(serializedReopenedClean).not.toContain("legacy_clean_wa_99");
+
+    const repeatClean = await Effect.runPromise(
+      toolB.execute(
+        sampleLogInput({
+          actual: "regression hit",
+          groupId: legacyCleanTargetGid,
+        }),
+        callCtx("ses_legacy_clean"),
+      ),
+    );
+    expect(repeatClean.output?.status).toBe("logged");
+    const serializedRepeatClean = JSON.stringify(repeatClean);
+    expect(serializedRepeatClean).not.toContain("legacy_clean_res_88");
+    expect(serializedRepeatClean).not.toContain("legacy_clean_wa_99");
+
+    data.delete("papercut:v1:s:01950000-0000-7000-8000-000000009002");
+    const rollup = await Effect.runPromise(summarizeOpenPapercuts(ctxB, BASE_TIME - DAY_MS));
+    expect(JSON.stringify(rollup)).not.toContain("legacy_target_secret_11");
+  });
 });
 
 describe("exact deterministic grouping, validation, and no fuzzy auto-merge", () => {
@@ -495,9 +698,7 @@ describe("exact deterministic grouping, validation, and no fuzzy auto-merge", ()
     expect(missing.output?.status).toBe("rejected");
     expect(data.size).toBe(0);
 
-    const created = await Effect.runPromise(
-      tool.execute(sampleLogInput(), callCtx("ses_1")),
-    );
+    const created = await Effect.runPromise(tool.execute(sampleLogInput(), callCtx("ses_1")));
     if (created.output?.status !== "logged") throw new Error("expected logged");
 
     const mismatched = await Effect.runPromise(
@@ -1005,6 +1206,173 @@ describe("separate s:/o: pagination, scanTruncated, and safe retention pruning",
     expect(queried.output.items.some((item) => item.groupId === oldOpenGid)).toBe(true);
   });
 
+  test("recovers from 1-row / low-cap full and truncated state stores via pre-cap expired pruning and reserved resolve headroom", async () => {
+    let now = BASE_TIME;
+    const { storage, data, removeOrder } = makeMemoryStorage();
+    const tool = papercuts(makeCtx(storage), () => now, {
+      stateScanCap: 1,
+      occurrenceScanCap: 4,
+    });
+
+    const g1 = await Effect.runPromise(
+      tool.execute(sampleLogInput({ actual: "first failure alpha" }), callCtx("ses_1")),
+    );
+    const g2 = await Effect.runPromise(
+      tool.execute(sampleLogInput({ actual: "second failure beta" }), callCtx("ses_2")),
+    );
+    if (g1.output?.status !== "logged" || g2.output?.status !== "logged") {
+      throw new Error("expected logged");
+    }
+
+    const r1 = await Effect.runPromise(
+      tool.execute(
+        { action: "resolve", groupId: g1.output.groupId, resolution: "Fixed g1" },
+        callCtx("ses_r1"),
+      ),
+    );
+    expect(r1.output?.status).toBe("resolved");
+
+    now += 1_000;
+    const blockedBeforeRetention = await Effect.runPromise(
+      tool.execute(
+        { action: "resolve", groupId: g2.output.groupId, resolution: "Too early" },
+        callCtx("ses_r2_early"),
+      ),
+    );
+    expect(blockedBeforeRetention.output?.status).toBe("rejected");
+
+    now = BASE_TIME + 95 * DAY_MS;
+    const recoveredResolve = await Effect.runPromise(
+      tool.execute(
+        { action: "resolve", groupId: g2.output.groupId, resolution: "Fixed g2 after retention" },
+        callCtx("ses_r2"),
+      ),
+    );
+    expect(recoveredResolve.output?.status).toBe("resolved");
+    if (recoveredResolve.output?.status !== "resolved") throw new Error("expected resolved");
+    expect(recoveredResolve.output.wrote).toBe(true);
+    expect(recoveredResolve.output.prunedKeys).toBe(2);
+    expect(recoveredResolve.output.scanTruncated).toBe(false);
+    expect(removeOrder).toHaveLength(2);
+    expect(removeOrder[0]?.startsWith("papercut:v1:o:")).toBe(true);
+    expect(removeOrder[1]?.startsWith("papercut:v1:s:")).toBe(true);
+
+    const overflowed = makeMemoryStorage();
+    const expiredGid = computeGroupId("tool:worktrees", "overflow expired bug");
+    const openGid = computeGroupId("tool:brain", "overflow active bug");
+    overflowed.data.set("papercut:v1:o:01950000-0000-7000-8000-000000008001", {
+      v: 1,
+      id: "01950000-0000-7000-8000-000000008001",
+      groupId: expiredGid,
+      targetKind: "tool",
+      target: "tools.spectre.worktrees",
+      canonicalTarget: "tool:worktrees",
+      tried: "start",
+      expected: "opens",
+      actual: "overflow expired bug",
+      projectId: "proj_a",
+      repo: "repo-a",
+      opencodeVersion: "2.4.2",
+      at: BASE_TIME - 120 * DAY_MS,
+    });
+    overflowed.data.set("papercut:v1:s:01950000-0000-7000-8000-000000008002", {
+      v: 1,
+      id: "01950000-0000-7000-8000-000000008002",
+      groupId: expiredGid,
+      status: "open",
+      workaround: "old workaround",
+      projectId: "proj_a",
+      repo: "repo-a",
+      at: BASE_TIME - 110 * DAY_MS,
+    });
+    overflowed.data.set("papercut:v1:s:01950000-0000-7000-8000-000000008003", {
+      v: 1,
+      id: "01950000-0000-7000-8000-000000008003",
+      groupId: expiredGid,
+      status: "resolved",
+      resolution: "Fixed 95d ago",
+      projectId: "proj_spectre",
+      repo: "spectre",
+      at: BASE_TIME - 95 * DAY_MS,
+    });
+    overflowed.data.set("papercut:v1:o:01950000-0000-7000-8000-000000008004", {
+      v: 1,
+      id: "01950000-0000-7000-8000-000000008004",
+      groupId: openGid,
+      targetKind: "tool",
+      target: "tools.spectre.brain",
+      canonicalTarget: "tool:brain",
+      tried: "recall",
+      expected: "returns",
+      actual: "overflow active bug",
+      projectId: "proj_a",
+      repo: "repo-a",
+      opencodeVersion: "2.4.2",
+      at: BASE_TIME - DAY_MS,
+    });
+
+    const overflowTool = papercuts(makeCtx(overflowed.storage), () => BASE_TIME, {
+      stateScanCap: 1,
+      occurrenceScanCap: 4,
+    });
+    const recoveredFromTruncated = await Effect.runPromise(
+      overflowTool.execute(
+        { action: "resolve", groupId: openGid, resolution: "Recovered from truncated state store" },
+        callCtx("ses_recover"),
+      ),
+    );
+    expect(recoveredFromTruncated.output?.status).toBe("resolved");
+    if (recoveredFromTruncated.output?.status !== "resolved") throw new Error("expected resolved");
+    expect(recoveredFromTruncated.output.wrote).toBe(true);
+    expect(recoveredFromTruncated.output.prunedKeys).toBe(3);
+    expect(recoveredFromTruncated.output.scanTruncated).toBe(false);
+    expect(overflowed.removeOrder).toEqual([
+      "papercut:v1:o:01950000-0000-7000-8000-000000008001",
+      "papercut:v1:s:01950000-0000-7000-8000-000000008002",
+      "papercut:v1:s:01950000-0000-7000-8000-000000008003",
+    ]);
+
+    const headroomStore = makeMemoryStorage();
+    const headroomTool = papercuts(makeCtx(headroomStore.storage), () => BASE_TIME, {
+      stateScanCap: 2,
+      occurrenceScanCap: 10,
+    });
+    const h1 = await Effect.runPromise(
+      headroomTool.execute(sampleLogInput({ actual: "headroom bug one" }), callCtx("ses_h1")),
+    );
+    const h2 = await Effect.runPromise(
+      headroomTool.execute(sampleLogInput({ actual: "headroom bug two" }), callCtx("ses_h2")),
+    );
+    if (h1.output?.status !== "logged" || h2.output?.status !== "logged") {
+      throw new Error("expected logged");
+    }
+    await Effect.runPromise(
+      headroomTool.execute(
+        { action: "resolve", groupId: h1.output.groupId, resolution: "Fixed h1" },
+        callCtx("ses_hr1"),
+      ),
+    );
+
+    const blockedWorkaround = await Effect.runPromise(
+      headroomTool.execute(
+        sampleLogInput({ actual: "headroom bug two", workaround: "try workaround" }),
+        callCtx("ses_h2"),
+      ),
+    );
+    expect(blockedWorkaround.output?.status).toBe("rejected");
+
+    const allowedResolve = await Effect.runPromise(
+      headroomTool.execute(
+        { action: "resolve", groupId: h2.output.groupId, resolution: "Fixed h2 using headroom" },
+        callCtx("ses_hr2"),
+      ),
+    );
+    expect(allowedResolve.output?.status).toBe("resolved");
+    if (allowedResolve.output?.status !== "resolved") throw new Error("expected resolved");
+    expect(allowedResolve.output.wrote).toBe(true);
+    expect(data.size).toBe(2);
+  });
+
   test("isolates storage defects: papercuts throws Tool.Error while summarizeOpenPapercuts returns unavailable", async () => {
     const { storage } = makeMemoryStorage({ failScan: true });
     const ctx = makeCtx(storage);
@@ -1076,7 +1444,9 @@ describe("real bun:sqlite host-schema integration, concurrency, Code Mode execut
       expect(queryWithSamples.output.items[0]?.samples?.[0]?.sessionID).toBeUndefined();
 
       now += 60_000;
-      const collected1 = await Effect.runPromise(auditB.execute({}, callCtx("ses_nocturna", "nocturna")));
+      const collected1 = await Effect.runPromise(
+        auditB.execute({}, callCtx("ses_nocturna", "nocturna")),
+      );
       if (collected1.output?.status !== "collected") throw new Error("expected collected");
       expect(collected1.output.sessions).toEqual([]);
       expect(collected1.output.papercuts.status).toBe("ok");
@@ -1108,7 +1478,9 @@ describe("real bun:sqlite host-schema integration, concurrency, Code Mode execut
           callCtx("ses_spectre_fix"),
         ),
       );
-      const collected2 = await Effect.runPromise(auditB.execute({}, callCtx("ses_nocturna", "nocturna")));
+      const collected2 = await Effect.runPromise(
+        auditB.execute({}, callCtx("ses_nocturna", "nocturna")),
+      );
       if (collected2.output?.status !== "collected") throw new Error("expected collected");
       expect(collected2.output.papercuts.openGroups).toBe(0);
 
@@ -1148,7 +1520,9 @@ describe("real bun:sqlite host-schema integration, concurrency, Code Mode execut
       if (cmOut.status !== "logged") throw new Error("expected logged");
       expect(cmOut.reopened).toBe(true);
 
-      const collected3 = await Effect.runPromise(auditB.execute({}, callCtx("ses_nocturna", "nocturna")));
+      const collected3 = await Effect.runPromise(
+        auditB.execute({}, callCtx("ses_nocturna", "nocturna")),
+      );
       if (collected3.output?.status !== "collected") throw new Error("expected collected");
       expect(collected3.output.papercuts.openGroups).toBe(1);
       expect(collected3.output.papercuts.topGroups[0]?.reopened).toBe(true);
