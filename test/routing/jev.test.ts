@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { Model, Provider } from "@opencode/plugin/effect";
 import { Effect } from "effect";
 import {
-  CONSOLE_ENDPOINT,
   type Decide,
   JEV_MODEL,
   type JevSettings,
@@ -189,21 +188,6 @@ describe("quiet verdicts, and none of them throws", () => {
         .pipe(Effect.runPromise),
     );
     expect(why).toContain("within 20 ms");
-  });
-
-  test("a legacy endpoint other than the Console is quiet before the host is asked, and names it", async () => {
-    const [decide, got] = record(() => Effect.succeed(GOOD));
-    const judge = jevJudge({ ...SETTINGS, endpoint: "https://openrouter.ai/x" }, MATCHES, decide);
-    const why = reasonOf(await judge.judge(TASK).pipe(Effect.runPromise));
-    expect(why).toContain("https://openrouter.ai/x");
-    expect(got).toHaveLength(0);
-  });
-
-  test("the Console endpoint from an older file is the host's own call", async () => {
-    const [decide, got] = record(() => Effect.succeed(GOOD));
-    const judge = jevJudge({ ...SETTINGS, endpoint: CONSOLE_ENDPOINT }, MATCHES, decide);
-    expect((await judge.judge(TASK).pipe(Effect.runPromise)).kind).toBe("profile");
-    expect(got).toHaveLength(1);
   });
 
   test("a model that is not a ref is quiet before the host is asked", async () => {

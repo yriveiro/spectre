@@ -32,7 +32,6 @@ export const QUESTION_INSTRUCTIONS =
 
 export type JevSettings = {
   readonly model?: string | undefined;
-  readonly endpoint?: string | undefined;
   /** The budget in milliseconds. */
   readonly timeout?: number | undefined;
 };
@@ -43,12 +42,6 @@ export const judgeRef = (model: string | undefined): string => {
 };
 
 const quiet = (why: string): Verdict => ({ kind: "quiet", why });
-
-/** The only endpoint a config written before 2.3.0 could name that the `opencode` provider still serves. */
-export const CONSOLE_ENDPOINT = "https://opencode.ai/inference/systemone/v1/systemone";
-
-export const isLegacyEndpoint = (endpoint: string | undefined): boolean =>
-  endpoint !== undefined && endpoint !== "" && endpoint !== CONSOLE_ENDPOINT;
 
 type Ref =
   | { readonly kind: "parsed"; readonly model: Model.Ref; readonly text: string }
@@ -126,11 +119,7 @@ export const jevJudge = (
   const refused =
     Object.keys(criteria).length === 0
       ? quiet('The profiles carry no "match" text, so the question has no choices.')
-      : isLegacyEndpoint(settings.endpoint)
-        ? quiet(
-            `The judge names the endpoint ${settings.endpoint}, and the host now owns the call. Name its decision model as provider/id instead.`,
-          )
-        : undefined;
+      : undefined;
 
   const judge = (task: string): Effect.Effect<Verdict> => {
     if (refused !== undefined) return Effect.succeed(refused);
