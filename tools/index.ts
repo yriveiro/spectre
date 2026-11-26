@@ -5,7 +5,7 @@ import { canvases } from "./definitions/canvas";
 import { comments } from "./definitions/comments";
 import { goal } from "./definitions/goal";
 import { historyTool } from "./definitions/history";
-import { nocturnaTool } from "./definitions/nocturna";
+import { attachSkillTelemetry, nocturnaTool } from "./definitions/nocturna";
 import { papercuts } from "./definitions/papercuts";
 import { pr } from "./definitions/pr";
 import { prose } from "./definitions/prose";
@@ -78,4 +78,5 @@ export const update = (ctx: Plugin.Context) =>
     yield* attach(ctx);
     yield* attachSearch(ctx);
     yield* attachRoutingGuard(ctx);
+    yield* attachSkillTelemetry(ctx);
   });

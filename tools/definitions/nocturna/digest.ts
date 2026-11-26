@@ -1,7 +1,20 @@
 import type { Tool } from "@opencode/plugin/effect";
 import type { Session } from "@opencode/schema/session";
 import type { SessionMessage } from "@opencode/schema/session-message";
-import { DateTime } from "effect";
+import { DateTime, Predicate } from "effect";
+import {
+  canonicalizeFailedSkillID,
+  countNestedToolErrors,
+  hasShellFailureOutput,
+  KNOWN_SPECTRE_SKILL_IDS,
+  sanitizeCompletedSkillID,
+} from "./telemetry";
+import {
+  mergeAttributedStep,
+  type SessionTelemetryRecord,
+  type StoredAttributedStep,
+  type StoredSkillLoad,
+} from "./telemetry-store";
 
 export const toMillis = (value: DateTime.DateTime | number): number =>
   typeof value === "number" ? value : DateTime.toEpochMillis(value);
@@ -17,6 +30,15 @@ export interface ToolStat {
   readonly calls: number;
   readonly errors: number;
   readonly sampleError?: string;
+}
+
+export type TelemetryCoverage = "live" | "transcript" | "hybrid" | "none";
+
+export interface ReconciledSessionTelemetry {
+  readonly coverage: TelemetryCoverage;
+  readonly partial: boolean;
+  readonly loads: ReadonlyArray<StoredSkillLoad>;
+  readonly steps: ReadonlyArray<StoredAttributedStep>;
 }
 
 export interface SessionDigest {
@@ -46,6 +68,13 @@ export interface SessionDigest {
   readonly skillsLoaded: Array<string>;
   readonly tools: Array<ToolStat>;
   readonly anomalyScore: number;
+  readonly telemetryCoverage: TelemetryCoverage;
+  readonly telemetryPartial?: boolean;
+}
+
+export interface SessionDigestResult {
+  readonly digest: SessionDigest;
+  readonly telemetry: ReconciledSessionTelemetry;
 }
 
 interface MutableToolStat {
@@ -76,15 +105,6 @@ const recordNestedToolCalls = (toolMap: Map<string, MutableToolStat>, toolCalls:
     if (record.status === "error") stat.errors += 1;
     toolMap.set(record.tool, stat);
   }
-};
-
-const SHELL_EXIT_FAILURE = /\bExit code:\s*[1-9]\d*\b/i;
-
-const hasShellFailureOutput = (content: ReadonlyArray<Tool.Content>): boolean => {
-  for (const item of content) {
-    if (item.type === "text" && SHELL_EXIT_FAILURE.test(item.text)) return true;
-  }
-  return false;
 };
 
 const isSubagentResume = (part: SessionMessage.AssistantTool): boolean => {
@@ -209,10 +229,316 @@ const optionalMetadata = (info: Session.Info) => {
   };
 };
 
+const messageCreatedTime = (message: SessionMessage.Info): number | undefined => {
+  const created = (message as { readonly time?: { readonly created?: DateTime.DateTime | number } })
+    .time?.created;
+  return created === undefined ? undefined : toMillis(created);
+};
+
+const countToolPartPostLoadErrors = (part: SessionMessage.AssistantTool): number => {
+  if (part.name === "skill") return 0;
+  if (part.state.status === "error") return 1;
+  if (part.state.status !== "completed") return 0;
+  if (part.name === "execute") {
+    const metadata = part.state.metadata as
+      | { readonly error?: unknown; readonly toolCalls?: unknown }
+      | undefined;
+    const nested = countNestedToolErrors(metadata?.toolCalls);
+    return metadata?.error === true && nested === 0 ? 1 : nested;
+  }
+  return part.name === "shell" && hasShellFailureOutput(part.state.content) ? 1 : 0;
+};
+
+const countAssistantPostLoadErrors = (
+  content: ReadonlyArray<SessionMessage.AssistantContent>,
+): number => {
+  let errors = 0;
+  for (const part of content) {
+    if (part.type === "tool") errors += countToolPartPostLoadErrors(part);
+  }
+  return errors;
+};
+
+interface TranscriptSkillExtract {
+  readonly loads: Array<StoredSkillLoad>;
+  readonly steps: Array<StoredAttributedStep>;
+  readonly hasCompletedCompaction: boolean;
+}
+
+interface ReplayState {
+  turnSeq: number;
+  currentTurnID: string;
+  hasCompletedCompaction: boolean;
+  readonly activeSkills: Set<string>;
+  readonly pendingToolSkills: Set<string>;
+  readonly loads: Array<StoredSkillLoad>;
+  readonly steps: Array<StoredAttributedStep>;
+  readonly knownSkillIDs: Set<string>;
+}
+
+const replaySkillToolPart = (
+  state: ReplayState,
+  part: SessionMessage.AssistantTool,
+  at: number,
+): void => {
+  const rawId =
+    part.state.status === "streaming" || !Predicate.isObject(part.state.input)
+      ? undefined
+      : (part.state.input as { id?: unknown }).id;
+  if (part.state.status === "completed") {
+    const skill = sanitizeCompletedSkillID(rawId);
+    if (skill === undefined) return;
+    state.knownSkillIDs.add(skill);
+    state.loads.push({
+      id: `tool:${part.id}`,
+      turnID: state.currentTurnID,
+      skill,
+      trigger: "agent-tool",
+      status: "completed",
+      at,
+    });
+    state.pendingToolSkills.add(skill);
+    return;
+  }
+  if (part.state.status === "error") {
+    state.loads.push({
+      id: `tool:${part.id}`,
+      turnID: state.currentTurnID,
+      skill: canonicalizeFailedSkillID(rawId, state.knownSkillIDs),
+      trigger: "agent-tool",
+      status: "error",
+      at,
+    });
+  }
+};
+
+const replayAssistantMessage = (
+  state: ReplayState,
+  message: SessionMessage.Assistant,
+  at: number,
+): void => {
+  for (const skill of state.pendingToolSkills) state.activeSkills.add(skill);
+  state.pendingToolSkills.clear();
+
+  if (state.activeSkills.size > 0) {
+    const hasUsage = message.cost !== undefined && message.tokens !== undefined;
+    state.steps.push({
+      assistantMessageID: message.id,
+      turnID: state.currentTurnID,
+      skills: [...state.activeSkills].toSorted(),
+      ...(hasUsage
+        ? {
+            cost: message.cost,
+            tokens: {
+              input: message.tokens.input,
+              output: message.tokens.output,
+              reasoning: message.tokens.reasoning,
+              cacheRead: message.tokens.cache.read,
+              cacheWrite: message.tokens.cache.write,
+            },
+          }
+        : {}),
+      postLoadErrors: countAssistantPostLoadErrors(message.content),
+    });
+  }
+
+  for (const part of message.content) {
+    if (part.type === "tool" && part.name === "skill") {
+      replaySkillToolPart(state, part, at);
+    }
+  }
+};
+
+const replayUserMessage = (
+  state: ReplayState,
+  message: SessionMessage.User,
+  at: number,
+): void => {
+  const seen = new Set<string>();
+  for (const attached of message.skills ?? []) {
+    const skill = sanitizeCompletedSkillID(attached.id);
+    if (skill === undefined || seen.has(skill)) continue;
+    seen.add(skill);
+    state.knownSkillIDs.add(skill);
+    state.loads.push({
+      id: `prompt:${message.id}:${skill}`,
+      turnID: state.currentTurnID,
+      skill,
+      trigger: "prompt-attachment",
+      status: "completed",
+      at,
+    });
+    state.activeSkills.add(skill);
+  }
+};
+
+const closeReplayTurn = (state: ReplayState): void => {
+  state.activeSkills.clear();
+  state.pendingToolSkills.clear();
+  state.turnSeq += 1;
+  state.currentTurnID = `tx:${state.turnSeq}`;
+};
+
+const replayOneMessage = (
+  state: ReplayState,
+  message: SessionMessage.Info,
+  at: number,
+): void => {
+  if (message.type === "compaction") {
+    if (message.status === "completed") {
+      state.hasCompletedCompaction = true;
+      closeReplayTurn(state);
+    }
+    return;
+  }
+  if (message.type === "idle") {
+    closeReplayTurn(state);
+    return;
+  }
+  if (message.type === "user") {
+    replayUserMessage(state, message, at);
+    return;
+  }
+  if (message.type === "skill") {
+    const skill = sanitizeCompletedSkillID(message.skill);
+    if (skill === undefined) return;
+    state.knownSkillIDs.add(skill);
+    state.loads.push({
+      id: `act:${message.id}`,
+      turnID: state.currentTurnID,
+      skill,
+      trigger: "api-activation",
+      status: "completed",
+      at,
+    });
+    state.activeSkills.add(skill);
+    return;
+  }
+  if (message.type === "assistant") {
+    replayAssistantMessage(state, message, at);
+  }
+};
+
+export const extractTranscriptSkillTelemetry = (
+  info: Session.Info,
+  messages: ReadonlyArray<SessionMessage.Info>,
+  knownSkillIDs: ReadonlySet<string> = KNOWN_SPECTRE_SKILL_IDS,
+): TranscriptSkillExtract => {
+  const forkCutoff = info.fork === undefined ? undefined : toMillis(info.time.created);
+  const fallbackAt = toMillis(info.time.updated);
+  const state: ReplayState = {
+    turnSeq: 0,
+    currentTurnID: "tx:0",
+    hasCompletedCompaction: false,
+    activeSkills: new Set(),
+    pendingToolSkills: new Set(),
+    loads: [],
+    steps: [],
+    knownSkillIDs: new Set(knownSkillIDs),
+  };
+
+  for (const message of messages) {
+    const created = messageCreatedTime(message);
+    if (forkCutoff !== undefined && created !== undefined && created < forkCutoff) continue;
+    replayOneMessage(state, message, created ?? fallbackAt);
+  }
+
+  return {
+    loads: state.loads,
+    steps: state.steps,
+    hasCompletedCompaction: state.hasCompletedCompaction,
+  };
+};
+
+const reconcileLoads = (
+  liveLoads: ReadonlyArray<StoredSkillLoad>,
+  txLoads: ReadonlyArray<StoredSkillLoad>,
+): { readonly loads: Array<StoredSkillLoad>; readonly added: boolean } => {
+  const byId = new Map<string, StoredSkillLoad>();
+  for (const load of liveLoads) byId.set(load.id, load);
+  let added = false;
+  for (const txLoad of txLoads) {
+    if (!byId.has(txLoad.id)) {
+      byId.set(txLoad.id, txLoad);
+      added = true;
+    }
+  }
+  return { loads: [...byId.values()], added };
+};
+
+const reconcileSteps = (
+  liveSteps: ReadonlyArray<StoredAttributedStep>,
+  txSteps: ReadonlyArray<StoredAttributedStep>,
+): { readonly steps: Array<StoredAttributedStep>; readonly added: boolean } => {
+  const byId = new Map<string, StoredAttributedStep>();
+  for (const step of liveSteps) byId.set(step.assistantMessageID, step);
+  let added = false;
+  for (const txStep of txSteps) {
+    const existing = byId.get(txStep.assistantMessageID);
+    if (existing === undefined) {
+      byId.set(txStep.assistantMessageID, txStep);
+      added = true;
+      continue;
+    }
+    const merged = mergeAttributedStep(
+      { ...txStep, assistantMessageID: existing.assistantMessageID, turnID: existing.turnID },
+      existing,
+    );
+    if (
+      merged.skills.length > existing.skills.length ||
+      (existing.cost === undefined && merged.cost !== undefined)
+    ) {
+      added = true;
+    }
+    byId.set(txStep.assistantMessageID, merged);
+  }
+  return { steps: [...byId.values()], added };
+};
+
+export const reconcileSessionTelemetry = (
+  live: SessionTelemetryRecord | undefined,
+  transcript: TranscriptSkillExtract,
+): ReconciledSessionTelemetry => {
+  if (live === undefined) {
+    const hasActivity = transcript.loads.length > 0 || transcript.steps.length > 0;
+    return {
+      coverage: hasActivity ? "transcript" : "none",
+      partial: transcript.hasCompletedCompaction,
+      loads: transcript.loads,
+      steps: transcript.steps,
+    };
+  }
+
+  const loads = reconcileLoads(live.loads, transcript.loads);
+  const steps = reconcileSteps(live.steps, transcript.steps);
+  const addedFromTranscript = loads.added || steps.added;
+  return {
+    coverage: addedFromTranscript ? "hybrid" : "live",
+    partial:
+      live.partial ||
+      live.truncated ||
+      (addedFromTranscript && transcript.hasCompletedCompaction),
+    loads: loads.loads,
+    steps: steps.steps,
+  };
+};
+
+const completedSkillIDs = (loads: ReadonlyArray<StoredSkillLoad>): Array<string> => {
+  const seen = new Set<string>();
+  const out: Array<string> = [];
+  for (const load of loads) {
+    if (load.status !== "completed" || seen.has(load.skill)) continue;
+    seen.add(load.skill);
+    out.push(load.skill);
+  }
+  return out;
+};
+
 export const digestSession = (
   info: Session.Info,
   messages: ReadonlyArray<SessionMessage.Info>,
-): SessionDigest => {
+  live?: SessionTelemetryRecord,
+): SessionDigestResult => {
   const tally: MessageTally = {
     userTurns: 0,
     assistantSteps: 0,
@@ -228,8 +554,10 @@ export const digestSession = (
 
   const tools = sortedToolStats(tally.toolMap);
   const toolErrors = tools.reduce((sum, item) => sum + item.errors, 0);
+  const transcript = extractTranscriptSkillTelemetry(info, messages);
+  const telemetry = reconcileSessionTelemetry(live, transcript);
 
-  return {
+  const digest: SessionDigest = {
     id: info.id,
     ...optionalMetadata(info),
     createdAt: toMillis(info.time.created),
@@ -249,10 +577,14 @@ export const digestSession = (
     retries: tally.retries,
     subagentsSpawned: tally.subagentsSpawned,
     shellFailed: tally.shellFailed,
-    skillsLoaded: [...tally.skills],
+    skillsLoaded: completedSkillIDs(telemetry.loads),
     tools,
     anomalyScore: computeAnomalyScore(tally, toolErrors, info),
+    telemetryCoverage: telemetry.coverage,
+    ...(telemetry.partial ? { telemetryPartial: true } : {}),
   };
+
+  return { digest, telemetry };
 };
 
 export interface InspectedCall {

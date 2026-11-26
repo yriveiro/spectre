@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { type Plugin, Tool } from "@opencode/plugin/effect";
-import { DateTime, Effect, type Schema } from "effect";
-import { nocturnaTool } from "../../tools/definitions/nocturna";
+import { DateTime, Effect, Schema } from "effect";
+import { renderCatalog } from "../../skills/catalog";
+import { definitions } from "../../skills/definitions";
+import { NAMESPACE_DESCRIPTION } from "../../tools";
+import { NocturnaOutput, nocturnaTool } from "../../tools/definitions/nocturna";
+import { telemetryStorageKey } from "../../tools/definitions/nocturna/telemetry-store";
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
 const NOW = 1_800_000_000_000;
@@ -10,9 +14,11 @@ interface MockSession {
   readonly id: string;
   readonly projectID?: string;
   readonly parentID?: string;
+  readonly fork?: { readonly sessionID: string; readonly boundary: { readonly type: "message"; readonly id: string } };
   readonly agent?: string;
   readonly title?: string;
   readonly outcome?: "succeeded" | "failed" | "interrupted";
+  readonly createdAt?: number;
   readonly updatedAt: number;
   readonly cost?: number;
   readonly tokens?: {
@@ -28,6 +34,7 @@ interface MockSession {
 const toSessionInfo = (row: MockSession) => ({
   id: row.id,
   ...(row.parentID === undefined ? {} : { parentID: row.parentID }),
+  ...(row.fork === undefined ? {} : { fork: row.fork }),
   projectID: row.projectID ?? "proj_spectre",
   ...(row.agent === undefined ? {} : { agent: row.agent }),
   model: { providerID: "anthropic", id: "claude-sonnet-4" },
@@ -40,7 +47,7 @@ const toSessionInfo = (row: MockSession) => ({
   },
   ...(row.outcome === undefined ? {} : { outcome: row.outcome }),
   time: {
-    created: DateTime.makeUnsafe(row.updatedAt - 60_000),
+    created: DateTime.makeUnsafe(row.createdAt ?? row.updatedAt - 60_000),
     updated: DateTime.makeUnsafe(row.updatedAt),
   },
   ...(row.title === undefined ? {} : { title: row.title }),
@@ -265,7 +272,23 @@ describe("tools.spectre.nocturna", () => {
     expect(out.sessions[1]?.compacted).toBe(true);
     expect(out.totals.toolErrors).toBe(1);
     expect(out.totals.retries).toBe(1);
-    expect(out.topSkills).toEqual([{ skill: "playbook-feature", sessions: 1 }]);
+    expect(out.topSkills).toEqual([
+      {
+        skill: "playbook-feature",
+        sessions: 1,
+        invocations: 1,
+        triggers: { "agent-tool": 0, "prompt-attachment": 0, "api-activation": 1 },
+        loadErrors: 0,
+        attributedCost: 0,
+        attributedTokens: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+        unmeasuredSteps: 1,
+        postLoadErrors: 0,
+      },
+    ]);
+    expect(out.sessions[1]?.telemetryCoverage).toBe("transcript");
+    expect(out.sessions[1]?.telemetryPartial).toBe(true);
+    expect(out.sessions[0]?.telemetryCoverage).toBe("none");
+    expect(out.sessions[0]?.telemetryPartial).toBeUndefined();
   });
 
   test("collect fails with Tool.Error when ctx.session.list fails instead of reporting a clean window", async () => {
@@ -737,5 +760,328 @@ describe("tools.spectre.nocturna", () => {
       scanTruncated: false,
       topGroups: [],
     });
+  });
+
+  test("extracts User.skills prompt attachments, excludes Step k and sibling errors, keeps steered prompts in one turn, and tracks completed vs failed compaction", async () => {
+    const { ctx } = makeHost([
+      {
+        id: "ses_tx_skills",
+        agent: "spectre",
+        updatedAt: NOW - DAY_MS,
+        cost: 0.4,
+        messages: [
+          {
+            id: "msg_cf",
+            type: "compaction",
+            status: "failed",
+            reason: "auto",
+            error: { type: "aborted", message: "cancelled" },
+          },
+          {
+            id: "msg_u1",
+            type: "user",
+            text: "fix bug",
+            skills: [{ id: "playbook-bug-fix", name: "playbook-bug-fix", text: "body" }],
+          },
+          {
+            id: "msg_a1",
+            type: "assistant",
+            agent: "spectre",
+            model: { providerID: "anthropic", id: "claude-sonnet-4" },
+            cost: 0.1,
+            tokens: { input: 200, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
+            content: [
+              {
+                type: "tool",
+                id: "call_tdd",
+                name: "skill",
+                state: {
+                  status: "completed",
+                  input: { id: "tdd" },
+                  content: [{ type: "text", text: "tdd body" }],
+                },
+              },
+              {
+                type: "tool",
+                id: "call_sib",
+                name: "read",
+                state: {
+                  status: "error",
+                  input: { path: "missing" },
+                  error: { type: "tool.execution", message: "nope" },
+                },
+              },
+            ],
+          },
+          {
+            id: "msg_u2_steer",
+            type: "user",
+            text: "also verify",
+          },
+          {
+            id: "msg_a2",
+            type: "assistant",
+            agent: "spectre",
+            model: { providerID: "anthropic", id: "claude-sonnet-4" },
+            cost: 0.2,
+            tokens: { input: 400, output: 100, reasoning: 0, cache: { read: 0, write: 0 } },
+            content: [
+              {
+                type: "tool",
+                id: "call_e",
+                name: "edit",
+                state: {
+                  status: "error",
+                  input: {},
+                  error: { type: "tool.execution", message: "mismatch" },
+                },
+              },
+            ],
+          },
+          { id: "msg_idle", type: "idle", outcome: "succeeded" },
+          {
+            id: "msg_a3_after_idle",
+            type: "assistant",
+            agent: "spectre",
+            model: { providerID: "anthropic", id: "claude-sonnet-4" },
+            cost: 0.1,
+            tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
+            content: [],
+          },
+        ],
+      },
+    ]);
+
+    const tool = nocturnaTool(ctx, () => NOW);
+    const res = await Effect.runPromise(tool.execute({}, callContext()));
+    if (res.output?.status !== "collected") throw new Error("expected collected");
+
+    expect(res.output.sessions[0]?.telemetryCoverage).toBe("transcript");
+    expect(res.output.sessions[0]?.telemetryPartial).toBeUndefined();
+    expect(res.output.sessions[0]?.skillsLoaded).toEqual(["playbook-bug-fix", "tdd"]);
+    expect(res.output.topSkills).toEqual([
+      {
+        skill: "playbook-bug-fix",
+        sessions: 1,
+        invocations: 1,
+        triggers: { "agent-tool": 0, "prompt-attachment": 1, "api-activation": 0 },
+        loadErrors: 0,
+        attributedCost: 0.2,
+        attributedTokens: { input: 400, output: 100, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+        unmeasuredSteps: 0,
+        postLoadErrors: 2,
+      },
+      {
+        skill: "tdd",
+        sessions: 1,
+        invocations: 1,
+        triggers: { "agent-tool": 1, "prompt-attachment": 0, "api-activation": 0 },
+        loadErrors: 0,
+        attributedCost: 0.1,
+        attributedTokens: { input: 200, output: 50, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+        unmeasuredSteps: 0,
+        postLoadErrors: 1,
+      },
+    ]);
+    expect(res.output.skillCoUse).toEqual([
+      { left: "playbook-bug-fix", right: "tdd", sessions: 1, sameTurn: 1, jaccard: 1 },
+    ]);
+  });
+
+  test("applies fork replay cutoff so pre-fork parent skills and step costs are not double-counted", async () => {
+    const forkAt = NOW - 10_000;
+    const { ctx } = makeHost([
+      {
+        id: "ses_forked",
+        agent: "spectre",
+        fork: { sessionID: "ses_parent", boundary: { type: "message", id: "msg_p1" } },
+        createdAt: forkAt,
+        updatedAt: NOW - 1_000,
+        cost: 0.15,
+        messages: [
+          {
+            id: "msg_pre_u",
+            type: "user",
+            text: "old",
+            time: { created: DateTime.makeUnsafe(forkAt - 5_000) },
+            skills: [{ id: "architect", name: "architect", text: "old" }],
+          },
+          {
+            id: "msg_pre_a",
+            type: "assistant",
+            agent: "spectre",
+            model: { providerID: "anthropic", id: "claude-sonnet-4" },
+            time: { created: DateTime.makeUnsafe(forkAt - 4_000) },
+            cost: 0.5,
+            tokens: { input: 5_000, output: 500, reasoning: 0, cache: { read: 0, write: 0 } },
+            content: [],
+          },
+          {
+            id: "msg_post_u",
+            type: "user",
+            text: "new",
+            time: { created: DateTime.makeUnsafe(forkAt + 1_000) },
+            skills: [{ id: "tdd", name: "tdd", text: "new" }],
+          },
+          {
+            id: "msg_post_a",
+            type: "assistant",
+            agent: "spectre",
+            model: { providerID: "anthropic", id: "claude-sonnet-4" },
+            time: { created: DateTime.makeUnsafe(forkAt + 2_000) },
+            cost: 0.15,
+            tokens: { input: 300, output: 100, reasoning: 0, cache: { read: 0, write: 0 } },
+            content: [],
+          },
+        ],
+      },
+    ]);
+
+    const tool = nocturnaTool(ctx, () => NOW);
+    const res = await Effect.runPromise(tool.execute({}, callContext()));
+    if (res.output?.status !== "collected") throw new Error("expected collected");
+
+    expect(res.output.sessions[0]?.skillsLoaded).toEqual(["tdd"]);
+    expect(res.output.topSkills).toEqual([
+      {
+        skill: "tdd",
+        sessions: 1,
+        invocations: 1,
+        triggers: { "agent-tool": 0, "prompt-attachment": 1, "api-activation": 0 },
+        loadErrors: 0,
+        attributedCost: 0.15,
+        attributedTokens: { input: 300, output: 100, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+        unmeasuredSteps: 0,
+        postLoadErrors: 0,
+      },
+    ]);
+  });
+
+  test("deduplicates overlapping live and transcript steps by assistantMessageID with zero double-charge", async () => {
+    const { ctx, store } = makeHost([
+      {
+        id: "ses_hybrid",
+        agent: "spectre",
+        updatedAt: NOW - 1_000,
+        cost: 0.45,
+        messages: [
+          {
+            id: "msg_u1",
+            type: "user",
+            text: "go",
+            skills: [
+              { id: "A", name: "A", text: "A" },
+              { id: "B", name: "B", text: "B" },
+            ],
+          },
+          {
+            id: "msg_2",
+            type: "assistant",
+            agent: "spectre",
+            model: { providerID: "anthropic", id: "claude-sonnet-4" },
+            cost: 0.2,
+            tokens: { input: 400, output: 100, reasoning: 0, cache: { read: 0, write: 0 } },
+            content: [],
+          },
+          {
+            id: "msg_3",
+            type: "assistant",
+            agent: "spectre",
+            model: { providerID: "anthropic", id: "claude-sonnet-4" },
+            cost: 0.1,
+            tokens: { input: 200, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
+            content: [],
+          },
+        ],
+      },
+    ]);
+
+    store.set(telemetryStorageKey("ses_hybrid"), {
+      version: 1,
+      projectID: "proj_spectre",
+      sessionID: "ses_hybrid",
+      updatedAt: NOW - 1_000,
+      partial: false,
+      truncated: false,
+      loads: [
+        {
+          id: "prompt:msg_u1:A",
+          turnID: "live:0",
+          skill: "A",
+          trigger: "prompt-attachment",
+          status: "completed",
+          at: NOW - 5_000,
+        },
+      ],
+      steps: [
+        {
+          assistantMessageID: "msg_pre_1",
+          turnID: "live:0",
+          skills: ["A"],
+          cost: 0.15,
+          tokens: { input: 300, output: 50, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+          postLoadErrors: 0,
+        },
+        {
+          assistantMessageID: "msg_2",
+          turnID: "live:0",
+          skills: ["A"],
+          cost: 0.2,
+          tokens: { input: 400, output: 100, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+          postLoadErrors: 0,
+        },
+      ],
+    });
+
+    const tool = nocturnaTool(ctx, () => NOW);
+    const res = await Effect.runPromise(tool.execute({}, callContext()));
+    if (res.output?.status !== "collected") throw new Error("expected collected");
+
+    expect(res.output.sessions[0]?.telemetryCoverage).toBe("hybrid");
+    expect(res.output.skillCoverage).toEqual({
+      live: 0,
+      transcript: 0,
+      hybrid: 1,
+      none: 0,
+      partial: 0,
+    });
+    const rowA = res.output.topSkills.find((row) => row.skill === "A");
+    const rowB = res.output.topSkills.find((row) => row.skill === "B");
+    expect(rowA?.attributedCost).toBe(0.3);
+    expect(rowB?.attributedCost).toBe(0.15);
+    expect((rowA?.attributedCost ?? 0) + (rowB?.attributedCost ?? 0)).toBeCloseTo(0.45, 6);
+  });
+
+  test("preserves unchanged descriptions, byte-identical push catalog, and valid NocturnaOutput schema decode across all actions", async () => {
+    const { ctx } = makeHost([
+      {
+        id: "ses_schema",
+        agent: "spectre",
+        updatedAt: NOW - 1_000,
+        messages: [{ id: "msg_u", type: "user", text: "hi" }],
+      },
+    ]);
+    const tool = nocturnaTool(ctx, () => NOW);
+    expect(tool.description).toBe(
+      `Collect, inspect, and watermark past OpenCode sessions for Nocturna audits over a rolling lookback window.
+Uses ctx.session to digest root and subagent token spend, tool errors, retries, compactions, and loaded skills over the last 7 days by default, and tracks analyzed session updatedAt watermarks in ctx.storage so unchanged sessions are skipped until resumed.`,
+    );
+    expect(NAMESPACE_DESCRIPTION).toContain(
+      "nocturna (rolling session audit digests, storage watermarks)",
+    );
+    expect(renderCatalog(definitions)).toContain("## Spectre skill catalog");
+
+    const decode = Schema.decodeUnknownOption(NocturnaOutput);
+    const collected = await Effect.runPromise(tool.execute({}, callContext()));
+    const inspected = await Effect.runPromise(
+      tool.execute({ action: "inspect", sessions: ["ses_schema"] }, callContext()),
+    );
+    const marked = await Effect.runPromise(
+      tool.execute({ action: "mark", sessions: ["ses_schema"] }, callContext()),
+    );
+
+    expect(decode(collected.output)._tag).toBe("Some");
+    expect(decode(inspected.output)._tag).toBe("Some");
+    expect(decode(marked.output)._tag).toBe("Some");
   });
 });
