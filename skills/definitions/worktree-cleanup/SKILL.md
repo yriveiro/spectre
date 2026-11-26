@@ -11,7 +11,12 @@ the directory is gone and so is the evidence.
 
 ## Start
 
-Call the tool. Everything below is what to do with what it returns.
+Call the tool, then follow the four phases in order:
+
+1. Read the warnings
+2. Take the holds off the table
+3. Reclaim the safe ones
+4. Report what you did not do
 
 ```
 const a = await tools.spectre.worktrees({})

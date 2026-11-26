@@ -109,6 +109,9 @@ paths the plan names and returns the comments and suppressions in each, so a
 wrong path comes back empty instead of being asserted. Run it over the files the
 plan points at: an unexpected empty is a wrong path.
 
+If any Phase E check fails, repair the plan before Phase F. When a prototype fails
+to settle a blocking question, stop and report the gap rather than guessing.
+
 ## Phase F: Hand back
 
 Post the plan path and what the prototypes proved, then stop. Execution starts

@@ -33,10 +33,11 @@ describe("playbook contracts", () => {
     expect(tdd).toContain("ripwire . --from-trace");
   });
 
-  test("playbook-feature and playbook-bug-fix pass profile.agent and profile.model.ref to subagent", async () => {
+  test("playbook-feature, playbook-bug-fix, and playbook-babysit pass profile.agent and profile.model.ref to subagent", async () => {
     for (const path of [
       "skills/definitions/playbook-feature/SKILL.md",
       "skills/definitions/playbook-bug-fix/SKILL.md",
+      "skills/definitions/playbook-babysit/SKILL.md",
     ]) {
       const text = await readRepoFile(path);
       expect(text).toContain("subagent");
@@ -44,6 +45,48 @@ describe("playbook contracts", () => {
       expect(text).toContain("profile.agent");
       expect(text).toContain("profile.model.ref");
     }
+  });
+
+  test("playbook-babysit offloads failed CI log triage to read-only operator and fails closed", async () => {
+    const raw = await readRepoFile("skills/definitions/playbook-babysit/SKILL.md");
+    const flat = raw.replace(/\s+/g, " ");
+
+    expect(flat).toContain("model-router");
+    expect(flat).toContain('tools.spectre.routing({ profile: "mechanical" })');
+    expect(flat).toContain("tools.spectre.routing({})");
+    expect(flat).toContain("operator");
+    expect(flat).toContain("profile.agent");
+    expect(flat).toContain("profile.model.ref");
+
+    expect(flat).toContain("**Scope:**");
+    expect(flat).toContain("**Invariants:**");
+    expect(flat).toContain("**Verification:**");
+    expect(flat).toContain("**Stop boundary:**");
+
+    expect(flat).toContain("gh pr checks");
+    expect(flat).toContain("gh run view");
+    expect(flat).toContain("--job");
+    expect(flat).toContain("--attempt");
+    expect(flat).toContain("--log-failed");
+    expect(flat).toContain("headRefOid");
+    expect(flat).toContain("untrusted data");
+    expect(flat).toContain("15 lines");
+    expect(flat).toContain("200 characters");
+    expect(flat).toContain("redact");
+
+    expect(flat).toContain("sessionID");
+    expect(flat).toMatch(/omit(?:ting)? `model`/i);
+    expect(flat).toContain("<background-result>");
+    expect(flat).toMatch(/yield/i);
+    expect(flat).toMatch(/never (?:read|fetch) raw (?:CI )?logs/i);
+
+    expect(flat).toContain("rows[].ci");
+    expect(flat).toContain("github-rejected");
+    expect(flat).toContain("unknown");
+    expect(flat).toMatch(/stop without retrying/i);
+
+    expect(flat).not.toContain("offset: -50");
+    expect(flat).not.toContain("read the child logs");
   });
 
   test("/pr prompt enables review by default for >=3 code files or >=100 LOC", async () => {
