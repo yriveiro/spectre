@@ -143,13 +143,15 @@ describe("tools blade layout", () => {
     expect(isBlank(lines[9])).toBe(true);
     expect(isRule(lines[10])).toBe(true);
     expect(lines[11]).toContain("Σ 3 tools · 4 calls");
-    expect(lines[12]).toContain("cache↻");
-    expect(isBlank(lines[13])).toBe(true);
+    expect(isBlank(lines[12])).toBe(true);
+    expect(lines[13]).toContain("cache(R/W)");
+    expect(isBlank(lines[14])).toBe(true);
+    expect(lines[15]).toContain("█ input · ▓ cacheRead");
+    expect(isBlank(lines[16])).toBe(true);
     // No sort hint and no letter keys: only select, expand and close.
-    expect(lines[14]).toContain("↑↓ select · ↵ expand");
-    expect(lines[14]).toContain("esc close (t)");
-    expect(lines[14]).not.toContain("sort");
-    expect(isBlank(lines[15])).toBe(true);
+    expect(lines[17]).toContain("↑↓ select · ↵ expand");
+    expect(lines[17]).toContain("esc close (t)");
+    expect(lines[17]).not.toContain("sort");
 
     await setup.dispose();
   });

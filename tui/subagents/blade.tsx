@@ -2,7 +2,7 @@ import type { Plugin } from "@opencode/plugin/tui";
 import type { JSX } from "@opentui/solid";
 import { createMemo } from "solid-js";
 import { blade } from "../blade.tsx";
-import { bar, type Column } from "../blade-layout.ts";
+import type { Column } from "../blade-layout.ts";
 import {
   formatCost,
   formatTokens,
@@ -11,6 +11,7 @@ import {
   type ProfileUsage,
   profileLabel,
   sessionUsage,
+  tokenBar,
   totalTokens,
 } from "./usage.ts";
 
@@ -99,8 +100,8 @@ export const subagentsBlade = (input: {
     },
     { header: "in", width: 7, align: "right", cell: (one) => formatTokens(one.run.tokens.input) },
     {
-      header: "cache↻",
-      width: 9,
+      header: "cache(R/W)",
+      width: 10,
       hideBelow: 56,
       align: "right",
       tone: "faint",
@@ -174,7 +175,7 @@ export const subagentsBlade = (input: {
         width: 10,
         hideBelow: 62,
         tone: "muted",
-        cell: (row) => bar(totalTokens(row.tokens), peak(), 10),
+        cell: (row) => tokenBar(row.tokens, peak(), 10),
       },
     ],
     summary: () => {
@@ -184,8 +185,14 @@ export const subagentsBlade = (input: {
         {
           text: `Σ ${now.totals.runs} runs · ${formatTokens(totalTokens(now.totals.tokens))} tokens · ${formatCost(now.totals.cost)}`,
         },
+        { text: "" },
         {
-          text: `in ${formatTokens(tokens.input)} · cache↻ ${formatTokens(tokens.cacheRead)}/${formatTokens(tokens.cacheWrite)} · out ${formatTokens(tokens.output)} · rsn ${formatTokens(tokens.reasoning)}`,
+          text: `in ${formatTokens(tokens.input)} · cache(R/W) ${formatTokens(tokens.cacheRead)}/${formatTokens(tokens.cacheWrite)} · out ${formatTokens(tokens.output)} · rsn ${formatTokens(tokens.reasoning)}`,
+          tone: "faint",
+        },
+        { text: "" },
+        {
+          text: "█ input · ▓ cacheRead · ▒ cacheWrite · ░ output · ▪ reasoning",
           tone: "faint",
         },
       ];

@@ -3,8 +3,10 @@ import type { SessionInfo, SessionMessageInfo } from "@opencode/client";
 import type { Plugin } from "@opencode/plugin/tui";
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/solid";
+import { join } from "node:path";
 import { subagentsBlade } from "../../tui/subagents/blade.tsx";
-import { sessionUsage } from "../../tui/subagents/usage.ts";
+import { profileRouting } from "../../tui/subagents/routing.ts";
+import { profileLabel, sessionUsage, tokenBar } from "../../tui/subagents/usage.ts";
 import { tokenUsage as usage } from "./fixture.ts";
 
 const BASE = RGBA.fromInts(220, 224, 232, 255);
@@ -30,12 +32,13 @@ const assistant = (
   id: string,
   tokens: ReturnType<typeof usage>,
   cost: number,
+  variant?: string,
 ): SessionMessageInfo => ({
   id: `msg_${seq++}`,
   time: { created: seq, completed: seq },
   type: "assistant",
   agent,
-  model: { providerID: "opencode-go", id },
+  model: variant === undefined ? { providerID: "opencode-go", id } : { providerID: "opencode-go", id, variant },
   content: [{ type: "text", text: "ok" }],
   tokens,
   cost,
@@ -130,7 +133,7 @@ const isRule = (line: string | undefined) => line !== undefined && /^─+$/.test
 
 describe("subagents blade layout", () => {
   test("a wide panel spends its width on every column and keeps numbers under their headers", async () => {
-    const { setup, lines } = await renderBlade(96, 26);
+    const { setup, lines } = await renderBlade(96, 31);
 
     expect(lines[0]).toContain("Session breakdown");
     expect(lines[0]).toContain("draft session");
@@ -153,7 +156,7 @@ describe("subagents blade layout", () => {
     expect((lines[mainRow] ?? "").indexOf("1.3K") + "1.3K".length).toBe(tokensEnd);
     expect((lines[mainRow] ?? "").indexOf("$0.020") + "$0.020".length).toBe(costEnd);
 
-    const profileRow = lines.findIndex((line) => line.trimStart().startsWith("explore"));
+    const profileRow = lines.findIndex((line) => line.trimStart().startsWith("→ explore"));
     expect(profileRow).toBeGreaterThan(mainRow);
     // The model column is sized to the longest ref the rows carry, so at
     // this width even the 38-character ref shows whole.
@@ -166,7 +169,7 @@ describe("subagents blade layout", () => {
     expect(lines[totals]).toContain("2.3K tokens");
     const band = lines.findIndex((line) => line.includes("▼ build · 1 run"));
     expect(band).toBeGreaterThan(totals);
-    expect(lines[band + 1]).toContain("cache↻");
+    expect(lines[band + 1]).toContain("cache(R/W)");
     expect(lines[band + 1]).toContain("rsn");
     const runRow = lines.findIndex((line) => line.includes("summarize the blade"));
     expect(runRow).toBeGreaterThan(band);
@@ -185,7 +188,7 @@ describe("subagents blade layout", () => {
   });
 
   test("a narrow panel drops columns instead of overlapping them", async () => {
-    const { setup, lines } = await renderBlade(44, 30);
+    const { setup, lines } = await renderBlade(44, 32);
 
     const agentHead = lines.findIndex((line) => line.includes("tokens") && line.includes("agent"));
     expect(agentHead).toBeGreaterThanOrEqual(0);
@@ -209,7 +212,7 @@ describe("subagents blade layout", () => {
     const band = lines.findIndex((line) => line.includes("▼ build · 1 run"));
     expect(band).toBeGreaterThan(mainRow);
     expect(lines[band + 1]).toContain("in");
-    expect(lines[band + 1]).not.toContain("cache↻");
+    expect(lines[band + 1]).not.toContain("cache(R/W)");
     expect(lines[band + 1]).not.toContain("rsn");
     expect(lines[band + 1]).toContain("cost");
 
@@ -230,13 +233,13 @@ describe("subagents blade layout", () => {
     // At this width the model column shrinks below the longest ref on
     // purpose: the cell clips with an ellipsis instead of pushing the row
     // into its neighbour, and the label keeps its floor.
-    const profileRow = lines.findIndex((line) => line.trimStart().startsWith("explore"));
+    const profileRow = lines.findIndex((line) => line.trimStart().startsWith("→ explore"));
     expect(profileRow).toBeGreaterThanOrEqual(0);
     const row = lines[profileRow] ?? "";
     expect(row).toContain("opencode-go/…");
     expect(row).not.toContain("muse-spark");
     expect(row).toContain("960");
-    expect(row.trimEnd().endsWith("█".repeat(7))).toBe(true);
+    expect(row.trimEnd().endsWith("██████▓")).toBe(true);
     // Nothing is pushed past the panel's inner width.
     expect(row.trimEnd().length).toBeLessThanOrEqual(63);
 
@@ -274,5 +277,120 @@ describe("subagents blade layout", () => {
     // The child's prompt drops the subagent preamble the host prefixes.
     const child = report.rows.find((row) => row.name === "explore")?.runs[0]?.run;
     expect(child?.promptText).toBe("Explore the layout.");
+  });
+
+  test("profileRouting emits crosscheck profiles and sessionUsage attributes them with a glyph", async () => {
+    const dir = join(Bun.env.TMPDIR ?? "/tmp", `spectre-subagents-crosscheck-${crypto.randomUUID()}`);
+    await Bun.write(
+      join(dir, "spectre.json"),
+      JSON.stringify({
+        models: {
+          fast: "opencode-go/muse-spark-1.3-contributor",
+          review: "opencode-go/glm-5.3",
+        },
+        priority: ["fast", "review"],
+        crosscheck: ["review", "fast"],
+        profiles: {
+          deep: {
+            effort: "high",
+            model: "fast",
+            crosscheck: { effort: "high", model: "review" },
+            match: "Deep work.",
+            why: "Test.",
+          },
+        },
+      }),
+    );
+    const models = [
+      {
+        providerID: "opencode-go",
+        id: "muse-spark-1.3-contributor",
+        modelID: "muse-spark-1.3-contributor",
+        name: "Muse",
+        family: "muse",
+        variants: [{ id: "high" }],
+        cost: [{ input: 1, output: 2, cache: { read: 0, write: 0 } }],
+        enabled: true,
+        status: "active",
+        capabilities: { tools: true, input: [], output: [] },
+        time: { released: 0 },
+        limit: { context: 200_000, output: 32_000 },
+      },
+      {
+        providerID: "opencode-go",
+        id: "glm-5.3",
+        modelID: "glm-5.3",
+        name: "GLM",
+        family: "glm",
+        variants: [{ id: "high" }],
+        cost: [{ input: 2, output: 4, cache: { read: 0, write: 0 } }],
+        enabled: true,
+        status: "active",
+        capabilities: { tools: true, input: [], output: [] },
+        time: { released: 0 },
+        limit: { context: 200_000, output: 32_000 },
+      },
+    ];
+    const prevConfigDir = Bun.env.OPENCODE_CONFIG_DIR;
+    Bun.env.OPENCODE_CONFIG_DIR = dir;
+    let resolved;
+    try {
+      resolved = await profileRouting(dir, models);
+    } finally {
+      if (prevConfigDir === undefined) delete Bun.env.OPENCODE_CONFIG_DIR;
+      else Bun.env.OPENCODE_CONFIG_DIR = prevConfigDir;
+    }
+    expect(resolved.map((one) => ({ name: one.name, ref: one.ref, crosscheck: one.crosscheck ?? false }))).toEqual([
+      { name: "deep", ref: "opencode-go/muse-spark-1.3-contributor#high", crosscheck: false },
+      { name: "deep", ref: "opencode-go/glm-5.3#high", crosscheck: true },
+    ]);
+
+    const crossSessions = new Map<string, SessionInfo>([
+      ["ses_root", { id: "ses_root", title: "root", agent: "spectre" } as unknown as SessionInfo],
+      ["ses_primary", { id: "ses_primary", parentID: "ses_root", title: "primary", agent: "spectre" } as unknown as SessionInfo],
+      ["ses_cross", { id: "ses_cross", parentID: "ses_root", title: "cross", agent: "spectre" } as unknown as SessionInfo],
+    ]);
+    const crossMessages: Record<string, ReadonlyArray<SessionMessageInfo>> = {
+      ses_root: [user("go"), assistant("spectre", "glm-5.3", usage(100, 10, 0, 0, 0), 0.01), idle()],
+      ses_primary: [
+        user("You are a subagent spawned by another session. Primary."),
+        assistant("spectre", "muse-spark-1.3-contributor", usage(200, 20, 0, 0, 0), 0.02, "high"),
+        idle(),
+      ],
+      ses_cross: [
+        user("You are a subagent spawned by another session. Review."),
+        assistant("spectre", "glm-5.3", usage(300, 30, 0, 0, 0), 0.03, "high"),
+        idle(),
+      ],
+    };
+
+    const report = sessionUsage({
+      rootID: "ses_root",
+      family: () => ["ses_root", "ses_primary", "ses_cross"],
+      get: (id) => crossSessions.get(id),
+      status: () => "idle" as const,
+      messages: (id) => crossMessages[id] ?? [],
+      profiles: resolved,
+    });
+
+    const unrouted = report.rows.filter((row) => row.unrouted);
+    expect(unrouted).toEqual([]);
+
+    const primaryRow = report.rows.find((row) => row.kind === "profile" && !row.crosscheck);
+    const crossRow = report.rows.find((row) => row.kind === "profile" && row.crosscheck);
+    expect(primaryRow?.name).toBe("deep");
+    expect(crossRow?.name).toBe("deep");
+    expect(profileLabel(primaryRow!)).toBe("→ deep");
+    expect(profileLabel(crossRow!)).toBe("⇄ deep");
+
+    const mainRow = report.rows.find((row) => row.kind === "main");
+    expect(profileLabel(mainRow!)).toBe("spectre");
+
+    expect(tokenBar({ input: 500, output: 200, reasoning: 100, cacheRead: 200, cacheWrite: 0 }, 1000, 10)).toBe(
+      "█████▓▓░░▪",
+    );
+    expect(tokenBar({ input: 7, output: 26, reasoning: 0, cacheRead: 17, cacheWrite: 0 }, 50, 10)).toBe(
+      "██▓▓▓░░░░░",
+    );
   });
 });

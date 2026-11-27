@@ -58,6 +58,8 @@ export type ProfileRouting = {
   readonly agent: string;
   /** `provider/model#rung`, or undefined when the profile failed to resolve. */
   readonly ref: string | undefined;
+  /** True when this entry represents the profile's crosscheck model rather than its primary. */
+  readonly crosscheck?: boolean;
 };
 
 export type ProfileRun = {
@@ -76,6 +78,8 @@ export type ProfileUsage = {
   readonly ref: string | undefined;
   /** Profile rows only: no routing signature claimed these runs. */
   readonly unrouted: boolean;
+  /** True when this row tracks a profile's crosscheck model. */
+  readonly crosscheck: boolean;
   readonly tokens: TokenTotals;
   readonly cost: number;
   readonly runs: ReadonlyArray<ProfileRun>;
@@ -120,6 +124,8 @@ const addTotals = (into: TokenTotals, from: TokenTotals): TokenTotals => ({
   cacheRead: into.cacheRead + from.cacheRead,
   cacheWrite: into.cacheWrite + from.cacheWrite,
 });
+
+export { tokenBar } from "../blade-layout.ts";
 
 export const totalTokens = (tokens: TokenTotals): number =>
   tokens.input + tokens.output + tokens.reasoning + tokens.cacheRead + tokens.cacheWrite;
@@ -235,6 +241,7 @@ type RowBuilder = {
   agent: string;
   ref: string | undefined;
   unrouted: boolean;
+  crosscheck: boolean;
   tokens: TokenTotals;
   cost: number;
   runs: ProfileRun[];
@@ -250,10 +257,13 @@ export const rowKey = (row: {
   readonly name: string | undefined;
   readonly agent: string;
   readonly ref: string | undefined;
+  readonly crosscheck?: boolean;
 }): string => {
   switch (row.kind) {
     case "profile":
-      return row.name === undefined ? `profile:unrouted:${row.agent}` : `profile:${row.name}`;
+      return row.name === undefined
+        ? `profile:unrouted:${row.agent}`
+        : `profile:routed:${row.crosscheck ? "crosscheck" : "primary"}:${row.name}`;
     case "main":
       return `main:${row.agent}:${row.ref}`;
     case "compaction":
@@ -261,11 +271,13 @@ export const rowKey = (row: {
   }
 };
 
-/**
- * The routing profile a child run matched, or undefined when nothing matches.
- * Profiles that share a signature stay separate rows; config order decides
- * which row the run is booked on.
- */
+const preferPrimary = (
+  matches: ReadonlyArray<ProfileRouting>,
+): (ProfileRouting & { readonly ref: string }) | undefined =>
+  (matches.find((one) => !one.crosscheck) ?? matches[0]) as
+    | (ProfileRouting & { readonly ref: string })
+    | undefined;
+
 const attribution = (
   routing: ReadonlyArray<ProfileRouting>,
   childAgent: string,
@@ -273,10 +285,10 @@ const attribution = (
 ): (ProfileRouting & { readonly ref: string }) | undefined => {
   const forAgent = routing.filter((one) => one.agent === childAgent && one.ref !== undefined);
   const exact = forAgent.filter((one) => runModels.includes(one.ref as string));
-  if (exact.length > 0) return exact[0] as ProfileRouting & { readonly ref: string };
+  if (exact.length > 0) return preferPrimary(exact);
   const bases = new Set(runModels.map(baseRef));
   const base = forAgent.filter((one) => bases.has(baseRef(one.ref as string)));
-  if (base.length > 0) return base[0] as ProfileRouting & { readonly ref: string };
+  if (base.length > 0) return preferPrimary(base);
   return undefined;
 };
 
@@ -299,8 +311,9 @@ export const sessionUsage = (input: {
     agent: string,
     ref: string | undefined,
     name: string | undefined,
+    crosscheck = false,
   ): RowBuilder => {
-    const key = rowKey({ kind, name, agent, ref });
+    const key = rowKey({ kind, name, agent, ref, crosscheck });
     const held = rows.get(key);
     if (held !== undefined) return held;
     const fresh: RowBuilder = {
@@ -309,6 +322,7 @@ export const sessionUsage = (input: {
       agent,
       ref,
       unrouted: kind === "profile" && ref === undefined,
+      crosscheck,
       tokens: zero(),
       cost: 0,
       runs: [],
@@ -367,8 +381,8 @@ export const sessionUsage = (input: {
       const matched = attribution(input.profiles, run.agent, run.models);
       const row =
         matched === undefined
-          ? rowOf("profile", run.agent, undefined, undefined)
-          : rowOf("profile", run.agent, matched.ref, matched.name);
+          ? rowOf("profile", run.agent, undefined, undefined, false)
+          : rowOf("profile", run.agent, matched.ref, matched.name, matched.crosscheck ?? false);
       row.tokens = addTotals(row.tokens, run.tokens);
       row.cost += run.cost;
       row.runs.push({ child: info.title ?? info.id, run });
@@ -390,6 +404,7 @@ export const sessionUsage = (input: {
     agent: row.agent,
     ref: row.ref,
     unrouted: row.unrouted,
+    crosscheck: row.crosscheck,
     tokens: row.tokens,
     cost: row.cost,
     runs: row.runs,
@@ -429,14 +444,15 @@ export const formatCost = (usd: number): string => {
   return `$${usd.toFixed(usd < 1 ? 3 : 2)}`;
 };
 
-/** The row label: the profile's name, `main` for the root's agent, or the agent when unrouted. */
+/** The row label: the root's agent, a glyph-prefixed profile, or the agent when unrouted. */
 export const profileLabel = (row: ProfileUsage): string => {
   switch (row.kind) {
     case "main":
-      return `main · ${row.agent}`;
+      return row.agent;
     case "compaction":
       return "compaction";
     case "profile":
-      return row.name === undefined ? `${row.agent} (unrouted)` : row.name;
+      if (row.name === undefined) return `${row.agent} (unrouted)`;
+      return row.crosscheck ? `⇄ ${row.name}` : `→ ${row.name}`;
   }
 };
