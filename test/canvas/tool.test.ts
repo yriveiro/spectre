@@ -1,19 +1,13 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { Plugin, Tool } from "@opencode/plugin/effect";
-import { Effect } from "effect";
+import { type Plugin, Tool } from "@opencode/plugin/effect";
+import { Cause, DateTime, Effect, Exit, type Schema } from "effect";
 import { canvases } from "../../tools/definitions/canvas";
 import type { Input as CanvasInput, Output, Review } from "../../tools/definitions/canvas/content";
 import { CACHE_ROOT, write } from "../../tools/definitions/canvas/evidence";
+import { decodeCanvasState } from "../../tools/definitions/canvas/patch";
 import type { Read } from "../../tools/definitions/canvas/read";
-
-/**
- * The dispatcher end to end: `publish`/`update` through a fake artifact tool,
- * the report and diagram composers, the page arm with the real d3 bundle, and
- * the PR arm through a real evidence cache. The fake tool is the host seam; the
- * composers and the cache are the production code.
- */
 
 const PROJECT = join(Bun.env.TMPDIR ?? "/tmp", `canvas-tool-${process.pid}`);
 
@@ -87,6 +81,177 @@ const ctxFor = (project: string, tools: ReadonlyArray<Tool.Info & { readonly id:
     tool: { list: () => Effect.succeed(tools) },
   }) as unknown as Plugin.Context;
 
+const makeNocturnaSession = (id: string, title: string, at: number) => ({
+  id,
+  projectID: "p",
+  agent: "spectre",
+  title,
+  outcome: "failed",
+  cost: 0.25,
+  tokens: { input: 1_000, output: 500, reasoning: 100, cache: { read: 50, write: 10 } },
+  time: { created: DateTime.makeUnsafe(at - 120_000), updated: DateTime.makeUnsafe(at - 30_000) },
+});
+
+const nocturnaMessages = (skill: string, toolName: string) => [
+  { id: "msg_user", type: "user", text: "implement the dashboard" },
+  { id: "msg_skill", type: "skill", skill, name: skill, text: "" },
+  {
+    id: "msg_assistant",
+    type: "assistant",
+    agent: "spectre",
+    model: { providerID: "anthropic", id: "claude-sonnet-4" },
+    retry: { attempt: 1, error: { type: "rate_limit", message: "429 Too Many Requests" } },
+    content: [
+      {
+        type: "tool",
+        id: `call_${toolName}`,
+        name: toolName,
+        state: {
+          status: "completed",
+          input: { path: "index.ts" },
+          content: [{ type: "text", text: "updated" }],
+        },
+      },
+    ],
+  },
+];
+
+const ctxForNocturna = (
+  project: string,
+  tools: ReadonlyArray<Tool.Info & { readonly id: string }>,
+  options: {
+    readonly denyRead?: boolean;
+    readonly omitPermission?: boolean;
+    readonly defectPermission?: boolean;
+    readonly declinePapercuts?: boolean;
+    readonly correctedFeedback?: string;
+    readonly wrappedDecline?: boolean;
+    readonly failSessionList?: boolean;
+    readonly defectSessionGet?: boolean;
+    readonly defectStorageGet?: boolean;
+    readonly now?: number;
+  } = {},
+) => {
+  let now = options.now ?? Date.UTC(2026, 10, 27, 12, 0, 0);
+  const clock = () => now;
+  const caller = {
+    id: "ses_test",
+    projectID: "p",
+    agent: "spectre",
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    time: { created: DateTime.makeUnsafe(now - 60_000), updated: DateTime.makeUnsafe(now) },
+  };
+  const sessions = [makeNocturnaSession("ses_feature", "Feature run", now)];
+  const messagesBySession = new Map([
+    ["ses_feature", nocturnaMessages("playbook-feature", "edit")],
+  ]);
+  const store = new Map<string, Schema.Json>();
+  const permissionCalls: Array<{
+    readonly action: string;
+    readonly resources: ReadonlyArray<string>;
+  }> = [];
+  let listCalls = 0;
+
+  const ctx = {
+    location: { directory: project, project: { id: "p", directory: project, canonical: project } },
+    tool: { list: () => Effect.succeed(tools) },
+    ...(options.omitPermission
+      ? {}
+      : {
+          permission: {
+            assert: (input: {
+              readonly action: string;
+              readonly resources: ReadonlyArray<string>;
+            }) => {
+              permissionCalls.push({ action: input.action, resources: input.resources });
+              if (options.defectPermission && input.action === "read") {
+                return Effect.die(new Error("User rejected permission"));
+              }
+              if (options.declinePapercuts && input.action === "papercuts") {
+                return Effect.die({ _tag: "Permission.DeclinedError" });
+              }
+              if (options.wrappedDecline && input.action === "read") {
+                return Effect.fail(
+                  new Tool.Error({
+                    message: "Declined",
+                    error: { _tag: "Permission.DeclinedError" },
+                  }),
+                );
+              }
+              if (options.correctedFeedback !== undefined && input.action === "read") {
+                return Effect.fail(
+                  new Tool.Error({
+                    message: options.correctedFeedback,
+                    error: {
+                      _tag: "Permission.CorrectedError",
+                      feedback: options.correctedFeedback,
+                    },
+                  }),
+                );
+              }
+              if (options.denyRead && input.action === "read") {
+                return Effect.fail(new Tool.Error({ message: "Read permission denied." }));
+              }
+              return Effect.void;
+            },
+          },
+        }),
+    storage: {
+      get: (key: string) => {
+        if (options.defectStorageGet) {
+          return Effect.die(new Error("/private/secret/storage crashed"));
+        }
+        return Effect.succeed(store.get(key));
+      },
+      set: (key: string, value: Schema.Json) =>
+        Effect.sync(() => {
+          store.set(key, value);
+        }),
+      remove: (key: string) =>
+        Effect.sync(() => {
+          store.delete(key);
+        }),
+      scan: () => Effect.succeed({ entries: [] }),
+    },
+    session: {
+      list: () => {
+        listCalls += 1;
+        if (options.failSessionList) {
+          return Effect.fail(new Error("/private/secret/sessions.db failed"));
+        }
+        return Effect.succeed({ data: [...sessions], cursor: {} });
+      },
+      get: ({ sessionID }: { readonly sessionID: string }) => {
+        if (options.defectSessionGet) {
+          return Effect.die(new Error("session.get defect"));
+        }
+        return Effect.succeed(
+          sessionID === caller.id
+            ? caller
+            : (sessions.find((s) => s.id === sessionID) ?? sessions[0]),
+        );
+      },
+      context: ({ sessionID }: { readonly sessionID: string }) =>
+        Effect.succeed(messagesBySession.get(sessionID) ?? []),
+    },
+  } as unknown as Plugin.Context;
+
+  return {
+    ctx,
+    clock,
+    permissionCalls,
+    get listCalls() {
+      return listCalls;
+    },
+    addSession: (id: string, title: string, skill: string, toolName: string) => {
+      now += 60_000;
+      sessions.unshift(makeNocturnaSession(id, title, now));
+      messagesBySession.set(id, nocturnaMessages(skill, toolName));
+    },
+  };
+};
+
 const toolContext = {
   sessionID: "ses_test",
   agent: "spectre",
@@ -95,8 +260,12 @@ const toolContext = {
   progress: () => Effect.void,
 } as unknown as Tool.Context;
 
-const run = async (ctx: Plugin.Context, input: CanvasInput): Promise<Output> => {
-  const result = await Effect.runPromise(canvases(ctx).execute(input, toolContext));
+const run = async (
+  ctx: Plugin.Context,
+  input: CanvasInput,
+  clock?: () => number,
+): Promise<Output> => {
+  const result = await Effect.runPromise(canvases(ctx, clock).execute(input, toolContext));
   if (result.output === undefined) throw new Error("canvas returned no output");
   return result.output;
 };
@@ -188,6 +357,329 @@ describe("publish and update through the host artifact tools", () => {
     expect(html).toContain('data-pele-action="fullscreen"');
     expect(html).toContain("<script>");
     expect(html).not.toContain("<script src=");
+  });
+
+  test("publishes current Nocturna telemetry as a board artifact", async () => {
+    const calls: Array<Recorded> = [];
+    const { ctx, clock, permissionCalls } = ctxForNocturna(PROJECT, [
+      fakeTool("artifact_create", calls),
+    ]);
+
+    const output = published(
+      await run(
+        ctx,
+        {
+          action: "publish",
+          content: { kind: "nocturna", days: 7, limit: 25 },
+        },
+        clock,
+      ),
+    );
+
+    expect(output.title).toBe("Nocturna telemetry — 7 days");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.tool).toBe("artifact_create");
+    expect(permissionCalls).toContainEqual({ action: "read", resources: ["*"] });
+    const html = calls[0]?.input.files?.["index.html"] ?? "";
+    expect(html).toContain("Nocturna telemetry — 7 days");
+    expect(html).toContain("playbook-feature");
+    expect(html).toContain("edit");
+    expect(html).toContain("ses_feature");
+
+    const decoded = decodeCanvasState(calls[0]?.input.files ?? {});
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) throw new Error(decoded.problem);
+    expect(decoded.content.kind).toBe("board");
+    if (decoded.content.kind !== "board") throw new Error("expected board");
+    const serialized = JSON.stringify(decoded.content);
+    expect(serialized).toContain("playbook-feature");
+    expect(serialized).toContain("edit");
+    expect(serialized).toContain("ses_feature");
+  });
+
+  test("recollects Nocturna on update and patches saved board state without recollecting", async () => {
+    const calls: Array<Recorded> = [];
+    const fixture = ctxForNocturna(PROJECT, [
+      fakeTool("artifact_create", calls),
+      fakeTool("artifact_update", calls),
+      fakeReadTool(calls),
+    ]);
+
+    const created = published(
+      await run(
+        fixture.ctx,
+        { action: "publish", content: { kind: "nocturna", days: 7, limit: 25 } },
+        fixture.clock,
+      ),
+    );
+    expect(fixture.listCalls).toBe(1);
+
+    fixture.addSession("ses_followup", "Followup run", "tdd", "read");
+    const updated = published(
+      await run(
+        fixture.ctx,
+        { action: "update", id: created.id, content: { kind: "nocturna", days: 7, limit: 25 } },
+        fixture.clock,
+      ),
+    );
+    expect(updated.id).toBe(created.id);
+    expect(fixture.listCalls).toBe(2);
+    expect(calls[1]?.tool).toBe("artifact_update");
+    const updatedHtml = calls[1]?.input.files?.["index.html"] ?? "";
+    expect(updatedHtml).toContain("ses_followup");
+    expect(updatedHtml).toContain("tdd");
+
+    const patched = published(
+      await run(
+        fixture.ctx,
+        {
+          action: "patch",
+          id: created.id,
+          ops: [
+            { op: "set-title", title: "Annotated Nocturna Board" },
+            { op: "set-summary", summary: "Reviewed telemetry snapshot." },
+          ],
+        },
+        fixture.clock,
+      ),
+    );
+    expect(patched.title).toBe("Annotated Nocturna Board");
+    expect(fixture.listCalls).toBe(2);
+    const patchedDecoded = decodeCanvasState(calls[2]?.input.files ?? {});
+    expect(patchedDecoded.ok).toBe(true);
+    if (!patchedDecoded.ok) throw new Error(patchedDecoded.problem);
+    expect(patchedDecoded.content.kind).toBe("board");
+    if (patchedDecoded.content.kind !== "board") throw new Error("expected board");
+    expect(patchedDecoded.content.title).toBe("Annotated Nocturna Board");
+    expect(patchedDecoded.content.summary).toBe("Reviewed telemetry snapshot.");
+    expect(JSON.stringify(patchedDecoded.content)).toContain("ses_followup");
+    expect(JSON.stringify(patchedDecoded.content)).toContain("playbook-feature");
+  });
+
+  test("refuses Nocturna publish when read permission is denied", async () => {
+    const calls: Array<Recorded> = [];
+    const fixture = ctxForNocturna(PROJECT, [fakeTool("artifact_create", calls)], { denyRead: true });
+
+    const output = await run(
+      fixture.ctx,
+      { action: "publish", content: { kind: "nocturna", days: 7, limit: 25 } },
+      fixture.clock,
+    );
+
+    expect(output).toEqual({
+      status: "refused",
+      problem: "Nocturna telemetry requires read permission.",
+    });
+    expect(calls).toHaveLength(0);
+    expect(fixture.listCalls).toBe(0);
+  });
+
+  test("refuses Nocturna publish when permission.assert is unavailable", async () => {
+    const calls: Array<Recorded> = [];
+    const fixture = ctxForNocturna(PROJECT, [fakeTool("artifact_create", calls)], {
+      omitPermission: true,
+    });
+
+    const output = await run(
+      fixture.ctx,
+      { action: "publish", content: { kind: "nocturna", days: 7, limit: 25 } },
+      fixture.clock,
+    );
+
+    expect(output).toEqual({
+      status: "refused",
+      problem: "Nocturna telemetry requires read permission.",
+    });
+    expect(calls).toHaveLength(0);
+    expect(fixture.listCalls).toBe(0);
+  });
+
+  test("preserves host plain-rejection defect from permission.assert", async () => {
+    const calls: Array<Recorded> = [];
+    const fixture = ctxForNocturna(PROJECT, [fakeTool("artifact_create", calls)], {
+      defectPermission: true,
+    });
+
+    const exit = await Effect.runPromiseExit(
+      canvases(fixture.ctx, fixture.clock).execute(
+        { action: "publish", content: { kind: "nocturna", days: 7, limit: 25 } },
+        toolContext,
+      ),
+    );
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      expect(Cause.hasDies(exit.cause)).toBe(true);
+    }
+    expect(calls).toHaveLength(0);
+    expect(fixture.listCalls).toBe(0);
+  });
+
+  test("returns a stable refusal without raw error details when session.list fails", async () => {
+    const calls: Array<Recorded> = [];
+    const fixture = ctxForNocturna(PROJECT, [fakeTool("artifact_create", calls)], {
+      failSessionList: true,
+    });
+
+    const output = await run(
+      fixture.ctx,
+      { action: "publish", content: { kind: "nocturna", days: 7, limit: 25 } },
+      fixture.clock,
+    );
+
+    expect(output).toEqual({
+      status: "refused",
+      problem: "Nocturna telemetry could not be collected.",
+    });
+    expect(calls).toHaveLength(0);
+    expect(fixture.listCalls).toBe(1);
+  });
+
+  test("returns a stable refusal without raw error details when storage.get defects", async () => {
+    const calls: Array<Recorded> = [];
+    const fixture = ctxForNocturna(PROJECT, [fakeTool("artifact_create", calls)], {
+      defectStorageGet: true,
+    });
+
+    const output = await run(
+      fixture.ctx,
+      { action: "publish", content: { kind: "nocturna", days: 7, limit: 25 } },
+      fixture.clock,
+    );
+
+    expect(output).toEqual({
+      status: "refused",
+      problem: "Nocturna telemetry could not be collected.",
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  test("preserves Permission.CorrectedError feedback and does not swallow wrapped DeclinedError", async () => {
+    const calls: Array<Recorded> = [];
+    const corrected = ctxForNocturna(PROJECT, [fakeTool("artifact_create", calls)], {
+      correctedFeedback: "Limit the dashboard to 1 day.",
+    });
+
+    const correctedOutput = await run(
+      corrected.ctx,
+      { action: "publish", content: { kind: "nocturna", days: 7, limit: 25 } },
+      corrected.clock,
+    );
+    expect(correctedOutput).toEqual({
+      status: "refused",
+      problem: "Limit the dashboard to 1 day.",
+    });
+    expect(calls).toHaveLength(0);
+    expect(corrected.listCalls).toBe(0);
+
+    const declined = ctxForNocturna(PROJECT, [fakeTool("artifact_create", calls)], {
+      wrappedDecline: true,
+    });
+    const declinedExit = await Effect.runPromiseExit(
+      canvases(declined.ctx, declined.clock).execute(
+        { action: "publish", content: { kind: "nocturna", days: 7, limit: 25 } },
+        toolContext,
+      ),
+    );
+    expect(Exit.isFailure(declinedExit)).toBe(true);
+    expect(calls).toHaveLength(0);
+    expect(declined.listCalls).toBe(0);
+  });
+
+  test("propagates a plain papercut permission decline defect instead of returning a Canvas result", async () => {
+    const calls: Array<Recorded> = [];
+    const fixture = ctxForNocturna(PROJECT, [fakeTool("artifact_create", calls)], {
+      declinePapercuts: true,
+    });
+
+    const exit = await Effect.runPromiseExit(
+      canvases(fixture.ctx, fixture.clock).execute(
+        { action: "publish", content: { kind: "nocturna", days: 7, limit: 25 } },
+        toolContext,
+      ),
+    );
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      expect(Cause.hasDies(exit.cause)).toBe(true);
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  test("preflights artifact_create and artifact_update before prompting or collecting Nocturna", async () => {
+    const calls: Array<Recorded> = [];
+    const noCreate = ctxForNocturna(PROJECT, [fakeTool("artifact_update", calls)]);
+    const publishOutput = await run(
+      noCreate.ctx,
+      { action: "publish", content: { kind: "nocturna", days: 7, limit: 25 } },
+      noCreate.clock,
+    );
+    expect(publishOutput.status).toBe("refused");
+    if (publishOutput.status !== "refused") throw new Error("expected refused");
+    expect(publishOutput.problem).toContain("experimental.artifacts");
+    expect(publishOutput.problem).toContain("OPENCODE_FLAGS=artifacts");
+    expect(noCreate.permissionCalls).toHaveLength(0);
+    expect(noCreate.listCalls).toBe(0);
+
+    const noUpdate = ctxForNocturna(PROJECT, [fakeTool("artifact_create", calls)]);
+    const updateOutput = await run(
+      noUpdate.ctx,
+      { action: "update", id: "art_test", content: { kind: "nocturna", days: 7, limit: 25 } },
+      noUpdate.clock,
+    );
+    expect(updateOutput.status).toBe("refused");
+    if (updateOutput.status !== "refused") throw new Error("expected refused");
+    expect(updateOutput.problem).toContain("experimental.artifacts");
+    expect(noUpdate.permissionCalls).toHaveLength(0);
+    expect(noUpdate.listCalls).toBe(0);
+  });
+
+  test("patches a board without calling ctx.session.get even when session.get defects", async () => {
+    const calls: Array<Recorded> = [];
+    const tools = [
+      fakeTool("artifact_create", calls),
+      fakeTool("artifact_update", calls),
+      fakeReadTool(calls),
+    ];
+    const fixture = ctxForNocturna(PROJECT, tools, { defectSessionGet: true });
+
+    const created = published(
+      await run(
+        fixture.ctx,
+        {
+          action: "publish",
+          content: {
+            kind: "board",
+            title: "Board Snapshot",
+            sections: [
+              {
+                id: "kpi",
+                kind: "kpi",
+                heading: "Overview",
+                items: [{ label: "Count", value: "1" }],
+              },
+            ],
+          },
+        },
+        fixture.clock,
+      ),
+    );
+
+    const patched = published(
+      await run(
+        fixture.ctx,
+        {
+          action: "patch",
+          id: created.id,
+          ops: [{ op: "set-title", title: "Patched Board Snapshot" }],
+        },
+        fixture.clock,
+      ),
+    );
+
+    expect(patched.title).toBe("Patched Board Snapshot");
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.tool).toBe("artifact_update");
   });
 
   test("update keeps the id and sends no provider", async () => {

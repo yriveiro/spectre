@@ -115,6 +115,18 @@ export type CreateInput = {
 
 export type UpdateInput = CreateInput & { readonly id: string };
 
+export const preflight = Effect.fn("Canvas.artifact.preflight")(function* (
+  ctx: Plugin.Context,
+  action: "publish" | "update",
+) {
+  const required = action === "publish" ? "artifact_create" : "artifact_update";
+  const tool = yield* findArtifactTool(ctx, required);
+  if (tool === undefined) {
+    return { ok: false as const, problem: unavailableProblem };
+  }
+  return { ok: true as const };
+});
+
 export const create = Effect.fn("Canvas.artifact.create")(function* (input: CreateInput) {
   const tool = yield* findArtifactTool(input.ctx, "artifact_create");
   if (tool === undefined)
