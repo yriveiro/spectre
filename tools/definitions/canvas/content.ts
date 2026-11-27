@@ -270,14 +270,33 @@ export const BrainContent = Schema.Struct({
 });
 export type BrainContent = Schema.Schema.Type<typeof BrainContent>;
 
-export const Content = Schema.Union([
+export const NocturnaContent = Schema.Struct({
+  kind: Schema.Literals(["nocturna"]),
+  days: Schema.optional(Schema.Finite).annotate({
+    description: "Rolling lookback window in days (1..90). Default 7.",
+  }),
+  limit: Schema.optional(Schema.Int).annotate({
+    description: "Maximum sessions to digest in this batch (1..100). Default 25.",
+  }),
+  includeAnalyzed: Schema.optional(Schema.Boolean).annotate({
+    description: "Include sessions already watermarked in Nocturna storage. Default false.",
+  }),
+});
+export type NocturnaContent = Schema.Schema.Type<typeof NocturnaContent>;
+
+export const StoredContent = Schema.Union([
   PageContent,
   ReportContent,
   DiagramContent,
   PrContent,
   BoardContent,
-  BrainContent,
 ]);
+export type StoredContent = Schema.Schema.Type<typeof StoredContent>;
+
+export const RenderableContent = Schema.Union([StoredContent, BrainContent]);
+export type RenderableContent = Schema.Schema.Type<typeof RenderableContent>;
+
+export const Content = Schema.Union([RenderableContent, NocturnaContent]);
 export type Content = Schema.Schema.Type<typeof Content>;
 
 export const DiffInput = Schema.Struct({

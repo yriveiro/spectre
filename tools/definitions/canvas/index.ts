@@ -1,28 +1,31 @@
-import type { Plugin, Tool } from "@opencode/plugin/effect";
-import { Effect } from "effect";
+import { type Plugin, Tool } from "@opencode/plugin/effect";
+import { Cause, Effect, Option } from "effect";
 import { snapshot as snapshotBrain } from "../brain";
+import { collectNocturna } from "../nocturna";
 import { board } from "./board";
 import { composeBrain } from "./brain";
 import { diagram, page, report } from "./compose";
 import {
   type Composed,
-  type Content,
   type DiffInput,
   Input,
   type Input as InputType,
   Output,
+  type RenderableContent,
   refused,
 } from "./content";
 import { bundle } from "./d3";
 import { load, write } from "./evidence";
+import { nocturnaBoard } from "./nocturna";
 import { applyPatchOps, CANVAS_STATE_FILE, decodeCanvasState, encodeCanvasState } from "./patch";
 import { pr as composePr } from "./pr";
-import { create, readArtifact, update } from "./publish";
+import { create, preflight, readArtifact, update } from "./publish";
 import type { Read, Input as ReadInput } from "./read";
 import { read as readDiff, totalsOf } from "./read";
 
-const DESCRIPTION = `Publish or update HTML pages, Mermaid diagrams, Markdown reports, brain graphs, and visual PR reviews.
-Use action "diff" to parse a pull request or local base and head diff into cached evidence with a token, "publish" to create a visual OpenCode artifact URL (including kind "brain" for the canonical .spectre/brain connectome, bundled d3.min.js for custom UI pages, and static SVG Mermaid rendering), and "update" to replace an existing art_ artifact in place.`;
+const DESCRIPTION = `Publish or update visual HTML pages, Mermaid diagrams, Markdown reports, dashboards, brain graphs, and PR reviews.
+Use action "diff" to parse a pull request or local diff into review evidence, "publish" to create a visual OpenCode artifact URL, "update" to replace an art_ artifact, and "patch" to edit saved canvas state.
+Content kinds cover "page" (with bundled d3.min.js), "report", "diagram", "pr", "board" dashboards, "brain" connectome graphs, and "nocturna" for a Nocturna telemetry dashboard.`;
 
 const subjectOf = (
   input: DiffInput,
@@ -65,10 +68,6 @@ const attempt = <A>(
     Effect.catch((problem: string) => Effect.succeed({ ok: false as const, problem })),
   );
 
-/**
- * Compose one content arm. The switch is exhaustive: a new content kind fails
- * the build at the `never`, so it cannot fall through to a diagram by accident.
- */
 const resolveBrainDirectory = (
   ctx: Plugin.Context,
   sessionID: Tool.Context["sessionID"],
@@ -83,11 +82,12 @@ const resolveBrainDirectory = (
   });
 
 const buildContent = (
-  project: string,
-  brainDirectory: string,
-  content: Content,
+  ctx: Plugin.Context,
+  sessionID: Tool.Context["sessionID"],
+  content: RenderableContent,
 ): Effect.Effect<Composed> =>
   Effect.gen(function* () {
+    const project = ctx.location.project.directory;
     switch (content.kind) {
       case "pr": {
         const evidence = yield* Effect.promise(() => load(project, content.token));
@@ -111,6 +111,7 @@ const buildContent = (
         return built.ok ? built.value : { ok: false as const, problem: built.problem };
       }
       case "brain": {
+        const brainDirectory = yield* resolveBrainDirectory(ctx, sessionID);
         const snap = yield* snapshotBrain(brainDirectory).pipe(
           Effect.map((value) => ({ ok: true as const, value })),
           Effect.catch((error) => Effect.succeed({ ok: false as const, problem: causeMessage(error) })),
@@ -152,15 +153,125 @@ const executeDiff = (ctx: Plugin.Context, input: DiffInput): Effect.Effect<{ out
     };
   });
 
+const PERMISSION_SIGNALS = new Set<unknown>([
+  "Permission.DeclinedError",
+  "Permission.CorrectedError",
+]);
+
+const isPermissionSignal = (cause: Cause.Cause<unknown>): boolean =>
+  cause.reasons.some((reason) => {
+    const item = Cause.isDieReason(reason)
+      ? reason.defect
+      : Cause.isFailReason(reason)
+        ? reason.error
+        : undefined;
+    const candidate = item instanceof Tool.Error ? item.error : item;
+    return (
+      typeof candidate === "object" &&
+      candidate !== null &&
+      "_tag" in candidate &&
+      PERMISSION_SIGNALS.has(candidate._tag)
+    );
+  });
+
+const inspectPermissionError = (
+  error: Tool.Error,
+): { readonly kind: "declined" } | { readonly kind: "refused"; readonly problem: string } => {
+  const inner = error.error;
+  if (typeof inner === "object" && inner !== null && "_tag" in inner) {
+    if (inner._tag === "Permission.DeclinedError") return { kind: "declined" };
+    if (inner._tag === "Permission.CorrectedError") {
+      const raw =
+        "feedback" in inner && typeof inner.feedback === "string" ? inner.feedback : error.message;
+      const trimmed = raw.trim();
+      if (trimmed !== "") return { kind: "refused", problem: trimmed };
+    }
+  }
+  return { kind: "refused", problem: "Nocturna telemetry requires read permission." };
+};
+
+const assertNocturnaReadPermission = (
+  ctx: Plugin.Context,
+  context: Tool.Context,
+): Effect.Effect<
+  { readonly ok: true } | { readonly ok: false; readonly problem: string },
+  Tool.Error
+> => {
+  const assertPermission = ctx.permission?.assert;
+  if (typeof assertPermission !== "function") {
+    return Effect.succeed({
+      ok: false as const,
+      problem: "Nocturna telemetry requires read permission.",
+    });
+  }
+  return assertPermission({
+    sessionID: context.sessionID,
+    ...(context.agent === undefined ? {} : { agent: context.agent }),
+    action: "read",
+    resources: ["*"],
+    ...(context.messageID !== undefined && context.id !== undefined
+      ? { source: { type: "tool" as const, messageID: context.messageID, id: context.id } }
+      : {}),
+  }).pipe(
+    Effect.matchCauseEffect({
+      onFailure: (cause) => {
+        if (Cause.hasDies(cause) || Cause.hasInterrupts(cause)) {
+          return Effect.failCause(cause);
+        }
+        const failure = Option.getOrUndefined(Cause.findErrorOption(cause));
+        if (!(failure instanceof Tool.Error)) return Effect.failCause(cause);
+        const inspected = inspectPermissionError(failure);
+        if (inspected.kind === "declined") return Effect.failCause(cause);
+        return Effect.succeed({ ok: false as const, problem: inspected.problem });
+      },
+      onSuccess: () => Effect.succeed({ ok: true as const }),
+    }),
+  );
+};
+
 const resolveTargetContent = (
   ctx: Plugin.Context,
   context: Tool.Context,
   input: Exclude<InputType, DiffInput>,
+  now: number,
 ): Effect.Effect<
-  { readonly ok: true; readonly content: Content } | { readonly ok: false; readonly problem: string }
+  | { readonly ok: true; readonly content: RenderableContent }
+  | { readonly ok: false; readonly problem: string },
+  Tool.Error
 > =>
   Effect.gen(function* () {
-    if (input.action !== "patch") return { ok: true as const, content: input.content };
+    if (input.action !== "patch") {
+      const { content } = input;
+      if (content.kind !== "nocturna") return { ok: true as const, content };
+      const permitted = yield* assertNocturnaReadPermission(ctx, context);
+      if (!permitted.ok) return permitted;
+      return yield* collectNocturna(
+        ctx,
+        {
+          days: content.days,
+          limit: content.limit,
+          includeAnalyzed: content.includeAnalyzed,
+        },
+        context,
+        now,
+      ).pipe(
+        Effect.matchCauseEffect({
+          onFailure: (cause) =>
+            Cause.hasInterrupts(cause) || isPermissionSignal(cause)
+              ? Effect.failCause(cause)
+              : Effect.logWarning("Nocturna telemetry collection failed", {
+                  cause: Cause.pretty(cause),
+                }).pipe(
+                  Effect.as({
+                    ok: false as const,
+                    problem: "Nocturna telemetry could not be collected.",
+                  }),
+                ),
+          onSuccess: ({ output }) =>
+            Effect.succeed({ ok: true as const, content: nocturnaBoard(output) }),
+        }),
+      );
+    }
     const existing = yield* readArtifact({ ctx, context, id: input.id });
     if (existing.status !== "read") return { ok: false as const, problem: existing.problem };
     const decoded = decodeCanvasState(existing.files);
@@ -168,7 +279,10 @@ const resolveTargetContent = (
     return applyPatchOps(decoded.content, input.ops);
   });
 
-export const canvases = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Output> => ({
+export const canvases = (
+  ctx: Plugin.Context,
+  clock: () => number = Date.now,
+): Tool.Info<typeof Input, typeof Output> => ({
   name: "canvas",
   description: DESCRIPTION,
   input: Input,
@@ -179,15 +293,15 @@ export const canvases = (ctx: Plugin.Context): Tool.Info<typeof Input, typeof Ou
     if (input.action !== "publish" && !input.id.startsWith("art_"))
       return { output: refused(`${input.action} id must be an artifact id that starts with \`art_\``) };
 
-    const resolved = yield* resolveTargetContent(ctx, context, input);
+    if (input.action === "publish" || input.action === "update") {
+      const ready = yield* preflight(ctx, input.action);
+      if (!ready.ok) return { output: refused(ready.problem) };
+    }
+
+    const resolved = yield* resolveTargetContent(ctx, context, input, clock());
     if (!resolved.ok) return { output: refused(resolved.problem) };
 
-    const brainDirectory = yield* resolveBrainDirectory(ctx, context.sessionID);
-    const built: Composed = yield* buildContent(
-      ctx.location.project.directory,
-      brainDirectory,
-      resolved.content,
-    );
+    const built: Composed = yield* buildContent(ctx, context.sessionID, resolved.content);
     if (!built.ok) return { output: refused(built.problem) };
 
     const filesWithState: Readonly<Record<string, string>> =

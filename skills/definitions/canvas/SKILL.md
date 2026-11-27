@@ -28,6 +28,8 @@ is a drawing rather than a report or a designed UI.
   itself is the point is a `page`.
 - One figure and the sentence it carries is a `diagram`.
 - Project memory under `.spectre/brain/` uses `brain`, never custom HTML.
+- Nocturna session telemetry dashboards use `nocturna`, which collects the
+  rolling window and renders a `board`.
 - A pull request is `pr-canvas`, not any of the above.
 
 ## Report
@@ -85,6 +87,18 @@ custom `page` for project memory.
 
 Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
 "brain", focus? } }`. Report the artifact id and the relative URL.
+
+## Nocturna
+
+Code collects current Nocturna session telemetry and renders it as a `board`
+artifact with batch totals, tool and skill tables, session anomalies, and
+papercuts. The published artifact stores the resolved `board` state, so `patch`
+edits the saved snapshot and `update` with `kind: "nocturna"` recollects current
+telemetry.
+
+Call `tools.spectre.canvas` with `{ action: "publish", content: { kind:
+"nocturna", days?, limit?, includeAnalyzed? } }`. Report the artifact id and the
+relative URL.
 
 ## Iterate and reopen
 

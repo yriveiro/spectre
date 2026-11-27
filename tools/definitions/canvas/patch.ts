@@ -1,13 +1,13 @@
 import { Schema } from "effect";
-import { Content, type Content as ContentType, type PatchOp } from "./content";
+import { type PatchOp, StoredContent } from "./content";
 
 export const CANVAS_STATE_FILE = ".spectre-canvas.json";
 
 export type PatchResult =
-  | { readonly ok: true; readonly content: ContentType }
+  | { readonly ok: true; readonly content: StoredContent }
   | { readonly ok: false; readonly problem: string };
 
-export const encodeCanvasState = (content: ContentType): string =>
+export const encodeCanvasState = (content: StoredContent): string =>
   `${JSON.stringify(content, null, 2)}\n`;
 
 export const decodeCanvasState = (
@@ -26,9 +26,9 @@ export const decodeCanvasState = (
   } catch {
     return { ok: false, problem: `${CANVAS_STATE_FILE} is not valid JSON` };
   }
-  const decoded = Schema.decodeUnknownOption(Content)(parsed);
+  const decoded = Schema.decodeUnknownOption(StoredContent)(parsed);
   if (decoded._tag === "None") {
-    return { ok: false, problem: `${CANVAS_STATE_FILE} does not match the Canvas Content schema` };
+    return { ok: false, problem: `${CANVAS_STATE_FILE} does not match the Canvas StoredContent schema` };
   }
   return { ok: true, content: decoded.value };
 };
@@ -80,9 +80,9 @@ const replaceMarkdownSection = (
   };
 };
 
-const applyTitleOp = (current: ContentType, title: string): PatchResult => {
+const applyTitleOp = (current: StoredContent, title: string): PatchResult => {
   if (title.trim() === "") return { ok: false, problem: "set-title requires a non-empty title" };
-  if (current.kind === "pr" || current.kind === "brain") {
+  if (current.kind === "pr") {
     return {
       ok: false,
       problem: `a "${current.kind}" canvas derives its title automatically and cannot be renamed with set-title`,
@@ -91,7 +91,7 @@ const applyTitleOp = (current: ContentType, title: string): PatchResult => {
   return { ok: true, content: { ...current, title } };
 };
 
-const applySummaryOp = (current: ContentType, summary: string): PatchResult => {
+const applySummaryOp = (current: StoredContent, summary: string): PatchResult => {
   if (current.kind === "pr") {
     return { ok: true, content: { ...current, review: { ...current.review, summary } } };
   }
@@ -102,7 +102,7 @@ const applySummaryOp = (current: ContentType, summary: string): PatchResult => {
 };
 
 const applyMarkdownOp = (
-  current: ContentType,
+  current: StoredContent,
   op: Extract<PatchOp, { op: "replace-section" | "append-markdown" }>,
 ): PatchResult => {
   if (current.kind !== "report") {
@@ -118,7 +118,7 @@ const applyMarkdownOp = (
 };
 
 const applyDiagramOp = (
-  current: ContentType,
+  current: StoredContent,
   op: Extract<PatchOp, { op: "set-diagram" }>,
 ): PatchResult => {
   if (current.kind !== "diagram") {
@@ -136,7 +136,7 @@ const applyDiagramOp = (
 };
 
 const upsertPrPoint = (
-  current: Extract<ContentType, { kind: "pr" }>,
+  current: Extract<StoredContent, { kind: "pr" }>,
   op: Extract<PatchOp, { op: "upsert-point" }>,
 ): PatchResult => {
   const points = [...current.review.points];
@@ -154,7 +154,7 @@ const upsertPrPoint = (
 };
 
 const applyPrOp = (
-  current: ContentType,
+  current: StoredContent,
   op: Extract<PatchOp, { op: "upsert-point" | "remove-point" | "upsert-group" }>,
 ): PatchResult => {
   if (current.kind !== "pr") {
@@ -177,7 +177,7 @@ const applyPrOp = (
 };
 
 const applyBoardOp = (
-  current: ContentType,
+  current: StoredContent,
   op: Extract<PatchOp, { op: "upsert-board-section" | "remove-board-section" }>,
 ): PatchResult => {
   if (current.kind !== "board") {
@@ -207,7 +207,7 @@ const applyBoardOp = (
   return { ok: true, content: { ...current, sections: next } };
 };
 
-const applyOne = (current: ContentType, op: PatchOp): PatchResult => {
+const applyOne = (current: StoredContent, op: PatchOp): PatchResult => {
   switch (op.op) {
     case "set-title":
       return applyTitleOp(current, op.title);
@@ -233,7 +233,7 @@ const applyOne = (current: ContentType, op: PatchOp): PatchResult => {
 };
 
 export const applyPatchOps = (
-  initial: ContentType,
+  initial: StoredContent,
   ops: ReadonlyArray<PatchOp>,
 ): PatchResult => {
   if (ops.length === 0) {

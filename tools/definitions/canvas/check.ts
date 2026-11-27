@@ -1,13 +1,3 @@
-/**
- * Pure findings over one HTML document. No disk, no network, no clock: every
- * function takes the page (and sometimes the artifact's file map) and returns
- * what it found. Severity is the composer's decision, not this module's.
- *
- * The scans are lexical on purpose. A generated page is built from templates
- * this repository owns, and a model-authored page is one string; a parser would
- * buy nothing the regexes do not, and every check here can fail in a test.
- */
-
 export type ExternalLoad = {
   readonly target: string;
   readonly kind: "remote" | "missing";
@@ -23,8 +13,6 @@ const ID = /\bid\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
 
 const STYLE_BLOCK = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
 
-const STYLE_ATTR = /\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
-
 const CSS_URL = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi;
 
 /**
@@ -34,6 +22,10 @@ const CSS_URL = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)/gi;
  */
 const ATTRS = "((?:\"[^\"]*\"|'[^']*'|[^>\"'])*)";
 
+const START_TAG = new RegExp(`<[a-z][a-z0-9:-]*\\b${ATTRS}>`, "gi");
+
+const ATTR_PAIR = /([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+
 const tags = (html: string, name: string): ReadonlyArray<string> => {
   const found: Array<string> = [];
   for (const match of html.matchAll(new RegExp(`<${name}\\b${ATTRS}>`, "gi")))
@@ -41,12 +33,18 @@ const tags = (html: string, name: string): ReadonlyArray<string> => {
   return found;
 };
 
-const attr = (attrs: string, name: string): string | undefined => {
-  const match = new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(
-    attrs,
-  );
-  return match?.[1] ?? match?.[2] ?? match?.[3];
+const attrValues = (attrs: string, name: string): ReadonlyArray<string> => {
+  const target = name.toLowerCase();
+  const found: Array<string> = [];
+  for (const match of attrs.matchAll(ATTR_PAIR)) {
+    if ((match[1] ?? "").toLowerCase() !== target) continue;
+    const value = match[2] ?? match[3] ?? match[4];
+    if (value !== undefined) found.push(value);
+  }
+  return found;
 };
+
+const attr = (attrs: string, name: string): string | undefined => attrValues(attrs, name)[0];
 
 const decode = (text: string): string =>
   text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z][a-z0-9]*);/gi, (match, body: string) => {
@@ -103,21 +101,18 @@ const hrefs = (html: string): ReadonlyArray<string> => {
 const cssTexts = (html: string): ReadonlyArray<string> => {
   const found: Array<string> = [];
   for (const match of html.matchAll(STYLE_BLOCK)) found.push(match[1] ?? "");
-  for (const match of html.matchAll(STYLE_ATTR)) found.push(match[1] ?? match[2] ?? match[3] ?? "");
+  for (const match of html.matchAll(START_TAG)) {
+    for (const value of attrValues(match[1] ?? "", "style")) found.push(decode(value));
+  }
   return found;
 };
 
-/**
- * A target that leaves the artifact. `data:` and `#` are local; a relative path
- * is local only when the file map holds it. `missing` and `remote` stay separate
- * because a `page` may warn about a CDN it names and must still refuse a
- * relative file that is not in the artifact.
- */
 const classify = (
   raw: string,
   files: Readonly<Record<string, string>>,
+  decoded = false,
 ): ExternalLoad | undefined => {
-  const value = clean(raw);
+  const value = decoded ? raw.trim() : clean(raw);
   if (value === "" || value.startsWith("#")) return undefined;
   if (value.toLowerCase().startsWith("data:")) return undefined;
   if (value.startsWith("//") || SCHEME.test(value) || value.startsWith("/"))
@@ -166,9 +161,9 @@ export const externalLoads = (
   files: Readonly<Record<string, string>>,
 ): ReadonlyArray<ExternalLoad> => {
   const found: Array<ExternalLoad> = [];
-  const add = (raw: string | undefined): void => {
+  const add = (raw: string | undefined, decoded = false): void => {
     if (raw === undefined) return;
-    const one = classify(raw, files);
+    const one = classify(raw, files, decoded);
     if (one !== undefined) found.push(one);
   };
 
@@ -182,7 +177,7 @@ export const externalLoads = (
     add(attr(attrs, "href"));
   }
   for (const css of cssTexts(html))
-    for (const match of css.matchAll(CSS_URL)) add(match[1] ?? match[2] ?? match[3]);
+    for (const match of css.matchAll(CSS_URL)) add(match[1] ?? match[2] ?? match[3], true);
 
   const seen = new Set<string>();
   return found.filter((one) => {

@@ -5,6 +5,7 @@ import { AbsolutePath } from "@opencode/schema/schema";
 import { Effect } from "effect";
 import { ledger as brainLedger } from "../../tools/definitions/brain/ledger";
 import { board } from "../../tools/definitions/canvas/board";
+import { nocturnaBoard } from "../../tools/definitions/canvas/nocturna";
 
 const PROJECT = join(Bun.env.TMPDIR ?? "/tmp", `canvas-board-${process.pid}`);
 
@@ -188,5 +189,81 @@ describe("board composer", () => {
     expect(badSymbol.ok).toBe(false);
     if (badSymbol.ok) throw new Error("expected refusal");
     expect(badSymbol.problem).toContain("nonExistentSymbol");
+  });
+
+  test("composes a table with CSS-like session title text and single-escaped papercut target", async () => {
+    const content = nocturnaBoard({
+      status: "collected",
+      project: "p",
+      windowDays: 7,
+      cutoffAt: 0,
+      scannedInWindow: 1,
+      skippedAnalyzed: 0,
+      remainingUnanalyzed: 0,
+      trackedInStorage: 0,
+      truncated: false,
+      unreadable: [],
+      totals: {
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+        toolCalls: 0,
+        toolErrors: 0,
+        retries: 0,
+        compactions: 0,
+      },
+      topTools: [],
+      topSkills: [],
+      skillCoUse: [],
+      skillCoverage: { live: 0, transcript: 0, hybrid: 0, none: 1, partial: 0 },
+      sessions: [
+        {
+          id: "ses_css",
+          title: "Fix inline style=background:url(icon.svg)",
+          agent: "spectre",
+          outcome: "succeeded",
+          createdAt: 1,
+          updatedAt: 2,
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+          userTurns: 1,
+          assistantSteps: 1,
+          retries: 0,
+          compactions: 0,
+          compacted: false,
+          subagentsSpawned: 0,
+          shellFailed: 0,
+          skillsLoaded: [],
+          telemetryCoverage: "none",
+          telemetryPartial: false,
+          tools: [],
+          anomalyScore: 0,
+        },
+      ],
+      papercuts: {
+        status: "ok",
+        openGroups: 1,
+        newReportsInWindow: 1,
+        scanTruncated: false,
+        topGroups: [
+          {
+            groupId: "pc_1",
+            targetKind: "tool",
+            target: "tool &lt;alpha&gt; &amp; beta",
+            projects: 1,
+            occurrences: 2,
+            reopened: false,
+          },
+        ],
+      },
+    });
+
+    const result = await board(PROJECT, content);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.problem);
+    const html = result.files["index.html"] ?? "";
+    expect(html).toContain("<td>Fix inline style=background:url(icon.svg)</td>");
+    expect(html).toContain("<td>tool &lt;alpha&gt; &amp; beta</td>");
+    expect(html).not.toContain("&amp;lt;");
+    expect(html).not.toContain("&amp;amp;");
   });
 });

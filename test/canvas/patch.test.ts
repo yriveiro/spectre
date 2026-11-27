@@ -26,6 +26,13 @@ describe("decodeCanvasState and encodeCanvasState", () => {
     const badJson = decodeCanvasState({ [CANVAS_STATE_FILE]: "{broken" });
     expect(badJson.ok).toBe(false);
   });
+
+  test("refuses an unresolved nocturna request in .spectre-canvas.json", () => {
+    const decoded = decodeCanvasState({
+      [CANVAS_STATE_FILE]: JSON.stringify({ kind: "nocturna", days: 7, limit: 25 }),
+    });
+    expect(decoded.ok).toBe(false);
+  });
 });
 
 describe("applyPatchOps", () => {

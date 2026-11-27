@@ -39,6 +39,31 @@ describe("externalLoads", () => {
     ).toEqual([{ target: "https://x.test/a.png", kind: "remote" }]);
   });
 
+  test("inline style attributes with url(…) are external, but text and non-style attributes are not", () => {
+    expect(externalLoads('<div style="background:url(icon.svg)"></div>', {})).toEqual([
+      { target: "icon.svg", kind: "missing" },
+    ]);
+    expect(externalLoads("<div style=background:url(icon.svg)></div>", {})).toEqual([
+      { target: "icon.svg", kind: "missing" },
+    ]);
+    expect(externalLoads("<td>Fix inline style=background:url(icon.svg)</td>", {})).toEqual([]);
+    expect(
+      externalLoads('<th title="Sort by style=background:url(icon.svg)">Title</th>', {}),
+    ).toEqual([]);
+  });
+
+  test("entity-quoted inline style url(…) values are decoded once while style blocks stay raw", () => {
+    expect(
+      externalLoads('<div style="background: url(&quot;data:image/svg+xml,<svg/>&quot;)"></div>', {}),
+    ).toEqual([]);
+    expect(
+      externalLoads(
+        '<div style="background: url(&quot;https://evil.example/a.png&quot;)"></div>',
+        {},
+      ),
+    ).toEqual([{ target: "https://evil.example/a.png", kind: "remote" }]);
+  });
+
   test("a stylesheet link loads; a canonical link does not", () => {
     expect(externalLoads('<link rel="stylesheet" href="https://x.test/a.css">', {})).toEqual([
       { target: "https://x.test/a.css", kind: "remote" },

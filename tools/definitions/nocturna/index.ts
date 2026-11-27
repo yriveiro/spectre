@@ -1,6 +1,6 @@
 import { Agent, type Plugin, Tool } from "@opencode/plugin/effect";
 import { Session } from "@opencode/schema/session";
-import { Effect, Option, Result, Schema } from "effect";
+import { Cause, Effect, Option, Result, Schema } from "effect";
 import { type PapercutRollup, PapercutRollupSchema, summarizeOpenPapercuts } from "../papercuts";
 import {
   digestSession,
@@ -147,7 +147,7 @@ const SessionDigestSchema = Schema.Struct({
   telemetryPartial: Schema.optional(Schema.Boolean),
 });
 
-const CollectedOutput = Schema.Struct({
+export const CollectedOutput = Schema.Struct({
   status: Schema.Literals(["collected"]),
   project: Schema.String,
   windowDays: Schema.Number,
@@ -310,11 +310,17 @@ const loadAgentPermissions = (
   );
 };
 
+const isPermissionDecisionError = (error: Tool.Error): boolean => {
+  const inner = error.error;
+  if (typeof inner !== "object" || inner === null || !("_tag" in inner)) return false;
+  return inner._tag === "Permission.DeclinedError" || inner._tag === "Permission.CorrectedError";
+};
+
 const canReadPapercuts = (
   ctx: Plugin.Context,
   callerInfo: Session.Info | undefined,
   context: Tool.Context | undefined,
-): Effect.Effect<boolean> =>
+): Effect.Effect<boolean, Tool.Error> =>
   Effect.gen(function* () {
     const rawAgent = context?.agent ?? callerInfo?.agent;
     const agentID =
@@ -340,8 +346,19 @@ const canReadPapercuts = (
         ? { source: { type: "tool" as const, messageID: context.messageID, id: context.id } }
         : {}),
     }).pipe(
-      Effect.as(true),
-      Effect.catchCause(() => Effect.succeed(false)),
+      Effect.matchCauseEffect({
+        onFailure: (cause) => {
+          if (Cause.hasDies(cause) || Cause.hasInterrupts(cause)) {
+            return Effect.failCause(cause);
+          }
+          const failure = Option.getOrUndefined(Cause.findErrorOption(cause));
+          if (!(failure instanceof Tool.Error) || isPermissionDecisionError(failure)) {
+            return Effect.failCause(cause);
+          }
+          return Effect.succeed(false);
+        },
+        onSuccess: () => Effect.succeed(true),
+      }),
     );
   });
 
@@ -811,7 +828,7 @@ const collectVisiblePapercuts = (
   callerInfo: Session.Info | undefined,
   context: Tool.Context | undefined,
   cutoffAt: number,
-): Effect.Effect<PapercutRollup> =>
+): Effect.Effect<PapercutRollup, Tool.Error> =>
   canReadPapercuts(ctx, callerInfo, context).pipe(
     Effect.flatMap((allowed) =>
       allowed ? summarizeOpenPapercuts(ctx, cutoffAt) : Effect.succeed(UNAVAILABLE_PAPERCUTS),
@@ -882,6 +899,34 @@ const runCollect = (
       content: `Collected ${digests.length} session(s) across ${windowDays}d (${scanned.skippedAnalyzed} skipped, ${output.remainingUnanalyzed} remaining, ${unreadable.length} unreadable).${papercutNote}`,
     };
   });
+
+export interface NocturnaCollectOptions {
+  readonly days?: number | undefined;
+  readonly limit?: number | undefined;
+  readonly offset?: number | undefined;
+  readonly includeAnalyzed?: boolean | undefined;
+}
+
+export const collectNocturna = (
+  ctx: Plugin.Context,
+  options: NocturnaCollectOptions,
+  context: Tool.Context | undefined,
+  now: number = Date.now(),
+) =>
+  runCollect(
+    ctx,
+    {
+      action: "collect",
+      ...(options.days === undefined ? {} : { days: options.days }),
+      ...(options.limit === undefined ? {} : { limit: options.limit }),
+      ...(options.offset === undefined ? {} : { offset: options.offset }),
+      ...(options.includeAnalyzed === undefined
+        ? {}
+        : { includeAnalyzed: options.includeAnalyzed }),
+    },
+    context,
+    now,
+  );
 
 const runInspect = (ctx: Plugin.Context, input: typeof InspectInput.Type) =>
   Effect.gen(function* () {
@@ -980,6 +1025,6 @@ export const nocturnaTool = (
     const now = clock();
     if (input.action === "inspect") return runInspect(ctx, input);
     if (input.action === "mark") return runMark(ctx, input, now);
-    return runCollect(ctx, input, context, now);
+    return collectNocturna(ctx, input, context, now);
   },
 });
