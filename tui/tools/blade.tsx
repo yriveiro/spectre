@@ -2,14 +2,14 @@ import type { Plugin } from "@opencode/plugin/tui";
 import type { JSX } from "@opentui/solid";
 import { createMemo } from "solid-js";
 import { blade } from "../blade.tsx";
-import { bar, type Column } from "../blade-layout.ts";
+import { type Column, tokenBar } from "../blade-layout.ts";
 import { displayName, formatTokens, type ToolUsage, toolUsage, totalTokens } from "./usage.ts";
 
 /** One tool's by-type spend, the words the expand line shows. */
 const breakdown = (one: ToolUsage): string => {
   const parts = [
     `in ${formatTokens(one.tokens.input)}`,
-    `cache↻ ${formatTokens(one.tokens.cacheRead)}/${formatTokens(one.tokens.cacheWrite)}`,
+    `cache(R/W) ${formatTokens(one.tokens.cacheRead)}/${formatTokens(one.tokens.cacheWrite)}`,
     `out ${formatTokens(one.tokens.output)}`,
     `rsn ${formatTokens(one.tokens.reasoning)}`,
   ];
@@ -70,7 +70,7 @@ export const toolsBlade = (input: {
       width: 10,
       hideBelow: 46,
       tone: "muted",
-      cell: (one) => bar(totalTokens(one.tokens), peak(), 10),
+      cell: (one) => tokenBar(one.tokens, peak(), 10),
     },
   ];
 
@@ -94,8 +94,14 @@ export const toolsBlade = (input: {
         {
           text: `Σ ${now.tools.length} tools · ${now.totals.calls} calls · ${formatTokens(totalTokens(now.totals))} tokens`,
         },
+        { text: "" },
         {
-          text: `in ${formatTokens(now.totals.input)} · cache↻ ${formatTokens(now.totals.cacheRead)}/${formatTokens(now.totals.cacheWrite)} · out ${formatTokens(now.totals.output)} · rsn ${formatTokens(now.totals.reasoning)}${outside}`,
+          text: `in ${formatTokens(now.totals.input)} · cache(R/W) ${formatTokens(now.totals.cacheRead)}/${formatTokens(now.totals.cacheWrite)} · out ${formatTokens(now.totals.output)} · rsn ${formatTokens(now.totals.reasoning)}${outside}`,
+          tone: "faint",
+        },
+        { text: "" },
+        {
+          text: "█ input · ▓ cacheRead · ▒ cacheWrite · ░ output · ▪ reasoning",
           tone: "faint",
         },
       ];

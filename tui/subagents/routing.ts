@@ -64,12 +64,30 @@ export const profileRouting = async (
   );
   const specs = found.configuredProfiles ? found.tables.profiles : DEFAULT_PROFILES;
 
-  return Object.entries(specs).map(([name, entry]): ProfileRouting => {
-    const resolved = resolveProfile(name, entry, kept.kept, DEFAULT_AGENT, crosscheck.listed);
-    return {
-      name,
-      agent: entry.agent ?? defaultAgentFor(name, DEFAULT_AGENT),
-      ref: resolved.resolution === undefined ? undefined : spendRef(resolved.resolution.primary),
-    };
-  });
+  const entries = Object.entries(specs).map(([name, entry]) => ({
+    name,
+    agent: entry.agent ?? defaultAgentFor(name, DEFAULT_AGENT),
+    resolved: resolveProfile(name, entry, kept.kept, DEFAULT_AGENT, crosscheck.listed),
+  }));
+
+  const primary: ProfileRouting[] = entries.map(({ name, agent, resolved }) => ({
+    name,
+    agent,
+    ref: resolved.resolution === undefined ? undefined : spendRef(resolved.resolution.primary),
+  }));
+
+  const secondary: ProfileRouting[] = entries.flatMap(({ name, agent, resolved }) =>
+    resolved.resolution?.crosscheck === undefined
+      ? []
+      : [
+          {
+            name,
+            agent,
+            ref: spendRef(resolved.resolution.crosscheck),
+            crosscheck: true,
+          },
+        ],
+  );
+
+  return [...primary, ...secondary];
 };

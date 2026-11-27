@@ -153,6 +153,51 @@ export const bar = (tokens: number, peak: number, cells: number): string => {
   return "█".repeat(Math.min(cells, filled)).padEnd(cells);
 };
 
+export type TokenBuckets = {
+  readonly input: number;
+  readonly output: number;
+  readonly reasoning: number;
+  readonly cacheRead: number;
+  readonly cacheWrite: number;
+};
+
+const TOKEN_GLYPHS: ReadonlyArray<readonly [keyof TokenBuckets, string]> = [
+  ["input", "█"],
+  ["cacheRead", "▓"],
+  ["cacheWrite", "▒"],
+  ["output", "░"],
+  ["reasoning", "▪"],
+];
+
+/**
+ * Stacked proportional bar across token types, scaled against `peak` into
+ * `cells` columns using largest-remainder apportionment.
+ */
+export const tokenBar = (tokens: TokenBuckets, peak: number, cells: number): string => {
+  const total =
+    tokens.input + tokens.output + tokens.reasoning + tokens.cacheRead + tokens.cacheWrite;
+  if (peak <= 0 || total <= 0 || cells <= 0) return " ".repeat(Math.max(0, cells));
+  const filled = Math.min(cells, Math.max(1, Math.round((total / peak) * cells)));
+  const parts = TOKEN_GLYPHS.flatMap(([key, glyph], order) => {
+    const count = tokens[key];
+    if (count <= 0) return [];
+    const numerator = count * filled;
+    const width = Math.floor(numerator / total);
+    return [{ order, glyph, width, rem: numerator % total }];
+  });
+  let remaining = filled - parts.reduce((sum, part) => sum + part.width, 0);
+  const byRem = [...parts].sort((a, b) => b.rem - a.rem || a.order - b.order);
+  for (const part of byRem) {
+    if (remaining <= 0) break;
+    part.width += 1;
+    remaining -= 1;
+  }
+  return parts
+    .map((part) => part.glyph.repeat(part.width))
+    .join("")
+    .padEnd(cells);
+};
+
 /**
  * The bands a detail section shows, folded to `width` columns, at most
  * `cap` lines, every value starting `indent` columns in and `labelColumn`

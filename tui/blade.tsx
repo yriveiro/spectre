@@ -430,6 +430,7 @@ export const blade = <Row, Picked = undefined>(spec: BladeSpec<Row, Picked>): JS
                   minHeight: 0,
                   overflow: "hidden",
                 },
+                air(),
                 ...(table === undefined
                   ? []
                   : [
